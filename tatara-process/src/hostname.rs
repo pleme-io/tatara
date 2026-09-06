@@ -204,11 +204,27 @@ pub fn fmt_fqdn_stable(
 /// Uses [`EPHEMERAL_ID_HASH_LEN`] hex chars of BLAKE3 over the
 /// canonical JSON of the spec.
 pub fn ephemeral_id_from_spec<T: Serialize>(spec: &T) -> Result<String, HostnameError> {
-    let bytes = canonical_json(spec).map_err(|_| HostnameError::InvalidLabel {
-        segment: "spec",
-        label: "<unserializable>".into(),
-        reason: "spec failed to canonicalize",
-    })?;
+    // Canonical-bytes projection rides through the ONE substrate
+    // primitive [`crate::three_pillar::canonical_bytes`] — the
+    // strict, error-propagating peer of `three_pillar::pillar_bytes`
+    // that owns the 2-link `serde_json::to_value → serde_json::to_vec`
+    // canonicalization chain. Pre-lift this site read through a
+    // module-private `canonical_json` helper (removed) that restated
+    // the same 2-link chain byte-for-byte alongside the peer at
+    // `tatara-export-worker::canonical_json` — two hand-authored
+    // sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
+    // Post-lift both consumers name the payload ONCE and route
+    // through the ONE substrate owner; the discard of the concrete
+    // `serde_json::Error` diagnostic rides through the local
+    // `HostnameError::InvalidLabel` projection at this callsite so
+    // the operator-facing wording stays byte-identical to the
+    // pre-lift shape.
+    let bytes =
+        crate::three_pillar::canonical_bytes(spec).map_err(|_| HostnameError::InvalidLabel {
+            segment: "spec",
+            label: "<unserializable>".into(),
+            reason: "spec failed to canonicalize",
+        })?;
     Ok(short_hex_blake3(&bytes, EPHEMERAL_ID_HASH_LEN))
 }
 
@@ -270,13 +286,6 @@ fn validate_domain(segment: &'static str, domain: &str) -> Result<(), HostnameEr
         validate_label(segment, piece)?;
     }
     Ok(())
-}
-
-fn canonical_json<T: Serialize>(value: &T) -> Result<Vec<u8>, serde_json::Error> {
-    // Canonical = serde_json round-trip through Value (preserves
-    // declaration-order keys). Matches the receipt + worker pattern.
-    let v = serde_json::to_value(value)?;
-    serde_json::to_vec(&v)
 }
 
 fn short_hex_blake3(bytes: &[u8], len: usize) -> String {

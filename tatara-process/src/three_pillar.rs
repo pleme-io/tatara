@@ -225,6 +225,123 @@ pub fn pillar_bytes<T: Serialize + ?Sized>(v: &T) -> Vec<u8> {
     serde_json::to_vec(v).unwrap_or_default()
 }
 
+/// Canonical `serde_json` bytes for a pillar-input — the strict,
+/// error-propagating peer of [`pillar_bytes`] that routes the payload
+/// through `serde_json::Value` before emitting bytes.
+///
+/// Two workspace-local `canonical_json` helpers walked the SAME 2-link
+/// `serde_json::to_value(v)? → serde_json::to_vec(&v)` chain past the
+/// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, each with its own
+/// per-file private helper concentrating the round-trip:
+///
+/// * `tatara-process::hostname::canonical_json` — the private helper
+///   feeding [`crate::hostname::ephemeral_id_from_spec`], which hashes
+///   the canonical bytes of a `ProcessSpec` to derive the content-
+///   addressable `ephemeral_id` slot every per-instance FQDN routes
+///   through.
+/// * `tatara-export-worker::canonical_json` — the private helper
+///   feeding `compose_export_receipt`, which hashes the canonical
+///   bytes of both an `ExportSpec` (intent pillar) AND an
+///   `ExportOutcome` (control pillar) into a `tatara-receipt/v1`
+///   envelope that chains into the Process attestation tree.
+///
+/// Both helpers' bodies were byte-identical
+/// (`let v = serde_json::to_value(value)?; serde_json::to_vec(&v)`),
+/// differing only in return-error type (`serde_json::Error` on the
+/// hostname peer; `anyhow::Result` on the worker peer, achieved via
+/// `?` sugar). Post-lift both consumers name the payload ONCE and
+/// route through this ONE substrate primitive; the concrete
+/// `serde_json::Error` return type composes into `anyhow::Error` via
+/// `?` at the worker callsite and into `HostnameError::InvalidLabel`
+/// via `.map_err(...)` at the hostname callsite.
+///
+/// # Canonicalization semantics (the load-bearing difference from
+/// [`pillar_bytes`])
+///
+/// [`pillar_bytes`] calls `serde_json::to_vec` directly. On a `HashMap
+/// <String, V>` (or any serializer walking arbitrary iteration order),
+/// that yields the HashMap's non-deterministic key order — silently
+/// different bytes across runs on the SAME input. `canonical_bytes`
+/// interposes `serde_json::to_value` so the intermediate
+/// `Value::Object` — which is [`serde_json::Map`], itself a
+/// `BTreeMap<String, Value>` by default (this workspace does NOT
+/// enable `serde_json/preserve_order`; verified via the absence of
+/// `indexmap` under `serde_json` in `Cargo.lock`) — sorts keys
+/// alphabetically before the final `to_vec` emits them. This is the
+/// property both hostname + worker helpers relied on for
+/// hash-stability: identical spec / outcome payloads must produce
+/// identical canonical bytes across every reconcile / worker run.
+///
+/// Struct fields ALSO get sorted alphabetically through
+/// [`canonical_bytes`] — the intermediate `Value::Object` uses the
+/// same BTreeMap-backed [`serde_json::Map`], and the serde-json
+/// serializer for structs walks fields through the map surface (each
+/// field-name → `serialize_map_entry`), so the BTreeMap absorbs
+/// declaration order and re-emits alphabetically. This is a stronger
+/// canonicalization than [`pillar_bytes`] performs — the direct
+/// [`serde_json::to_vec`] emits struct fields in DECLARATION order.
+/// A pin at
+/// [`tests::canonical_bytes_sorts_struct_fields_alphabetically`]
+/// binds the sort behavior for structs, and the divergence pin
+/// [`tests::canonical_bytes_diverges_from_pillar_bytes_on_non_alphabetical_field_order`]
+/// binds the byte-shape difference from [`pillar_bytes`] on the
+/// non-alphabetical-declaration corner so the split between the two
+/// pillar-bytes primitives stays visible at fail-before-pass-after
+/// granularity. A `#[derive(Serialize)] struct` whose declaration
+/// order happens to coincide with alphabetical order (the common
+/// case for structs with `a`, `b`, `c` fields) will still produce the
+/// SAME bytes through both primitives — the coherence corner is
+/// pinned at
+/// [`tests::canonical_bytes_agrees_with_pillar_bytes_on_alphabetical_shapes`].
+///
+/// # Error surface
+///
+/// Returns `Result<Vec<u8>, serde_json::Error>` — the concrete
+/// serde error type both pre-lift helpers threaded upward. Callers
+/// convert to their target error kind at the callsite:
+///
+/// * `tatara-export-worker` composes into `anyhow::Result` through the
+///   `?` operator's `impl From<serde_json::Error> for anyhow::Error`
+///   sugar — one character of glue at the callsite instead of a
+///   dedicated `.map_err` wrap.
+/// * `tatara-process::hostname` composes into `Result<_, HostnameError>`
+///   through `.map_err(|_| HostnameError::InvalidLabel { .. })` — the
+///   substrate-primitive's typed error is projected onto the
+///   invalid-spec corner of the hostname's typed error surface. The
+///   underlying `serde_json` diagnostic is discarded deliberately at
+///   the pre-lift callsite (its wording is not operator-actionable at
+///   the FQDN emit boundary), and the substrate primitive preserves
+///   that discard choice.
+///
+/// # `#[must_use]`
+///
+/// Every consumer feeds the returned bytes into a BLAKE3 hash — the
+/// intent / control pillar on the receipt-envelope compose side, the
+/// content-hash prefix on the ephemeral-id compose side. Dropping the
+/// return silently reduces the pillar to empty bytes, which is never
+/// the intended semantic (the `?` propagation in every consumer would
+/// mask the drop with a compiler warning that this attribute
+/// surfaces).
+///
+/// # Theory anchor
+///
+/// THEORY.md §VI.1 (generation over composition — the 2-link
+/// `serde_json::to_value → to_vec` chain recurred at two hand-authored
+/// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
+/// lifted to ONE substrate owner here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — the byte-identity pin
+/// [`tests::canonical_bytes_matches_pre_lift_to_value_to_vec_chain_bytewise`]
+/// binds the primitive byte-identically to both hand-authored
+/// spellings, AND the key-canonicalization pin
+/// [`tests::canonical_bytes_sorts_hashmap_keys_alphabetically`]
+/// binds the load-bearing sort property that both pre-lift consumers
+/// depended on for hash stability).
+#[must_use = "an unused pillar-bytes result silently drops the payload; hash the result or thread it via `?`"]
+pub fn canonical_bytes<T: Serialize + ?Sized>(v: &T) -> Result<Vec<u8>, serde_json::Error> {
+    let value = serde_json::to_value(v)?;
+    serde_json::to_vec(&value)
+}
+
 /// Length-checked, bit-mask-folded constant-time byte comparator.
 ///
 /// Returns `true` iff `a` and `b` are equal in length AND in every
@@ -485,6 +602,218 @@ mod tests {
         assert_eq!(pillar_bytes(&owned), b"\"hello\"");
         assert_eq!(pillar_bytes("hello"), b"\"hello\"");
         assert_eq!(pillar_bytes(&owned), pillar_bytes("hello"));
+    }
+
+    // ── canonical_bytes byte-identity + corner pins ───────────────
+
+    #[test]
+    fn canonical_bytes_matches_pre_lift_to_value_to_vec_chain_bytewise() {
+        // Byte-identical parity with the pre-lift 2-link
+        // `serde_json::to_value(v)? → serde_json::to_vec(&v)` spelling
+        // both `tatara-process::hostname::canonical_json` +
+        // `tatara-export-worker::canonical_json` restated at their own
+        // bodies. Sweeps unit / primitive / struct / vec / map / nested
+        // shapes so a substrate-side reordering (a canonicalization
+        // that swept struct fields, a serde-version change to Value's
+        // internal Map backing) surfaces HERE rather than as silent
+        // canonical-bytes drift at every downstream consumer.
+        use serde::Serialize;
+        #[derive(Serialize)]
+        struct Inner {
+            a: u32,
+            b: String,
+        }
+        let pre_lift =
+            |v: &serde_json::Value| -> Result<Vec<u8>, serde_json::Error> { serde_json::to_vec(v) };
+        for value in [
+            serde_json::to_value(()).unwrap(),
+            serde_json::to_value(42u64).unwrap(),
+            serde_json::to_value("hello".to_string()).unwrap(),
+            serde_json::to_value(Inner {
+                a: 7,
+                b: "x".into(),
+            })
+            .unwrap(),
+            serde_json::to_value(vec![1u32, 2, 3]).unwrap(),
+        ] {
+            let via_primitive = canonical_bytes(&value).unwrap();
+            let via_pre_lift = pre_lift(&value).unwrap();
+            assert_eq!(via_primitive, via_pre_lift);
+        }
+    }
+
+    #[test]
+    fn canonical_bytes_sorts_hashmap_keys_alphabetically() {
+        // The load-bearing canonicalization property: keys of a
+        // `HashMap<String, V>` (whose iteration order is
+        // unspecified across serde-json versions and per-run randomized
+        // for BuildHasherDefault) come out ALPHABETICALLY sorted
+        // through this primitive. The `serde_json::Value::Object`
+        // intermediate uses `serde_json::Map` = `BTreeMap<String,
+        // Value>` in this workspace (no `preserve_order` feature —
+        // confirmed by the absence of `indexmap` under `serde_json` in
+        // `Cargo.lock`), so the `to_value` round-trip normalizes the
+        // key emission order before the final `to_vec`. A regression
+        // that dropped the Value round-trip (or that flipped the
+        // workspace to `preserve_order`) would fail-loudly HERE
+        // rather than as silent per-run hash drift at every
+        // ephemeral-id / export-receipt consumer.
+        use std::collections::HashMap;
+        let mut map: HashMap<String, u32> = HashMap::new();
+        map.insert("z".to_string(), 1);
+        map.insert("m".to_string(), 2);
+        map.insert("a".to_string(), 3);
+        let bytes = canonical_bytes(&map).unwrap();
+        assert_eq!(bytes, br#"{"a":3,"m":2,"z":1}"#);
+    }
+
+    #[test]
+    fn canonical_bytes_is_deterministic_across_hashmap_insertion_orders() {
+        // Two HashMaps with the SAME keys+values but populated in
+        // opposite insertion orders MUST project onto identical
+        // canonical bytes. This is the direct consumer-side contract
+        // both pre-lift `canonical_json` helpers depended on for hash
+        // stability (identical spec → identical ephemeral_id;
+        // identical outcome → identical control_hash). A regression
+        // that lost the sort — say, a switch to `IndexMap` under
+        // `preserve_order` — would surface as silent per-run drift at
+        // every downstream BLAKE3 consumer; the pin binds the
+        // insertion-order invariant HERE.
+        use std::collections::HashMap;
+        let mut ascending: HashMap<String, u32> = HashMap::new();
+        ascending.insert("a".to_string(), 3);
+        ascending.insert("m".to_string(), 2);
+        ascending.insert("z".to_string(), 1);
+        let mut descending: HashMap<String, u32> = HashMap::new();
+        descending.insert("z".to_string(), 1);
+        descending.insert("m".to_string(), 2);
+        descending.insert("a".to_string(), 3);
+        assert_eq!(
+            canonical_bytes(&ascending).unwrap(),
+            canonical_bytes(&descending).unwrap()
+        );
+    }
+
+    #[test]
+    fn canonical_bytes_agrees_with_pillar_bytes_on_alphabetical_shapes() {
+        // Coherence with the sibling primitive `pillar_bytes` on every
+        // shape whose emission is already alphabetical (a struct whose
+        // declaration order coincides with alphabetical order, an
+        // already-sorted BTreeMap, non-map primitives). These are the
+        // pillar-input shapes both primitives serialize identically. A
+        // regression at either owner that drifted the shared corner —
+        // a switch to some non-alphabetical struct-field sort at
+        // `canonical_bytes`, a swap of `to_vec` for a canonicalizing
+        // encoder at `pillar_bytes` — would fail-loudly at THIS pin
+        // rather than as silent drift between the two workspace-wide
+        // pillar-bytes primitives on the shared corner.
+        use serde::Serialize;
+        #[derive(Serialize)]
+        struct AlphaOrdered {
+            a: u32,
+            b: String,
+        }
+        let s = AlphaOrdered {
+            a: 7,
+            b: "x".into(),
+        };
+        assert_eq!(canonical_bytes(&s).unwrap(), pillar_bytes(&s));
+        assert_eq!(canonical_bytes(&()).unwrap(), pillar_bytes(&()));
+        assert_eq!(canonical_bytes(&42u64).unwrap(), pillar_bytes(&42u64));
+        let v: Vec<u32> = vec![1, 2, 3];
+        assert_eq!(canonical_bytes(&v).unwrap(), pillar_bytes(&v));
+        let mut btree = std::collections::BTreeMap::new();
+        btree.insert("k".to_string(), 1u32);
+        btree.insert("j".to_string(), 2u32);
+        assert_eq!(canonical_bytes(&btree).unwrap(), pillar_bytes(&btree));
+    }
+
+    #[test]
+    fn canonical_bytes_diverges_from_pillar_bytes_on_non_alphabetical_field_order() {
+        // Byte-shape divergence pin: on a struct whose declaration
+        // order is NOT alphabetical, the two primitives produce
+        // different bytes. `pillar_bytes` emits DECLARATION order (the
+        // direct `serde_json::to_vec` behavior); `canonical_bytes`
+        // emits ALPHABETICAL order (the Value round-trip through the
+        // BTreeMap-backed `serde_json::Map`). This split is
+        // load-bearing — a caller choosing `canonical_bytes` over
+        // `pillar_bytes` is asking for the canonicalizing sort, and a
+        // regression that silently merged the two primitives at the
+        // struct corner would invalidate every persisted receipt whose
+        // pillar-input has a non-alphabetical field order. The pin
+        // binds the split HERE so the two primitives evolve as an
+        // explicitly-partitioned pair on the (canonicalize? y/n) axis.
+        use serde::Serialize;
+        #[derive(Serialize)]
+        struct DescOrdered {
+            z_first: u32,
+            a_last: u32,
+        }
+        let s = DescOrdered {
+            z_first: 1,
+            a_last: 2,
+        };
+        // pillar_bytes preserves declaration order:
+        assert_eq!(pillar_bytes(&s), br#"{"z_first":1,"a_last":2}"#);
+        // canonical_bytes sorts alphabetically:
+        assert_eq!(canonical_bytes(&s).unwrap(), br#"{"a_last":2,"z_first":1}"#);
+        // The two must diverge on this corner:
+        assert_ne!(canonical_bytes(&s).unwrap(), pillar_bytes(&s));
+    }
+
+    #[test]
+    fn canonical_bytes_of_unit_produces_null_json() {
+        // The unit input projects to `b"null"` — matching the sibling
+        // `pillar_bytes(&())` corner. `canonical_bytes` succeeds on
+        // this input (serde emits `null` for `()`), so a regression
+        // that mis-conflated "empty pillar" with "serde failure" at
+        // the strict-Result peer would fail HERE rather than as silent
+        // pillar-input drift.
+        assert_eq!(canonical_bytes(&()).unwrap(), b"null");
+    }
+
+    #[test]
+    fn canonical_bytes_accepts_borrowed_and_owned_serializable_inputs() {
+        // The `T: Serialize + ?Sized` bound admits both borrowed
+        // (`&String`, `&Vec<u8>`) and unsized-via-borrow (`&str`)
+        // inputs without a per-callsite `.to_owned()` / `.clone()`
+        // wrap — matching the sibling `pillar_bytes` bound.
+        let owned: String = "hello".into();
+        assert_eq!(canonical_bytes(&owned).unwrap(), b"\"hello\"");
+        assert_eq!(canonical_bytes("hello").unwrap(), b"\"hello\"");
+        assert_eq!(
+            canonical_bytes(&owned).unwrap(),
+            canonical_bytes("hello").unwrap()
+        );
+    }
+
+    #[test]
+    fn canonical_bytes_sorts_struct_fields_alphabetically() {
+        // Struct fields are emitted in ALPHABETICAL order through
+        // `canonical_bytes` — the `to_value` intermediate `Value::Object`
+        // is `serde_json::Map = BTreeMap<String, Value>`, so serde's
+        // struct→map serializer inserts each field-name and the BTreeMap
+        // re-emits them alphabetically regardless of declaration order.
+        // This is the stronger-canonicalization behavior every downstream
+        // receipt / ephemeral-id consumer implicitly relied on for
+        // cross-run hash stability (a struct with a HashMap-typed field
+        // OR a struct whose declaration order changes across a
+        // refactor would still produce the same canonical bytes). A
+        // regression that dropped the Value round-trip would surface
+        // as declaration-order output HERE, and would silently
+        // invalidate every persisted receipt whose pillar-input is a
+        // struct with a non-alphabetical field order.
+        use serde::Serialize;
+        #[derive(Serialize)]
+        struct Ordered {
+            z_first: u32,
+            a_last: u32,
+        }
+        let s = Ordered {
+            z_first: 1,
+            a_last: 2,
+        };
+        assert_eq!(canonical_bytes(&s).unwrap(), br#"{"a_last":2,"z_first":1}"#);
     }
 
     // ── constant_time_eq byte-identity + corner pins ──────────────

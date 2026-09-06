@@ -280,9 +280,25 @@ pub fn compose_export_receipt(
     process_ref: Option<&str>,
 ) -> anyhow::Result<ReceiptEnvelope> {
     use tatara_process::hash::hex_blake3;
-    let intent_hash = hex_blake3(&canonical_json(spec)?);
+    use tatara_process::three_pillar::canonical_bytes;
+    // Intent + control pillar bytes route through the ONE substrate
+    // primitive `tatara_process::three_pillar::canonical_bytes` — the
+    // strict, error-propagating peer of `pillar_bytes` that owns the
+    // 2-link `serde_json::to_value → to_vec` canonicalization chain.
+    // Pre-lift this site read through a module-private `canonical_json`
+    // helper (removed) that restated the same 2-link chain byte-for-byte
+    // alongside the peer at `tatara_process::hostname::canonical_json`
+    // — two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold. Post-lift both consumers name the payload
+    // ONCE and route through the ONE substrate owner; the concrete
+    // `serde_json::Error` composes into `anyhow::Error` via `?` at this
+    // callsite (matching the pre-lift error-forwarding shape). The
+    // artifact-pillar `shipped_event_bytes` slot is already bytes and
+    // rides through `hex_blake3` directly — the canonicalize-then-hash
+    // shape only applies to the two typed-input pillars.
+    let intent_hash = hex_blake3(&canonical_bytes(spec)?);
     let artifact_hash = hex_blake3(shipped_event_bytes);
-    let control_hash = hex_blake3(&canonical_json(outcome)?);
+    let control_hash = hex_blake3(&canonical_bytes(outcome)?);
 
     let mut env = ReceiptEnvelope::build(
         "tatara.export",
@@ -312,15 +328,6 @@ pub fn compose_export_receipt(
     env.evidence = serde_json::Value::Object(evidence);
 
     Ok(env)
-}
-
-fn canonical_json<T: Serialize>(value: &T) -> anyhow::Result<Vec<u8>> {
-    // Canonical = serde_json through to_value then to_vec. Stable
-    // across runs of the same struct because serde_json::Value
-    // preserves field-emission order from the source serializer's
-    // declaration order (Rust struct field order).
-    let v = serde_json::to_value(value)?;
-    Ok(serde_json::to_vec(&v)?)
 }
 
 // ─── Minimal inline base64 (no extra dep) ──────────────────────────
@@ -493,13 +500,7 @@ mod tests {
         ]))
         .unwrap();
         let now = chrono::Utc::now();
-        let ev = prepare_event_payload(
-            ArtifactVariant::Receipts(&r),
-            &raw,
-            "ns/n",
-            "receipt",
-            now,
-        );
+        let ev = prepare_event_payload(ArtifactVariant::Receipts(&r), &raw, "ns/n", "receipt", now);
         let arr = ev.payload["receipts"].as_array().unwrap();
         assert_eq!(arr.len(), 2);
         assert_eq!(arr[1]["composed_root"], "def");
@@ -563,8 +564,7 @@ mod tests {
     fn export_receipt_chains_prev_root() {
         let s = http_spec("test-report");
         let ev = b"x";
-        let r1 =
-            compose_export_receipt(&s, ev, &ExportOutcome::Shipped, None, "r", None).unwrap();
+        let r1 = compose_export_receipt(&s, ev, &ExportOutcome::Shipped, None, "r", None).unwrap();
         let r2 = compose_export_receipt(
             &s,
             ev,
@@ -610,12 +610,24 @@ mod tests {
     #[test]
     fn export_receipt_artifact_hash_changes_with_payload() {
         let s = http_spec("x");
-        let r1 =
-            compose_export_receipt(&s, b"payload-1", &ExportOutcome::Shipped, None, "ns/n", None)
-                .unwrap();
-        let r2 =
-            compose_export_receipt(&s, b"payload-2", &ExportOutcome::Shipped, None, "ns/n", None)
-                .unwrap();
+        let r1 = compose_export_receipt(
+            &s,
+            b"payload-1",
+            &ExportOutcome::Shipped,
+            None,
+            "ns/n",
+            None,
+        )
+        .unwrap();
+        let r2 = compose_export_receipt(
+            &s,
+            b"payload-2",
+            &ExportOutcome::Shipped,
+            None,
+            "ns/n",
+            None,
+        )
+        .unwrap();
         assert_ne!(r1.artifact_hash, r2.artifact_hash);
     }
 }

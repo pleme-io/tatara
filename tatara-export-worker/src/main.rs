@@ -31,7 +31,7 @@ use tatara_export_worker::{
     ExportOutcome,
 };
 use tatara_process::export::{ArtifactVariant, ChannelVariant, ExportSpec};
-use tatara_process::prelude::Annotated;
+use tatara_process::prelude::{Annotated, ErrCtxExt};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
     // 2. Build the event payload via the pure lib function.
     let signal_type = extract_signal_type(&spec);
     let event = prepare_event_payload(
-        spec.source.variant().map_err(|e| anyhow!("source: {e}"))?,
+        spec.source.variant().err_ctx("source")?,
         &artifact_bytes,
         &run_id,
         &signal_type,
@@ -176,7 +176,7 @@ fn extract_signal_type(spec: &ExportSpec) -> String {
 // ─── Artifact readers ──────────────────────────────────────────────
 
 async fn read_artifact(spec: &ExportSpec, kube: &Client, ns: &str, name: &str) -> Result<Vec<u8>> {
-    let v = spec.source.variant().map_err(|e| anyhow!("source: {e}"))?;
+    let v = spec.source.variant().err_ctx("source")?;
     match v {
         ArtifactVariant::RunMarker(_) => Ok(Vec::new()),
         ArtifactVariant::TestReport(tr) => {

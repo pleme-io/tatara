@@ -17,6 +17,7 @@ pub mod delete;
 pub mod encapsulates;
 pub mod env;
 pub mod ephemeral;
+pub mod err_ctx;
 pub mod export;
 pub mod flux_resource;
 pub mod hash;
@@ -72,6 +73,7 @@ pub mod prelude {
         ExistingKustomization, UnknownEncapsulationMode, UnknownEncapsulationTarget,
     };
     pub use crate::ephemeral::{compile_ephemeral_source, EphemeralSpec};
+    pub use crate::err_ctx::ErrCtxExt;
     pub use crate::export::{
         ArtifactError, ArtifactKind, ArtifactSource, ArtifactVariant, ChannelError, ChannelKind,
         ChannelVariant, ExportSpec, ExportTrigger, HttpEventChannel, NatsSubjectChannel,

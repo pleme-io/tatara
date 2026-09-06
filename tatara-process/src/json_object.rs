@@ -211,6 +211,137 @@ impl JsonMapStrExt for Map<String, Value> {
     }
 }
 
+/// Substrate extension trait over `serde_json::Map<String, Value>` —
+/// the ONE substrate owner of the `.entry(<key>).or_insert_with(||
+/// Value::Object(<empty>))` seed-then-guard shape every JSON-mutating
+/// helper hand-authored at the "walk into this object slot on the
+/// parent map, seeding an empty object if the slot is absent, or fail
+/// loud if the slot exists but is a non-object" boundary.
+///
+/// Peer of [`ValueObjectExt::as_object_mut_or`] and
+/// [`JsonMapStrExt::insert_str`] on the JSON-mutation axis; split by
+/// SHAPE + SITE. [`ValueObjectExt::as_object_mut_or`] owns the "guard
+/// a `Value` handle into its object interior" step at ONE level;
+/// [`JsonMapStrExt::insert_str`] owns the "stamp a `Value::String` at
+/// a string-typed key" write shape; this trait owns the compound
+/// "get-or-seed the object at a slot, then guard" step every SSA-time
+/// re-injection walks when the caller intends to reach a nested
+/// object slot without asserting whether the parent has already
+/// populated it (a caller composing a fresh resource-body carries
+/// no `metadata` / `metadata.annotations` slot pre-seed; a caller
+/// composing atop a pre-populated resource does — both paths reach
+/// the same primitive).
+///
+/// Pre-lift the compound shape was hand-authored at TWO adjacent
+/// private helpers in `tatara-reconciler::ssapply` past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold, both walking the SAME
+/// 3-step `let X = <map>.entry(<slot>).or_insert_with(|| Value::Object
+/// (<empty>)); X.as_object_mut_or(<slot>)?` incantation:
+///
+/// * `metadata_object_mut(resource)` — the `metadata` slot seed-then-
+///   guard step at the root of every SSA-time re-injection walk
+///   (`inject_owner_reference` + `inject_annotations` reach it).
+/// * `inject_annotations(resource, process)` — the `annotations`
+///   slot seed-then-guard step nested one level deeper under the
+///   `metadata` object the primitive above returned.
+///
+/// Both restated the SAME 3-line shape verbatim: `.entry(<slot>)` on
+/// a `Map<String, Value>` handle known to be an object, then
+/// `.or_insert_with(|| Value::Object(<empty>))` to synthesize an
+/// empty object at the slot when absent, then a `.as_object_mut_or
+/// (<slot>)?` guard on the returned `&mut Value` to fail loud when
+/// the existing slot is a non-object. TWO byte-for-byte identical
+/// blocks past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold,
+/// differing only in the `&'static str` slot name each callsite
+/// stamped (`"metadata"` / `"annotations"`) — and the slot name is
+/// used at BOTH the entry key AND the guard error message so a
+/// regression that drifted the two apart at one callsite (a typo
+/// stamping `"metadata"` into the entry key + `"metadatas"` into
+/// the error message) would silently pass one pin and fail the
+/// other. Post-lift each callsite reads `<map>.object_slot_mut_or
+/// (<slot>)?` and the compound shape lives at ONE substrate owner
+/// here — the slot name is stamped ONCE per call and reaches both
+/// the entry key and the guard error slot mechanically.
+///
+/// ### Composability
+///
+/// * Slot name is `&'static str` — pre-lift both callsites stamped
+///   `&'static str` literals (`"metadata"` / `"annotations"`); a
+///   dynamic-slot caller (a callsite that reached this primitive
+///   with a `String` key computed at runtime) has no pre-lift
+///   precedent in the ssapply/render axis, so the `&'static str`
+///   bound stays honest to the pre-lift shape. A future caller
+///   needing a runtime slot name can widen this to
+///   `impl Into<String>` at the substrate; the pre-lift consumers
+///   inherit it mechanically.
+/// * Returns `anyhow::Result<&mut Map<String, Value>>` — matches the
+///   sibling [`ValueObjectExt::as_object_mut_or`] shape so the
+///   downstream `.entry(...).or_insert_with(...)` / `.insert(...)`
+///   mutation threads through `?` onto the caller's
+///   `Result<_, anyhow::Error>` return exactly as pre-lift.
+/// * Ok-arm returns the SAME `&mut Map<String, Value>` the pre-lift
+///   `.as_object_mut_or(<slot>)` step returned — no clone, no key-
+///   order reshape, no synthesis.
+///
+/// ### Naming — `object_slot_mut_or`, not `entry_object` or
+/// `get_or_insert_object_mut`
+///
+/// Same discipline as the two sibling traits above — the trait method
+/// deliberately does NOT collide with the inherent `Map::entry` /
+/// `Map::get_mut` / `Map::insert` methods (any of which a caller who
+/// has this trait in scope could resolve to by accident, silently
+/// dropping the type-guard step). The `_or` suffix names the intent
+/// (guard the `Option → Result` step at the same call, matching the
+/// pre-lift `.as_object_mut_or(<slot>)?` guard); `object_slot_mut`
+/// names the target shape (return an `&mut` object-typed `Map` at
+/// the slot). Together they read as "guard the slot into a mutable
+/// object interior or fail loud", matching the pre-lift semantics
+/// exactly.
+///
+/// ### `#[must_use]`
+///
+/// Every consumer threads the `?` short-circuit onto its handler's
+/// `Result<_, anyhow::Error>` return — dropping the guard swallows
+/// the underlying type-mismatch entirely, which is never the intended
+/// semantic at either pre-lift consumer (each downstream
+/// `.entry(...).or_insert_with(...)` / `.insert(...)` mutation
+/// depends on the returned `&mut Map` reference).
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 3-line `.entry(<slot>).or_insert_with(|| Value::Object(<empty>))
+/// .as_object_mut_or(<slot>)?` compound shape recurred at two
+/// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger, and is lifted to ONE substrate owner here). THEORY.md
+/// §II.1 invariant 5 (composition preserves proofs — a regression
+/// that drifted the entry-key slot vs. the guard-error slot at ONE
+/// site would silently pass one downstream pin and fail the other;
+/// post-lift the primitive stamps the slot ONCE per call so the
+/// substrate itself owns the entry-key ↔ guard-error name coherence).
+pub trait JsonMapObjectEntryExt {
+    /// Get-or-seed the object at `slot` in this JSON map, then guard
+    /// that the resulting handle is an object; returns
+    /// `&mut Map<String, Value>` on the object arm, and an
+    /// [`anyhow::Error`] whose `Display` reads
+    /// `"<slot> is not an object"` on the non-object arm (byte-
+    /// identical to the pre-lift `.as_object_mut_or(<slot>)?` guard,
+    /// sourced from the sibling [`ValueObjectExt::as_object_mut_or`]).
+    #[must_use = "an object-slot guard that isn't threaded via `?` swallows the underlying type mismatch"]
+    fn object_slot_mut_or(&mut self, slot: &'static str)
+        -> anyhow::Result<&mut Map<String, Value>>;
+}
+
+impl JsonMapObjectEntryExt for Map<String, Value> {
+    #[inline]
+    fn object_slot_mut_or(
+        &mut self,
+        slot: &'static str,
+    ) -> anyhow::Result<&mut Map<String, Value>> {
+        self.entry(slot)
+            .or_insert_with(|| Value::Object(Map::new()))
+            .as_object_mut_or(slot)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -444,5 +575,197 @@ mod tests {
         m.insert_str("empty", "");
         assert_eq!(m.get("empty"), Some(&Value::String(String::new())));
         assert!(!matches!(m.get("empty"), Some(Value::Null)));
+    }
+
+    // ─── JsonMapObjectEntryExt::object_slot_mut_or substrate pins ─────
+    //
+    // Fail-before-pass-after granularity: the
+    // `JsonMapObjectEntryExt::object_slot_mut_or` trait method did not
+    // exist before this commit, so each test below fails to compile
+    // pre-lift. Post-lift they collectively pin the compound
+    // seed-then-guard shape at ONE substrate owner — a regression that
+    // dropped the seed step (leaving an absent slot to fall through the
+    // guard as `None → Err`), skipped the guard step (silently returning
+    // an `&mut Value` when the existing slot is a non-object variant),
+    // drifted the entry-key slot vs. the guard-error slot (a copy-paste
+    // typo that stamped `"metadata"` into the entry and `"metadatas"`
+    // into the guard error message), or drifted the empty-seed shape
+    // (a `Value::Null` fallback where `Value::Object(Map::new())` is
+    // load-bearing at the downstream `.entry(...).or_insert_with(...)`
+    // / `.insert(...)` mutation) would surface HERE rather than as
+    // silent per-emit skew across the two pre-lift `ssapply.rs`
+    // consumers.
+
+    #[test]
+    fn object_slot_mut_or_absent_slot_seeds_empty_object_and_returns_it() {
+        // Absent-slot arm: the pre-lift `.entry(<slot>).or_insert_with
+        // (|| Value::Object(Default::default()))` step MUST seed the
+        // slot with an EMPTY `Value::Object` when the slot is not
+        // present in the parent map. The returned handle is the fresh
+        // empty map, MUTABLY, so a downstream `.insert(...)` writes
+        // land in the parent map's `<slot>` object post-return.
+        let mut parent = Map::new();
+        {
+            let child = parent
+                .object_slot_mut_or("metadata")
+                .expect("absent slot seeds an object");
+            assert!(child.is_empty(), "fresh-seeded slot is an empty object");
+            child.insert("name".into(), Value::String("demo".into()));
+        }
+        // The write landed in the parent map's metadata slot.
+        assert_eq!(parent["metadata"]["name"], "demo");
+        assert!(matches!(parent.get("metadata"), Some(Value::Object(_))));
+    }
+
+    #[test]
+    fn object_slot_mut_or_present_object_slot_returns_existing_interior_mutably() {
+        // Present-object-slot arm: when the slot is already populated
+        // with a `Value::Object`, the primitive MUST return the
+        // EXISTING map interior mutably — no synthesis, no reshape, no
+        // key-order rewrite. The downstream `.insert(...)` writes MUST
+        // merge into the pre-existing keys rather than replace them.
+        let mut parent = Map::new();
+        parent.insert(
+            "metadata".into(),
+            serde_json::json!({ "existing_key": "existing_value" }),
+        );
+        {
+            let child = parent
+                .object_slot_mut_or("metadata")
+                .expect("present-object slot returns Ok");
+            assert_eq!(
+                child.get("existing_key"),
+                Some(&Value::String("existing_value".into()))
+            );
+            child.insert("new_key".into(), Value::String("new_value".into()));
+        }
+        assert_eq!(parent["metadata"]["existing_key"], "existing_value");
+        assert_eq!(parent["metadata"]["new_key"], "new_value");
+    }
+
+    #[test]
+    fn object_slot_mut_or_present_non_object_slot_errors_with_pre_lift_display() {
+        // Fail-loud arm: when the slot is present but holds a non-
+        // object variant (a `Value::String` from a hand-authored
+        // YAML manifest where `metadata: "malformed"` slipped past
+        // kubectl's schema check), the primitive MUST fail with a
+        // `Display` byte-identical to the pre-lift
+        // `.as_object_mut_or(<slot>)?` guard — the sibling
+        // [`ValueObjectExt::as_object_mut_or`] guard's wire format.
+        // A regression that special-cased this arm (overwriting the
+        // slot with a fresh empty object, silently coercing) would
+        // silently swallow the operator's authoring error at the
+        // SSA-time re-injection step.
+        let mut parent = Map::new();
+        parent.insert("metadata".into(), Value::String("malformed".into()));
+        let err = parent.object_slot_mut_or("metadata").unwrap_err();
+        assert_eq!(format!("{err}"), "metadata is not an object");
+    }
+
+    #[test]
+    fn object_slot_mut_or_threads_the_slot_slug_verbatim_across_both_pre_lift_labels() {
+        // Cross-slot coherence pin: the TWO pre-lift consumers in
+        // `tatara-reconciler::ssapply` stamped TWO distinct slot slugs
+        // (`"metadata"` at the resource root, `"annotations"` at the
+        // metadata child), and the wrap-shape MUST honor each one
+        // verbatim as the leading slot in the `Display` output. A
+        // regression that hard-coded one slug across every callsite
+        // would pass the fail-loud pin above (on the `"metadata"` slug)
+        // and fail HERE — the two downstream error-stream greps
+        // operators run to bisect a "which SSA-time slot mutation
+        // faulted" alert would ALL collapse to the same slug, hiding
+        // whether the fault was at the resource-root object walk or
+        // the metadata-child annotations walk.
+        for slot in ["metadata", "annotations"] {
+            let mut parent = Map::new();
+            parent.insert(slot.into(), Value::Null);
+            let err = parent.object_slot_mut_or(slot).unwrap_err();
+            assert_eq!(format!("{err}"), format!("{slot} is not an object"));
+        }
+    }
+
+    #[test]
+    fn object_slot_mut_or_present_empty_object_returns_existing_reference_not_synthesized() {
+        // Precedence pin: a present slot holding an EMPTY
+        // `Value::Object` MUST return the pre-existing empty map
+        // interior — not a freshly-synthesized replacement. The
+        // pre-lift `.entry(<slot>).or_insert_with(||...)` step's
+        // short-circuit on the present-slot arm skips the closure
+        // entirely; a regression that always evaluated the closure
+        // (unconditionally overwriting an existing empty-object slot
+        // with a fresh empty object) would type-check silently at
+        // every callsite AND write byte-identical JSON at the empty-
+        // slot corner, but it would break a hypothetical future
+        // consumer that reached the primitive on a map whose slot
+        // was seeded upstream with metadata (a caller intending to
+        // preserve any keys the parent-composer already dropped in).
+        let mut parent = Map::new();
+        parent.insert("metadata".into(), Value::Object(Map::new()));
+        let addr_before = parent.get("metadata").unwrap() as *const Value;
+        {
+            let _child = parent.object_slot_mut_or("metadata").unwrap();
+        }
+        let addr_after = parent.get("metadata").unwrap() as *const Value;
+        assert_eq!(
+            addr_before, addr_after,
+            "present empty-object slot must return the pre-existing reference, not a fresh synthesis",
+        );
+    }
+
+    #[test]
+    fn object_slot_mut_or_matches_pre_lift_hand_authored_compound_shape_bytewise() {
+        // Byte-shape parity pin: `object_slot_mut_or(<slot>)?` MUST
+        // produce the SAME `&mut Map` (and, on the non-object arm, the
+        // SAME `Display`-shaped error) the pre-lift 3-line `.entry
+        // (<slot>).or_insert_with(|| Value::Object(Default::default()))
+        // .as_object_mut_or(<slot>)?` chain produced. Sweeps the three
+        // pre-lift-reachable input corners (absent slot / present
+        // object / present non-object) so a regression at the primitive
+        // that broke byte identity with the pre-lift chain at ONE
+        // corner surfaces here rather than as a subtle per-emit
+        // divergence.
+        for slot in ["metadata", "annotations"] {
+            // (1) Absent-slot corner: both routes seed empty-object at
+            //     the slot AND return the same empty map interior.
+            let mut via_primitive = Map::new();
+            let mut via_pre_lift = Map::new();
+            {
+                let _ = via_primitive.object_slot_mut_or(slot).unwrap();
+                let _ = via_pre_lift
+                    .entry(slot.to_string())
+                    .or_insert_with(|| Value::Object(Map::new()))
+                    .as_object_mut_or(slot)
+                    .unwrap();
+            }
+            assert_eq!(via_primitive, via_pre_lift);
+
+            // (2) Present-object corner: both routes read back the
+            //     same pre-populated interior mutably.
+            let mut via_primitive = Map::new();
+            via_primitive.insert(slot.into(), serde_json::json!({ "k": "v" }));
+            let mut via_pre_lift = via_primitive.clone();
+            {
+                let a = via_primitive.object_slot_mut_or(slot).unwrap();
+                let b = via_pre_lift
+                    .entry(slot.to_string())
+                    .or_insert_with(|| Value::Object(Map::new()))
+                    .as_object_mut_or(slot)
+                    .unwrap();
+                assert_eq!(a, b);
+            }
+
+            // (3) Present-non-object corner: both routes fail loud
+            //     with the same wire-format Display shape.
+            let mut via_primitive = Map::new();
+            via_primitive.insert(slot.into(), Value::Bool(true));
+            let mut via_pre_lift = via_primitive.clone();
+            let err_primitive = via_primitive.object_slot_mut_or(slot).unwrap_err();
+            let err_pre_lift = via_pre_lift
+                .entry(slot.to_string())
+                .or_insert_with(|| Value::Object(Map::new()))
+                .as_object_mut_or(slot)
+                .unwrap_err();
+            assert_eq!(format!("{err_primitive}"), format!("{err_pre_lift}"));
+        }
     }
 }

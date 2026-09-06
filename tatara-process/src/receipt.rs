@@ -523,6 +523,72 @@ fn is_null(v: &serde_json::Value) -> bool {
     v.is_null()
 }
 
+/// Wire-form encoding a [`ReceiptEnvelope`] payload was serialized
+/// in — the closed set of on-disk shapes the reader accepts.
+///
+/// Substrate primitive that closes the "which parser did this
+/// payload use" corner at ONE typed enum: every dispatcher that
+/// selects a parser (the shared [`ReceiptEnvelope::parse`] entry,
+/// the [`ReceiptEnvelope::parse_json`] / [`ReceiptEnvelope::parse_yaml`]
+/// wrappers, and the JSON-first-YAML-fallback
+/// [`ReceiptEnvelope::parse_either`]) routes through one arm of this
+/// enum, so a future wire form (e.g. a `Cbor` variant for a binary
+/// emit path, an `MsgPack` variant for a bandwidth-tight probe) lands
+/// as ONE variant + ONE arm of [`Self::parse_raw`]. Peer to
+/// [`ReceiptKind`] on the "one closed-set typed enum per wire-format
+/// axis" pattern — [`ReceiptKind`] closes the *semantic* kind axis
+/// (what the receipt claims), this enum closes the *encoding* axis
+/// (how the payload was written down).
+///
+/// The wrap-variant selection on the [`ReceiptError`] side
+/// ([`ReceiptError::InvalidJson`] vs [`ReceiptError::InvalidYaml`])
+/// travels with the wire-form arm here, so operators reading a
+/// failure surface see the encoding that failed without the caller
+/// having to hand-thread a per-form string label. See
+/// [`Self::error_variant`] for the closed-set mapping.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ReceiptWireForm {
+    /// Compact JSON — the closed-loop-probe binary's default emit
+    /// form and the shape `serde_json::to_string(&env)` produces.
+    Json,
+    /// YAML — the shape a ConfigMap authored via `kubectl apply -f`
+    /// carries, and what `serde_yaml::to_string(&env)` produces.
+    Yaml,
+}
+
+impl ReceiptWireForm {
+    /// Deserialize `payload` with this wire-form's serde reader,
+    /// wrapping the parser's `Display` in the matching per-form
+    /// [`ReceiptError`] variant. Does NOT run
+    /// [`ReceiptEnvelope::verify_shape`] — the shared
+    /// [`ReceiptEnvelope::parse`] owner composes that postpass so
+    /// every wrapper picks it up mechanically.
+    fn parse_raw(self, payload: &str) -> Result<ReceiptEnvelope, ReceiptError> {
+        match self {
+            Self::Json => {
+                serde_json::from_str(payload).map_err(|e| ReceiptError::InvalidJson(e.to_string()))
+            }
+            Self::Yaml => {
+                serde_yaml::from_str(payload).map_err(|e| ReceiptError::InvalidYaml(e.to_string()))
+            }
+        }
+    }
+
+    /// Stable wire-form label — the short lowercase identifier
+    /// (`"json"` / `"yaml"`) an operator-facing log line, a
+    /// per-form metrics tag, or a future CLI flag surface can print
+    /// or match against. Pins the closed-set spelling at ONE table
+    /// so a downstream rename lands here rather than at every
+    /// consumer that hand-composed `"json"` / `"yaml"` inline.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Yaml => "yaml",
+        }
+    }
+}
+
 /// Why a receipt is rejected. Kept as a typed enum so callers can
 /// pattern-match on the failure mode and surface targeted operator
 /// messages.
@@ -574,21 +640,44 @@ impl ReceiptEnvelope {
         }
     }
 
-    /// Parse a receipt from a JSON string.
-    pub fn parse_json(payload: &str) -> Result<Self, ReceiptError> {
-        let env: Self =
-            serde_json::from_str(payload).map_err(|e| ReceiptError::InvalidJson(e.to_string()))?;
+    /// Parse `payload` as a [`ReceiptWireForm`]-tagged encoding and
+    /// validate the result's shape — the ONE parse-then-verify chain
+    /// every [`Self::parse_json`] / [`Self::parse_yaml`] /
+    /// [`Self::parse_either`] wrapper composes through, and the entry
+    /// consumers that dispatch on a typed wire-form value (an
+    /// operator-supplied "receipt payload is <form>" annotation, a
+    /// future CLI flag on `tatara-check` selecting the reader) call
+    /// directly.
+    ///
+    /// Pre-lift the parse + `verify_shape` chain was hand-authored at
+    /// TWO byte-identical sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold — [`Self::parse_json`] and
+    /// [`Self::parse_yaml`] each restated the same
+    /// `<parser>(payload).map_err(|e| ReceiptError::<Variant>(
+    /// e.to_string()))?;` + `env.verify_shape()?; Ok(env)` shape with
+    /// only the parser + wrap-variant swapped. Post-lift the two
+    /// per-form deserialize+wrap pairings live at ONE closed-set
+    /// dispatch inside [`ReceiptWireForm::parse_raw`]; this owner
+    /// composes THAT dispatch with the shared `verify_shape` postpass
+    /// so the two wrappers, [`Self::parse_either`], and any future
+    /// wire-form consumer (adding e.g. `ReceiptWireForm::Cbor` for a
+    /// binary emit path) land at ONE arm without re-authoring the
+    /// verify chain.
+    pub fn parse(payload: &str, form: ReceiptWireForm) -> Result<Self, ReceiptError> {
+        let env = form.parse_raw(payload)?;
         env.verify_shape()?;
         Ok(env)
+    }
+
+    /// Parse a receipt from a JSON string.
+    pub fn parse_json(payload: &str) -> Result<Self, ReceiptError> {
+        Self::parse(payload, ReceiptWireForm::Json)
     }
 
     /// Parse a receipt from a YAML string. Useful for ConfigMaps that
     /// store the payload in YAML form.
     pub fn parse_yaml(payload: &str) -> Result<Self, ReceiptError> {
-        let env: Self =
-            serde_yaml::from_str(payload).map_err(|e| ReceiptError::InvalidYaml(e.to_string()))?;
-        env.verify_shape()?;
-        Ok(env)
+        Self::parse(payload, ReceiptWireForm::Yaml)
     }
 
     /// Parse via JSON first, then YAML if JSON fails. Lets a single
@@ -596,10 +685,8 @@ impl ReceiptEnvelope {
     /// declare it. Useful when the Job writes JSON and the reconciler
     /// reads back through a kube DynamicObject whose `data` is YAML.
     pub fn parse_either(payload: &str) -> Result<Self, ReceiptError> {
-        match Self::parse_json(payload) {
-            Ok(env) => Ok(env),
-            Err(_) => Self::parse_yaml(payload),
-        }
+        Self::parse(payload, ReceiptWireForm::Json)
+            .or_else(|_| Self::parse(payload, ReceiptWireForm::Yaml))
     }
 
     /// Closed-set table of pillars that MUST be non-empty on every
@@ -957,6 +1044,77 @@ generated_at:  2026-05-19T12:00:00Z
         let r = ReceiptEnvelope::parse_yaml(&yaml).expect("yaml parse");
         assert_eq!(r.kind, "db-migration");
         assert!(r.verify_root(None));
+    }
+
+    #[test]
+    fn wire_form_labels_pinned() {
+        // Byte-exact wire-form labels — a rename here is a
+        // wire-format change, not a typed-internal refactor. Log
+        // lines / metrics tags / future CLI flags grep for these.
+        assert_eq!(ReceiptWireForm::Json.as_str(), "json");
+        assert_eq!(ReceiptWireForm::Yaml.as_str(), "yaml");
+    }
+
+    #[test]
+    fn parse_dispatches_json_arm_byte_identically_to_parse_json() {
+        // The two owners must produce byte-identical output on the
+        // happy path — a regression that skewed either arm surfaces
+        // HERE rather than at every downstream call site of the
+        // wrappers.
+        let payload = canonical_payload_json();
+        let via_enum = ReceiptEnvelope::parse(&payload, ReceiptWireForm::Json).expect("json parse");
+        let via_wrapper = ReceiptEnvelope::parse_json(&payload).expect("json wrapper parse");
+        assert_eq!(via_enum, via_wrapper);
+    }
+
+    #[test]
+    fn parse_dispatches_yaml_arm_byte_identically_to_parse_yaml() {
+        let yaml = r#"
+version: tatara-receipt/v1
+kind: db-migration
+composed_root: ROOT
+intent_hash:   aaaa
+artifact_hash: bbbb
+control_hash:  cccc
+generated_at:  2026-05-19T12:00:00Z
+"#
+        .replace(
+            "ROOT",
+            &three_pillar::compose_root("bbbb", Some("cccc"), "aaaa", None),
+        );
+        let via_enum = ReceiptEnvelope::parse(&yaml, ReceiptWireForm::Yaml).expect("yaml parse");
+        let via_wrapper = ReceiptEnvelope::parse_yaml(&yaml).expect("yaml wrapper parse");
+        assert_eq!(via_enum, via_wrapper);
+    }
+
+    #[test]
+    fn parse_wrong_form_wraps_in_matching_error_variant() {
+        // Wire-form arm selection travels with the ReceiptError
+        // variant — a JSON payload parsed as YAML surfaces
+        // `InvalidYaml`, not `InvalidJson`, so an operator log line
+        // reads the encoding-that-failed without a hand-threaded
+        // per-form label. Pins the (arm, wrap-variant) coherence
+        // so a regression that decoupled either half surfaces here.
+        let json_payload = canonical_payload_json();
+        // JSON as JSON parses cleanly (baseline).
+        assert!(ReceiptEnvelope::parse(&json_payload, ReceiptWireForm::Json).is_ok());
+        // Bytes that a JSON reader rejects but a YAML reader silently
+        // accepts (JSON is a strict YAML subset, so the reverse cross-
+        // parse doesn't fail cleanly on any real payload; use invalid
+        // JSON that's ALSO invalid YAML to pin per-arm wrap variants).
+        let bad = "{ not-valid-";
+        let json_err =
+            ReceiptEnvelope::parse(bad, ReceiptWireForm::Json).expect_err("json rejects");
+        let yaml_err =
+            ReceiptEnvelope::parse(bad, ReceiptWireForm::Yaml).expect_err("yaml rejects");
+        assert!(
+            matches!(json_err, ReceiptError::InvalidJson(_)),
+            "json arm must wrap in InvalidJson, got {json_err:?}"
+        );
+        assert!(
+            matches!(yaml_err, ReceiptError::InvalidYaml(_)),
+            "yaml arm must wrap in InvalidYaml, got {yaml_err:?}"
+        );
     }
 
     #[test]

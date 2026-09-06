@@ -807,6 +807,37 @@ pub mod annotations {
     /// naming scheme. Value is the slot's `u32` rendered through
     /// `.to_string()`.
     pub const POOL_SLOT: &str = "tatara.pleme.io/pool-slot";
+    /// Stamped by `tatara-pool-reconciler::controller_allocation::
+    /// reconcile` on the bound member `Process` at the moment an
+    /// `EphemeralAllocation` transitions Bound → Released, to nudge
+    /// the pool reconciler into taking the return path (flip back
+    /// to `Lifetime::Permanent` on the pool's [`crate::pool::ReturnPolicy::
+    /// Keep`] arm, or delete the Process outright on the
+    /// [`crate::pool::ReturnPolicy::Replace`] arm). Value is the wire-
+    /// form string `"true"` — merge-patch semantics treat a bare
+    /// `Value::Null` as strip, so the pool reconciler's future strip
+    /// arm will stamp `Value::Null` under the same key through the
+    /// same substrate [`crate::patch::annotation_body`] composer. Peer
+    /// to [`SIGNAL`] (asynchronous signal-annotation ingest by
+    /// `tatara-reconciler::signals::ingest`) and [`RELEASED_FROM`]
+    /// (Releasing-gate stamp by `tatara-reconciler::phase_machine::
+    /// transition_to_releasing`) on the "single-annotation trigger
+    /// for the next reconcile pass" axis-family; all three keys ride
+    /// through the same `annotation_body(<key>, <value>)` composer at
+    /// their stamp sites.
+    ///
+    /// Peer to [`POOL`] + [`POOL_SLOT`] on the pool-membership axis:
+    /// where those two keys travel together at pool-controller
+    /// creation to identify a Process as a pool member, this key
+    /// travels alone at the allocator's Release arm to fire the
+    /// return path. A future rename that shifted the return-trigger
+    /// wire-form (a `tatara.pleme.io/v2/return-trigger` migration, a
+    /// per-fleet override, a collapse into a compound
+    /// `tatara.pleme.io/allocator-trigger` key carrying the
+    /// (bind|release) discriminator) lands at ONE `pub const` in the
+    /// substrate and every downstream consumer inherits the upgrade
+    /// mechanically.
+    pub const RETURN_TRIGGER: &str = "tatara.pleme.io/return-trigger";
 }
 
 /// Standard finalizer for the Process reconciler.
@@ -2300,6 +2331,118 @@ mod annotations_pins {
                 );
             }
         }
+    }
+
+    // ── Release-return axis pins ─────────────────────────────────────
+    //
+    // Pins the newly-lifted release-return annotation key
+    // ([`crate::annotations::RETURN_TRIGGER`]) at its canonical
+    // wire-form byte-value. Pre-lift the key was a bare
+    // `"tatara.pleme.io/return-trigger"` string literal at the
+    // pool-reconciler's Release-arm stamp (`tatara-pool-reconciler::
+    // controller_allocation::reconcile_inner`) — the ONE remaining
+    // hand-authored annotation-key literal in the workspace's active
+    // controllers after every sibling single-annotation key on the
+    // same axis-family (`SIGNAL`, `RELEASED_FROM`, `POOL`, `POOL_SLOT`,
+    // `REQUESTOR`, `ALLOCATION`, `REQUESTOR_KIND`) already routed
+    // through a `pub const` in the substrate. Post-lift the writer
+    // routes through the substrate constant; these pins bind the
+    // constant's byte-shape + tatara-namespace membership + partition-
+    // distinctness against every peer key so a future edit that
+    // drifted the constant (a typo'd suffix, an incoming rename that
+    // collapsed RETURN_TRIGGER onto a peer key, a `tatara.pleme.io/v2/
+    // return-trigger` migration landing at only the writer) surfaces
+    // HERE rather than as silent operator-facing skew between the
+    // allocator's Release-arm stamp and every downstream reader (an
+    // audit-trail scraper, a future pool-reconciler return-path arm,
+    // an admission-webhook gate on the return trigger).
+
+    #[test]
+    fn return_trigger_matches_pre_lift_wire_string() {
+        assert_eq!(
+            annotations::RETURN_TRIGGER,
+            "tatara.pleme.io/return-trigger",
+        );
+    }
+
+    #[test]
+    fn return_trigger_inhabits_tatara_namespace() {
+        // Same reverse-DNS namespace invariant every sibling key on
+        // the axis-family enforces above — a rename that dropped the
+        // prefix on RETURN_TRIGGER would collide with an arbitrary
+        // third-party operator's annotations on the same Process and
+        // silently corrupt the allocator's Release-arm write.
+        assert!(
+            annotations::RETURN_TRIGGER.starts_with("tatara.pleme.io/"),
+            "annotation key {:?} must inhabit tatara.pleme.io/ namespace",
+            annotations::RETURN_TRIGGER,
+        );
+    }
+
+    #[test]
+    fn return_trigger_is_distinct_from_every_peer_annotation_key() {
+        // Cross-family distinctness pin — RETURN_TRIGGER travels on
+        // the SAME member Process (at Release) that already carries
+        // the pool-membership axis (POOL, POOL_SLOT, stamped at
+        // creation), the allocator-bind axis (REQUESTOR, ALLOCATION,
+        // REQUESTOR_KIND, stamped at Bind), and the
+        // "single-annotation trigger for the next reconcile pass"
+        // axis-family (SIGNAL, RELEASED_FROM). A copy-paste that
+        // collapsed RETURN_TRIGGER onto any peer would let one write
+        // silently overwrite the other. Pin the key against every
+        // sibling substrate-owned annotation key on the workspace.
+        for peer in [
+            annotations::SIGNAL,
+            annotations::RELEASED_FROM,
+            annotations::POOL,
+            annotations::POOL_SLOT,
+            annotations::REQUESTOR,
+            annotations::ALLOCATION,
+            annotations::REQUESTOR_KIND,
+            annotations::MANAGED_BY,
+            annotations::PROCESS,
+            annotations::PID,
+            annotations::CONTENT_HASH,
+            annotations::ATTESTATION_ROOT,
+            annotations::GENERATION,
+            annotations::ROLE,
+            annotations::EXPORT_INDEX,
+            annotations::APP,
+            annotations::ROUTING_FORM,
+        ] {
+            assert_ne!(
+                annotations::RETURN_TRIGGER,
+                peer,
+                "RETURN_TRIGGER key {:?} collides with peer annotation key {peer:?}",
+                annotations::RETURN_TRIGGER,
+            );
+        }
+    }
+
+    #[test]
+    fn return_trigger_composes_at_annotation_body_key_slot() {
+        // End-to-end composability pin: the substrate composer
+        // [`crate::patch::annotation_body`] takes a `key: &str`; the
+        // pre-lift Release-arm callsite fed a bare `"tatara.pleme.io/
+        // return-trigger"` literal and the post-lift callsite feeds
+        // `annotations::RETURN_TRIGGER`. Both shapes produce a JSON
+        // merge-body whose `metadata.annotations.<KEY>` slot equals
+        // `"true"`; pin that the substrate constant threads through
+        // the composer verbatim so a regression that reshaped the
+        // `annotation_body` key-slot (a case-fold pass, an unexpected
+        // trim, a prefix-normalization step) surfaces HERE rather
+        // than at every downstream consumer.
+        let body = crate::patch::annotation_body(annotations::RETURN_TRIGGER, "true");
+        assert_eq!(
+            body["metadata"]["annotations"][annotations::RETURN_TRIGGER],
+            "true",
+            "annotation_body must stamp RETURN_TRIGGER verbatim at the metadata.annotations slot",
+        );
+        assert_eq!(
+            body["metadata"]["annotations"]["tatara.pleme.io/return-trigger"],
+            "true",
+            "byte-shape parity — the pre-lift hand-authored key spelling routes through the constant to the same nested slot",
+        );
     }
 }
 

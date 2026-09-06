@@ -638,10 +638,10 @@ where
 /// The `key` slot is `&str` matching the pre-lift call forms exactly:
 /// [`crate::annotations::SIGNAL`] via `SIGNAL_ANNOTATION: &str` at
 /// signals.rs, [`crate::annotations::RELEASED_FROM`] via a `pub const:
-/// &str` at phase_machine.rs, and a `"tatara.pleme.io/return-trigger"`
-/// literal at controller_allocation.rs. `&str` accepts both the
-/// pre-existing `pub const: &str` constants in [`crate::annotations`]
-/// and inline `&'static str` literals at the same signature.
+/// &str` at phase_machine.rs, and [`crate::annotations::RETURN_TRIGGER`]
+/// at controller_allocation.rs. `&str` accepts both the pre-existing
+/// `pub const: &str` constants in [`crate::annotations`] and inline
+/// `&'static str` literals at the same signature.
 ///
 /// A future caller composing a `String` key at runtime (a per-fleet
 /// prefix, a runtime-computed annotation name) coerces via `&*key`

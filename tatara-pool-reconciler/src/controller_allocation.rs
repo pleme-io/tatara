@@ -404,8 +404,22 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // transition_to_releasing`'s RELEASED_FROM stamp). Post-
             // lift the single-annotation merge-body posture lives at
             // ONE substrate owner.
-            let trigger_body =
-                tatara_process::patch::annotation_body("tatara.pleme.io/return-trigger", "true");
+            //
+            // Annotation-key axis rides through the ONE substrate
+            // owner [`tatara_process::annotations::RETURN_TRIGGER`] —
+            // pre-lift this was a bare `"tatara.pleme.io/return-
+            // trigger"` string literal at this stamp site while every
+            // sibling single-annotation key on the same axis-family
+            // (`SIGNAL`, `RELEASED_FROM`, `POOL`, `POOL_SLOT`,
+            // `REQUESTOR`, `ALLOCATION`, `REQUESTOR_KIND`) already
+            // routed through a `pub const` in the substrate's
+            // [`tatara_process::annotations`] module. Post-lift every
+            // downstream reader / future rename / prefix normalization
+            // reaches THIS callsite through the ONE substrate owner.
+            let trigger_body = tatara_process::patch::annotation_body(
+                tatara_process::annotations::RETURN_TRIGGER,
+                "true",
+            );
             // Peer to the Bind arm above: named-merge compose+dispatch
             // rides through the ONE substrate primitive
             // `tatara_process::patch::merge_as`, closing the last hand-

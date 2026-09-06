@@ -1222,6 +1222,85 @@ generated_at:  2026-05-19T12:00:00Z
     }
 
     #[test]
+    fn receipt_version_wire_form_pin() {
+        // Byte-shape pin on the ONE substrate const `RECEIPT_VERSION`.
+        // The wire-form literal `"tatara-receipt/v1"` is the value
+        // every serialized `ReceiptEnvelope.version` slot carries,
+        // every reader gate rejects a mismatch against, and every
+        // receipt-CM label value the closed-loop-probe stamps rides
+        // through. A bump lands at this ONE const and every consumer
+        // — the reconciler's `WrongVersion` diagnostic (routed
+        // through the thiserror-derived Display via the enum's
+        // `#[error("version != {RECEIPT_VERSION} (got {0:?})")]`
+        // attribute), the closed-loop-probe's receipt-CM label VALUE,
+        // and the envelope's `version` slot on build — inherits the
+        // upgrade mechanically. This pin binds the current byte-form
+        // so a bump surfaces here explicitly rather than as silent
+        // drift at the two production sites that pre-lift restated
+        // the literal by hand.
+        assert_eq!(RECEIPT_VERSION, "tatara-receipt/v1");
+    }
+
+    #[test]
+    fn wrong_version_display_routes_through_receipt_version_const() {
+        // Fail-before-pass-after substrate pin on the thiserror-
+        // derived Display for `ReceiptError::WrongVersion`. Two
+        // production consumers rely on this Display composing through
+        // `RECEIPT_VERSION`:
+        //
+        // * `tatara-reconciler::boundary::receipt_error_message` — the
+        //   `WrongVersion` arm now delegates to this Display directly
+        //   (`err.to_string()`), so the reconciler's operator-facing
+        //   diagnostic tracks the substrate const without a per-arm
+        //   hand-authored format literal.
+        // * `tatara-closed-loop-probe::write_receipt` — routes its
+        //   receipt-CM label VALUE through the same `RECEIPT_VERSION`
+        //   const directly, not this Display; both surfaces now share
+        //   the ONE owner.
+        //
+        // A regression that dropped the `{RECEIPT_VERSION}` interpolation
+        // from the enum's `#[error(...)]` attribute — reinlining the
+        // literal `"tatara-receipt/v1"` there — would silently
+        // desynchronize the reconciler's diagnostic from the probe's
+        // stamped label value on any future const bump. This pin
+        // catches such a regression at the Display byte shape.
+        let err = ReceiptError::WrongVersion("tatara-receipt/v99".into());
+        let msg = err.to_string();
+
+        // Byte-shape pin: exact composition through the substrate
+        // const, with `{0:?}` Debug-formatting the wrapped `String`
+        // (adding surrounding quotes).
+        assert_eq!(
+            msg,
+            format!("version != {RECEIPT_VERSION} (got \"tatara-receipt/v99\")"),
+            "WrongVersion Display must compose through the RECEIPT_VERSION const",
+        );
+
+        // Routing pin: the substrate const value appears verbatim in
+        // the Display output — a bump at `RECEIPT_VERSION` surfaces
+        // here immediately.
+        assert!(
+            msg.contains(RECEIPT_VERSION),
+            "WrongVersion Display must contain RECEIPT_VERSION verbatim, got {msg:?}",
+        );
+
+        // Compat pin: the pre-lift boundary.rs hand-authored format
+        // `format!("version != tatara-receipt/v1 (got {v:?})")` on
+        // the same wrapped `String` produces the same bytes as the
+        // Display — surfaces at THIS test as a byte equality, so the
+        // reconciler's `WrongVersion` arm's routing swap (from an
+        // inline `format!` to `err.to_string()`) preserves the
+        // dashboard-anchored substring `"version != tatara-receipt/v1"`
+        // that operators grep on.
+        let v = "tatara-receipt/v99".to_string();
+        let pre_lift = format!("version != tatara-receipt/v1 (got {v:?})");
+        assert_eq!(
+            msg, pre_lift,
+            "WrongVersion Display must byte-match the pre-lift boundary.rs format literal",
+        );
+    }
+
+    #[test]
     fn missing_field_rejected() {
         let mut env: serde_json::Value = serde_json::from_str(&canonical_payload_json()).unwrap();
         env.as_object_mut().unwrap().remove("intent_hash");

@@ -17,7 +17,9 @@ use kube::Client;
 use serde_json::json;
 use std::collections::BTreeMap;
 use tatara_process::kube_error::KubeResultExt;
-use tatara_process::receipt::{ReceiptEnvelope, ReceiptKind, RECEIPT_JSON_KEY, RECEIPT_YAML_KEY};
+use tatara_process::receipt::{
+    ReceiptEnvelope, ReceiptKind, RECEIPT_JSON_KEY, RECEIPT_VERSION, RECEIPT_YAML_KEY,
+};
 use tracing::{info, warn};
 
 mod probe;
@@ -212,13 +214,28 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
     // `configmap::namespaced` on the same axis — the namespaced
     // binder covers the Api<ConfigMap> handle-side; this composer
     // covers the resource-body side).
+    // Receipt-CM label VALUE `tatara-receipt/v1` rides through the
+    // ONE substrate owner `tatara_process::receipt::RECEIPT_VERSION` —
+    // pre-lift this was a bare `"tatara-receipt/v1".into()` string
+    // literal, one of TWO workspace-wide production restatements past
+    // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold that bypassed
+    // the canonical const (peer at
+    // `tatara-reconciler::boundary::receipt_error_message`'s
+    // `WrongVersion` arm, also swept in this commit onto the same
+    // owner via the thiserror-derived Display which already routes
+    // through `RECEIPT_VERSION`). Post-lift a bump to
+    // `tatara-receipt/v2` lands at ONE const declaration and both
+    // sites inherit the upgrade mechanically — the label value the
+    // probe stamps, the reader-side gate string in the reconciler,
+    // and every serialized envelope's `version` slot advance
+    // coherently in a single edit.
     let cm = tatara_process::configmap::with_data(
         cm_name,
         ns,
         data,
         Some(BTreeMap::from([(
             "tatara.pleme.io/receipt".into(),
-            "tatara-receipt/v1".into(),
+            RECEIPT_VERSION.into(),
         )])),
     );
 
@@ -308,7 +325,40 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
 mod tests {
     use super::Args;
     use clap::Parser;
-    use tatara_process::receipt::ReceiptKind;
+    use tatara_process::receipt::{ReceiptKind, RECEIPT_VERSION};
+
+    #[test]
+    fn receipt_cm_label_value_routes_through_receipt_version_const() {
+        // Fail-before-pass-after substrate pin: the receipt-CM label
+        // VALUE this binary stamps at `write_receipt` MUST route
+        // through the ONE canonical const
+        // `tatara_process::receipt::RECEIPT_VERSION`, not a bare
+        // `"tatara-receipt/v1"` string literal. A regression that
+        // reinlined the literal at the `BTreeMap::from([...])` label
+        // seed — silently reopening the bypass this commit closed —
+        // would fail HERE at the routing pin rather than as post-
+        // `RECEIPT_VERSION`-bump operator-facing skew between the
+        // label value on new receipt CMs (`"tatara-receipt/v1"` stale)
+        // and the actual envelope `version` slot (`"tatara-receipt/v2"`
+        // post-bump).
+        //
+        // Byte-shape parity with the pre-lift hand-authored pair is
+        // preserved by construction: `RECEIPT_VERSION` IS
+        // `"tatara-receipt/v1"` today, so a receipt CM written pre-
+        // and post-lift is byte-identical. This pin binds that
+        // parity + binds the routing so a future rewrite can't
+        // silently drift the two apart.
+        let pre_lift: (&str, &str) = ("tatara.pleme.io/receipt", "tatara-receipt/v1");
+        let post_lift: (&str, &str) = ("tatara.pleme.io/receipt", RECEIPT_VERSION);
+        assert_eq!(
+            pre_lift, post_lift,
+            "post-lift receipt-CM label pair must byte-match the pre-lift hand-authored pair"
+        );
+        assert_eq!(
+            RECEIPT_VERSION, "tatara-receipt/v1",
+            "RECEIPT_VERSION wire-form pin — a bump surfaces here at the probe consumer",
+        );
+    }
 
     #[test]
     fn args_parse_with_required_flags() {

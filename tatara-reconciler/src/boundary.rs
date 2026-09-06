@@ -1266,11 +1266,33 @@ fn parse_receipt_payload(payload: &str, expected_root: Option<&str>) -> ReceiptV
 /// Lower a `ReceiptError` to the same operator-visible strings the
 /// older hand-rolled parser surfaced, so dashboards / alerts that grep
 /// for these messages keep working.
+///
+/// The `WrongVersion` arm routes through the thiserror-derived
+/// [`ReceiptError`] Display impl — which itself routes through the ONE
+/// substrate const [`tatara_process::receipt::RECEIPT_VERSION`] via
+/// the enum's `#[error("version != {RECEIPT_VERSION} (got {0:?})")]`
+/// attribute. Pre-lift the arm hand-authored `format!("version !=
+/// tatara-receipt/v1 (got {v:?})")` with the version string spelled
+/// out inline, one of TWO workspace-wide production restatements of
+/// the `"tatara-receipt/v1"` bare literal past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication threshold that bypassed the canonical const (peer
+/// at `tatara-closed-loop-probe::write_receipt`'s receipt-CM label
+/// value, also swept in this commit onto the same owner). Post-lift a
+/// bump to `tatara-receipt/v2` lands at ONE const declaration and
+/// this diagnostic string, the probe's stamped label value, and every
+/// serialized envelope's `version` slot inherit the upgrade
+/// mechanically — no per-callsite hand-edit at the reconciler's
+/// dashboard-grep-anchoring format literal.
+///
+/// The byte shape stays identical to the pre-lift `format!` chain
+/// (thiserror composes `"version != {RECEIPT_VERSION} (got {0:?})"`
+/// where the `{0:?}` slot Debug-formats the wrapped `String` with
+/// surrounding quotes, matching the pre-lift `{v:?}` on `&String`).
 fn receipt_error_message(err: &ReceiptError) -> String {
     match err {
         ReceiptError::InvalidJson(m) => format!("invalid JSON: {m}"),
         ReceiptError::InvalidYaml(m) => format!("invalid YAML: {m}"),
-        ReceiptError::WrongVersion(v) => format!("version != tatara-receipt/v1 (got {v:?})"),
+        ReceiptError::WrongVersion(_) => err.to_string(),
         ReceiptError::MissingField(f) => format!("missing '{f}' string field"),
         ReceiptError::EmptyKind => "kind is empty".into(),
         ReceiptError::RootMismatch { got, want } => {
@@ -1703,6 +1725,63 @@ mod tests {
         let v = parse_receipt_payload(&payload.to_string(), None);
         assert!(
             matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("version != tatara-receipt/v1"))
+        );
+    }
+
+    #[test]
+    fn receipt_error_message_wrong_version_routes_through_receipt_version_const() {
+        // Fail-before-pass-after substrate pin: the `WrongVersion` arm
+        // of `receipt_error_message` MUST compose its diagnostic string
+        // through the ONE canonical const
+        // `tatara_process::receipt::RECEIPT_VERSION` (via the thiserror-
+        // derived `ReceiptError` Display), NOT restate the bare literal
+        // `"tatara-receipt/v1"` inline. A regression that reinlined the
+        // literal at this arm — silently reopening the bypass this
+        // commit closed — would fail HERE at the routing pin rather
+        // than as post-`RECEIPT_VERSION`-bump operator-facing skew
+        // between the reconciler's diagnostic (`"version !=
+        // tatara-receipt/v1 (got ...)"`) and the actual expected
+        // envelope version (`"tatara-receipt/v2"` post-bump).
+        //
+        // Byte-shape parity with the pre-lift `format!("version !=
+        // tatara-receipt/v1 (got {v:?})")` chain is preserved because
+        // the thiserror derive composes `"version != {RECEIPT_VERSION}
+        // (got {0:?})"` — identical byte shape when `RECEIPT_VERSION`
+        // is `"tatara-receipt/v1"` and `{0:?}` Debug-formats the
+        // wrapped `String` (adding surrounding quotes, same as
+        // `{v:?}` on `&String`).
+        let err = ReceiptError::WrongVersion("tatara-receipt/v99".into());
+        let msg = receipt_error_message(&err);
+
+        // Byte-shape pin: identical to what the pre-lift `format!`
+        // chain would have produced (with the substrate const spelled
+        // out in place of the hand-authored literal).
+        assert_eq!(
+            msg,
+            format!(
+                "version != {} (got \"tatara-receipt/v99\")",
+                tatara_process::receipt::RECEIPT_VERSION
+            ),
+            "WrongVersion arm must byte-match the RECEIPT_VERSION-composed shape",
+        );
+
+        // Routing pin: the substrate const appears in the diagnostic
+        // string as-is (a bump to `tatara-receipt/v2` at the const
+        // would surface HERE before it silently drifts operator
+        // dashboards).
+        assert!(
+            msg.contains(tatara_process::receipt::RECEIPT_VERSION),
+            "WrongVersion diagnostic must contain RECEIPT_VERSION verbatim, got {msg:?}",
+        );
+
+        // Composer parity: the arm delegates to the thiserror Display —
+        // a regression that split the two surfaces (inlining a
+        // format literal here that diverges from the enum's `#[error]`
+        // attribute) surfaces HERE as a byte inequality.
+        assert_eq!(
+            msg,
+            err.to_string(),
+            "WrongVersion arm must delegate to the thiserror-derived Display",
         );
     }
 

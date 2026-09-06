@@ -119,9 +119,10 @@ pub mod prelude {
     };
     pub use crate::qualified_process_ref;
     pub use crate::receipt::{
-        default_receipt_config_map_name, extract_receipt_payload_json, ReceiptEnvelope,
-        ReceiptError, ReceiptKind, ReceiptWireForm, RECEIPT_CM_KEYS, RECEIPT_CM_MISSING_KEY_MSG,
-        RECEIPT_CM_SUFFIX, RECEIPT_JSON_KEY, RECEIPT_VERSION, RECEIPT_YAML_KEY,
+        default_receipt_config_map_name, extract_receipt_payload_json,
+        resolve_receipt_config_map_name, ReceiptEnvelope, ReceiptError, ReceiptKind,
+        ReceiptWireForm, RECEIPT_CM_KEYS, RECEIPT_CM_MISSING_KEY_MSG, RECEIPT_CM_SUFFIX,
+        RECEIPT_JSON_KEY, RECEIPT_VERSION, RECEIPT_YAML_KEY,
     };
     pub use crate::requeue::after_secs as requeue_after_secs;
     pub use crate::routing::{RoutingBackend, RoutingForm, RoutingHostname, RoutingSpec};

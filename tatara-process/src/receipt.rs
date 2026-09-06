@@ -119,6 +119,84 @@ pub fn default_receipt_config_map_name(job_name: &str) -> String {
     out
 }
 
+/// Resolve the receipt-ConfigMap name a `JobAttested` /
+/// `ClosedLoopAuth` postcondition (or any future postcondition that
+/// consumes a receipt) reads — honoring an operator-supplied
+/// `receiptConfigMap:` override verbatim when present, otherwise
+/// falling back to the substrate's canonical
+/// [`default_receipt_config_map_name`] composer over `job_name`.
+///
+/// Pre-lift the SAME 4-line `<params>.receipt_config_map.clone()
+/// .unwrap_or_else(|| default_receipt_config_map_name(&<job_name>))`
+/// chain was hand-authored at TWO workspace-wide consumer sites past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, each feeding
+/// the postcondition's optional-override slot into the substrate's
+/// default-derivation composer:
+///
+/// * `tatara-reconciler::boundary::evaluate_job_attested` — the
+///   `JobAttested` postcondition's fallback derivation, threading
+///   `parsed.receipt_config_map` (optional operator override) +
+///   `parsed.name` (the Job name the postcondition attests).
+/// * `tatara-reconciler::boundary::evaluate_closed_loop_auth` — the
+///   `ClosedLoopAuth` postcondition's fallback derivation, threading
+///   `parsed.receipt_config_map` + the locally-derived `job_name`
+///   (`parsed.job_name.clone().unwrap_or_else(|| format!(
+///   "{process_name}-closed-loop-probe"))`).
+///
+/// Both sites walked the SAME 3-link chain — take the optional
+/// override, clone through the `Some` arm, fall back to the
+/// substrate default composer on `None` — differing only in the
+/// second operand (`&parsed.name` on the JobAttested axis, `&job_name`
+/// on the closed-loop axis). Post-lift each callsite reads
+/// `resolve_receipt_config_map_name(parsed.receipt_config_map.as_deref(),
+/// &<job_name>)` and the override-then-fallback resolution rule
+/// lives at ONE substrate owner.
+///
+/// Return-form axis: owned `String` — matches every downstream
+/// receipt-CM fetch site's `ns: &str, cm_name: &str` signature after
+/// the caller borrows the composed name. The `override_name:
+/// Option<&str>` input takes the borrow form so a consumer holding
+/// an `Option<String>` (the shipped `parsed.receipt_config_map` slot
+/// shape) reaches the substrate via `.as_deref()` without a
+/// speculative pre-clone at the callsite; the substrate performs the
+/// single owned-allocation only on the `Some` arm's projection.
+///
+/// The `Some` arm is byte-preserving — an operator who supplies an
+/// explicit `receiptConfigMap: ""` (empty string) gets the empty
+/// string back, matching the pre-lift `.clone().unwrap_or_else(...)`
+/// chain's semantics. This is intentional: the substrate defers
+/// empty-string validation to the downstream fetch site (which
+/// surfaces the error as `Satisfaction::Unsatisfied("<label> …
+/// receipt ConfigMap <ns>/ missing")` — the operator-visible symptom
+/// of the misconfiguration lands at the postcondition evaluator,
+/// not silently swallowed by a substrate-side non-empty filter).
+///
+/// A future normalization (a per-fleet suffix override injected via
+/// env var, a namespace-prefixed derivation for cluster-hosted receipt
+/// stores, a debug-build assertion rejecting the empty-override
+/// corner) lands at THIS ONE substrate primitive and every downstream
+/// postcondition evaluator inherits the upgrade mechanically — no
+/// per-site edit at the JobAttested / ClosedLoopAuth pair or at
+/// future postconditions consuming a receipt-CM override.
+///
+/// Sibling on the receipt-CM naming axis to
+/// [`default_receipt_config_map_name`] (unconditional composer, no
+/// override) — this primitive extends that composer with the
+/// optional-override projection every postcondition evaluator
+/// wraps around the composer's output.
+///
+/// Theory anchor: THEORY.md §III — the typescape; the
+/// override-then-fallback resolution rule for a postcondition-facing
+/// wire-name becomes a NAMED PRIMITIVE rather than a chain spelled
+/// out at every postcondition site.
+#[must_use]
+pub fn resolve_receipt_config_map_name(override_name: Option<&str>, job_name: &str) -> String {
+    match override_name {
+        Some(name) => name.to_string(),
+        None => default_receipt_config_map_name(job_name),
+    }
+}
+
 /// Canonical `data` key on a `receipt`-carrying ConfigMap for the JSON
 /// wire form of a [`ReceiptEnvelope`] — the substrate's PRIMARY payload
 /// key. Peer to [`RECEIPT_YAML_KEY`] on the same wire-form axis;
@@ -1621,6 +1699,114 @@ generated_at:  2026-05-19T12:00:00Z
                 expected,
                 "default_receipt_config_map_name({job_name:?}) drifted from \
                  <job>++RECEIPT_CM_SUFFIX composition",
+            );
+        }
+    }
+
+    // ── resolve_receipt_config_map_name ────────────────────────────
+    //
+    // Fail-before-pass-after pins for the substrate-level
+    // override-then-fallback resolution rule the reconciler's
+    // JobAttested + ClosedLoopAuth postcondition evaluators both
+    // route through post-lift. A regression that swapped the arm
+    // priority (fallback beating a Some override), stripped the
+    // empty-string preservation on the Some arm, or drifted the
+    // None arm off the substrate composer would silently misroute
+    // every postcondition-facing receipt-CM read — the pins here
+    // catch the drift at the primitive itself, before it reaches
+    // the shipped `evaluate_*` sites.
+    //
+    // Pre-lift the SAME 4-line `.clone().unwrap_or_else(||
+    // default_receipt_config_map_name(&<job>))` chain was hand-
+    // authored at TWO boundary.rs sites past the ★★ PRIME-DIRECTIVE
+    // ≥ 2 duplication threshold; post-lift both route through this
+    // ONE substrate primitive and any future normalization (a per-
+    // fleet suffix override, a namespace-prefixed derivation) lands
+    // here rather than at the pair of evaluator sites.
+
+    #[test]
+    fn resolve_receipt_config_map_name_prefers_supplied_override_verbatim() {
+        // The Some arm is byte-preserving — an operator who supplies
+        // an explicit `receiptConfigMap: "custom-cm"` on the
+        // postcondition's params gets `"custom-cm"` back, regardless
+        // of the fallback Job name the postcondition would otherwise
+        // derive against. Pins the pre-lift `.clone().unwrap_or_else(
+        // || default_receipt_config_map_name(...))` semantics — the
+        // Some arm never touches the fallback composer.
+        assert_eq!(
+            resolve_receipt_config_map_name(Some("custom-cm"), "my-job"),
+            "custom-cm",
+        );
+        assert_eq!(
+            resolve_receipt_config_map_name(Some("op-supplied-name"), "unrelated-job"),
+            "op-supplied-name",
+        );
+    }
+
+    #[test]
+    fn resolve_receipt_config_map_name_falls_back_to_default_composer_on_none() {
+        // The None arm delegates to the substrate composer verbatim —
+        // the wire-name that lands here is byte-identical to what the
+        // sibling `default_receipt_config_map_name(<job>)` produces at
+        // the same Job name. Pins the pre-lift `.unwrap_or_else(||
+        // default_receipt_config_map_name(&<job>))` fallback path.
+        for job_name in [
+            "my-job",
+            "closed-loop-attest-closed-loop-probe",
+            "svc-abc-job-42",
+        ] {
+            assert_eq!(
+                resolve_receipt_config_map_name(None, job_name),
+                default_receipt_config_map_name(job_name),
+                "resolve_receipt_config_map_name(None, {job_name:?}) must byte-match \
+                 default_receipt_config_map_name({job_name:?}) — the None arm's fallback \
+                 routing off the substrate composer drifted",
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_receipt_config_map_name_preserves_empty_override_bytewise() {
+        // The `.clone().unwrap_or_else(...)` chain pre-lift returned
+        // the empty string verbatim when the operator supplied
+        // `receiptConfigMap: ""` — an empty Some, not None. Pin that
+        // the substrate primitive matches: the empty-string corner
+        // routes through the Some arm, not the None fallback, so the
+        // operator-visible misconfiguration surfaces downstream at
+        // the postcondition evaluator's fetch site (as an
+        // `Unsatisfied` diagnostic) rather than being silently
+        // reshaped into the derived-default name.
+        assert_eq!(resolve_receipt_config_map_name(Some(""), "my-job"), "");
+    }
+
+    #[test]
+    fn resolve_receipt_config_map_name_matches_pre_lift_boundary_chain_shape() {
+        // Byte-shape parity pin — for every combination of (override,
+        // job_name) that the two pre-lift boundary.rs sites could
+        // have fed the `.clone().unwrap_or_else(||
+        // default_receipt_config_map_name(&<job>))` chain, the post-
+        // lift substrate primitive produces the same String. A
+        // regression that reshaped either arm (a stray `.trim()`, an
+        // implicit `String::new()` on an empty Some, a swap of the
+        // second-argument's borrow form) surfaces HERE at the
+        // reconstructed pre-lift chain, not at the shipped evaluator.
+        let cases: &[(Option<&str>, &str)] = &[
+            (None, "job-a"),
+            (Some("override-cm"), "job-b"),
+            (Some(""), "job-c"),
+            (None, ""),
+            (Some("custom"), ""),
+        ];
+        for (override_name, job_name) in cases {
+            let via_substrate = resolve_receipt_config_map_name(*override_name, job_name);
+            let pre_lift = override_name
+                .map(str::to_string)
+                .unwrap_or_else(|| default_receipt_config_map_name(job_name));
+            assert_eq!(
+                via_substrate, pre_lift,
+                "resolve_receipt_config_map_name({override_name:?}, {job_name:?}) \
+                 drifted from the pre-lift `.clone().unwrap_or_else(|| \
+                 default_receipt_config_map_name(&<job>))` chain shape",
             );
         }
     }

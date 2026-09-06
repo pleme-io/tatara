@@ -587,10 +587,20 @@ async fn evaluate_job_attested(
     if !parsed.expect_receipt {
         return Ok(Satisfaction::Satisfied);
     }
-    let cm_name = parsed
-        .receipt_config_map
-        .clone()
-        .unwrap_or_else(|| tatara_process::receipt::default_receipt_config_map_name(&parsed.name));
+    // Override-then-fallback receipt-CM resolution rides through the
+    // ONE substrate primitive
+    // [`tatara_process::receipt::resolve_receipt_config_map_name`] —
+    // pre-lift this was a hand-authored `.clone().unwrap_or_else(||
+    // default_receipt_config_map_name(&<job>))` chain past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold, sibling to the
+    // identical chain in `evaluate_closed_loop_auth` below. Post-lift
+    // both postcondition evaluators route through the same substrate
+    // owner; a future normalization (a per-fleet suffix override, a
+    // namespace-prefixed derivation) lands at the substrate.
+    let cm_name = tatara_process::receipt::resolve_receipt_config_map_name(
+        parsed.receipt_config_map.as_deref(),
+        &parsed.name,
+    );
     let verdict = verify_receipt_cm(client, ns, &cm_name, None).await?;
     Ok(classify_receipt_verdict(
         JobEvaluatorLabel::JobAttested.as_str(),
@@ -645,10 +655,15 @@ async fn evaluate_closed_loop_auth(
         .job_name
         .clone()
         .unwrap_or_else(|| format!("{process_name}-closed-loop-probe"));
-    let cm_name = parsed
-        .receipt_config_map
-        .clone()
-        .unwrap_or_else(|| tatara_process::receipt::default_receipt_config_map_name(&job_name));
+    // Override-then-fallback receipt-CM resolution rides through the
+    // ONE substrate primitive
+    // [`tatara_process::receipt::resolve_receipt_config_map_name`] —
+    // sibling to the identical chain in `evaluate_job_attested`
+    // above. See its docstring for the full pre-lift rationale.
+    let cm_name = tatara_process::receipt::resolve_receipt_config_map_name(
+        parsed.receipt_config_map.as_deref(),
+        &job_name,
+    );
 
     // 1. The probe Job must have succeeded.
     if let Err(unsat) = require_succeeded_job(

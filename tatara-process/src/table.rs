@@ -57,7 +57,7 @@ pub struct ProcessTableSpec {
     pub sigterm_timeout_seconds: u32,
 
     /// After this long in Zombie, force-reap.
-    #[serde(default = "default_zombie_timeout")]
+    #[serde(default = "crate::serde_defaults::default_zombie_timeout_seconds")]
     pub zombie_timeout_seconds: u32,
 
     /// When true, PID 1 adopts and terminates orphaned Processes.
@@ -67,9 +67,6 @@ pub struct ProcessTableSpec {
 
 fn default_next_seq() -> u32 {
     1
-}
-fn default_zombie_timeout() -> u32 {
-    600
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]

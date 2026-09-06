@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::{Identity, Process, ProcessTable};
+use tatara_process::serde_defaults::default_zombie_timeout_seconds;
 use tatara_process::table::ProcessTableSpec;
 
 /// Merge-patch the status subresource of a Process.
@@ -81,7 +82,20 @@ pub async fn ensure_process_table(
             max_depth: 0,
             max_children: 0,
             sigterm_timeout_seconds: 480,
-            zombie_timeout_seconds: 600,
+            // Zombie-force-reap window rides the substrate owner
+            // `tatara_process::serde_defaults::default_zombie_timeout_seconds`
+            // — pre-lift the bare `600` u32 literal at this composer's
+            // `zombie_timeout_seconds:` slot recurred alongside the
+            // `#[serde(default = "…")]` slot on
+            // `tatara_process::table::ProcessTableSpec::zombie_timeout_seconds`
+            // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold;
+            // post-lift the composer path and the serde path both
+            // resolve to the SAME workspace-canonical wire-form through
+            // ONE substrate owner. A future normalization (a shift to
+            // 300s, a per-fleet env override, a typed `ReapDeadline`
+            // newtype) lands at the substrate and this bootstrap
+            // composer inherits the upgrade mechanically.
+            zombie_timeout_seconds: default_zombie_timeout_seconds(),
             orphan_reaping_enabled: true,
         },
         status: None,

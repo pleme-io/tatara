@@ -187,6 +187,97 @@ pub fn default_sigterm_grace_seconds() -> u32 {
 /// slot contract.
 pub const DEFAULT_SIGTERM_GRACE_SECONDS: u32 = 480;
 
+/// Workspace-canonical `-> u32 { 600 }` Zombie-phase force-reap
+/// timeout serde-default owner — the ONE substrate site every
+/// `#[serde(default = "…")]` slot on a `u32` field whose semantic is
+/// "seconds a Process is permitted to sit in `Zombie` before PID 1
+/// force-reaps it" routes through, PLUS the ONE substrate anchor
+/// every hand-authored `ProcessTableSpec` composer that pre-populates
+/// the `zombie_timeout_seconds` slot with the workspace-canonical
+/// wire-form routes through.
+///
+/// Pre-lift the SAME `600` u32 constant lived at TWO workspace-wide
+/// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, each
+/// encoding the SAME semantic wire-form (10-minute Zombie force-reap
+/// window):
+///
+/// * [`crate::table::ProcessTableSpec::zombie_timeout_seconds`] — the
+///   per-ProcessTable Zombie force-reap window; the `#[serde(default
+///   = "…")]` seed the wire-parser stamps when a serialized
+///   `ProcessTable` YAML omits its own `zombieTimeoutSeconds:` slot.
+/// * `tatara_reconciler::patch::ensure_process_table` — the
+///   ProcessTable-singleton bootstrap composer; the explicit
+///   `zombie_timeout_seconds: 600` slot in the hand-authored
+///   [`crate::table::ProcessTableSpec`] struct literal used to
+///   materialize a fresh singleton on first observation.
+///
+/// Both sites walked the SAME bare `600u32` constant and served the
+/// SAME "10-minute Zombie force-reap" invariant — the serde path
+/// through the `#[serde(default = "…")]` machinery, the composer path
+/// through the explicit struct-literal slot. Post-lift the serde slot
+/// reads `default = "…serde_defaults::default_zombie_timeout_seconds"`
+/// (in-crate via `crate::serde_defaults::default_zombie_timeout_seconds`;
+/// cross-crate via
+/// `tatara_process::serde_defaults::default_zombie_timeout_seconds`)
+/// and the reconciler composer feeds the substrate fn directly at the
+/// `zombie_timeout_seconds:` slot in place of the bare `600` literal.
+///
+/// Return-form axis: `u32` — matches the serde `default = "…"` slot
+/// contract exactly (serde invokes the named function and stamps its
+/// returned owned value into the field). The paired
+/// [`DEFAULT_ZOMBIE_TIMEOUT_SECONDS`] const exposes the underlying
+/// `u32` for callers that want a compile-time handle (a `const fn`-
+/// visible pin, a `matches!(x, DEFAULT_ZOMBIE_TIMEOUT_SECONDS)` peer
+/// check, a const-context comparison against a k8s pod-termination
+/// grace annotation).
+///
+/// A future normalization on the workspace-canonical "Zombie force-
+/// reap" invariant (a shift to the k8s pod-eviction-recommended 300s
+/// default, a per-fleet override injected via a
+/// `TATARA_ZOMBIE_TIMEOUT_SECONDS` env var, a shift to a typed
+/// `ReapDeadline` newtype that carries the "seconds since Zombie
+/// entry" phase-anchored semantics) lands at THIS ONE substrate
+/// primitive and every downstream serde-default consumer PLUS every
+/// hand-authored `ensure_process_table`-shaped composer inherits the
+/// upgrade mechanically — no per-site edit at either listed caller or
+/// at future consumers (a per-Process `zombieTimeoutSecondsOverride`
+/// slot, a `PoolSpec`-scoped Zombie window, a new debug-build sub-10s
+/// override for local development).
+///
+/// Peer to [`default_sigterm_grace_seconds`] on the workspace-
+/// canonical "termination-phase timing" scalar axis. Where
+/// [`default_sigterm_grace_seconds`] owns the `-> u32 { 480 }`
+/// SIGTERM→SIGKILL escalation window (the Exiting → Zombie phase
+/// transition's grace clock), this primitive owns the `-> u32 { 600 }`
+/// Zombie → Reaped force-reap window (the phase transition that
+/// follows). The two primitives compose sequentially at the
+/// reconciler: a `Process` with the default policy spends up to
+/// [`default_sigterm_grace_seconds`] seconds in Exiting, then up to
+/// [`default_zombie_timeout_seconds`] seconds in Zombie, then is
+/// force-reaped and cascaded via ownerRefs.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// bare `600u32` constant recurred at TWO hand-authored sites past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, spanning two
+/// workspace crates, and is lifted onto ONE workspace-wide substrate
+/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the pins bind the wire-form at fail-before-pass-after
+/// granularity so a regression that drifted the returned u32 surfaces
+/// at [`tests::default_zombie_timeout_seconds_returns_600_bytewise`]
+/// rather than as silent operator-facing skew across the two
+/// downstream consumers).
+#[must_use]
+pub fn default_zombie_timeout_seconds() -> u32 {
+    DEFAULT_ZOMBIE_TIMEOUT_SECONDS
+}
+
+/// Workspace-canonical `u32` handle over the same `600` value
+/// [`default_zombie_timeout_seconds`] returns. Use this const for
+/// compile-time comparisons and const-context readers; use
+/// [`default_zombie_timeout_seconds`] for the serde `default = "…"`
+/// slot contract.
+pub const DEFAULT_ZOMBIE_TIMEOUT_SECONDS: u32 = 600;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -448,6 +539,120 @@ dimensions: []
              `sigterm_grace_seconds` through the substrate owner — a \
              hand-authored literal at the Default impl would decouple \
              the two construction paths",
+        );
+    }
+
+    // ─── default_zombie_timeout_seconds substrate pins ───────────────
+    //
+    // Bind [`default_zombie_timeout_seconds`] + the paired
+    // [`DEFAULT_ZOMBIE_TIMEOUT_SECONDS`] const at fail-before-pass-
+    // after granularity so a regression that drifted the wire-form
+    // default (a shift from `600` to `300` at ONLY the const, a
+    // decoupling of the const from the fn's returned value, a rename
+    // that broke the serde `default = "…"` path resolution) surfaces
+    // HERE rather than as silent operator-visible skew across the TWO
+    // consumers that ride through this ONE substrate owner (the
+    // `ProcessTableSpec::zombie_timeout_seconds` serde default AND
+    // the `tatara_reconciler::patch::ensure_process_table` composer's
+    // explicit `zombie_timeout_seconds:` slot).
+
+    #[test]
+    fn default_zombie_timeout_seconds_returns_600_bytewise() {
+        // Byte-shape parity with the TWO hand-authored pre-lift sites
+        // that each encoded `600` (the serde-default fn body in
+        // `crate::table` + the composer's explicit struct-literal slot
+        // in `tatara_reconciler::patch::ensure_process_table`). A
+        // regression that flipped the returned u32 (an accidental `60`
+        // or `6000` seed, a shift to millis without a unit rename, a
+        // shift to a typed newtype without a Deref) fails HERE rather
+        // than at the two downstream consumers whose "10-minute Zombie
+        // force-reap" invariant would silently become sub-minute or
+        // 100-minute.
+        assert_eq!(
+            default_zombie_timeout_seconds(),
+            600,
+            "default_zombie_timeout_seconds must return `600` bytewise; \
+             a regression surfaces here rather than as two-way skew \
+             across ProcessTableSpec::zombie_timeout_seconds + \
+             tatara_reconciler::patch::ensure_process_table",
+        );
+    }
+
+    #[test]
+    fn default_zombie_timeout_seconds_wire_form_const_matches_fn_return_bytewise() {
+        // Cross-form coherence pin: the `pub const
+        // DEFAULT_ZOMBIE_TIMEOUT_SECONDS: u32` handle and the `pub fn
+        // default_zombie_timeout_seconds() -> u32` owner MUST project
+        // onto the SAME wire-form value. A regression that updated
+        // one but not the other (e.g. lifted the const to `300` for a
+        // fleet-wide k8s-alignment shift but forgot the fn body, or
+        // vice versa) would silently produce two divergent workspace-
+        // canonical defaults — the const for compile-time consumers,
+        // the fn for serde-default + composer consumers. Pin the two
+        // projections at equality.
+        assert_eq!(
+            DEFAULT_ZOMBIE_TIMEOUT_SECONDS, 600,
+            "DEFAULT_ZOMBIE_TIMEOUT_SECONDS const must byte-match the \
+             pre-lift wire-form default `600`",
+        );
+        assert_eq!(
+            default_zombie_timeout_seconds(),
+            DEFAULT_ZOMBIE_TIMEOUT_SECONDS,
+            "default_zombie_timeout_seconds() must byte-match the \
+             paired DEFAULT_ZOMBIE_TIMEOUT_SECONDS const — a divergence \
+             would silently skew serde-default + composer consumers \
+             vs compile-time const readers",
+        );
+    }
+
+    #[test]
+    fn default_zombie_timeout_seconds_composes_at_process_table_spec_serde_default() {
+        // End-to-end: the
+        // [`crate::table::ProcessTableSpec::zombie_timeout_seconds`]
+        // serde default MUST route through the substrate owner. A
+        // YAML fragment that omits `zombieTimeoutSeconds:` parses
+        // into a ProcessTableSpec whose `zombie_timeout_seconds`
+        // reads bytewise-identical to
+        // [`default_zombie_timeout_seconds`]. A regression that
+        // reintroduced a local `fn default_zombie_timeout` shim in
+        // `table.rs` (bypassing the substrate) would produce a silent
+        // skew between the wire-parser Zombie force-reap window and
+        // the reconciler-composer Zombie force-reap window.
+        let yaml = "";
+        let ts: crate::table::ProcessTableSpec =
+            serde_yaml::from_str(yaml).expect("ProcessTableSpec YAML parses");
+        assert_eq!(
+            ts.zombie_timeout_seconds,
+            default_zombie_timeout_seconds(),
+            "ProcessTableSpec serde-default for the omitted \
+             `zombieTimeoutSeconds:` slot must route through \
+             crate::serde_defaults::default_zombie_timeout_seconds",
+        );
+    }
+
+    #[test]
+    fn default_zombie_timeout_seconds_pairs_with_sigterm_grace_on_termination_axis() {
+        // Composition pin: the two termination-phase timing primitives
+        // ([`default_sigterm_grace_seconds`] +
+        // [`default_zombie_timeout_seconds`]) fire sequentially at the
+        // reconciler — Exiting-phase grace first, then Zombie-phase
+        // force-reap. Pin both against their canonical wire-forms in
+        // a single assertion so a regression that lifted one primitive
+        // through a rename that shadowed the peer (or that drifted
+        // both together in a coordinated typo) surfaces HERE. The
+        // Zombie window MUST also be strictly greater than the SIGTERM
+        // grace window (a process only enters Zombie once its
+        // SIGTERM grace has already elapsed, so the reap deadline
+        // must be at least the escalation deadline).
+        assert_eq!(default_sigterm_grace_seconds(), 480);
+        assert_eq!(default_zombie_timeout_seconds(), 600);
+        assert!(
+            default_zombie_timeout_seconds() > default_sigterm_grace_seconds(),
+            "Zombie force-reap window must exceed the SIGTERM grace \
+             window — the Zombie phase only begins after the SIGTERM \
+             grace has elapsed, so a Zombie deadline shorter than the \
+             SIGTERM deadline would mean force-reap fires before the \
+             process ever entered Zombie",
         );
     }
 }

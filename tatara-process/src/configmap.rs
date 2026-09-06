@@ -227,6 +227,73 @@ pub fn with_data(
     }
 }
 
+/// Compose the diagnostic-body head every wire-verb failure against a
+/// namespaced [`ConfigMap`] wraps around the underlying [`kube::Error`]
+/// via [`crate::kube_error::KubeResultExt::kube_ctx_with`].
+///
+/// Owns the fixed `<verb> ConfigMap <ns>/<name>` shape as ONE substrate
+/// site, routing the `<ns>/<name>` join through the workspace-wide
+/// [`crate::qualified_process_ref`] composer so a future normalization
+/// of the qualified-ref shape (case-fold, unicode collation, IDN)
+/// lands at ONE site and every ConfigMap-scoped diagnostic body picks
+/// it up mechanically.
+///
+/// Pre-lift the 3-slot `format!("{verb} ConfigMap {ns}/{name}: {e}")`
+/// chain recurred at TWO hand-authored sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold, both inside the
+/// closed-loop-probe's receipt-CM idempotent-upsert idiom
+/// (`tatara-closed-loop-probe::main::write_receipt_cm`):
+/// - Verb `"patch"` — the create-then-409-retry arm's PATCH-verb
+///   failure wrap (`.map_err(|e| anyhow!("patch ConfigMap {ns}/{cm}: {e}"))?`).
+/// - Verb `"create"` — the initial CREATE-verb non-409 failure wrap
+///   (`Err(anyhow!("create ConfigMap {ns}/{cm}: {e}"))`).
+///
+/// Both sites walked the SAME shape — take a verb, the target
+/// ConfigMap's namespace + name, and the underlying `kube::Error`
+/// display — and produced the SAME "`{verb} ConfigMap {ns}/{name}:
+/// {kube error}`" diagnostic. Post-lift each callsite reads
+/// `configmap::error_ctx(<verb>, ns, cm_name)` and pipes the returned
+/// context string through [`crate::kube_error::KubeResultExt::kube_ctx_with`],
+/// which owns the `": {e}"` tail; the two halves compose to the
+/// byte-identical pre-lift diagnostic.
+///
+/// A future normalization step — a `tracing`-annotated span carrying
+/// the verb + qualified-ref for post-hoc audit, a per-verb structured-
+/// error kind so operators can filter by write-verb rather than
+/// substring-match on the message body, a wire-time hedging of the
+/// verb spelling (`"PATCH"` vs `"patch"` per a fleet convention),
+/// injection of the operator's namespace prefix for a shared-CM
+/// deployment — lands at THIS ONE substrate primitive and every
+/// downstream ConfigMap-scoped failure diagnostic across the fleet
+/// picks up the upgrade mechanically.
+///
+/// Sibling to [`with_data`] on the (per-ConfigMap × substrate-owned
+/// shape) axis: [`with_data`] owns the resource-body composition; this
+/// primitive owns the failure-diagnostic composition. Both bind the
+/// ConfigMap-scoped concerns at ONE substrate module so a future
+/// ConfigMap-family expansion (a `with_binary_data` peer for byte
+/// payloads, a `not_found_ctx` peer for GET-verb 404 diagnostic bodies)
+/// lands next to the existing composers.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 3-slot `format!(...)` chain recurred at 2 hand-authored sites past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is lifted onto
+/// the ONE workspace-wide substrate owner here). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — the pin block below
+/// binds the composer at fail-before-pass-after granularity, so a
+/// regression that reordered the head slots, drifted the fixed
+/// `"ConfigMap"` resource-kind literal, or dropped the qualified-ref
+/// routing back to a bare `format!("{ns}/{name}")` surfaces at
+/// `configmap::tests::error_ctx_*` rather than as silent operator-
+/// facing skew across the two consumer sites).
+#[must_use]
+pub fn error_ctx(verb: &str, ns: &str, name: &str) -> String {
+    format!(
+        "{verb} ConfigMap {}",
+        crate::qualified_process_ref(ns, name)
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,6 +512,142 @@ mod tests {
             cm.metadata.labels.as_ref(),
             Some(&labels),
             "labels-slot preserves the passed map verbatim — a regression that dropped the tatara.pleme.io/receipt label would silently break operator kubectl-selectors",
+        );
+    }
+
+    // ─── ConfigMap::error_ctx substrate pins ─────────────────────────
+    //
+    // The composer [`error_ctx`] binds the `<verb> ConfigMap <ns>/<name>`
+    // diagnostic-body head at ONE substrate site across TWO consumer
+    // callsites (the closed-loop-probe's create-then-409-patch idempotent-
+    // upsert idiom's CREATE-verb non-409 failure wrap + PATCH-verb
+    // failure wrap, both in `write_receipt_cm`). These pins bind the
+    // observable slots (verb-first, fixed `"ConfigMap"` resource-kind
+    // literal, qualified-ref routing for the `<ns>/<name>` join) at
+    // fail-before-pass-after granularity so a regression that reordered
+    // the head slots (e.g. `"ConfigMap <verb> <ns>/<name>"`), dropped the
+    // fixed resource-kind literal, or routed the `<ns>/<name>` shape
+    // through a bare `format!` inline (bypassing the workspace-wide
+    // `qualified_process_ref` substrate) surfaces HERE rather than as
+    // silent operator-facing prefix skew at the two consumer sites.
+
+    #[test]
+    fn error_ctx_signature_binds_borrowed_verb_ns_name_returning_owned_string() {
+        // The composer's signature binds `verb: &str` + `ns: &str` +
+        // `name: &str` on the input side (both hand-authored consumer
+        // sites pass a `&'static str` verb literal and borrowed
+        // `&str` fields from the `write_receipt_cm(cm_name: &str,
+        // ns: &str, ...)` slot pair). Return `String` matches the
+        // downstream `kube_ctx_with(context: String)` sink verbatim.
+        //
+        // A regression that widened any input slot to `String`
+        // (forcing the caller to `.to_string()` at the boundary — a
+        // per-site perf regression that also fights the `&str`-fields-
+        // in-args idiom the callers thread) or narrowed the return to
+        // `&'static str` (which would prevent the runtime-composed
+        // verb slot the two consumers pass — `"patch"` and `"create"`
+        // are `&'static str` today, but any future dynamic-verb caller
+        // would fail this coercion) fails at compile time.
+        let _witness: fn(&str, &str, &str) -> String = error_ctx;
+    }
+
+    #[test]
+    fn error_ctx_composes_patch_configmap_qualified_ref_body_verbatim() {
+        // Byte-shape parity witness against the closed-loop-probe's
+        // pre-lift PATCH-verb chain: pre-lift the `.map_err(|e|
+        // anyhow!("patch ConfigMap {ns}/{cm_name}: {e}"))?` chain at
+        // `write_receipt_cm`'s 409-arm PATCH wrap composed a
+        // diagnostic body of `"patch ConfigMap {ns}/{cm_name}"` as
+        // the head + `": {e}"` as the kube-err tail. Post-lift the
+        // primitive OWNS the head; the tail rides through
+        // `kube_ctx_with`'s existing `": {e}"` suffix.
+        //
+        // A regression that reordered head slots (e.g. dropped the
+        // fixed `"ConfigMap"` word or emitted the qualified-ref before
+        // the verb) surfaces here at the head-shape pin rather than as
+        // silent operator-visible prefix skew at the callsite.
+        assert_eq!(
+            error_ctx("patch", "default", "my-receipt-cm"),
+            "patch ConfigMap default/my-receipt-cm",
+        );
+    }
+
+    #[test]
+    fn error_ctx_composes_create_configmap_qualified_ref_body_verbatim() {
+        // Byte-shape parity witness against the closed-loop-probe's
+        // pre-lift CREATE-verb chain: pre-lift the `Err(anyhow!("create
+        // ConfigMap {ns}/{cm_name}: {e}"))` arm at `write_receipt_cm`'s
+        // fall-through CREATE-verb failure composed a diagnostic body
+        // of `"create ConfigMap {ns}/{cm_name}"` as the head + `": {e}"`
+        // as the kube-err tail. Post-lift the primitive owns the head;
+        // the tail rides through `kube_ctx_with`'s existing `": {e}"`
+        // suffix.
+        assert_eq!(
+            error_ctx("create", "probe-ns", "closed-loop-probe-receipt"),
+            "create ConfigMap probe-ns/closed-loop-probe-receipt",
+        );
+    }
+
+    #[test]
+    fn error_ctx_routes_ns_name_join_through_qualified_process_ref_substrate() {
+        // Routing pin — the `<ns>/<name>` join at the composer's tail
+        // rides through the workspace-wide `qualified_process_ref`
+        // primitive rather than a bare inline `format!("{ns}/{name}")`.
+        // A future normalization of the qualified-ref shape (case-
+        // fold, unicode collation, IDN) lands at ONE
+        // `qualified_process_ref` site and every downstream diagnostic
+        // body picks it up mechanically; this pin binds THIS composer
+        // to that substrate so a regression that inlined the join
+        // (drifting the primitive off the substrate axis this commit
+        // opens) surfaces HERE rather than as silent qualified-ref
+        // drift between the two consumer sites and every other
+        // qualified-ref consumer across the workspace.
+        for (ns, name) in [
+            ("default", "receipt-cm"),
+            ("tatara-system", "closed-loop-receipt"),
+            ("probe-ns", "cm-with-hyphen"),
+            ("ns-1", "cm.dotted.name"),
+        ] {
+            let via_composer = error_ctx("patch", ns, name);
+            let via_qualified =
+                format!("patch ConfigMap {}", crate::qualified_process_ref(ns, name));
+            assert_eq!(
+                via_composer, via_qualified,
+                "error_ctx must route the (ns, name) join through qualified_process_ref for ns={ns:?} name={name:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn error_ctx_composes_with_kube_ctx_with_to_pre_lift_anyhow_bang_body_verbatim() {
+        // End-to-end parity witness — the (composer + `kube_ctx_with`)
+        // pair produces the SAME diagnostic body every pre-lift
+        // `anyhow!("<verb> ConfigMap {ns}/{name}: {e}")` chain
+        // produced. The composer OWNS the head; `kube_ctx_with`
+        // OWNS the `": {e}"` tail; the concatenation is byte-
+        // identical to the pre-lift `anyhow!` body. A regression
+        // that drifted the head/tail separator (e.g. dropped the
+        // single space between the head and the colon-tail, or
+        // inserted a stray delimiter) surfaces HERE rather than as
+        // silent operator-facing message-shape skew.
+        use crate::kube_error::KubeResultExt;
+        use kube::core::ErrorResponse;
+
+        let e = kube::Error::Api(ErrorResponse {
+            status: "Failure".into(),
+            message: "test failure".into(),
+            reason: "Test".into(),
+            code: 500,
+        });
+        let pre_lift = format!("patch ConfigMap default/my-cm: {e}");
+
+        let via_pair: anyhow::Result<()> =
+            Err::<(), _>(e).kube_ctx_with(error_ctx("patch", "default", "my-cm"));
+        let post_lift = via_pair.unwrap_err().to_string();
+
+        assert_eq!(
+            post_lift, pre_lift,
+            "the (error_ctx head + kube_ctx_with tail) pair must produce the byte-identical pre-lift `anyhow!(\"<verb> ConfigMap {{ns}}/{{name}}: {{e}}\")` diagnostic",
         );
     }
 }

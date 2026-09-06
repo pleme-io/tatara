@@ -11,11 +11,12 @@
 //! call through `reqwest`. Three pillars composed by `tatara_process::
 //! receipt::ReceiptEnvelope::build`.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use clap::Parser;
 use kube::Client;
 use serde_json::json;
 use std::collections::BTreeMap;
+use tatara_process::kube_error::KubeResultExt;
 use tatara_process::receipt::{ReceiptEnvelope, ReceiptKind, RECEIPT_JSON_KEY, RECEIPT_YAML_KEY};
 use tracing::{info, warn};
 
@@ -251,14 +252,37 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
             // (peers of `merge_status` on the `/status` subresource
             // axis + `apply_patch_params` on the SSA wire-posture
             // axis, both already opened on the substrate side).
+            // Failure-diagnostic head rides the ONE substrate composer
+            // `tatara_process::configmap::error_ctx` — pre-lift this was
+            // a hand-authored `.map_err(|e| anyhow!("patch ConfigMap
+            // {ns}/{cm_name}: {e}"))` chain, one of TWO workspace-wide
+            // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+            // threshold (peer at the fall-through CREATE-verb failure
+            // wrap below). Post-lift the head composition lives at ONE
+            // substrate owner (peer of `configmap::with_data` on the
+            // per-ConfigMap substrate axis — with_data owns the
+            // resource-body composition; error_ctx owns the failure-
+            // diagnostic composition) and the wrap tail rides through
+            // the workspace-wide `kube_error::kube_ctx_with` primitive.
             tatara_process::patch::merge(&api, cm_name, &patch)
                 .await
-                .map_err(|e| anyhow!("patch ConfigMap {ns}/{cm_name}: {e}"))?;
+                .kube_ctx_with(tatara_process::configmap::error_ctx("patch", ns, cm_name))?;
             Ok(())
         }
         Err(e) => {
             warn!(error = %e, "create ConfigMap failed");
-            Err(anyhow!("create ConfigMap {ns}/{cm_name}: {e}"))
+            // Same substrate composer as the PATCH-verb wrap above —
+            // the two arms compose the ONE canonical `<verb> ConfigMap
+            // <ns>/<name>` diagnostic head through `configmap::error_ctx`
+            // and pipe it through `kube_ctx_with`'s `": {e}"` tail. The
+            // `Err::<(), _>(e).kube_ctx_with(...)` idiom routes a match-
+            // arm `kube::Error` value through the same substrate wrap
+            // the `.map_err(...)?` chain above uses on the Result-chain
+            // side, so a regression that drifted either surface fails at
+            // `configmap::tests::error_ctx_*` rather than as silent
+            // operator-visible prefix skew between the two arms.
+            Err::<(), _>(e)
+                .kube_ctx_with(tatara_process::configmap::error_ctx("create", ns, cm_name))
         }
     }
 }

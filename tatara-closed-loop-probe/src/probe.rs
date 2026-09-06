@@ -12,6 +12,82 @@ pub struct ServiceEndpoint {
     pub port: u16,
 }
 
+impl ServiceEndpoint {
+    /// In-cluster HTTP base URL — `"http://{service}:{port}"` — the ONE
+    /// substrate owner of the (`http://` scheme × service-DNS × port)
+    /// composition that every closed-loop probe hand-authored at each
+    /// endpoint bind pre-lift.
+    ///
+    /// Pre-lift the 4-slot
+    /// `["http://", &<svc>.service, ":", &<svc>.port.to_string()].concat()`
+    /// chain was open-coded at TWO adjacent sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold inside [`run`] — one
+    /// for the issuer endpoint's base, one for the consumer endpoint's
+    /// base — each restating the SAME 4-slot join to seed the base URL
+    /// for the follow-on path-append composition through the
+    /// sibling [`Self::url`] primitive.
+    ///
+    /// The `http://` scheme is baked into the primitive because the
+    /// closed-loop probe operates inside the cluster where ClusterIP
+    /// Services are reachable over plain HTTP; the ephemeral env's
+    /// TLS boundary lives at the Ingress north-side, which the probe
+    /// never crosses (see the CLAUDE.md **Ephemeral story** narrative
+    /// on the closed-loop pattern: "runs ClusterIP + in-cluster HTTP
+    /// between the bundled SaaS + Gateway; no Ingress, no per-namespace
+    /// TLS"). A future closed-loop probe over an HTTPS service (a
+    /// hypothetical externally-reachable SaaS whose issuer holds a
+    /// public cert) lands as ONE scheme-slot injection at THIS
+    /// substrate primitive — every downstream endpoint-URL consumer
+    /// (issuer base, consumer base, plus every `url(<path>)` derivation)
+    /// picks up the scheme upgrade mechanically without per-callsite
+    /// hand-edit.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 4-slot HTTP-endpoint composition recurred at two hand-
+    /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// trigger and is lifted to ONE method here). THEORY.md §II.1
+    /// invariant 5 (composition preserves proofs — the pins below
+    /// bind the primitive at fail-before-pass-after granularity, so a
+    /// regression that dropped the port, drifted the scheme, or
+    /// reshaped the concatenation surfaces at
+    /// `tests::base_url_*` rather than as silent operator-facing skew
+    /// between the two endpoint bases the probe issues requests
+    /// against).
+    #[must_use]
+    pub fn base_url(&self) -> String {
+        ["http://", &self.service, ":", &self.port.to_string()].concat()
+    }
+
+    /// Compose a path onto this endpoint's [`Self::base_url`] — the
+    /// ONE substrate owner of the 2-slot
+    /// `[<endpoint>.base_url().as_str(), <path>].concat()` chain
+    /// hand-authored at THREE adjacent sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold inside [`run`]
+    /// (issuer auth URL, issuer JWKS URL, consumer auth URL).
+    ///
+    /// The `path` slot is spliced verbatim — the primitive does NOT
+    /// normalize a missing leading slash, collapse `//` boundaries, or
+    /// canonicalize `.` / `..` segments — matching the pre-lift
+    /// hand-authored `.concat()` posture byte-for-byte at every
+    /// current callsite (the CLI defaults `/v2/auth`, `/.well-known/
+    /// jwks.json`, `/v2/whoami` all carry a leading slash by
+    /// convention). A future URL-canonicalization pass (a `url::Url::
+    /// join`-style walk, a scheme-relative path handler) lands at
+    /// this ONE substrate primitive and every downstream URL
+    /// composition inherits the upgrade mechanically without
+    /// per-callsite hand-edit.
+    ///
+    /// Peer to [`Self::base_url`] on the (base × base+path) axis:
+    /// [`Self::base_url`] owns the scheme/host/port composition;
+    /// this method composes on top of it, so a future scheme drift or
+    /// port-slot upgrade reaches BOTH surfaces through the ONE
+    /// composer chain.
+    #[must_use]
+    pub fn url(&self, path: &str) -> String {
+        [self.base_url().as_str(), path].concat()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ProbeConfig {
     pub issuer: ServiceEndpoint,
@@ -37,23 +113,19 @@ pub struct ProbeOutput {
 }
 
 pub async fn run(cfg: ProbeConfig) -> Result<ProbeOutput> {
-    let issuer_base = [
-        "http://",
-        &cfg.issuer.service,
-        ":",
-        &cfg.issuer.port.to_string(),
-    ]
-    .concat();
-    let consumer_base = [
-        "http://",
-        &cfg.consumer.service,
-        ":",
-        &cfg.consumer.port.to_string(),
-    ]
-    .concat();
-    let issuer_auth_url = [issuer_base.as_str(), &cfg.issuer_auth_path].concat();
-    let issuer_jwks_url = [issuer_base.as_str(), &cfg.issuer_jwks_path].concat();
-    let consumer_auth_url = [consumer_base.as_str(), &cfg.consumer_auth_path].concat();
+    // Endpoint URL composition rides the substrate primitives
+    // [`ServiceEndpoint::base_url`] + [`ServiceEndpoint::url`] — pre-
+    // lift these were FIVE hand-authored `.concat()` chains at this
+    // site (TWO 4-slot `[http://, svc, :, port]` bases + THREE 2-slot
+    // `[base, path]` derivations) past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold. Post-lift the endpoint→URL composition
+    // lives at ONE substrate owner per axis; a future scheme drift
+    // (HTTPS for externally-reachable probes) or URL-canonicalization
+    // pass lands at THAT owner and both endpoints inherit the
+    // upgrade mechanically.
+    let issuer_auth_url = cfg.issuer.url(&cfg.issuer_auth_path);
+    let issuer_jwks_url = cfg.issuer.url(&cfg.issuer_jwks_path);
+    let consumer_auth_url = cfg.consumer.url(&cfg.consumer_auth_path);
 
     let http = Client::builder()
         .timeout(cfg.http_timeout)
@@ -179,5 +251,133 @@ mod tests {
         assert_eq!(count_jwks_keys(""), 0);
         assert_eq!(count_jwks_keys("not json"), 0);
         assert_eq!(count_jwks_keys(r#"{"keys": "not-array"}"#), 0);
+    }
+
+    // ─── ServiceEndpoint URL composition substrate pins ─────────────
+    //
+    // These pins bind the substrate primitives [`ServiceEndpoint::
+    // base_url`] + [`ServiceEndpoint::url`] at fail-before-pass-after
+    // granularity. Pre-lift the 4-slot HTTP-base composition and its
+    // 2-slot path-append derivation recurred at FIVE hand-authored
+    // sites inside [`run`] past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold. Post-lift the composition lives at ONE substrate
+    // owner per axis; a regression that dropped the port slot,
+    // drifted the scheme, or reshaped the concatenation surfaces
+    // HERE rather than as silent operator-facing skew across the
+    // issuer + consumer endpoints the probe issues live requests
+    // against.
+
+    #[test]
+    fn base_url_composes_http_scheme_service_port_verbatim() {
+        // The primitive composes exactly `"http://{service}:{port}"`
+        // — no trailing slash, no path segment, no scheme drift. A
+        // regression that swapped in `"https://"` (a widened scheme
+        // slot without an in-scope typed injection), inserted an
+        // implicit trailing slash (breaking downstream path append),
+        // or reshaped the port formatting (leading zeros, hex output)
+        // surfaces HERE rather than at the wire request. Covers the
+        // two live shapes: a common issuer port (8080) + a common
+        // consumer port (8000) matching the CLI defaults in main.rs.
+        let issuer = ServiceEndpoint {
+            service: "issuer".into(),
+            port: 8080,
+        };
+        assert_eq!(issuer.base_url(), "http://issuer:8080");
+        let consumer = ServiceEndpoint {
+            service: "gateway".into(),
+            port: 8000,
+        };
+        assert_eq!(consumer.base_url(), "http://gateway:8000");
+    }
+
+    #[test]
+    fn base_url_matches_pre_lift_hand_authored_concat_chain_bytewise() {
+        // Byte-identical parity pin: for every observable (service,
+        // port) input, the primitive produces the SAME `String` a
+        // pre-lift 4-slot `["http://", &<svc>.service, ":",
+        // &<svc>.port.to_string()].concat()` chain produced. A
+        // regression that reshaped the internal concatenation (e.g.
+        // switched to `format!("http://{}:{}")` — safe on the wire
+        // but a category slip vs the pre-lift `.concat()` posture)
+        // still passes only because it observably produces the same
+        // bytes; the pin fixes the OBSERVABLE contract.
+        for (service, port) in [
+            ("issuer", 8080u16),
+            ("gateway", 8000),
+            ("saas.observability", 1),
+            ("s", u16::MAX),
+        ] {
+            let ep = ServiceEndpoint {
+                service: service.into(),
+                port,
+            };
+            let pre_lift = ["http://", &ep.service, ":", &ep.port.to_string()].concat();
+            assert_eq!(
+                ep.base_url(),
+                pre_lift,
+                "base_url() for ({service:?}, {port}) must match pre-lift 4-slot .concat()"
+            );
+        }
+    }
+
+    #[test]
+    fn url_appends_path_to_base_url_verbatim() {
+        // The primitive splices `path` verbatim onto `base_url` — no
+        // leading-slash normalization, no `//` collapse, no percent-
+        // encoding. Covers the three live path shapes threading
+        // through `run(cfg)`: `--issuer-auth-path` (`/v2/auth`),
+        // `--issuer-jwks-path` (`/.well-known/jwks.json`),
+        // `--consumer-auth-path` (`/v2/whoami`) — all lead with `/`
+        // by CLI-default convention. A regression that stripped a
+        // leading slash, normalized `.well-known`, or dropped a
+        // subpath segment surfaces here rather than as an operator-
+        // facing 404 at the wire.
+        let ep = ServiceEndpoint {
+            service: "issuer".into(),
+            port: 8080,
+        };
+        assert_eq!(ep.url("/v2/auth"), "http://issuer:8080/v2/auth");
+        assert_eq!(
+            ep.url("/.well-known/jwks.json"),
+            "http://issuer:8080/.well-known/jwks.json"
+        );
+        assert_eq!(ep.url("/v2/whoami"), "http://issuer:8080/v2/whoami");
+        // Preserves caller's leading-slash discipline: a slashless
+        // path composes with byte-identical `.concat()` semantics —
+        // NOT what URL-canonical joins do, but what the pre-lift
+        // `.concat()` chain did, so the pin binds the current
+        // contract byte-for-byte.
+        assert_eq!(ep.url("v2/auth"), "http://issuer:8080v2/auth");
+        // Empty path returns the base URL unchanged.
+        assert_eq!(ep.url(""), "http://issuer:8080");
+    }
+
+    #[test]
+    fn url_matches_pre_lift_hand_authored_concat_chain_bytewise() {
+        // Byte-identical parity pin: for every observable (endpoint,
+        // path) input, the primitive produces the SAME `String` a
+        // pre-lift 2-slot `[<ep>.base_url().as_str(),
+        // &<path>].concat()` chain produced. Sibling to the
+        // `base_url_matches_pre_lift_*` pin above — together the two
+        // pins bind the (base × base+path) axis pair the two
+        // substrate primitives close.
+        for (service, port, path) in [
+            ("issuer", 8080u16, "/v2/auth"),
+            ("issuer", 8080, "/.well-known/jwks.json"),
+            ("gateway", 8000, "/v2/whoami"),
+            ("s", 1, ""),
+            ("s", 1, "path"),
+        ] {
+            let ep = ServiceEndpoint {
+                service: service.into(),
+                port,
+            };
+            let pre_lift = [ep.base_url().as_str(), path].concat();
+            assert_eq!(
+                ep.url(path),
+                pre_lift,
+                "url({path:?}) for ({service:?}, {port}) must match pre-lift 2-slot .concat()"
+            );
+        }
     }
 }

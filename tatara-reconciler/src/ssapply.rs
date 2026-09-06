@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 use tatara_process::annotations;
 use tatara_process::anyhow_flatten::FlattenCtxExt;
 use tatara_process::flux_resource::FluxResource;
-use tatara_process::json_object::ValueObjectExt;
+use tatara_process::json_object::{JsonMapStrExt, ValueObjectExt};
 use tatara_process::k8s_wire_identity::K8sWireIdentity;
 use tatara_process::kube_error::KubeResultExt;
 use tatara_process::prelude::{FluxResourceRef, Process, RenderedResourceCoords};
@@ -1258,24 +1258,26 @@ fn inject_annotations(resource: &mut Value, process: &Process) -> Result<()> {
     // to the ONE-owner routing in `phase_machine::handle_forking`
     // (which reads the identity through the same primitive to seed
     // the FORK-time `derive_identity` fallback).
+    // Substrate string-slot write shape rides through the ONE typed
+    // [`JsonMapStrExt::insert_str`] owner — pre-lift each of the four
+    // observed-* annotation stamps below hand-authored the 2-line
+    // `annot.insert(<key>.to_string(), Value::String(<val>.<coerce>))`
+    // shape past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
+    // Post-lift the string-slot write lives at ONE substrate owner
+    // and a regression that drifted the `Value::String` wrap at ONE
+    // of the four sites (a caller who reached for `.insert(k, v)`
+    // after refactoring the value slot from `Value` to plain `String`)
+    // would fail-loud at the substrate's byte-shape pins rather than
+    // as silent per-annotation skew at the SSA-time re-injection.
     if let Some(pid) = process.observed_pid() {
-        annot.insert(annotations::PID.to_string(), Value::String(pid.to_string()));
+        annot.insert_str(annotations::PID, pid);
     }
     if let Some(id) = process.observed_identity() {
-        annot.insert(
-            annotations::CONTENT_HASH.to_string(),
-            Value::String(id.content_hash.clone()),
-        );
+        annot.insert_str(annotations::CONTENT_HASH, id.content_hash.clone());
     }
     if let Some(a) = process.observed_attestation() {
-        annot.insert(
-            annotations::GENERATION.to_string(),
-            Value::String(a.generation.to_string()),
-        );
-        annot.insert(
-            annotations::ATTESTATION_ROOT.to_string(),
-            Value::String(a.composed_root.clone()),
-        );
+        annot.insert_str(annotations::GENERATION, a.generation.to_string());
+        annot.insert_str(annotations::ATTESTATION_ROOT, a.composed_root.clone());
     }
     Ok(())
 }

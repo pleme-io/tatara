@@ -13,6 +13,7 @@ use tatara_process::hostname::{
 use tatara_process::intent::{
     AplicacaoIntent, FluxIntent, Intent, IntentVariant, LispIntent, NixIntent,
 };
+use tatara_process::json_object::JsonMapStrExt;
 use tatara_process::k8s_builtin_resource::K8sBuiltinResource;
 use tatara_process::k8s_object_ref::K8sObjectRef;
 use tatara_process::phase::ProcessPhase;
@@ -120,8 +121,12 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
     // Kustomization lives in the Process's namespace so that K8s-native
     // ownerReferences (same-namespace only) cascade cleanup on deletion.
     let mut spec = serde_json::Map::new();
-    spec.insert("interval".into(), Value::String("1m".into()));
-    spec.insert("path".into(), Value::String(f.path.clone()));
+    // String-slot writes ride through the ONE typed
+    // [`JsonMapStrExt::insert_str`] substrate owner — sibling to the
+    // `render_aplicacao` HelmRelease.spec seeds + the
+    // `ssapply::inject_annotations` observed-* stamp family.
+    spec.insert_str("interval", "1m");
+    spec.insert_str("path", f.path.clone());
     spec.insert("prune".into(), Value::Bool(true));
     // 3-slot `{kind, name, namespace}` cross-resource reference at
     // Kustomization.spec.sourceRef → GitRepository. Pre-lift this was
@@ -147,7 +152,7 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
         .as_json(),
     );
     if let Some(tn) = &f.target_namespace {
-        spec.insert("targetNamespace".into(), Value::String(tn.clone()));
+        spec.insert_str("targetNamespace", tn.clone());
     }
     if f.decrypt_sops {
         spec.insert(
@@ -228,7 +233,7 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
         }
     };
     if !a.profile.is_empty() {
-        values.insert("profile".into(), Value::String(a.profile.clone()));
+        values.insert_str("profile", a.profile.clone());
     }
 
     // Split the chart reference: OCI → emit OCIRepository + HelmRelease.chartRef.
@@ -324,12 +329,9 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
     // ONE typed `AplicacaoIntent::flux_reconcile_interval` composer.
     // Byte-identity of the two slots is pinned by
     // `ocirepository_and_helmrelease_carry_byte_identical_flux_reconcile_interval`.
-    hr_spec.insert(
-        "interval".into(),
-        Value::String(a.flux_reconcile_interval()),
-    );
-    hr_spec.insert("releaseName".into(), Value::String(release_name.clone()));
-    hr_spec.insert("targetNamespace".into(), Value::String(target_ns));
+    hr_spec.insert_str("interval", a.flux_reconcile_interval());
+    hr_spec.insert_str("releaseName", release_name.clone());
+    hr_spec.insert_str("targetNamespace", target_ns);
     if let Some(chart_obj) = chart_block.as_object() {
         for (k, v) in chart_obj {
             hr_spec.insert(k.clone(), v.clone());
@@ -848,14 +850,8 @@ fn one_export_job(
     // reconciler ownership discovery — see `ownership_labels` doc
     // for the peer-shape note.
     let mut job_labels = crate::ssapply::ownership_labels(process_ref);
-    job_labels.insert(
-        annotations::ROLE.to_string(),
-        Value::String("export".to_string()),
-    );
-    job_labels.insert(
-        annotations::EXPORT_INDEX.to_string(),
-        Value::String(index.to_string()),
-    );
+    job_labels.insert_str(annotations::ROLE, "export");
+    job_labels.insert_str(annotations::EXPORT_INDEX, index.to_string());
 
     // Route the export Job's `(apiVersion, kind)` pair through the
     // typed [`K8sBuiltinResource::Job`] closed-set owner's

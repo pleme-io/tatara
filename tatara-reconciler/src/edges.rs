@@ -25,6 +25,7 @@ use anyhow::Result;
 use serde_json::{json, Value};
 
 use tatara_process::annotations;
+use tatara_process::json_object::JsonMapStrExt;
 use tatara_process::routing::{RoutingBackend, RoutingForm, RoutingHostname};
 use tatara_process::routing_edge_resource::RoutingEdgeResource;
 
@@ -308,26 +309,19 @@ impl Edge for IngressEdge {
         // branches collapse to a single insert whose value is decided by
         // the enum, not by an inline ternary restated per site.
         let mut annotations_map = crate::ssapply::ownership_annotations(ctx.process_ref);
-        annotations_map.insert(
-            annotations::ROUTING_FORM.to_string(),
-            Value::String(
-                RoutingForm::from_is_stable(ctx.is_stable)
-                    .as_str()
-                    .to_string(),
-            ),
+        annotations_map.insert_str(
+            annotations::ROUTING_FORM,
+            RoutingForm::from_is_stable(ctx.is_stable).as_str(),
         );
         for (k, v) in &ctx.backend.ingress_annotations {
-            annotations_map.insert(k.clone(), Value::String(v.clone()));
+            annotations_map.insert_str(k.clone(), v.clone());
         }
         let issuer = ctx
             .backend
             .tls_issuer
             .as_deref()
             .unwrap_or("letsencrypt-prod");
-        annotations_map.insert(
-            "cert-manager.io/cluster-issuer".to_string(),
-            Value::String(issuer.to_string()),
-        );
+        annotations_map.insert_str("cert-manager.io/cluster-issuer", issuer);
 
         // Compose the 5-slot metadata block through the shared
         // substrate composer that owns the `{name, namespace, labels,

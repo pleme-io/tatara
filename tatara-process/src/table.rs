@@ -53,7 +53,7 @@ pub struct ProcessTableSpec {
     pub max_children: u32,
 
     /// Grace window before escalating SIGTERM → SIGKILL (seconds).
-    #[serde(default = "default_sigterm_timeout")]
+    #[serde(default = "crate::serde_defaults::default_sigterm_grace_seconds")]
     pub sigterm_timeout_seconds: u32,
 
     /// After this long in Zombie, force-reap.
@@ -67,9 +67,6 @@ pub struct ProcessTableSpec {
 
 fn default_next_seq() -> u32 {
     1
-}
-fn default_sigterm_timeout() -> u32 {
-    480
 }
 fn default_zombie_timeout() -> u32 {
     600

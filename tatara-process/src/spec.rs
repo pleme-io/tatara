@@ -140,7 +140,7 @@ impl From<MustReachPhase> for ProcessPhase {
 #[serde(rename_all = "camelCase")]
 pub struct SignalPolicy {
     /// Grace before escalating SIGTERM → SIGKILL.
-    #[serde(default = "default_sigterm_grace")]
+    #[serde(default = "crate::serde_defaults::default_sigterm_grace_seconds")]
     pub sigterm_grace_seconds: u32,
     /// Permit force-reap via SIGKILL (default: allow).
     #[serde(default = "crate::serde_defaults::default_true")]
@@ -156,16 +156,12 @@ pub struct SignalPolicy {
 impl Default for SignalPolicy {
     fn default() -> Self {
         Self {
-            sigterm_grace_seconds: default_sigterm_grace(),
+            sigterm_grace_seconds: crate::serde_defaults::default_sigterm_grace_seconds(),
             sigkill_force: true,
             sighup_strategy: SighupStrategy::default(),
             start_suspended: false,
         }
     }
-}
-
-fn default_sigterm_grace() -> u32 {
-    480
 }
 
 #[cfg(test)]

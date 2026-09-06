@@ -123,6 +123,91 @@ impl Satisfaction {
             qname = crate::ssapply::qualified_process_ref(ns, name),
         ))
     }
+
+    /// Compose a [`Satisfaction::Unsatisfied`] diagnostic whose body
+    /// opens with the recurring `<label> <ns>/<name> ` head every Job-
+    /// based boundary evaluator surfaces once its fetch-and-classify
+    /// chain has resolved and only the per-arm tail body varies.
+    /// Peer to [`Self::resource_not_found`] on the same head-composition
+    /// axis: `resource_not_found` owns the fixed `<label> <ns>/<name>
+    /// not found` shape at the fetch-miss corner; this composer owns
+    /// the variable-tail shape at every OTHER Job-based diagnostic
+    /// corner where the arm-specific suffix ("failed
+    /// (status.failed={n})", "still running (succeeded={s},
+    /// active={a})", "receipt ConfigMap <ns>/<cm> missing", "receipt
+    /// malformed: {why}", …) differs between callsites.
+    ///
+    /// The ONE substrate owner of the `<label> <ns>/<name> <tail>`
+    /// diagnostic shape restated by hand at FOUR sites past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold:
+    ///
+    /// * [`classify_job_status`] on the `status.failed > 0` arm —
+    ///   `format!("{label} {ns}/{name} failed (status.failed={})",
+    ///   status.failed)`.
+    /// * [`classify_job_status`] on the `status.succeeded < 1` arm —
+    ///   `format!("{label} {ns}/{name} still running (succeeded={},
+    ///   active={})", status.succeeded, status.active)`.
+    /// * [`classify_receipt_verdict`] on the [`ReceiptVerdict::Missing`]
+    ///   arm — `format!("{label} {ns}/{name} receipt ConfigMap
+    ///   {ns}/{cm_name} missing")` (whose sub-tail `<ns>/<cm_name>`
+    ///   join is also lifted onto `qualified_process_ref` at the
+    ///   callsite).
+    /// * [`classify_receipt_verdict`] on the
+    ///   [`ReceiptVerdict::Malformed`] arm — `format!("{label}
+    ///   {ns}/{name} receipt malformed: {why}")`.
+    ///
+    /// The `<ns>/<name>` join at the head routes through the
+    /// workspace-wide [`tatara_process::qualified_process_ref`]
+    /// composer via its [`crate::ssapply::qualified_process_ref`]
+    /// re-export — pre-lift each of the four sites hand-authored a
+    /// bare `{ns}/{name}` join that did NOT ride through the
+    /// composer, so a future normalization of the join (case-fold,
+    /// unicode-safe collation, etc.) would have skipped these four
+    /// diagnostic bodies. Post-lift every head inherits the
+    /// workspace-wide `<ns>/<name>` join mechanically, matching the
+    /// sibling [`Self::resource_not_found`] composer's routing
+    /// convention.
+    ///
+    /// The `tail` parameter accepts any [`std::fmt::Display`]-able
+    /// value (an owned [`String`] from a callsite `format!(...)`, a
+    /// `&str` literal, a per-callsite carrier type) so callers pass
+    /// their arm-specific tail without pre-committing the composer to
+    /// a single carrier shape. Each future Job-based diagnostic corner
+    /// on this file (kenshi-runner's P3 lift will add per-suite
+    /// diagnostics; future per-membro contract receipts will add
+    /// per-contract phrasing) lands as ONE new callsite through this
+    /// composer instead of another hand-authored `format!(...)` with
+    /// the same `<label> <ns>/<name> …` head.
+    ///
+    /// Byte-shape pin: `labeled_diagnostic("Job", "flux-system",
+    /// "my-job", "failed (status.failed=3)")` yields
+    /// `Satisfaction::Unsatisfied("Job flux-system/my-job failed
+    /// (status.failed=3)")`, byte-identical to the pre-lift shape the
+    /// existing
+    /// [`classify_job_status_tests::failed_job_projects_to_unsatisfied_with_counter_tail`]
+    /// test already pinned.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the shape recurred at four sites past the PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here). THEORY
+    /// .md §II.1 invariant 5 (composition preserves proofs — the four
+    /// callsites now compose structurally through ONE primitive; a
+    /// regression that drifted the wording at ONE site surfaces at
+    /// [`satisfaction_labeled_diagnostic_tests`] rather than as silent
+    /// drift at every future Job-based diagnostic corner with the
+    /// same head shape).
+    #[must_use]
+    pub fn labeled_diagnostic(
+        label: &str,
+        ns: &str,
+        name: &str,
+        tail: impl std::fmt::Display,
+    ) -> Self {
+        Self::Unsatisfied(format!(
+            "{label} {qname} {tail}",
+            qname = crate::ssapply::qualified_process_ref(ns, name),
+        ))
+    }
 }
 
 /// Closed set of diagnostic label prefixes used by Job-based boundary
@@ -770,15 +855,31 @@ fn classify_job_status(
         JobLookup::Missing => Err(Satisfaction::resource_not_found(label, ns, name)),
         JobLookup::Found(status) => {
             if status.failed > 0 {
-                Err(Satisfaction::Unsatisfied(format!(
-                    "{label} {ns}/{name} failed (status.failed={})",
-                    status.failed
-                )))
+                // The `<label> <ns>/<name> failed …` diagnostic head
+                // now routes through the substrate composer
+                // [`Satisfaction::labeled_diagnostic`] — ONE of FOUR
+                // sites lifted onto the composer past the ★★
+                // PRIME-DIRECTIVE ≥ 2 duplication threshold. The `<ns>
+                // /<name>` join inherits the workspace-wide
+                // [`tatara_process::qualified_process_ref`] normalization
+                // mechanically. See the composer's doc for the full
+                // four-arm pre-lift shape catalog.
+                Err(Satisfaction::labeled_diagnostic(
+                    label,
+                    ns,
+                    name,
+                    format_args!("failed (status.failed={})", status.failed),
+                ))
             } else if status.succeeded < 1 {
-                Err(Satisfaction::Unsatisfied(format!(
-                    "{label} {ns}/{name} still running (succeeded={}, active={})",
-                    status.succeeded, status.active
-                )))
+                Err(Satisfaction::labeled_diagnostic(
+                    label,
+                    ns,
+                    name,
+                    format_args!(
+                        "still running (succeeded={}, active={})",
+                        status.succeeded, status.active
+                    ),
+                ))
             } else {
                 Ok(status)
             }
@@ -879,12 +980,31 @@ fn classify_receipt_verdict(
 ) -> Satisfaction {
     match verdict {
         ReceiptVerdict::Ok(_) => Satisfaction::Satisfied,
-        ReceiptVerdict::Missing => Satisfaction::Unsatisfied(format!(
-            "{label} {ns}/{name} receipt ConfigMap {ns}/{cm_name} missing"
-        )),
-        ReceiptVerdict::Malformed(why) => {
-            Satisfaction::Unsatisfied(format!("{label} {ns}/{name} receipt malformed: {why}"))
-        }
+        // Both Unsatisfied arms now route through
+        // [`Satisfaction::labeled_diagnostic`] — the substrate composer
+        // that owns the `<label> <ns>/<name> <tail>` diagnostic head.
+        // The Missing arm's sub-tail carries a SECOND `<ns>/<cm_name>`
+        // join (the receipt ConfigMap coordinates); route that through
+        // the same [`crate::ssapply::qualified_process_ref`] composer
+        // too, so both `<ns>/<name>` joins on this diagnostic body
+        // inherit the workspace-wide normalization mechanically. See
+        // the composer's doc for the full four-arm pre-lift shape
+        // catalog.
+        ReceiptVerdict::Missing => Satisfaction::labeled_diagnostic(
+            label,
+            ns,
+            name,
+            format_args!(
+                "receipt ConfigMap {cm} missing",
+                cm = crate::ssapply::qualified_process_ref(ns, cm_name),
+            ),
+        ),
+        ReceiptVerdict::Malformed(why) => Satisfaction::labeled_diagnostic(
+            label,
+            ns,
+            name,
+            format_args!("receipt malformed: {why}"),
+        ),
     }
 }
 
@@ -1709,6 +1829,202 @@ mod satisfaction_resource_not_found_tests {
             msg.ends_with(" not found"),
             "diagnostic body must end with ` not found` (leading space + verbatim phrase) — a \
              regression that drifted the tail would surface here; got {msg:?}",
+        );
+    }
+}
+
+/// Substrate-primitive tests for [`Satisfaction::labeled_diagnostic`] —
+/// the ONE workspace-wide owner of the variable-tail `<label>
+/// <ns>/<name> <tail>` diagnostic shape that pre-lift lived at FOUR
+/// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+/// ([`classify_job_status`] on the `status.failed > 0` +
+/// `status.succeeded < 1` arms, [`classify_receipt_verdict`] on the
+/// [`ReceiptVerdict::Missing`] + [`ReceiptVerdict::Malformed`] arms).
+///
+/// Pins two contract axes at fail-before-pass-after granularity:
+///
+/// 1. Byte-shape identity of the diagnostic body — a regression that
+///    reshaped the `<label> <ns>/<name> <tail>` head (a swapped slot
+///    order, a lost separator, a lost label prefix, a doubled space
+///    between head and tail) surfaces here rather than as silent
+///    operator-facing drift across the four callsites.
+/// 2. `<ns>/<name>` routing invariant — the join rides through
+///    [`crate::ssapply::qualified_process_ref`] (a re-export of the
+///    workspace-wide [`tatara_process::qualified_process_ref`]
+///    composer). A regression that re-inlined a `{}/{}` join at the
+///    composer would surface here + at the sibling composer's own
+///    pins in `tatara_process::lib::qualified_process_ref_tests`.
+///
+/// Sibling of the [`satisfaction_resource_not_found_tests`] module
+/// above (on the fixed-tail axis) — kept as its own module so a
+/// regression at the variable-tail composer's axis surfaces distinctly
+/// from the fixed-tail composer's axis.
+#[cfg(test)]
+mod satisfaction_labeled_diagnostic_tests {
+    use super::Satisfaction;
+
+    // ── Contract axis 1: byte-shape identity across the four pre-lift
+    // restatements ─────────────────────────────────────────────────────
+    //
+    // Each assertion below binds the composer to the exact diagnostic
+    // body one of the four pre-lift `format!(...)` chains produced,
+    // so a regression that reshaped the composer's `format!` body
+    // surfaces at whichever axis carries the drift. The four inputs
+    // mirror the four pre-lift callsites verbatim.
+
+    #[test]
+    fn shape_matches_classify_job_status_failed_arm_pre_lift() {
+        // Pre-lift: `format!("{label} {ns}/{name} failed
+        // (status.failed={})", status.failed)` at `classify_job_status`
+        // on the `status.failed > 0` arm.
+        let s = Satisfaction::labeled_diagnostic(
+            "Job",
+            "default",
+            "my-job",
+            format_args!("failed (status.failed={})", 3_i64),
+        );
+        assert_eq!(
+            s,
+            Satisfaction::Unsatisfied("Job default/my-job failed (status.failed=3)".into()),
+        );
+    }
+
+    #[test]
+    fn shape_matches_classify_job_status_running_arm_pre_lift() {
+        // Pre-lift: `format!("{label} {ns}/{name} still running
+        // (succeeded={}, active={})", status.succeeded, status.active)`
+        // at `classify_job_status` on the `status.succeeded < 1` arm.
+        let s = Satisfaction::labeled_diagnostic(
+            "Job",
+            "default",
+            "my-job",
+            format_args!("still running (succeeded={}, active={})", 0_i64, 2_i64),
+        );
+        assert_eq!(
+            s,
+            Satisfaction::Unsatisfied(
+                "Job default/my-job still running (succeeded=0, active=2)".into()
+            ),
+        );
+    }
+
+    #[test]
+    fn shape_matches_classify_receipt_verdict_missing_arm_pre_lift() {
+        // Pre-lift: `format!("{label} {ns}/{name} receipt ConfigMap
+        // {ns}/{cm_name} missing")` at `classify_receipt_verdict` on
+        // the `ReceiptVerdict::Missing` arm. Post-lift the sub-tail's
+        // `<ns>/<cm_name>` join ALSO rides through
+        // `qualified_process_ref`, so a callsite-side regression that
+        // re-inlined a `{}/{}` at the sub-tail would surface at this
+        // module's peer `ns_cm_join_at_missing_sub_tail_rides_composer`
+        // pin. This assertion binds the byte-identical shape both
+        // pre- and post-lift emit at the standard input.
+        let s = Satisfaction::labeled_diagnostic(
+            "Job",
+            "flux-system",
+            "my-job",
+            format_args!(
+                "receipt ConfigMap {cm} missing",
+                cm = crate::ssapply::qualified_process_ref("flux-system", "my-job-receipt"),
+            ),
+        );
+        assert_eq!(
+            s,
+            Satisfaction::Unsatisfied(
+                "Job flux-system/my-job receipt ConfigMap flux-system/my-job-receipt missing"
+                    .into()
+            ),
+        );
+    }
+
+    #[test]
+    fn shape_matches_classify_receipt_verdict_malformed_arm_pre_lift() {
+        // Pre-lift: `format!("{label} {ns}/{name} receipt malformed:
+        // {why}")` at `classify_receipt_verdict` on the
+        // `ReceiptVerdict::Malformed` arm.
+        let s = Satisfaction::labeled_diagnostic(
+            "Job",
+            "default",
+            "my-job",
+            format_args!("receipt malformed: {why}", why = "invalid JSON: EOF"),
+        );
+        assert_eq!(
+            s,
+            Satisfaction::Unsatisfied(
+                "Job default/my-job receipt malformed: invalid JSON: EOF".into()
+            ),
+        );
+    }
+
+    // ── Contract axis 2: routing invariant — the `<ns>/<name>` join
+    // rides through `qualified_process_ref` ────────────────────────
+    //
+    // A regression that re-inlined a `{}/{}` join at the composer
+    // would silently skip a future workspace-wide normalization of
+    // the `<ns>/<name>` shape (case-fold, unicode-safe collation,
+    // etc.). This pin binds the composer's diagnostic head to the
+    // ONE workspace-wide `<ns>/<name>` owner byte-identically, so a
+    // regression at either side surfaces here.
+
+    #[test]
+    fn ns_name_join_at_head_rides_qualified_process_ref_composer() {
+        let ns = "flux-system";
+        let name = "my-job";
+        let s = Satisfaction::labeled_diagnostic("Job", ns, name, "tail-goes-here");
+        let Satisfaction::Unsatisfied(msg) = s else {
+            panic!("labeled_diagnostic must project to Satisfaction::Unsatisfied");
+        };
+        let qname = tatara_process::qualified_process_ref(ns, name);
+        assert!(
+            msg.contains(&qname),
+            "diagnostic body must carry the substrate `<ns>/<name>` join `{qname}` — a regression \
+             that re-inlined a `{{}}/{{}}` join would surface here; got {msg:?}",
+        );
+        // Anchor the join at the position immediately after the
+        // label prefix + one space — pins the two-slot spatial
+        // ordering (`<label> <ns>/<name>` head, not
+        // `<ns>/<name> <label>`).
+        assert!(
+            msg.starts_with(&format!("Job {qname} ")),
+            "diagnostic body must open with `<label> <ns>/<name> ` — a regression that swapped \
+             the two slots would surface here; got {msg:?}",
+        );
+    }
+
+    #[test]
+    fn head_ends_with_single_space_separator_before_tail() {
+        // Pin the spatial separator between the `<label> <ns>/<name>`
+        // head and the arm-specific tail as a single ASCII space — a
+        // regression that dropped the separator (concatenating head
+        // and tail) or doubled it would silently reshape every
+        // downstream operator-visible diagnostic across the four
+        // callsites.
+        let s = Satisfaction::labeled_diagnostic("Job", "ns", "job", "TAIL");
+        let Satisfaction::Unsatisfied(msg) = s else {
+            unreachable!()
+        };
+        assert_eq!(msg, "Job ns/job TAIL");
+    }
+
+    #[test]
+    fn tail_impl_display_accepts_str_string_and_format_args() {
+        // The composer's `tail: impl Display` contract accepts every
+        // callsite-shipped carrier without pre-committing to one:
+        // owned `String` from a callsite `format!(...)`, `&str`
+        // literal, and `format_args!(...)` (the shape callsites now
+        // ship post-lift to avoid a callsite-side transient
+        // `String` allocation on every diagnostic). Pin all three
+        // shapes at the type level — a regression that narrowed the
+        // trait bound would fail compilation on this test.
+        let via_string = Satisfaction::labeled_diagnostic("L", "n", "x", String::from("owned"));
+        let via_str = Satisfaction::labeled_diagnostic("L", "n", "x", "borrowed");
+        let via_format_args =
+            Satisfaction::labeled_diagnostic("L", "n", "x", format_args!("via {}", "args"));
+        assert_eq!(via_string, Satisfaction::Unsatisfied("L n/x owned".into()));
+        assert_eq!(via_str, Satisfaction::Unsatisfied("L n/x borrowed".into()));
+        assert_eq!(
+            via_format_args,
+            Satisfaction::Unsatisfied("L n/x via args".into())
         );
     }
 }

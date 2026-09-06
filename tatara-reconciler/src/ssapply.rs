@@ -10,9 +10,11 @@ use kube::{Api, Client};
 use serde_json::{json, Value};
 
 use tatara_process::annotations;
+use tatara_process::anyhow_flatten::FlattenCtxExt;
 use tatara_process::flux_resource::FluxResource;
 use tatara_process::json_object::ValueObjectExt;
 use tatara_process::k8s_wire_identity::K8sWireIdentity;
+use tatara_process::kube_error::KubeResultExt;
 use tatara_process::prelude::{FluxResourceRef, Process, RenderedResourceCoords};
 
 /// Field manager string we use for all SSA writes.
@@ -770,7 +772,7 @@ pub async fn apply_owned(
     // wire-params sub-axis).
     tatara_process::patch::apply(&api, &coords.name, FIELD_MANAGER, &obj)
         .await
-        .map_err(|e| anyhow!("ssapply {}/{}: {e}", coords.kind, coords.name))?;
+        .kube_ctx_with(format!("ssapply {}/{}", coords.kind, coords.name))?;
     Ok(())
 }
 
@@ -1073,7 +1075,7 @@ pub async fn fetch_flux_ref(client: Client, r: &FluxResourceRef) -> Result<Optio
     let (namespace, api_version, kind, name) = r.fetch_coords();
     fetch(client, namespace, api_version, kind, name)
         .await
-        .map_err(|e| anyhow!("{}: {e}", flux_ref_fetch_error_context(r)))
+        .flatten_ctx_with(flux_ref_fetch_error_context(r))
 }
 
 /// Parsed readiness state of a resource's `status.conditions[type=Ready]`.

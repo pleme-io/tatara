@@ -18,7 +18,7 @@
 //! `check_depends_on` reuses the `ProcessPhase` evaluator and returns unmet
 //! dependencies structured for UX messaging.
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use kube::Client;
 use serde::Deserialize;
 use serde_json::Value;
@@ -26,6 +26,7 @@ use serde_json::Value;
 use tatara_process::boundary::{Condition, ConditionKind};
 use tatara_process::flux_resource::FluxResource;
 use tatara_process::k8s_builtin_resource::K8sBuiltinResource;
+use tatara_process::kube_error::KubeResultExt;
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
 #[cfg(test)]
@@ -1037,7 +1038,7 @@ async fn evaluate_process_phase(
     let target = match api
         .get_opt(&parsed.process_ref)
         .await
-        .map_err(|e| anyhow!("fetch process {ns}/{}: {e}", parsed.process_ref))?
+        .kube_ctx_with(format!("fetch process {ns}/{}", parsed.process_ref))?
     {
         Some(t) => t,
         // The None arm routes through the substrate composer

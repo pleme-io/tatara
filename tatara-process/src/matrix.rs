@@ -92,7 +92,7 @@ pub struct BreatheEnvelope {
     /// Start observe-only (`dryRun`) — breathe reports what it WOULD carve
     /// without mutating, until the cost SLA is validated. Default `true`
     /// (safe by default for a fresh sweep).
-    #[serde(default = "default_true")]
+    #[serde(default = "crate::serde_defaults::default_true")]
     pub dry_run: bool,
 
     /// The workload kind the bands target (default `Deployment`). The band's
@@ -127,9 +127,6 @@ pub struct BreatheDimension {
 
 fn default_breathe_cooldown() -> u64 {
     60
-}
-fn default_true() -> bool {
-    true
 }
 fn default_target_kind() -> String {
     "Deployment".to_string()

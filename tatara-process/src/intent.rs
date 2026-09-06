@@ -245,17 +245,13 @@ pub struct FluxIntent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_namespace: Option<String>,
     /// SOPS decryption — defaults to true to match pleme-io conventions.
-    #[serde(default = "default_true")]
+    #[serde(default = "crate::serde_defaults::default_true")]
     pub decrypt_sops: bool,
     /// If set, additionally emit a HelmRelease for this chart.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub helm_chart: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub helm_values: Option<BTreeMap<String, serde_json::Value>>,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 /// Lisp-sourced intent — tatara-lisp reader + macroexpander produces resources.

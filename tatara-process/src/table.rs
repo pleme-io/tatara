@@ -61,7 +61,7 @@ pub struct ProcessTableSpec {
     pub zombie_timeout_seconds: u32,
 
     /// When true, PID 1 adopts and terminates orphaned Processes.
-    #[serde(default = "default_true")]
+    #[serde(default = "crate::serde_defaults::default_true")]
     pub orphan_reaping_enabled: bool,
 }
 
@@ -73,9 +73,6 @@ fn default_sigterm_timeout() -> u32 {
 }
 fn default_zombie_timeout() -> u32 {
     600
-}
-fn default_true() -> bool {
-    true
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]

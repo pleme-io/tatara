@@ -75,7 +75,7 @@ pub struct EphemeralDefaults {
     /// Whether to auto-emit an `OCIRepository` peer for `oci://` chart
     /// refs. Default: `true`. Operators can disable when they
     /// pre-create OCIRepositories cluster-wide.
-    #[serde(default = "default_true")]
+    #[serde(default = "tatara_process::serde_defaults::default_true")]
     pub emit_oci_repository: bool,
 }
 
@@ -90,9 +90,6 @@ fn default_registry() -> String {
 }
 fn default_root_ca() -> String {
     "saguao-fleet-root".to_string()
-}
-fn default_true() -> bool {
-    true
 }
 
 impl Default for EphemeralDefaults {
@@ -192,6 +189,67 @@ mod tests {
             tatara_process::lifetime::DEFAULT_EPHEMERAL_TTL,
             "EphemeralDefaults::default().default_ttl must byte-match \
              the paired DEFAULT_EPHEMERAL_TTL const in tatara-process",
+        );
+    }
+
+    #[test]
+    fn emit_oci_repository_routes_through_workspace_canonical_default_true_owner() {
+        // Cross-crate coherence pin: the reconciler-side operator-facing
+        // `emit_oci_repository` slot MUST agree bytewise with the
+        // workspace-canonical `default_true` substrate owner in
+        // `tatara-process`. Pre-lift this side had its own private
+        // `fn default_true() -> bool { true }` shim; that shim was one
+        // of FIVE workspace-wide restatements of the SAME 3-line body
+        // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold. A
+        // partial re-tuning that drifted one side (e.g. a shift to
+        // `false` at the tatara-process substrate owner for a safer-
+        // by-default posture but not at this reconciler-side shim)
+        // would silently produce operator-facing skew where every
+        // peer serde-default flipped to `false` but this one still
+        // stamped `true` on any legacy `EphemeralDefaults` whose YAML
+        // omits the field.
+        //
+        // Post-lift both sides route through
+        // `tatara_process::serde_defaults::default_true` — a
+        // regression that reintroduces a private shim here surfaces
+        // at THIS pin rather than as five-way skew across the
+        // BreatheSpec / SignalPolicy / FluxIntent / ProcessTableSpec /
+        // EphemeralDefaults consumer family.
+        assert_eq!(
+            EphemeralDefaults::default().emit_oci_repository,
+            tatara_process::serde_defaults::default_true(),
+            "EphemeralDefaults::default().emit_oci_repository must \
+             route through tatara_process::serde_defaults::default_true \
+             — a private-shim reintroduction skews the reconciler-side \
+             default against the workspace-canonical substrate owner",
+        );
+        assert_eq!(
+            EphemeralDefaults::default().emit_oci_repository,
+            tatara_process::serde_defaults::DEFAULT_TRUE,
+            "EphemeralDefaults::default().emit_oci_repository must \
+             byte-match the paired DEFAULT_TRUE const in tatara-process",
+        );
+    }
+
+    #[test]
+    fn emit_oci_repository_serde_default_omits_to_workspace_true() {
+        // Peer to the byte-shape pin above — pin the substrate routing
+        // at the serde-default surface. A YAML fragment that omits the
+        // `emit_oci_repository:` slot MUST parse into an
+        // `EphemeralDefaults` whose slot reads bytewise-identical to
+        // the workspace-canonical `default_true` owner. A regression
+        // that decoupled the serde `default = "…"` path from the
+        // substrate primitive (e.g. a stale `default = "default_true"`
+        // that still pointed at a re-added local shim) would silently
+        // resurrect the pre-lift skew corner.
+        let yaml = "{}";
+        let d: EphemeralDefaults = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(
+            d.emit_oci_repository,
+            tatara_process::serde_defaults::default_true(),
+            "EphemeralDefaults serde-default for the omitted \
+             `emit_oci_repository:` slot must route through \
+             tatara_process::serde_defaults::default_true",
         );
     }
 

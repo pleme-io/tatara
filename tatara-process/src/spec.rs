@@ -143,7 +143,7 @@ pub struct SignalPolicy {
     #[serde(default = "default_sigterm_grace")]
     pub sigterm_grace_seconds: u32,
     /// Permit force-reap via SIGKILL (default: allow).
-    #[serde(default = "default_true")]
+    #[serde(default = "crate::serde_defaults::default_true")]
     pub sigkill_force: bool,
     /// How SIGHUP is handled.
     #[serde(default)]
@@ -166,9 +166,6 @@ impl Default for SignalPolicy {
 
 fn default_sigterm_grace() -> u32 {
     480
-}
-fn default_true() -> bool {
-    true
 }
 
 #[cfg(test)]

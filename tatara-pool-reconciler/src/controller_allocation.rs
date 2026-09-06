@@ -456,7 +456,16 @@ pub fn error_policy(
     _ctx: Arc<PoolContext>,
 ) -> Action {
     warn!(error = ?err, "allocation reconcile failed");
-    tatara_process::requeue::after_secs(15)
+    // Named-intent requeue rides through the ONE substrate primitive
+    // `tatara_process::requeue::error_backoff` — pre-lift this was a
+    // hand-authored `after_secs(15)` chain feeding a bare `15`
+    // literal, one of TWO workspace-wide restatements of the "back
+    // off after a reconcile error" cadence past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold (peer at
+    // `controller_pool::error_policy` on the same pool-reconciler
+    // failure-sink axis). See the peer for the full pre-lift audit
+    // + upgrade rationale.
+    tatara_process::requeue::error_backoff()
 }
 
 #[cfg(test)]

@@ -463,7 +463,19 @@ pub fn error_policy(
     _ctx: Arc<PoolContext>,
 ) -> Action {
     warn!(error = ?err, "pool reconcile failed");
-    tatara_process::requeue::after_secs(15)
+    // Named-intent requeue rides through the ONE substrate primitive
+    // `tatara_process::requeue::error_backoff` — pre-lift this was a
+    // hand-authored `after_secs(15)` chain feeding a bare `15`
+    // literal, one of TWO workspace-wide restatements of the "back
+    // off after a reconcile error" cadence past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold (peer at
+    // `controller_allocation::error_policy` on the same
+    // pool-reconciler failure-sink axis). Post-lift both
+    // `error_policy` sinks share ONE substrate owner; a future
+    // exponential-backoff overlay, jitter overlay, or per-reconciler
+    // ceiling lands at THAT primitive rather than as scattered
+    // per-site hand-edits here and at the sibling Allocation sink.
+    tatara_process::requeue::error_backoff()
 }
 
 /// **R11 desired-count action applier.** Translates a

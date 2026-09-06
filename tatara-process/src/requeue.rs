@@ -43,7 +43,11 @@ use std::time::Duration;
 /// * `tatara-reconciler::table_controller` — 2 sites feeding `30`
 ///   at the ProcessTable heartbeat + error policy.
 /// * `tatara-pool-reconciler::controller_pool` — 3 sites feeding
-///   the reconcile-interval slot + literal `15`.
+///   the reconcile-interval slot + literal `15` (the two `15`
+///   sites — the pool reconciler's `error_policy` sink + the
+///   Allocation reconciler's peer sink — subsequently reached
+///   [`error_backoff`] on the named-intent axis; count preserved
+///   here for the pre-lift audit).
 /// * `tatara-pool-reconciler::controller_allocation` — 3 sites
 ///   feeding literal `5` (bind-retry), the reconcile-interval
 ///   slot, and literal `15`.
@@ -129,6 +133,28 @@ pub const SHORT_RETRY_SECONDS: u64 = 5;
 /// duplication threshold across three files that each named the
 /// same intent independently.
 pub const HEARTBEAT_SECONDS: u64 = 30;
+
+/// Second-count budget for the "back off after a reconcile error"
+/// requeue intent (15s). Bound by the bare `15` literal in
+/// `tatara-pool-reconciler::controller_pool::error_policy` (Pool
+/// reconcile-failure backoff) and by the bare `15` literal in
+/// `tatara-pool-reconciler::controller_allocation::error_policy`
+/// (Allocation reconcile-failure backoff), past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold across two files that
+/// each named the same intent independently.
+///
+/// Sits between [`SHORT_RETRY_SECONDS`] (5s — a per-branch bounded
+/// retry inside a reconcile pass) and [`HEARTBEAT_SECONDS`] (30s —
+/// the steady-state re-observation cadence). The pool-reconciler
+/// deliberately chose a *shorter* error-backoff than its own
+/// `heartbeat_seconds` slot (default 30) because a Pool /
+/// EphemeralAllocation reconcile failure signals a mis-computed
+/// desired-count or a stale claim — either of which the operator
+/// wants observed again ahead of the next heartbeat tick — whereas
+/// the two `tatara-reconciler` error_policy sinks fall through to
+/// [`heartbeat`] directly because a Process-reconcile failure holds
+/// its own retry budget in the FSM handlers themselves.
+pub const ERROR_BACKOFF_SECONDS: u64 = 15;
 
 /// The "fast re-poll" requeue action — `after_secs(TICK_SECONDS)`.
 ///
@@ -235,6 +261,58 @@ pub fn short_retry() -> Action {
 #[must_use]
 pub fn heartbeat() -> Action {
     after_secs(HEARTBEAT_SECONDS)
+}
+
+/// The "back off after a reconcile error" requeue action —
+/// `after_secs(ERROR_BACKOFF_SECONDS)`.
+///
+/// The ONE substrate owner of the "re-enqueue after an
+/// `error_policy` sink caught a reconcile failure" requeue intent.
+/// Pre-lift bound at 2 workspace-wide `error_policy` return-sites
+/// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold across
+/// one crate:
+///
+/// * `tatara-pool-reconciler::controller_pool::error_policy` — the
+///   `EphemeralPool` reconciler's failure sink; a bare `15`
+///   literal fed [`after_secs`].
+/// * `tatara-pool-reconciler::controller_allocation::error_policy`
+///   — the `EphemeralAllocation` reconciler's failure sink; a bare
+///   `15` literal fed [`after_secs`].
+///
+/// Post-lift each callsite reads
+/// `tatara_process::requeue::error_backoff()`. Peer to [`tick`],
+/// [`short_retry`], and [`heartbeat`] on the "named requeue intent"
+/// axis; the pool-reconciler's `error_policy` deliberately chose a
+/// backoff shorter than its own `heartbeat_seconds` slot (see
+/// [`ERROR_BACKOFF_SECONDS`] for the "pool-failure signals stale
+/// desired-count / claim" rationale). `tatara-reconciler`'s two
+/// `error_policy` sinks fall through to [`heartbeat`] directly
+/// because a Process-reconcile failure holds its own retry budget
+/// in the FSM handlers themselves — so the two intents are named
+/// separately on purpose rather than folded.
+///
+/// A future normalization on the error-backoff intent alone (an
+/// exponential-backoff overlay bounded by `HEARTBEAT_SECONDS`, a
+/// per-reconciler injectable ceiling for a mis-configured pool, a
+/// jitter overlay to avoid a thundering herd of pool + allocation
+/// error retries) lands at THIS ONE substrate primitive and both
+/// downstream `error_policy` sites inherit the upgrade
+/// mechanically. No per-site edit at either of the 2 listed
+/// callers or at future consumers (a new pool-adjacent controller,
+/// a new failure-sink axis).
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the intent recurred at 2 hand-authored production sites past
+/// the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
+/// ONE owner here). THEORY.md §II.1 invariant 5 (composition
+/// preserves proofs — the intent → second-count mapping lives at
+/// ONE typed algebra projection; a regression that drifted the
+/// second-count would fail at the byte-shape pin below rather than
+/// as silent operator-visible cadence skew across both downstream
+/// `error_policy` return-sites).
+#[must_use]
+pub fn error_backoff() -> Action {
+    after_secs(ERROR_BACKOFF_SECONDS)
 }
 
 #[cfg(test)]
@@ -422,6 +500,27 @@ mod tests {
     }
 
     #[test]
+    fn error_backoff_binds_to_fifteen_seconds_and_matches_pre_lift_hand_authored_chain() {
+        // The bare `15` literal both `tatara-pool-reconciler::
+        // controller_pool::error_policy` and `tatara-pool-
+        // reconciler::controller_allocation::error_policy` fed
+        // into `after_secs` pre-lift, now bound at ONE owner
+        // here. A drift would silently change the pool + allocation
+        // error-backoff cadence across both downstream sites,
+        // either racing the API server on a genuinely stuck pool
+        // (if shortened) or delaying observation of a stale
+        // desired-count / claim past the operator's expectation
+        // (if lengthened).
+        assert_eq!(ERROR_BACKOFF_SECONDS, 15);
+        let composed = format!("{:?}", error_backoff());
+        let hand_authored = format!("{:?}", after_secs(15));
+        assert_eq!(
+            composed, hand_authored,
+            "error_backoff() must byte-shape-match after_secs(15); the intent → second-count binding drifted",
+        );
+    }
+
+    #[test]
     fn named_requeue_intents_compose_at_reconcile_return_position() {
         // Every helper returns `Action` and composes at the
         // canonical `Result<Action, _>` return position every
@@ -432,6 +531,7 @@ mod tests {
         let _tick_ok: Result<Action, ()> = Ok(tick());
         let _short_retry_ok: Result<Action, ()> = Ok(short_retry());
         let _heartbeat_ok: Result<Action, ()> = Ok(heartbeat());
+        let _error_backoff_ok: Result<Action, ()> = Ok(error_backoff());
     }
 
     #[test]
@@ -439,30 +539,40 @@ mod tests {
         // Peer to the reconcile-return shape: `error_policy` returns
         // bare `Action` (no `Result` wrapper). `heartbeat()` is the
         // canonical error-policy return for both `controller.rs` and
-        // `table_controller.rs`; pin the shape so a regression that
-        // added a wrapper surfaces HERE rather than at the two
+        // `table_controller.rs`; `error_backoff()` is the canonical
+        // error-policy return for both `controller_pool.rs` and
+        // `controller_allocation.rs`. Pin the shape so a regression
+        // that added a wrapper surfaces HERE rather than at the four
         // `error_policy` sites.
         let _tick: Action = tick();
         let _short_retry: Action = short_retry();
         let _heartbeat: Action = heartbeat();
+        let _error_backoff: Action = error_backoff();
     }
 
     #[test]
     fn named_requeue_intents_project_distinct_second_counts() {
-        // Cross-intent coherence pin: the three named intents must
-        // resolve to three distinct second-counts. A regression that
+        // Cross-intent coherence pin: the four named intents must
+        // resolve to four distinct second-counts. A regression that
         // collapsed two intents onto the same constant (e.g.
         // `TICK_SECONDS == SHORT_RETRY_SECONDS` after an over-eager
-        // "unify budgets" refactor) would fold a semantic distinction
-        // into a numeric one, and the 28 downstream sites would
-        // silently lose the intent name's meaning even though the
-        // helpers still compile.
+        // "unify budgets" refactor, or `ERROR_BACKOFF_SECONDS ==
+        // HEARTBEAT_SECONDS` after folding the pool-reconciler's
+        // error sink into the process-reconciler's) would fold a
+        // semantic distinction into a numeric one, and the
+        // downstream sites would silently lose the intent name's
+        // meaning even though the helpers still compile.
         assert_ne!(TICK_SECONDS, SHORT_RETRY_SECONDS);
+        assert_ne!(TICK_SECONDS, ERROR_BACKOFF_SECONDS);
         assert_ne!(TICK_SECONDS, HEARTBEAT_SECONDS);
+        assert_ne!(SHORT_RETRY_SECONDS, ERROR_BACKOFF_SECONDS);
         assert_ne!(SHORT_RETRY_SECONDS, HEARTBEAT_SECONDS);
+        assert_ne!(ERROR_BACKOFF_SECONDS, HEARTBEAT_SECONDS);
         assert!(
-            TICK_SECONDS < SHORT_RETRY_SECONDS && SHORT_RETRY_SECONDS < HEARTBEAT_SECONDS,
-            "named requeue intents must project onto strictly increasing second-counts (tick < short_retry < heartbeat); a regression that flipped the ordering would silently invert the retry-cadence hierarchy",
+            TICK_SECONDS < SHORT_RETRY_SECONDS
+                && SHORT_RETRY_SECONDS < ERROR_BACKOFF_SECONDS
+                && ERROR_BACKOFF_SECONDS < HEARTBEAT_SECONDS,
+            "named requeue intents must project onto strictly increasing second-counts (tick < short_retry < error_backoff < heartbeat); a regression that flipped the ordering would silently invert the retry-cadence hierarchy",
         );
     }
 }

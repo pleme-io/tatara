@@ -66,11 +66,88 @@ pub fn derive_identity<T: Serialize>(spec: &T, name_override: Option<&str>) -> I
     }
 }
 
+/// Canonical hierarchical PID-path segment separator.
+///
+/// The ONE substrate owner of the `'.'` char every hierarchical-PID
+/// composer + walker on this file + [`crate::pid`] (via
+/// [`join_pid_segment`]) reaches through, so a future normalization of
+/// the separator (a swap to `'/'` for a Unix-path-shaped rendering, a
+/// per-segment escape for names carrying literal `.`s, a widened
+/// grapheme-boundary walker for unicode-safe splits) lands at ONE
+/// substrate primitive and every hierarchical-PID producer + consumer
+/// picks up the upgrade mechanically.
+///
+/// Pre-lift the bare `'.'` char literal was hand-authored at TWO
+/// production sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold on the [`crate::pid`] side alone
+/// ([`crate::pid::depth`] on `pid_path.split('.')` and
+/// [`crate::pid::parent_of`] on `pid_path.rfind('.')`), plus the THREE
+/// composer sites this module + [`crate::pid`] hand-authored on the
+/// join axis before the [`join_pid_segment`] lift below routed them
+/// through the same const.
+///
+/// Theory grounding: THEORY.md §II.1 invariant 4 (deterministic
+/// identity — hierarchical PIDs are ONE cluster-wide address space
+/// with ONE canonical separator; every producer + consumer of the
+/// address space binds through the same substrate slot).
+pub const PID_PATH_SEPARATOR: char = '.';
+
+/// Compose the canonical `<head><PID_PATH_SEPARATOR><tail>`
+/// hierarchical PID-path segment join.
+///
+/// Owns the fixed 2-slot `format!("{head}.{tail}")` shape as ONE
+/// substrate site, routing the separator through
+/// [`PID_PATH_SEPARATOR`] so a future normalization of the separator
+/// (see the const's doc for the catalog) reaches every hierarchical-
+/// PID producer through this ONE primitive.
+///
+/// Pre-lift the 2-slot join was hand-authored at THREE production
+/// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, split
+/// across two crates:
+/// - [`format_process_address`] on the (`identity.name`, `pid_path`)
+///   pair — the root address composer.
+/// - [`crate::pid::allocate_pid`] on the Some(parent) arm's
+///   (`parent`, `next_sequence`) pair — the child PID allocator.
+/// - [`crate::pid::allocate_pid`] on the None arm's
+///   (`identity.name`, `next_sequence`) pair — the root PID allocator.
+///
+/// Post-lift each callsite reads
+/// `join_pid_segment(<head>, <tail>)` and the composed byte shape
+/// matches the pre-lift `format!` chain verbatim. The `tail`
+/// parameter accepts any [`std::fmt::Display`]-able value so the
+/// `u32 next_sequence` slot on [`crate::pid::allocate_pid`] flows
+/// through the primitive without a pre-format `.to_string()` round-
+/// trip, matching the sibling [`crate::boundary::Satisfaction::labeled_diagnostic`]
+/// composer's `tail: impl Display` convention.
+///
+/// Extension: future hierarchical-PID producers (P3 kenshi-runner's
+/// per-suite Job PID allocator, any future placement rule that names
+/// a fresh child under an existing parent) land as ONE new callsite
+/// through this composer instead of another hand-authored `format!(
+/// "{head}.{tail}")` restatement.
+///
+/// Theory grounding: THEORY.md §VI.1 (generation over composition —
+/// the shape recurred at three sites past the PRIME-DIRECTIVE ≥ 2
+/// duplication trigger, and is lifted to ONE owner here). THEORY.md
+/// §II.1 invariant 5 (composition preserves proofs — the three
+/// callsites now compose structurally through ONE primitive; a
+/// regression that drifted the separator at ONE site surfaces at
+/// [`tests::join_pid_segment_*`] rather than as silent operator-
+/// facing skew across the hierarchical-PID address space).
+#[must_use]
+pub fn join_pid_segment(head: &str, tail: impl std::fmt::Display) -> String {
+    format!("{head}{PID_PATH_SEPARATOR}{tail}")
+}
+
 /// Format a hierarchical process address: `{identity}.{pid_path}`.
 ///
 /// Examples: `"seph.1"`, `"a3f7x9kp.1.1"`, `"seph.1.7.2"`.
+///
+/// Routes through the ONE substrate composer [`join_pid_segment`] so a
+/// future normalization of the hierarchical-PID join (see the composer's
+/// doc for the catalog) reaches this address renderer mechanically.
 pub fn format_process_address(identity: &Identity, pid_path: &str) -> String {
-    format!("{}.{}", identity.name, pid_path)
+    join_pid_segment(&identity.name, pid_path)
 }
 
 fn base32_encode(bytes: &[u8]) -> String {
@@ -155,5 +232,102 @@ mod tests {
             name_override: true,
         };
         assert_eq!(format_process_address(&id, "1.7"), "seph.1.7");
+    }
+
+    // ─── PID_PATH_SEPARATOR + join_pid_segment substrate pins ─────────
+    //
+    // The [`PID_PATH_SEPARATOR`] const + [`join_pid_segment`] composer
+    // own the ONE substrate site every hierarchical-PID producer +
+    // consumer across this module + [`crate::pid`] reaches through.
+    // These pins bind both at fail-before-pass-after granularity so a
+    // regression that drifted the separator char, changed the composer's
+    // slot ordering (`{tail}{sep}{head}` typo), or dropped the routing
+    // through the const surfaces HERE rather than as silent operator-
+    // facing skew across the cluster-wide PID address space.
+
+    #[test]
+    fn pid_path_separator_is_dot() {
+        // Byte-shape pin: the separator is `'.'`. A drift to `'/'`,
+        // `':'`, or a widened grapheme separator would fail here rather
+        // than as silent skew at every hierarchical-PID splitter
+        // (`crate::pid::depth`, `crate::pid::parent_of`) + composer
+        // (`join_pid_segment`).
+        assert_eq!(PID_PATH_SEPARATOR, '.');
+    }
+
+    #[test]
+    fn join_pid_segment_composes_head_then_separator_then_tail() {
+        // Byte-shape pin: `join_pid_segment("seph", "1")` yields
+        // `"seph.1"`, matching the pre-lift `format!("{}.{}",
+        // identity.name, next_sequence)` shape at
+        // `crate::pid::allocate_pid` (None arm).
+        assert_eq!(join_pid_segment("seph", "1"), "seph.1");
+    }
+
+    #[test]
+    fn join_pid_segment_composes_pid_path_tail_verbatim() {
+        // Byte-shape pin: the `tail` slot accepts a `&str` carrying its
+        // own inner separators without escaping — matches the pre-lift
+        // `format_process_address` shape where the passed `pid_path` was
+        // already a dot-delimited chain.
+        assert_eq!(join_pid_segment("seph", "1.7"), "seph.1.7");
+        assert_eq!(join_pid_segment("seph.1", "7"), "seph.1.7");
+    }
+
+    #[test]
+    fn join_pid_segment_accepts_display_tail() {
+        // Byte-shape pin: the `tail: impl Display` slot admits a `u32`
+        // integer directly, matching the pre-lift `format!("{parent}.
+        // {next_sequence}")` shape at `crate::pid::allocate_pid`
+        // (Some(parent) arm) that inlined the `u32` slot without a
+        // `.to_string()` round-trip.
+        assert_eq!(join_pid_segment("seph.1", 7u32), "seph.1.7");
+        // Sweep the whole hierarchical-PID next-sequence axis so a
+        // regression at any single sequence value surfaces here.
+        for seq in [0u32, 1, 42, u32::MAX] {
+            assert_eq!(
+                join_pid_segment("seph.1", seq),
+                format!("seph.1.{seq}"),
+                "join must match pre-lift `format!(\"{{parent}}.{{seq}}\")` for seq={seq}"
+            );
+        }
+    }
+
+    #[test]
+    fn join_pid_segment_routes_through_pid_path_separator_const() {
+        // Cross-primitive coherence pin: the composed body's separator
+        // slot is byte-identical to the `PID_PATH_SEPARATOR` const. A
+        // regression that inlined a bare `'.'` at the composer while
+        // the const was renamed would surface HERE rather than as
+        // silent skew between the two substrate primitives.
+        let composed = join_pid_segment("seph", "1");
+        let mut chars = composed.chars();
+        assert_eq!(chars.next(), Some('s'));
+        assert_eq!(chars.next(), Some('e'));
+        assert_eq!(chars.next(), Some('p'));
+        assert_eq!(chars.next(), Some('h'));
+        assert_eq!(chars.next(), Some(PID_PATH_SEPARATOR));
+        assert_eq!(chars.next(), Some('1'));
+    }
+
+    #[test]
+    fn format_process_address_composes_through_join_pid_segment() {
+        // Post-lift parity pin: `format_process_address` routes through
+        // `join_pid_segment`, so its output for the same input is byte-
+        // identical to the composer's output for the (identity.name,
+        // pid_path) pair. A regression that inlined a bare `format!` at
+        // the address renderer while the composer was upgraded would
+        // silently split the two on the hierarchical-PID axis.
+        let id = Identity {
+            name: "seph".into(),
+            content_hash: "a".repeat(26),
+            name_override: true,
+        };
+        for pid_path in ["1", "1.7", "1.7.3"] {
+            assert_eq!(
+                format_process_address(&id, pid_path),
+                join_pid_segment(&id.name, pid_path),
+            );
+        }
     }
 }

@@ -89,7 +89,10 @@ pub mod prelude {
         ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id, HostnameError,
         HostnameResultExt, EPHEMERAL_ID_HASH_LEN,
     };
-    pub use crate::identity::{content_hash, derive_identity, format_process_address, Identity};
+    pub use crate::identity::{
+        content_hash, derive_identity, format_process_address, join_pid_segment, Identity,
+        PID_PATH_SEPARATOR,
+    };
     pub use crate::intent::{
         AplicacaoIntent, ContainerIntent, FluxIntent, GuestIntent, HelmLifecyclePolicy,
         HelmRemediationPolicy, Intent, IntentError, IntentKind, IntentVariant, LispIntent,

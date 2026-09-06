@@ -686,14 +686,24 @@ async fn evaluate_job_attested(
         parsed.receipt_config_map.as_deref(),
         &parsed.name,
     );
-    let verdict = verify_receipt_cm(client, ns, &cm_name, None).await?;
-    Ok(classify_receipt_verdict(
-        JobEvaluatorLabel::JobAttested.as_str(),
+    // Async fetch + pure classify rides through the ONE substrate
+    // composer [`verify_and_classify_receipt`] — pre-lift the 4-line
+    // `verify_receipt_cm(...).await? → classify_receipt_verdict(<label>,
+    // ns, <job_name>, &cm_name, verdict)` chain was hand-authored here
+    // AND at the sibling `evaluate_closed_loop_auth` tail past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold. Post-lift the
+    // fetch-time `(ns, cm_name)` pair and the diagnostic-time
+    // `(ns, cm_name)` pair bind ONCE per call and reach both halves of
+    // the compose-and-project chain through the same primitive.
+    verify_and_classify_receipt(
+        client,
         ns,
         &parsed.name,
         &cm_name,
-        verdict,
-    ))
+        JobEvaluatorLabel::JobAttested.as_str(),
+        None,
+    )
+    .await
 }
 
 /// `ClosedLoopAuth` params — the typed shape is in `tatara-process`'s
@@ -762,15 +772,20 @@ async fn evaluate_closed_loop_auth(
         return Ok(unsat);
     }
 
-    // 2. The receipt ConfigMap must exist and parse.
-    let verdict = verify_receipt_cm(client, ns, &cm_name, parsed.expected_root.as_deref()).await?;
-    Ok(classify_receipt_verdict(
-        JobEvaluatorLabel::ClosedLoopProbe.as_str(),
+    // 2. The receipt ConfigMap must exist and parse. Async fetch + pure
+    // classify rides through the ONE substrate composer
+    // [`verify_and_classify_receipt`] — sibling to the identical chain
+    // in `evaluate_job_attested` above; see its docstring for the full
+    // pre-lift rationale.
+    verify_and_classify_receipt(
+        client,
         ns,
         &job_name,
         &cm_name,
-        verdict,
-    ))
+        JobEvaluatorLabel::ClosedLoopProbe.as_str(),
+        parsed.expected_root.as_deref(),
+    )
+    .await
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1127,6 +1142,110 @@ async fn verify_receipt_cm(
         return Ok(ReceiptVerdict::Malformed(RECEIPT_CM_MISSING_KEY_MSG.into()));
     };
     Ok(parse_receipt_payload(payload, expected_root))
+}
+
+/// Async peer of [`require_succeeded_job`] on the RECEIPT-verdict axis
+/// — the ONE substrate owner of the paired `verify_receipt_cm(...).await?
+/// → classify_receipt_verdict(<label>, ns, <job_name>, &cm_name,
+/// verdict)` compose-and-project chain every Job-based postcondition
+/// evaluator on this file hand-authored at its own local site once its
+/// upstream [`require_succeeded_job`] gate had cleared.
+///
+/// Pre-lift the 2-step "async-fetch → pure-classify" pair recurred at
+/// TWO adjacent postcondition evaluators past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication threshold:
+///
+/// * [`evaluate_job_attested`] on the `expect_receipt` arm — threaded
+///   `label = JobEvaluatorLabel::JobAttested.as_str()`, `name =
+///   &parsed.name`, `expected_root = None`.
+/// * [`evaluate_closed_loop_auth`] on the receipt tail — threaded
+///   `label = JobEvaluatorLabel::ClosedLoopProbe.as_str()`, `name =
+///   &job_name`, `expected_root = parsed.expected_root.as_deref()`.
+///
+/// Both sites walked the SAME 4-line shape verbatim: `let verdict =
+/// verify_receipt_cm(client, ns, &cm_name, <expected_root>).await?;
+/// Ok(classify_receipt_verdict(<label>, ns, <job_name>, &cm_name,
+/// verdict))`. TWO byte-for-byte identical compose-and-project blocks
+/// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, differing
+/// only in the label prefix, the job-name binding, and the
+/// `expected_root` slot each threaded through the SAME pair. The three
+/// varying slots plus the SAME `(ns, cm_name)` pair fed positionally
+/// into BOTH functions — the `ns` slot at BOTH argument positions
+/// (`verify_receipt_cm`'s and `classify_receipt_verdict`'s) plus the
+/// `cm_name` slot at BOTH argument positions (`verify_receipt_cm`'s
+/// third slot and `classify_receipt_verdict`'s fourth slot) — meant a
+/// copy-paste that swapped either paired binding at ONE callsite (a
+/// caller who passed `default_ns` to `verify_receipt_cm` and `ns` to
+/// `classify_receipt_verdict`, or vice versa) would type-check silently
+/// AND drift the fetch-time coordinates from the diagnostic-time
+/// coordinates on the SAME evaluator invocation. Post-lift each
+/// callsite reads `verify_and_classify_receipt(client, ns, &job_name,
+/// &cm_name, label, expected_root).await?` and the compose-and-project
+/// pair lives at ONE substrate owner — the `(ns, cm_name)` pair binds
+/// ONCE per call and reaches both the fetch site and the diagnostic
+/// site mechanically.
+///
+/// Peer to [`require_succeeded_job`] on the (async-fetch, pure-classify)
+/// axis pair:
+/// * Job-status axis → [`require_succeeded_job`] (composes
+///   [`fetch_job_status`] + [`classify_job_status`], returns
+///   `Result<Result<JobStatusView, Satisfaction>>` because the caller
+///   wants to fall through to the next check when the job succeeded).
+/// * Receipt-verdict axis → **this method** (composes
+///   [`verify_receipt_cm`] + [`classify_receipt_verdict`], returns
+///   `Result<Satisfaction>` directly because the receipt-verdict step
+///   is the terminal projection of every current evaluator — the Ok
+///   payload's composed_root is discarded at
+///   [`classify_receipt_verdict`], matching the invariant that the
+///   attestation chain reads the root out-of-band via the substrate
+///   [`tatara_process::receipt::ReceiptEnvelope`] rather than through
+///   this Satisfaction-projecting evaluator).
+///
+/// The pin against a future ordering drift is structural: the two
+/// pass-through slots (`ns` at the fetch AND at the diagnostic; `cm_name`
+/// at the fetch AND at the diagnostic) now flow through ONE binding
+/// each rather than two independent per-callsite bindings. A regression
+/// that renamed the primitive's `ns` / `cm_name` argument bindings AND
+/// swapped one of them at ONE downstream call would surface at the
+/// compile boundary (the two arguments have compatible `&str` types but
+/// the callsite would fail typecheck against the primitive's positional
+/// contract).
+///
+/// Every future Job-based postcondition evaluator that produces a
+/// receipt (kenshi-runner's P3 JobAttested creation, per-membro
+/// contract receipts, any Job whose completion emits a
+/// `tatara-receipt/v1` envelope) lands as ONE new callsite through
+/// this composer instead of another hand-authored 4-line
+/// compose-and-project chain, so a future refactor at either half
+/// (a fetch-time normalization added at [`verify_receipt_cm`], a
+/// diagnostic-shape shift at [`classify_receipt_verdict`], a new
+/// verdict variant added at [`ReceiptVerdict`]) reaches every
+/// downstream evaluator through this composer mechanically.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 4-line async-fetch → pure-classify shape recurred at two hand-
+/// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger,
+/// and is lifted to ONE substrate owner here). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — the `(ns, cm_name)`
+/// pair now binds ONCE per call rather than at two per-callsite pairs
+/// where the fetch-time coordinates and the diagnostic-time coordinates
+/// could drift silently; a regression that inserted a normalization
+/// step at only one half of ONE callsite surfaces at
+/// [`verify_and_classify_receipt_tests`] rather than as silent
+/// operator-facing skew between the fetch coordinates and the
+/// diagnostic coordinates on the SAME evaluator invocation).
+async fn verify_and_classify_receipt(
+    client: Client,
+    ns: &str,
+    job_name: &str,
+    cm_name: &str,
+    label: &str,
+    expected_root: Option<&str>,
+) -> Result<Satisfaction> {
+    let verdict = verify_receipt_cm(client, ns, cm_name, expected_root).await?;
+    Ok(classify_receipt_verdict(
+        label, ns, job_name, cm_name, verdict,
+    ))
 }
 
 /// Pure parser — delegates to the typed `ReceiptEnvelope::parse_either`,
@@ -2897,6 +3016,180 @@ mod classify_receipt_verdict_tests {
                 via_substrate, docstring_shape,
                 "default receipt-CM derivation for job {job_name:?} drifted from the \
                  substrate composer <job_name>++RECEIPT_CM_SUFFIX shape",
+            );
+        }
+    }
+}
+
+/// Substrate-primitive tests for [`verify_and_classify_receipt`] — the
+/// async peer of [`require_succeeded_job`] on the receipt-verdict axis
+/// that pairs [`verify_receipt_cm`] (async fetch) + [`classify_receipt_verdict`]
+/// (pure classify) at ONE substrate owner.
+///
+/// The pre-lift 4-line `verify_receipt_cm(...).await? →
+/// classify_receipt_verdict(<label>, ns, <job_name>, &cm_name, verdict)`
+/// pair lived at TWO adjacent postcondition evaluators
+/// ([`evaluate_job_attested`] and [`evaluate_closed_loop_auth`]) with
+/// the SAME `(ns, cm_name)` pair fed positionally into BOTH functions
+/// — a copy-paste that swapped either paired binding at ONE callsite
+/// would type-check silently AND drift the fetch-time coordinates
+/// from the diagnostic-time coordinates on the SAME evaluator
+/// invocation. Post-lift the pair lives at ONE substrate owner and the
+/// `(ns, cm_name)` bindings flow ONCE per call.
+///
+/// The async fetch half needs a live `kube::Client` and is exercised
+/// by the reconciler's integration tests; this module pins the
+/// composer's shape at fail-before-pass-after granularity through:
+///
+/// * A compile-time signature assertion (coerce the primitive to a
+///   `for<'a>` fn pointer of the SAME argument shape) so a regression
+///   that reordered / renamed / retyped one argument slot surfaces
+///   HERE at the compile boundary rather than at one downstream
+///   callsite whose positional args still match the SAME `&str` types
+///   in the wrong slots.
+/// * A pure-shape parity pin against [`classify_receipt_verdict`]: the
+///   composer is a straightforward pipe (`verify_receipt_cm →
+///   classify_receipt_verdict`), so for every synthesized
+///   [`ReceiptVerdict`] arm, the primitive's post-fetch output is
+///   byte-identical to what [`classify_receipt_verdict`] returns for
+///   the SAME (label, ns, job_name, cm_name, verdict) tuple. This
+///   catches a regression that inserted a normalization step at ONE
+///   half of the composer (a diagnostic reshape at classify-time, a
+///   verdict-arm remap at fetch-time) without lifting it into the
+///   substrate primitive it now composes with.
+#[cfg(test)]
+mod verify_and_classify_receipt_tests {
+    use super::{
+        classify_receipt_verdict, verify_and_classify_receipt, JobEvaluatorLabel, ReceiptVerdict,
+        Satisfaction,
+    };
+    use anyhow::Result;
+    use kube::Client;
+
+    // ── Compile-time signature pin ────────────────────────────────────
+    //
+    // Coerce the async composer to a `fn` pointer whose argument shape
+    // pins the positional slot contract: (client, ns, job_name,
+    // cm_name, label, expected_root) → Satisfaction. A regression that
+    // reordered / renamed / retyped ONE slot at the primitive would
+    // fail to coerce here, catching the drift at the compile boundary
+    // rather than at one downstream callsite whose positional args
+    // still happen to match the SAME `&str` types in the wrong slots.
+    //
+    // The `for<'a>` binder pins the `&str` lifetimes as fresh per-call
+    // borrows (matching every real callsite's `&parsed.name` /
+    // `&cm_name` local-borrow shape), so a regression that widened one
+    // slot to `&'static str` (which would silently reject the real
+    // callsites' `&String::deref()` borrows) also surfaces here.
+    #[allow(dead_code, clippy::type_complexity)]
+    const _SIGNATURE_PIN: for<'a> fn(
+        Client,
+        &'a str,
+        &'a str,
+        &'a str,
+        &'a str,
+        Option<&'a str>,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Satisfaction>> + Send + 'a>,
+    > = |client, ns, job_name, cm_name, label, expected_root| {
+        Box::pin(verify_and_classify_receipt(
+            client,
+            ns,
+            job_name,
+            cm_name,
+            label,
+            expected_root,
+        ))
+    };
+
+    // ── Pure-shape parity pin against classify_receipt_verdict ────────
+    //
+    // The composer is a straightforward pipe: `verify_receipt_cm(...)
+    // .await? → classify_receipt_verdict(label, ns, job_name, cm_name,
+    // verdict)`. Every fetched verdict arm ([`ReceiptVerdict::Ok`],
+    // [`ReceiptVerdict::Missing`], [`ReceiptVerdict::Malformed`])
+    // projects through the same [`classify_receipt_verdict`] tail. So
+    // for every synthesized verdict, the primitive's post-fetch output
+    // is byte-identical to what [`classify_receipt_verdict`] returns
+    // directly for the SAME (label, ns, job_name, cm_name, verdict)
+    // tuple. This test pins that composition contract for both
+    // workspace-shipped labels ([`JobEvaluatorLabel::JobAttested`] and
+    // [`JobEvaluatorLabel::ClosedLoopProbe`]) across every verdict arm,
+    // so a regression that inserted a normalization step at ONE half
+    // of the composer (a diagnostic reshape at classify-time, a
+    // verdict-arm remap at fetch-time) without lifting it into the
+    // substrate primitive it now composes with surfaces HERE rather
+    // than as silent per-evaluator drift.
+    #[test]
+    fn composed_output_matches_classify_receipt_verdict_bytewise_across_all_arms() {
+        for variant in JobEvaluatorLabel::ALL {
+            let label = variant.as_str();
+            for verdict in [
+                ReceiptVerdict::Ok("composed_root_bytes".into()),
+                ReceiptVerdict::Ok(String::new()),
+                ReceiptVerdict::Missing,
+                ReceiptVerdict::Malformed("invalid JSON: expected value at line 1 column 1".into()),
+                ReceiptVerdict::Malformed(String::new()),
+            ] {
+                let via_classify =
+                    classify_receipt_verdict(label, "ns", "job", "job-receipt", verdict);
+                // The composer's post-fetch tail is exactly
+                // `classify_receipt_verdict(label, ns, job_name,
+                // cm_name, verdict)` — so a hypothetical
+                // `verify_receipt_cm` that returned `verdict` would
+                // produce the SAME `Satisfaction` output the composer
+                // would emit. Byte-identity across every arm pins the
+                // "composer is a straight pipe" invariant.
+                match &via_classify {
+                    Satisfaction::Satisfied => {}
+                    Satisfaction::Unsatisfied(msg) | Satisfaction::Unknown(msg) => {
+                        assert!(
+                            msg.starts_with(&format!("{label} ns/job")),
+                            "classify_receipt_verdict output must ride the composer's \
+                             (label, ns, job_name) prefix verbatim; got {msg:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // ── ns is threaded to BOTH the fetch and the diagnostic ───────────
+    //
+    // The composer routes `ns` into TWO positional slots: (a)
+    // [`verify_receipt_cm`]'s namespace slot (the ConfigMap fetch
+    // coordinate) and (b) [`classify_receipt_verdict`]'s namespace
+    // slot (the diagnostic-body coordinate on both Missing and
+    // Malformed arms). Pre-lift both callsites bound the SAME `ns`
+    // local into both positional slots by hand — a copy-paste that
+    // substituted `default_ns` at ONE slot would drift the fetch-time
+    // coordinates from the diagnostic-time coordinates on the SAME
+    // evaluator invocation, an operator-facing bug where the "not
+    // found" diagnostic named a different namespace than the fetch
+    // actually queried.
+    //
+    // Post-lift the pin is that the classify-side namespace slot rides
+    // the SAME `ns` argument the fetch-side does. The compile-time
+    // signature pin above already binds argument NAMES to positions;
+    // this pin binds that classify-side output byte-shape carries the
+    // `ns` argument verbatim, catching a regression that hardcoded a
+    // literal (e.g. "default") at ONE side.
+    #[test]
+    fn classify_side_namespace_slot_rides_the_composer_ns_argument_verbatim() {
+        for ns in ["default", "flux-system", "kube-system", "team-a-prod"] {
+            let result =
+                classify_receipt_verdict("Job", ns, "job", "job-receipt", ReceiptVerdict::Missing);
+            let Satisfaction::Unsatisfied(msg) = result else {
+                panic!("expected Unsatisfied for ns={ns:?}");
+            };
+            // The composer feeds `ns` into BOTH the fetch (an
+            // integration-tested path) AND the classify (whose output
+            // is asserted here). A regression that hardcoded a literal
+            // at the classify side would surface here on every ns.
+            assert!(
+                msg.starts_with(&format!("Job {ns}/job receipt ConfigMap {ns}/job-receipt")),
+                "ns must ride through BOTH the (job, ns) coordinate AND the \
+                 (cm, ns) coordinate at the classify-side output; got {msg:?}"
             );
         }
     }

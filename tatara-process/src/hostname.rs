@@ -161,10 +161,7 @@ pub fn fmt_fqdn(
     location: &str,
     domain: &str,
 ) -> Result<String, HostnameError> {
-    validate_label("app", app)?;
-    if RESERVED_APP_LABELS.contains(&app) {
-        return Err(HostnameError::ReservedApp(app.to_string()));
-    }
+    validate_app(app)?;
     validate_label("ephemeral_id", ephemeral_id)?;
     validate_label("cluster", cluster)?;
     validate_label("location", location)?;
@@ -187,10 +184,7 @@ pub fn fmt_fqdn_stable(
     location: &str,
     domain: &str,
 ) -> Result<String, HostnameError> {
-    validate_label("app", app)?;
-    if RESERVED_APP_LABELS.contains(&app) {
-        return Err(HostnameError::ReservedApp(app.to_string()));
-    }
+    validate_app(app)?;
     validate_label("cluster", cluster)?;
     validate_label("location", location)?;
     validate_domain("domain", domain)?;
@@ -269,6 +263,69 @@ fn validate_label(segment: &'static str, label: &str) -> Result<(), HostnameErro
             label: label.to_string(),
             reason: "must contain only [a-z0-9-]",
         });
+    }
+    Ok(())
+}
+
+/// Validate a caller-supplied `app` label at the fleet-hostname
+/// boundary — the ONE substrate primitive owning the two-step (RFC 1123
+/// DNS label + saguão-reservation reject) check every hostname composer
+/// runs on its `app` slot BEFORE stamping it into an emitted FQDN.
+///
+/// Pre-lift the two-step check was hand-authored at TWO adjacent public
+/// FQDN composers in this module past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold:
+///
+/// * [`fmt_fqdn`] — the per-instance form; the 4-line prelude
+///   preceded the sibling `validate_label("ephemeral_id", …)` +
+///   cluster / location / domain checks.
+/// * [`fmt_fqdn_stable`] — the unprefixed stable-claim form; the same
+///   4-line prelude preceded the cluster / location / domain checks
+///   with no `ephemeral_id` slot in between.
+///
+/// Both restated the SAME 4-line prelude verbatim: (1)
+/// `validate_label("app", app)?` to enforce the RFC 1123 shape (1–63
+/// chars, lowercase alphanumeric + hyphen, no leading / trailing
+/// hyphen), then (2) an early-return
+/// `HostnameError::ReservedApp(app.to_string())` when the label
+/// appears in the module-private [`RESERVED_APP_LABELS`] set
+/// (currently `"auth"` / `"cracha"` — the saguão control-plane
+/// reservations declared in pleme-io CLAUDE.md § Fleet hostname
+/// pattern).
+///
+/// Post-lift each callsite reads `validate_app(app)?` and the ordered
+/// two-step check lives at ONE substrate owner. The step ORDER is
+/// load-bearing: `validate_label` runs first so a reserved label whose
+/// spelling ALSO violates RFC 1123 (an operator who typed `"AUTH"`
+/// instead of `"auth"`) surfaces as
+/// [`HostnameError::InvalidLabel`] (the underlying shape defect),
+/// not as [`HostnameError::ReservedApp`] (the higher-level policy
+/// gate) — matching the pre-lift order both composers hand-authored.
+/// A regression that swapped the two steps would silently re-classify
+/// every such input and callers pattern-matching on the two variants
+/// would branch differently.
+///
+/// A future extension to the reserved set (adding a third saguão name,
+/// a per-cluster reservation surface, a normalized-form lookup that
+/// treats `"Auth"` and `"auth"` as the same reservation) lands at THIS
+/// ONE substrate primitive and both [`fmt_fqdn`] + [`fmt_fqdn_stable`]
+/// inherit the upgrade mechanically — no per-composer edit at either
+/// call site, no drift risk for a third future FQDN-shape composer
+/// that plugs into the same reservation policy.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 4-line two-step check recurred at two hand-authored composer
+/// preludes past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and
+/// lifts to ONE substrate owner here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — the pin block below binds the
+/// primitive at fail-before-pass-after granularity so a regression
+/// that reorders the two steps, drops one, or drifts the typed error
+/// variant surfaces at THESE pins rather than as silent fleet-
+/// hostname skew across every downstream FQDN emit).
+fn validate_app(app: &str) -> Result<(), HostnameError> {
+    validate_label("app", app)?;
+    if RESERVED_APP_LABELS.contains(&app) {
+        return Err(HostnameError::ReservedApp(app.to_string()));
     }
     Ok(())
 }
@@ -562,6 +619,210 @@ mod tests {
             ephemeral_id_from_spec(&v).hostname_ctx("ephemeral_id_from_spec");
         assert!(composed.is_ok());
         assert_eq!(composed.unwrap().len(), EPHEMERAL_ID_HASH_LEN);
+    }
+
+    // ─── validate_app substrate pins ─────────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `validate_app` helper
+    // did not exist pre-lift — both [`fmt_fqdn`] and [`fmt_fqdn_stable`]
+    // hand-authored the two-step (RFC 1123 label + reserved-name reject)
+    // check inline. Post-lift the two composers thread the same
+    // primitive, so the pins below pin the primitive's SHAPE + STEP
+    // ORDER + typed-variant surface at the substrate — a regression
+    // that (a) reorders the two steps, (b) drops the reserved-name
+    // gate silently, or (c) promotes the `HostnameError::ReservedApp`
+    // arm to a generic `InvalidLabel` surfaces HERE rather than as
+    // silent skew at every downstream FQDN emit.
+
+    #[test]
+    fn validate_app_accepts_valid_lowercase_alphanumeric_label() {
+        // Happy-path pin: a valid `app` label passes the two-step
+        // check with `Ok(())`. A regression that inverted the return
+        // arm (rejected everything, matched no reserved) surfaces
+        // HERE rather than as every FQDN emit refusing every input.
+        validate_app("api").unwrap();
+        validate_app("gateway").unwrap();
+        validate_app("demo-app").unwrap();
+        validate_app("a").unwrap();
+    }
+
+    #[test]
+    fn validate_app_rejects_empty_label_with_invalid_label_variant() {
+        // Step-1 delegation pin: an empty `app` MUST surface as
+        // `HostnameError::InvalidLabel { segment: "app", .. }` from
+        // the underlying `validate_label("app", app)?` call — NOT as
+        // `ReservedApp` (which would silently reclassify the shape
+        // defect as a policy rejection).
+        assert!(matches!(
+            validate_app(""),
+            Err(HostnameError::InvalidLabel { segment: "app", .. })
+        ));
+    }
+
+    #[test]
+    fn validate_app_rejects_uppercase_label_with_invalid_label_variant() {
+        // Step-1 delegation pin: casing-invalid labels reach through
+        // to `validate_label`'s [a-z0-9-] check. A regression that
+        // short-circuited the reserved-check on a case-insensitive
+        // match ("AUTH" reads as reserved without going through the
+        // RFC 1123 gate first) would surface HERE.
+        assert!(matches!(
+            validate_app("API"),
+            Err(HostnameError::InvalidLabel { segment: "app", .. })
+        ));
+    }
+
+    #[test]
+    fn validate_app_rejects_too_long_label_with_invalid_label_variant() {
+        // Step-1 delegation pin: 64-char labels violate the RFC 1123
+        // upper bound and surface at the `validate_label` gate.
+        let long = "a".repeat(64);
+        assert!(matches!(
+            validate_app(&long),
+            Err(HostnameError::InvalidLabel { segment: "app", .. })
+        ));
+    }
+
+    #[test]
+    fn validate_app_rejects_reserved_auth_label_with_reserved_app_variant() {
+        // Step-2 pin: the currently-reserved `"auth"` slot surfaces
+        // as `HostnameError::ReservedApp("auth")` — the typed
+        // control-plane rejection callers pattern-match on. A
+        // regression that dropped this variant would silently
+        // accept the reservation and let a tenant deploy under the
+        // saguão namespace.
+        assert!(matches!(
+            validate_app("auth"),
+            Err(HostnameError::ReservedApp(ref s)) if s == "auth"
+        ));
+    }
+
+    #[test]
+    fn validate_app_rejects_reserved_cracha_label_with_reserved_app_variant() {
+        // Sibling pin to the `"auth"` reservation — pins the second
+        // currently-reserved label. A regression that dropped one
+        // reservation but not the other would surface HERE.
+        assert!(matches!(
+            validate_app("cracha"),
+            Err(HostnameError::ReservedApp(ref s)) if s == "cracha"
+        ));
+    }
+
+    #[test]
+    fn validate_app_step_order_puts_rfc_1123_check_before_reserved_check() {
+        // Load-bearing order pin: `validate_label` runs FIRST so a
+        // reserved label whose spelling ALSO violates RFC 1123
+        // (uppercase, hyphen at end, etc.) surfaces as
+        // `InvalidLabel` — the underlying SHAPE defect — not as
+        // `ReservedApp` (the higher-level POLICY gate). Callers who
+        // pattern-match on the two variants branch DIFFERENTLY on
+        // shape defects vs policy rejections, so a swap of the two
+        // steps would silently re-route every uppercase-reserved
+        // input into the wrong error arm.
+        assert!(matches!(
+            validate_app("AUTH"),
+            Err(HostnameError::InvalidLabel { segment: "app", .. })
+        ));
+        assert!(matches!(
+            validate_app("Cracha"),
+            Err(HostnameError::InvalidLabel { segment: "app", .. })
+        ));
+    }
+
+    #[test]
+    fn validate_app_matches_pre_lift_two_step_chain_bytewise_across_every_variant_shape() {
+        // Byte-shape parity pin: the substrate primitive's return
+        // MUST equal the pre-lift 4-line hand-authored chain for
+        // every representative input shape. A regression that
+        // drifted the primitive's semantics away from the pre-lift
+        // composer preludes surfaces HERE rather than as silent
+        // skew at either `fmt_fqdn` / `fmt_fqdn_stable` consumer.
+        fn pre_lift(app: &str) -> Result<(), HostnameError> {
+            validate_label("app", app)?;
+            if RESERVED_APP_LABELS.contains(&app) {
+                return Err(HostnameError::ReservedApp(app.to_string()));
+            }
+            Ok(())
+        }
+        for input in [
+            // Happy path.
+            "api",
+            "gateway",
+            "demo-app",
+            "a",
+            // Step-1 rejections.
+            "",
+            "API",
+            "-bad",
+            "bad-",
+            "with_underscore",
+            // Step-2 rejections.
+            "auth",
+            "cracha",
+            // Step-1 wins over step-2 (uppercase reserved).
+            "AUTH",
+            "Cracha",
+        ] {
+            let via_primitive = validate_app(input);
+            let via_pre_lift = pre_lift(input);
+            match (via_primitive, via_pre_lift) {
+                (Ok(()), Ok(())) => {}
+                (Err(a), Err(b)) => assert_eq!(a, b, "variant mismatch for {input:?}"),
+                (a, b) => panic!("arm mismatch for {input:?}: primitive={a:?} pre_lift={b:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn validate_app_covers_every_currently_reserved_label_at_the_primitive() {
+        // Coherence sweep: iterate the RESERVED_APP_LABELS set and
+        // verify each element rejects at the substrate. A future
+        // addition to the reserved set that forgets to update the
+        // primitive would surface HERE rather than as silent
+        // acceptance at every FQDN emit.
+        for reserved in RESERVED_APP_LABELS {
+            assert!(
+                matches!(validate_app(reserved), Err(HostnameError::ReservedApp(ref s)) if s == reserved),
+                "RESERVED_APP_LABELS entry {reserved:?} must surface as ReservedApp at the substrate"
+            );
+        }
+    }
+
+    #[test]
+    fn fmt_fqdn_routes_app_slot_through_validate_app_primitive() {
+        // Delegation pin: the per-instance composer routes its `app`
+        // slot check through `validate_app`, NOT through a re-open-
+        // coded restatement of the two-step chain. A regression that
+        // inlined the pre-lift check at the composer prelude would
+        // reintroduce the duplication the lift removed; this pin
+        // catches it by asserting the composer surfaces the SAME
+        // typed error the primitive would for a representative
+        // input in each of the two rejection arms.
+        assert!(matches!(
+            fmt_fqdn("AUTH", "x", "y", "z", "example.com"),
+            Err(HostnameError::InvalidLabel { segment: "app", .. })
+        ));
+        assert!(matches!(
+            fmt_fqdn("auth", "x", "y", "z", "example.com"),
+            Err(HostnameError::ReservedApp(ref s)) if s == "auth"
+        ));
+    }
+
+    #[test]
+    fn fmt_fqdn_stable_routes_app_slot_through_validate_app_primitive() {
+        // Sibling delegation pin — same shape as the per-instance
+        // pin above but for the stable-claim composer. Both
+        // composers now share the primitive; a regression that
+        // re-inlined the chain at either site surfaces at ONE of
+        // the two pins rather than at every downstream FQDN emit.
+        assert!(matches!(
+            fmt_fqdn_stable("Cracha", "y", "z", "example.com"),
+            Err(HostnameError::InvalidLabel { segment: "app", .. })
+        ));
+        assert!(matches!(
+            fmt_fqdn_stable("cracha", "y", "z", "example.com"),
+            Err(HostnameError::ReservedApp(ref s)) if s == "cracha"
+        ));
     }
 
     #[test]

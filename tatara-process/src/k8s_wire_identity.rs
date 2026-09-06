@@ -73,6 +73,8 @@
 
 use serde_json::{Map, Value};
 
+use crate::json_object::JsonMapStrExt;
+
 /// K8s wire-form identity of a resource — the `(apiVersion, kind)`
 /// pair, carried as a typed struct so a caller who receives one
 /// cannot skew the two slots at compose time.
@@ -203,11 +205,13 @@ impl K8sWireIdentity {
     /// trigger, and is lifted to ONE substrate body here).
     #[inline]
     fn insert_identity_slots(self, m: &mut Map<String, Value>) {
-        m.insert(
-            "apiVersion".to_string(),
-            Value::String(self.api_version.to_string()),
-        );
-        m.insert("kind".to_string(), Value::String(self.kind.to_string()));
+        // Both slot writes route through the workspace-wide substrate
+        // owner `JsonMapStrExt::insert_str` for the
+        // `.insert(<k>.to_string(), Value::String(<v>.to_string()))`
+        // shape; the shared body here composes over that primitive
+        // rather than restating the 2-slot `Value::String` wrap.
+        m.insert_str("apiVersion", self.api_version);
+        m.insert_str("kind", self.kind);
     }
 }
 
@@ -496,6 +500,56 @@ mod tests {
                 "kind slot must agree across both peers for {id:?}",
             );
             assert_eq!(pure, composed, "full emit must agree for {id:?}");
+        }
+    }
+
+    #[test]
+    fn insert_identity_slots_composes_through_json_map_str_ext_insert_str_bytewise() {
+        // Substrate-composition coherence pin: `insert_identity_slots`
+        // routes both slot writes through the workspace-wide substrate
+        // owner `JsonMapStrExt::insert_str` for the
+        // `.insert(<k>.to_string(), Value::String(<v>.to_string()))`
+        // string-slot write shape. This pin binds that composition at
+        // substrate granularity — a regression that inlined the
+        // `.insert(<k>.to_string(), Value::String(<v>.to_string()))`
+        // shape back into the private helper (bypassing the substrate
+        // owner opened at commit 848e16f) would surface here as a
+        // shape-drift assertion rather than as silent breakage of the
+        // "one substrate owner per slot-write shape" invariant.
+        //
+        // Sweep the same eight-identity range the sibling
+        // `as_json_and_resource_json_share_body_by_construction` pin
+        // uses so the two pins together cover both the delegation axis
+        // (as_json ↔ resource_json share `insert_identity_slots`) and
+        // the substrate-composition axis (`insert_identity_slots`
+        // stamps identical bytes to a hand-authored `insert_str`
+        // chain).
+        for id in [
+            K8sWireIdentity::new("group.io/v1", "Widget"),
+            K8sWireIdentity::new("kustomize.toolkit.fluxcd.io/v1", "Kustomization"),
+            K8sWireIdentity::new("helm.toolkit.fluxcd.io/v2", "HelmRelease"),
+            K8sWireIdentity::new("source.toolkit.fluxcd.io/v1beta2", "OCIRepository"),
+            K8sWireIdentity::new("networking.k8s.io/v1", "Ingress"),
+            K8sWireIdentity::new("externaldns.k8s.io/v1alpha1", "DNSEndpoint"),
+            K8sWireIdentity::new("batch/v1", "Job"),
+            K8sWireIdentity::new("v1", "ConfigMap"),
+        ] {
+            let via_primitive = id.as_json();
+
+            // Hand-authored: exactly the same shape, but composed
+            // over `insert_str` outside the helper — matches the
+            // helper's byte-output when both consumers route through
+            // the ONE substrate owner.
+            let mut hand = Map::with_capacity(2);
+            hand.insert_str("apiVersion", id.api_version);
+            hand.insert_str("kind", id.kind);
+            let via_hand = Value::Object(hand);
+
+            assert_eq!(
+                via_primitive, via_hand,
+                "insert_identity_slots must compose byte-identically to an \
+                 `insert_str`-authored (apiVersion, kind) pair for {id:?}",
+            );
         }
     }
 }

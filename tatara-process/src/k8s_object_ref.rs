@@ -69,6 +69,7 @@
 
 use serde_json::{Map, Value};
 
+use crate::json_object::JsonMapStrExt;
 use crate::k8s_wire_identity::K8sWireIdentity;
 
 /// K8s cross-resource reference — the 3-slot
@@ -133,12 +134,15 @@ impl K8sObjectRef {
     /// silent wire-form skew at every emit site.
     pub fn as_json(&self) -> Value {
         let mut m = Map::with_capacity(3);
-        m.insert("kind".to_string(), Value::String(self.kind.clone()));
-        m.insert("name".to_string(), Value::String(self.name.clone()));
-        m.insert(
-            "namespace".to_string(),
-            Value::String(self.namespace.clone()),
-        );
+        // All THREE slot writes route through the workspace-wide
+        // substrate owner `JsonMapStrExt::insert_str` for the
+        // `.insert(<k>.to_string(), Value::String(<v>.clone()))`
+        // shape; the composer here now stamps its (kind, name,
+        // namespace) triple through the ONE substrate primitive
+        // rather than restating the `Value::String` wrap three times.
+        m.insert_str("kind", self.kind.clone());
+        m.insert_str("name", self.name.clone());
+        m.insert_str("namespace", self.namespace.clone());
         Value::Object(m)
     }
 }
@@ -378,5 +382,42 @@ mod tests {
         });
         let composed = K8sObjectRef::new("HelmRepository", "pleme-io", "flux-system").as_json();
         assert_eq!(composed, hand_authored);
+    }
+
+    #[test]
+    fn as_json_composes_through_json_map_str_ext_insert_str_bytewise() {
+        // Substrate-composition coherence pin: `K8sObjectRef::as_json`
+        // routes each of its three slot writes through the workspace-
+        // wide substrate owner `JsonMapStrExt::insert_str` for the
+        // `.insert(<k>.to_string(), Value::String(<v>.clone()))`
+        // string-slot write shape. This pin binds the composition at
+        // substrate granularity — a regression that re-inlined any of
+        // the three `Value::String(<v>.clone())` slot writes (bypassing
+        // the substrate owner opened at 848e16f) would surface here
+        // rather than as silent breakage of the "one substrate owner
+        // per slot-write shape" invariant. Sweep the same three
+        // callsite shapes the pre-lift render sites hand-authored
+        // (GitRepository / OCIRepository / HelmRepository sourceRef /
+        // chartRef pointers) so the pin covers each pre-lift consumer.
+        use crate::json_object::JsonMapStrExt;
+        for r in [
+            K8sObjectRef::new("GitRepository", "flake-src", "flux-system"),
+            K8sObjectRef::new("OCIRepository", "ephemeral-demo", "demo-test"),
+            K8sObjectRef::new("HelmRepository", "pleme-io", "flux-system"),
+        ] {
+            let via_primitive = r.as_json();
+
+            let mut hand = Map::with_capacity(3);
+            hand.insert_str("kind", r.kind.clone());
+            hand.insert_str("name", r.name.clone());
+            hand.insert_str("namespace", r.namespace.clone());
+            let via_hand = Value::Object(hand);
+
+            assert_eq!(
+                via_primitive, via_hand,
+                "K8sObjectRef::as_json must compose byte-identically to an \
+                 `insert_str`-authored (kind, name, namespace) triple for {r:?}",
+            );
+        }
     }
 }

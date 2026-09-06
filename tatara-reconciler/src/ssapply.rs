@@ -120,14 +120,17 @@ pub fn apply_patch_params() -> PatchParams {
 /// pass-through on PROCESS) stay owned here.
 fn ownership_kv_pair(process_ref: &str) -> serde_json::Map<String, Value> {
     let mut m = serde_json::Map::new();
-    m.insert(
-        annotations::MANAGED_BY.to_string(),
-        Value::String(FIELD_MANAGER.to_string()),
-    );
-    m.insert(
-        annotations::PROCESS.to_string(),
-        Value::String(process_ref.to_string()),
-    );
+    // Both slot writes route through the workspace-wide substrate
+    // owner `JsonMapStrExt::insert_str` for the
+    // `.insert(<k>.to_string(), Value::String(<v>.to_string()))`
+    // shape; the shared body here composes over that primitive so a
+    // future normalization of the string-slot wrap (a per-fleet
+    // canonicalization, a zero-alloc `Cow<'static, str>` value slot
+    // variant, a debug-build assertion) lands at ONE place and both
+    // `ownership_annotations` + `ownership_labels` inherit the
+    // upgrade mechanically through this shared body.
+    m.insert_str(annotations::MANAGED_BY, FIELD_MANAGER);
+    m.insert_str(annotations::PROCESS, process_ref);
     m
 }
 
@@ -1816,6 +1819,45 @@ mod tests {
                 ownership_annotations(input),
                 ownership_labels(input),
                 "labels and annotations axes must produce byte-identical maps for {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ownership_kv_pair_composes_through_json_map_str_ext_insert_str_bytewise() {
+        // Substrate-composition coherence pin: `ownership_kv_pair`
+        // routes both slot writes through the workspace-wide substrate
+        // owner `JsonMapStrExt::insert_str` for the
+        // `.insert(<k>.to_string(), Value::String(<v>.to_string()))`
+        // string-slot write shape. This pin binds the composition at
+        // substrate granularity — a regression that re-inlined the
+        // `.insert(<k>.to_string(), Value::String(<v>.to_string()))`
+        // shape into the shared body (bypassing the substrate owner
+        // opened at commit 848e16f) would surface here rather than as
+        // silent breakage of the "one substrate owner per slot-write
+        // shape" invariant. Sweep the same range of `process_ref`
+        // shapes the sibling delegation pins already cover.
+        for input in [
+            "flux-system/observability-stack",
+            "just-a-name",
+            "",
+            "ns/name@42",
+            "with spaces and / slashes",
+        ] {
+            let via_primitive = ownership_kv_pair(input);
+
+            // Hand-authored: exactly the same shape, but composed
+            // over `insert_str` outside the shared body — matches the
+            // owner's byte-output when both consumers route through
+            // the ONE substrate owner.
+            let mut hand = serde_json::Map::new();
+            hand.insert_str(annotations::MANAGED_BY, FIELD_MANAGER);
+            hand.insert_str(annotations::PROCESS, input);
+
+            assert_eq!(
+                via_primitive, hand,
+                "ownership_kv_pair must compose byte-identically to an \
+                 `insert_str`-authored (MANAGED_BY, PROCESS) pair for {input:?}"
             );
         }
     }

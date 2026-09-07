@@ -85,6 +85,116 @@
 //! trigger, and is lifted to ONE substrate owner here).
 
 use serde::Serialize;
+use std::fmt::Display;
+
+/// The canonical `"blake3:"` scheme prefix every three-pillar-style
+/// wire-form BLAKE3 hash string in the workspace opens with — a typed
+/// substrate owner of the scheme literal on the READ (predicate) AND
+/// WRITE (compose) axes.
+///
+/// Pre-lift the SAME `"blake3:"` bare literal was hand-authored across
+/// two axes of consumer sites in this crate:
+///
+/// * WRITE — [`crate::render::Renderer::artifact`] +
+///   [`crate::render::Renderer::summary`]: each composed the same
+///   `format!("blake3:{<hash>}")` wire-form wrap on top of a
+///   `ShortHash: Display` receiver to paint the `◇ blake3:<hash>` slot
+///   next to every artifact + summary line, past the ★★
+///   PRIME-DIRECTIVE ≥ 2 duplication threshold.
+/// * READ — [`tests::hex_blake3_of_json_is_64_lowercase_hex_chars`]'s
+///   `!h.starts_with("blake3:")` negative-form pin (the scheme-prefix-
+///   absence invariant every consumer of the bare
+///   [`hex_blake3_of_json`] projector inherits) already reads the same
+///   bare literal on the predicate side.
+///
+/// Post-lift the two WRITE sites route through [`blake3_scheme_display`]
+/// and the READ pin references this constant, so a future scheme change
+/// (a length tag, a version discriminator, a per-fleet suffix, a
+/// `b3:` shorthand) lands at ONE substrate owner rather than at the
+/// two consumers-that-remembered-to-spell-it-right.
+///
+/// Sibling owner to the `"blake3:"` scheme literal
+/// [`tatara-engine::domain::attestation::pillar_hash`] carries on the
+/// COMPUTE-and-WRAP axis (`&[u8] → "blake3:{hex}"`): that primitive
+/// composes the scheme prefix with a freshly-computed BLAKE3 digest;
+/// [`blake3_scheme_display`] composes the scheme prefix with an
+/// ALREADY-computed hex handle. The two owners partition the
+/// scheme-prefix surface at the (compute-and-wrap, wrap-only) axis.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the wire-form scheme literal at ONE substrate owner means
+/// the render path and its assertion pins agree bytewise by
+/// construction). THEORY.md §V.3 (three-pillar attestation — the
+/// canonical pillar-hash shape is `"blake3:{hex}"`; this constant pins
+/// the scheme prefix half of that shape at the UI-side wire).
+pub const BLAKE3_SCHEME_PREFIX: &str = "blake3:";
+
+/// The [`BLAKE3_SCHEME_PREFIX`]-prefixed wire form of an already-
+/// computed BLAKE3 hex handle — the ONE substrate owner of the
+/// `format!("blake3:{<hex>}")` one-line wrap chain the render surface
+/// restated at TWO WRITE sites pre-lift.
+///
+/// Pre-lift the SAME chain was hand-authored at TWO workspace-visible
+/// WRITE sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger,
+/// each composing a `ShortHash`'s dim-styled render slot:
+///
+/// * [`crate::render::Renderer::artifact`] — the per-artifact line's
+///   `◇ blake3:<hash>` slot, paired with the dim-styled artifact name +
+///   state chunk. The `ShortHash: Display` receiver stamped a 7-char
+///   BLAKE3 prefix onto the line, wrapped verbatim in the scheme
+///   prefix via `format!("blake3:{hash}")`.
+/// * [`crate::render::Renderer::summary`] — the summary banner's
+///   content-root slot, paired with the totals line. The same
+///   `ShortHash: Display` receiver stamped the root-hash prefix onto
+///   the banner, wrapped verbatim in the scheme prefix via
+///   `format!("blake3:{root_hash}")`.
+///
+/// Both sites walked the SAME one-link chain — take a `Display`-
+/// projectable BLAKE3 hex handle and prepend the substrate's canonical
+/// [`BLAKE3_SCHEME_PREFIX`] — differing only in the receiver's slot
+/// name (`hash` vs `root_hash`, both `&ShortHash`). Post-lift each
+/// callsite reads `blake3_scheme_display(<receiver>)` and the wrap
+/// step lives at ONE substrate owner sharing the scheme literal with
+/// its READ-side sibling pin.
+///
+/// # `H: Display`
+///
+/// The receiver bound is `H: Display` so the primitive accepts BOTH
+/// the pre-lift receivers ([`crate::event::ShortHash`], which
+/// implements `Display` writing its own 7-char BLAKE3 prefix) AND
+/// future consumers that produce a raw `String` / `&str` / `blake3::
+/// Hash` hex handle. The `format!("{}{hex}", BLAKE3_SCHEME_PREFIX)`
+/// composition is polymorphic on the `Display` axis so every current
+/// caller compiles verbatim through the substrate primitive.
+///
+/// # `#[must_use]`
+///
+/// Every consumer either stamps the returned scheme-prefixed string
+/// into a `Renderer::text(...)` slot (both current callers) or feeds
+/// it directly onto a wire — dropping the return means the wrap was
+/// performed for no observable reason.
+///
+/// Byte-shape parity with the pre-lift hand-authored one-line chain is
+/// pinned at
+/// [`tests::blake3_scheme_display_matches_pre_lift_format_scheme_chain_bytewise`]
+/// so a regression that reshaped the scheme literal (a `b3:` shorthand,
+/// an uppercase `BLAKE3:` variant), swapped the format positional
+/// (`format!("{hex}{}", "blake3:")` — hex before scheme), or added a
+/// separator (`"blake3: "` with a stray space) surfaces HERE rather
+/// than as silent operator-facing drift at the render slot.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// one-line `format!("blake3:{<hex>}")` chain recurred at TWO
+/// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger, and is lifted to ONE substrate owner here). THEORY.md §V.3
+/// (three-pillar attestation — the canonical pillar-hash shape is
+/// `"blake3:{hex}"`; this primitive owns the wrap-only half of that
+/// shape at the UI-side wire, sibling to the compute-and-wrap owner
+/// `pillar_hash` in tatara-engine).
+#[must_use]
+pub fn blake3_scheme_display<H: Display>(hex: H) -> String {
+    format!("{BLAKE3_SCHEME_PREFIX}{hex}")
+}
 
 /// The lowercase-64-hex BLAKE3 digest of `v`'s canonical JSON
 /// serialization — a thin delegate onto
@@ -125,7 +235,8 @@ pub fn hex_blake3_of_json<T: Serialize + ?Sized>(v: &T) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::hex_blake3_of_json;
+    use super::{blake3_scheme_display, hex_blake3_of_json, BLAKE3_SCHEME_PREFIX};
+    use crate::event::ShortHash;
     use serde::Serialize;
 
     #[derive(Serialize)]
@@ -236,8 +347,13 @@ mod tests {
                 spec.name,
             );
             assert!(
-                !h.starts_with("blake3:"),
-                "hash for {:?} must not carry the three-pillar `blake3:` scheme prefix",
+                // Route the scheme-absence READ pin through the same
+                // substrate constant [`BLAKE3_SCHEME_PREFIX`] the
+                // WRITE-side primitive [`blake3_scheme_display`]
+                // composes onto. A future scheme rename lands at ONE
+                // owner and both sides move in lockstep.
+                !h.starts_with(BLAKE3_SCHEME_PREFIX),
+                "hash for {:?} must not carry the three-pillar `{BLAKE3_SCHEME_PREFIX}` scheme prefix",
                 spec.name,
             );
         }
@@ -258,5 +374,143 @@ mod tests {
             hex_blake3_of_json::<str>("hello"),
             hex_blake3_of_json(&owned)
         );
+    }
+
+    // ── blake3_scheme_display substrate pins ─────────────────────────
+    //
+    // Bind [`blake3_scheme_display`] at fail-before-pass-after
+    // granularity so a regression that swapped the scheme literal
+    // (a `b3:` shorthand, an uppercase `BLAKE3:` variant), reversed the
+    // format positional (hex before scheme), stray-spaced the
+    // separator (`"blake3: "`), or dropped the wrap entirely surfaces
+    // HERE rather than as silent operator-facing drift at the render
+    // slot every artifact + summary line paints.
+    //
+    // Each pin is fail-before-pass-after: the primitive did not exist
+    // pre-lift, so any test that invokes it fails to compile pre-lift
+    // and passes post-lift; the byte-identity pins below then bind the
+    // specific shape choice.
+
+    /// Byte-identical parity with the pre-lift hand-authored
+    /// `format!("blake3:{<hex>}")` chain both WRITE-side callers walked.
+    /// A regression that reshaped the scheme literal, swapped the
+    /// format positional, or added a stray separator surfaces HERE
+    /// rather than as a silent operator-facing drift at the render
+    /// slot. Sweeps representative receivers — a `ShortHash` (matching
+    /// the two pre-lift callsite shapes), a bare `&str`, a `String` —
+    /// so the `H: Display` polymorphism composes byte-identically to
+    /// the pre-lift monomorphic shape across every corner.
+    #[test]
+    fn blake3_scheme_display_matches_pre_lift_format_scheme_chain_bytewise() {
+        // ShortHash receiver — mirrors the two pre-lift callsite
+        // shapes at `Renderer::artifact` + `Renderer::summary`.
+        let short = ShortHash::from_blake3_hex("cxx3i50lvlprhlqclm1m");
+        let via_primitive = blake3_scheme_display(&short);
+        let via_pre_lift = format!("blake3:{short}");
+        assert_eq!(
+            via_primitive, via_pre_lift,
+            "blake3_scheme_display drifted from pre-lift `format!(\"blake3:{{}}\", _)` on ShortHash",
+        );
+
+        // Bare &str receiver — a future consumer that has a raw
+        // hex handle without a ShortHash newtype wrap.
+        let raw = "abcd1234";
+        assert_eq!(blake3_scheme_display(raw), format!("blake3:{raw}"));
+
+        // Owned String receiver — the same shape as &str but by-value
+        // through the `Display` bound.
+        let owned: String = "deadbeef".into();
+        assert_eq!(blake3_scheme_display(&owned), format!("blake3:{owned}"));
+    }
+
+    /// Wire-format pin: every output MUST begin with the canonical
+    /// [`BLAKE3_SCHEME_PREFIX`] byte sequence. A regression that
+    /// dropped the prefix (writing bare hex) or drifted the spelling
+    /// (`b3:`, `BLAKE3:`, `blake3=`) would silently break downstream
+    /// consumers whose regex or prefix-strip step expects the exact
+    /// `"blake3:"` scheme.
+    #[test]
+    fn blake3_scheme_display_output_carries_blake3_scheme_prefix() {
+        let out = blake3_scheme_display("cxx3i50");
+        assert!(
+            out.starts_with(BLAKE3_SCHEME_PREFIX),
+            "blake3_scheme_display output must carry the `{BLAKE3_SCHEME_PREFIX}` scheme prefix, got {out:?}",
+        );
+        // Empty-hex corner — the wrap is unconditional, so an empty
+        // receiver still produces the bare scheme prefix. Pin the
+        // corner so a future refactor that added a `hex.is_empty()`
+        // short-circuit has to explicitly move this pin.
+        assert_eq!(blake3_scheme_display(""), BLAKE3_SCHEME_PREFIX);
+    }
+
+    /// Determinism pin: `blake3_scheme_display` is a pure `format!`
+    /// composition, so two calls with the same receiver produce
+    /// byte-identical output. A regression that mixed nondeterminism
+    /// in (a wall-clock read, a random seed, a per-fleet suffix)
+    /// would surface HERE rather than as flaky render output.
+    #[test]
+    fn blake3_scheme_display_is_deterministic_for_identical_receiver() {
+        let short = ShortHash::from_blake3_hex("deadbeefcafe");
+        let a = blake3_scheme_display(&short);
+        let b = blake3_scheme_display(&short);
+        assert_eq!(a, b);
+    }
+
+    /// Length pin: for a `ShortHash` receiver (7-char BLAKE3 prefix
+    /// via `ShortHash::from_blake3_hex`'s `.chars().take(7).collect()`
+    /// step), the wrapped output is exactly
+    /// `BLAKE3_SCHEME_PREFIX.len() + 7` chars. Pin the wire-shape
+    /// budget so a `Renderer::text(...)` slot's fixed-width alignment
+    /// assumption surfaces here rather than as a visual drift.
+    #[test]
+    fn blake3_scheme_display_short_hash_output_is_scheme_plus_seven_char_prefix() {
+        let short = ShortHash::from_blake3_hex("cxx3i50lvlprhlqc");
+        let out = blake3_scheme_display(&short);
+        assert_eq!(
+            out.len(),
+            BLAKE3_SCHEME_PREFIX.len() + 7,
+            "blake3_scheme_display on ShortHash must produce scheme+7-char-prefix wire form, got {out:?}",
+        );
+        assert!(out.starts_with(BLAKE3_SCHEME_PREFIX));
+    }
+
+    /// Cross-consumer coherence: the WRITE-side wrap primitive AND the
+    /// READ-side scheme-absence assertion (used by
+    /// [`hex_blake3_of_json_is_64_lowercase_hex_chars`]) share the SAME
+    /// canonical scheme prefix. A regression that drifted ONE side
+    /// (e.g. renamed the constant from under the WRITE primitive
+    /// without updating the READ pin) would silently pass through this
+    /// pin — but a regression that changed the constant's VALUE
+    /// (`"blake3:"` → `"b3:"`) would land the WRITE output on the
+    /// new prefix AND the READ predicate would accept the new prefix
+    /// as its scheme-absent floor, keeping both sides in lockstep at
+    /// ONE substrate owner.
+    #[test]
+    fn blake3_scheme_display_wrap_and_read_side_pin_share_scheme_constant() {
+        let out = blake3_scheme_display("someHex");
+        assert!(
+            out.starts_with(BLAKE3_SCHEME_PREFIX),
+            "WRITE-side wrap primitive must carry the substrate's canonical scheme prefix"
+        );
+        // The READ-side pin at
+        // `hex_blake3_of_json_is_64_lowercase_hex_chars` asserts a
+        // bare-hex output does NOT start with the SAME constant. Pin
+        // the coherence: the bare-hex projection at
+        // `hex_blake3_of_json` produces 64-lowercase-hex-only, and the
+        // WRITE wrap primitive adds the scheme prefix on top. Both
+        // sides route through `BLAKE3_SCHEME_PREFIX`.
+        #[derive(Serialize)]
+        struct F {
+            k: u32,
+        }
+        let bare = hex_blake3_of_json(&F { k: 0 });
+        assert!(
+            !bare.starts_with(BLAKE3_SCHEME_PREFIX),
+            "bare hex projection must NOT carry the scheme prefix (that's the wrap primitive's role)",
+        );
+        // The wrap primitive composed on top of the bare projection
+        // produces the scheme-prefixed wire form byte-identically.
+        let wrapped = blake3_scheme_display(&bare);
+        assert_eq!(wrapped, format!("{BLAKE3_SCHEME_PREFIX}{bare}"));
     }
 }

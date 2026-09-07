@@ -150,7 +150,7 @@ impl Renderer {
         let snow = self.colored_glyph(Sigil::Snowflake, Role::Primary);
         let name_s = self.text(name, Role::Primary);
         let diamond = self.colored_glyph(Sigil::Diamond, Role::Info);
-        let hash_s = self.text(&format!("blake3:{hash}"), Role::Dim);
+        let hash_s = self.text(&crate::hash::blake3_scheme_display(hash), Role::Dim);
         let state_chunk = self.state_chunk(state);
         writeln!(w, "  {snow} {name_s:<28} {diamond} {hash_s}  {state_chunk}")
     }
@@ -195,7 +195,7 @@ impl Renderer {
         let tri = self.colored_glyph(Sigil::Triangle, Role::Primary);
         let label = self.text("content root", Role::Primary);
         let diamond = self.colored_glyph(Sigil::Diamond, Role::Info);
-        let hash = self.text(&format!("blake3:{root_hash}"), Role::Dim);
+        let hash = self.text(&crate::hash::blake3_scheme_display(root_hash), Role::Dim);
         writeln!(w, "{tri} {label}  {diamond} {hash}")?;
         let summary =
             format!("  {total} total · {built} built · {cached} cached · {failed} failed",);

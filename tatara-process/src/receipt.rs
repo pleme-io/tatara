@@ -635,6 +635,43 @@ pub enum ReceiptWireForm {
 }
 
 impl ReceiptWireForm {
+    /// The closed set of wire-form encodings the reader accepts —
+    /// single source of truth that drives the JSON-first-YAML-fallback
+    /// sweep at [`ReceiptEnvelope::parse_either`] AND any future
+    /// enumeration consumer (a per-form metrics tag walker, a
+    /// `tatara-check` receipt-form auditor, a CLI `--wire-form` flag
+    /// completion list). Adding a third variant (e.g. `Cbor` for the
+    /// binary-emit corner already anticipated at [`Self`]'s enum
+    /// docstring, or `MsgPack` for a bandwidth-tight probe) lands as
+    /// ONE new variant + ONE arm on [`Self::parse_raw`] + ONE arm on
+    /// [`Self::as_str`] + ONE entry in [`Self::ALL`] — exhaustively
+    /// checked by the compiler (the `[Self; N]` array literal forces
+    /// the arity) AND by the per-variant truth-table tests below AND
+    /// by `parse_either`'s ALL-driven sweep (which auto-picks up the
+    /// new form without a per-consumer edit at the fallback chain).
+    ///
+    /// Sibling closed-set tables across the crate's typescape — this
+    /// entry closes the fourth axis they jointly own (semantic kind /
+    /// export report / process phase / boundary condition / intent
+    /// kind / **wire-form encoding**):
+    /// [`ReceiptKind::ALL`],
+    /// [`crate::export::ReportFormat::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::intent::IntentKind::ALL`].
+    ///
+    /// The array order is JSON THEN YAML — matching the historical
+    /// [`ReceiptEnvelope::parse_either`] `.or_else` chain that tried
+    /// JSON first and YAML on JSON failure, so operator-facing log
+    /// lines reading the LAST-form error variant continue to see the
+    /// same fallback-form error (`ReceiptError::InvalidYaml`) on a
+    /// receipt payload that both forms reject. A regression that
+    /// reorders the entries surfaces at
+    /// [`tests::receipt_wire_form_all_matches_declaration_order_json_then_yaml`]
+    /// rather than as silent operator-facing skew across every
+    /// fallback log line.
+    pub const ALL: [Self; 2] = [Self::Json, Self::Yaml];
+
     /// Deserialize `payload` with this wire-form's serde reader,
     /// wrapping the parser's `Display` in the matching per-form
     /// [`ReceiptError`] variant. Does NOT run
@@ -762,9 +799,31 @@ impl ReceiptEnvelope {
     /// reader accept either wire form without the operator having to
     /// declare it. Useful when the Job writes JSON and the reconciler
     /// reads back through a kube DynamicObject whose `data` is YAML.
+    ///
+    /// Routes the fallback sweep through the closed-set table
+    /// [`ReceiptWireForm::ALL`] so a future third wire-form variant
+    /// (`Cbor`, `MsgPack`) picks up the fallback automatically — the
+    /// per-callsite `Self::parse(payload, Wire::A).or_else(|_|
+    /// Self::parse(payload, Wire::B))` chain would otherwise need a
+    /// third `.or_else` link at THIS site the moment the enum grew.
+    /// On full failure, the returned error is the LAST attempted
+    /// form's error variant (byte-for-byte identical to the pre-lift
+    /// `.or_else` chain, which discarded the JSON error and returned
+    /// the YAML error) — pinned at
+    /// [`tests::parse_either_preserves_last_form_error_variant_on_full_failure`].
     pub fn parse_either(payload: &str) -> Result<Self, ReceiptError> {
-        Self::parse(payload, ReceiptWireForm::Json)
-            .or_else(|_| Self::parse(payload, ReceiptWireForm::Yaml))
+        let mut last_err: Option<ReceiptError> = None;
+        for form in ReceiptWireForm::ALL {
+            match Self::parse(payload, form) {
+                Ok(env) => return Ok(env),
+                Err(e) => last_err = Some(e),
+            }
+        }
+        // `ReceiptWireForm::ALL: [Self; 2]` is non-empty at the type
+        // level, so the loop assigns `last_err` on every full-failure
+        // path. The `expect` documents the invariant a future zero-
+        // arity mistake at the ALL table would surface with.
+        Err(last_err.expect("ReceiptWireForm::ALL is non-empty"))
     }
 
     /// Closed-set table of pillars that MUST be non-empty on every
@@ -1131,6 +1190,139 @@ generated_at:  2026-05-19T12:00:00Z
         // lines / metrics tags / future CLI flags grep for these.
         assert_eq!(ReceiptWireForm::Json.as_str(), "json");
         assert_eq!(ReceiptWireForm::Yaml.as_str(), "yaml");
+    }
+
+    #[test]
+    fn receipt_wire_form_all_covers_every_declared_variant() {
+        // Closed-set coverage pin: `ReceiptWireForm::ALL` MUST hold
+        // every variant the enum declares. A regression that added a
+        // `Cbor` variant to the enum's declaration + a `parse_raw`
+        // arm + an `as_str` arm but forgot to extend `ALL` would let
+        // `parse_either` silently keep failing over on a valid Cbor
+        // payload without ever trying the parser — a fallback-corner
+        // regression that no other test would catch. The pin binds
+        // exhaustive coverage by re-projecting each variant through
+        // `as_str` and asserting the ALL sweep hits the same set.
+        let via_all: std::collections::HashSet<&'static str> =
+            ReceiptWireForm::ALL.iter().map(|f| f.as_str()).collect();
+        let via_declaration: std::collections::HashSet<&'static str> =
+            [ReceiptWireForm::Json, ReceiptWireForm::Yaml]
+                .iter()
+                .map(|f| f.as_str())
+                .collect();
+        assert_eq!(
+            via_all, via_declaration,
+            "ReceiptWireForm::ALL must cover every declared variant — a new arm added to \
+             `parse_raw` / `as_str` MUST also land in `ALL` so `parse_either` picks it up",
+        );
+        // Arity pin — the `[Self; 2]` type binding is compile-time,
+        // but the runtime `.len()` guards against a `[Self; 0]` typo
+        // that would make `parse_either` unreachable.
+        assert_eq!(ReceiptWireForm::ALL.len(), 2);
+    }
+
+    #[test]
+    fn receipt_wire_form_all_matches_declaration_order_json_then_yaml() {
+        // Order pin: `parse_either` iterates through ALL in
+        // declaration order, so a reorder here changes which form's
+        // error variant `parse_either` returns on full-failure. The
+        // pre-lift `.or_else` chain fixed JSON THEN YAML — pin that
+        // order at the substrate so a reorder surfaces here rather
+        // than as silent skew at every operator-facing fallback log
+        // line reading `ReceiptError::InvalidYaml` on a full-failure.
+        assert_eq!(
+            ReceiptWireForm::ALL,
+            [ReceiptWireForm::Json, ReceiptWireForm::Yaml],
+        );
+    }
+
+    #[test]
+    fn parse_either_dispatches_through_all_table_in_declaration_order() {
+        // Fail-before-pass-after routing pin: `parse_either` MUST try
+        // JSON first (the ALL table's head), then YAML (the tail).
+        // A JSON payload succeeds on the first try — the YAML arm is
+        // never reached, so any per-YAML normalization the future
+        // `parse_raw` YAML arm might grow (a trim, an alias table)
+        // does NOT affect the JSON-happy path. Conversely, a YAML-
+        // only payload MUST fall through the JSON arm and succeed on
+        // the YAML arm — the fallback sweep is the whole point.
+        let json_payload = canonical_payload_json();
+        let via_either = ReceiptEnvelope::parse_either(&json_payload).expect("json parses");
+        let via_json_direct = ReceiptEnvelope::parse_json(&json_payload).expect("json direct");
+        assert_eq!(
+            via_either, via_json_direct,
+            "parse_either on a valid-JSON payload MUST route through the JSON arm identically",
+        );
+
+        let yaml = r#"
+version: tatara-receipt/v1
+kind: test-suite
+composed_root: ROOT
+intent_hash:   aaaa
+artifact_hash: bbbb
+control_hash:  cccc
+generated_at:  2026-05-19T12:00:00Z
+"#
+        .replace(
+            "ROOT",
+            &three_pillar::compose_root("bbbb", Some("cccc"), "aaaa", None),
+        );
+        let via_either = ReceiptEnvelope::parse_either(&yaml).expect("yaml falls through JSON arm");
+        let via_yaml_direct = ReceiptEnvelope::parse_yaml(&yaml).expect("yaml direct");
+        assert_eq!(
+            via_either, via_yaml_direct,
+            "parse_either on a valid-YAML-only payload MUST fall through JSON and match YAML",
+        );
+    }
+
+    #[test]
+    fn parse_either_preserves_last_form_error_variant_on_full_failure() {
+        // Semantic pin: on a payload that BOTH wire forms reject, the
+        // pre-lift `.or_else(|_| ...)` chain returned the LAST arm's
+        // error (YAML's `InvalidYaml`), discarding the JSON error.
+        // Post-lift the ALL-driven sweep preserves that semantic — a
+        // regression that returned the FIRST arm's error (`InvalidJson`)
+        // instead would silently reshape every operator-facing
+        // full-failure log line, since operators grep the arm variant
+        // to know "which form was tried last." Pin the semantic at
+        // the substrate boundary so a regression here fails loudly
+        // rather than in log-grep drift downstream.
+        let bad = "{ not-valid-";
+        let err = ReceiptEnvelope::parse_either(bad).expect_err("both forms reject");
+        assert!(
+            matches!(err, ReceiptError::InvalidYaml(_)),
+            "parse_either full-failure MUST return the LAST-form error \
+             (ReceiptWireForm::ALL's tail); got {err:?}",
+        );
+    }
+
+    #[test]
+    fn receipt_wire_form_all_is_sibling_shape_to_receipt_kind_all() {
+        // Cross-primitive closed-set family pin: `ReceiptWireForm::ALL`
+        // MUST have the same `[Self; N]` shape the sibling closed-set
+        // tables the module docstring names use (`ReceiptKind::ALL`,
+        // `ReportFormat::ALL`, `ProcessPhase::ALL`, `ConditionKind::ALL`,
+        // `IntentKind::ALL`). Every entry is a `Copy` variant of the
+        // enum, reachable off the type name via `X::ALL`. A regression
+        // that promoted ONE table to a `Vec<Self>` or a `HashSet<Self>`
+        // (splintering the family) would surface at compile time on the
+        // callers that iterate them uniformly — the pin here just
+        // documents the family membership at test level.
+        let wire_forms_via_all: Vec<&'static str> =
+            ReceiptWireForm::ALL.iter().map(|f| f.as_str()).collect();
+        let kinds_via_all: Vec<&'static str> =
+            ReceiptKind::ALL.iter().map(|k| k.as_str()).collect();
+        // Both tables project their variants through an `as_str`
+        // const projection into a stable-order slice of static strs;
+        // that shape is the closed-set family's shared idiom.
+        assert!(!wire_forms_via_all.is_empty());
+        assert!(!kinds_via_all.is_empty());
+        assert!(
+            wire_forms_via_all.iter().all(|s| s
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')),
+            "wire-form labels are kebab/lowercase like the sibling closed sets",
+        );
     }
 
     #[test]

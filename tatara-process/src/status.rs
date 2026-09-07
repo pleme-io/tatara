@@ -383,29 +383,21 @@ impl RenderedResourceCoords {
     /// missing X"` in `apply_owned` vs `"rendered resource missing
     /// X"` in `flux_ref_from_json`).
     pub fn from_json(res: &Value) -> anyhow::Result<Self> {
-        // Four `.get(<key>).and_then(|v| v.as_str())` READ chains
-        // (`apiVersion`, `kind`, `metadata.name`, `metadata.namespace`)
-        // now route through the ONE substrate primitive
-        // `crate::json_object::ValueGetExt::get_str` — the string-axis
-        // sibling of `get_i64` on the same
-        // `.get(<key>).and_then(|v| v.as_<T>())` READ-chain axis-family.
-        // A future normalization (Unicode NFC-fold, whitespace trim,
-        // empty-string rejection) lands at the substrate primitive and
-        // every downstream `apiVersion` / `kind` /
-        // `metadata.{name,namespace}` reader inherits it mechanically.
-        let api_version = res
-            .get_str("apiVersion")
-            .ok_or_else(|| anyhow::anyhow!("rendered resource missing apiVersion"))?
-            .to_string();
-        let kind = res
-            .get_str("kind")
-            .ok_or_else(|| anyhow::anyhow!("rendered resource missing kind"))?
-            .to_string();
+        // The three REQUIRED-slot extracts (`apiVersion`, `kind`,
+        // `metadata.name`) route through the ONE substrate primitive
+        // `Self::required_str` — the required-extract sibling of
+        // `crate::json_object::ValueGetExt::get_str` on the same
+        // rendered-resource axis. A future normalization (Unicode
+        // NFC-fold, whitespace trim, empty-string rejection) lands
+        // at the primitive body and every downstream consumer of the
+        // canonical `"rendered resource missing X"` wire form inherits
+        // it mechanically. The optional `metadata.namespace` slot
+        // continues to route through the pre-existing `get_str` READ
+        // primitive since its absent-arm is `None`, not an error.
+        let api_version = Self::required_str(Some(res), "apiVersion", "apiVersion")?;
+        let kind = Self::required_str(Some(res), "kind", "kind")?;
         let metadata = res.get("metadata");
-        let name = metadata
-            .and_then(|m| m.get_str("name"))
-            .ok_or_else(|| anyhow::anyhow!("rendered resource missing metadata.name"))?
-            .to_string();
+        let name = Self::required_str(metadata, "name", "metadata.name")?;
         let namespace = metadata
             .and_then(|m| m.get_str("namespace"))
             .map(str::to_string);
@@ -415,6 +407,98 @@ impl RenderedResourceCoords {
             name,
             namespace,
         })
+    }
+
+    /// Diagnostic prefix stamped ahead of every required-slot label in
+    /// the canonical error wire form. Owned in ONE workspace-wide place
+    /// so a rename (a fleet-wide switch to `"resource is missing"` /
+    /// `"missing rendered-resource field"`) lands here and every
+    /// downstream `.to_string()`-consumer + operator-facing log grep
+    /// inherits the rename mechanically, not at 3 hand-authored
+    /// `anyhow!(…)` restatements.
+    pub const MISSING_MESSAGE_PREFIX: &'static str = "rendered resource missing";
+
+    /// Required-slot extract on a rendered-resource JSON `Value` — the
+    /// substrate owner of the paired `.get_str(<key>).ok_or_else(||
+    /// anyhow!("rendered resource missing <slot>"))?.to_string()`
+    /// four-link chain every REQUIRED slot on a rendered `Value`
+    /// walks pre-lift.
+    ///
+    /// The primitive accepts an `Option<&Value>` receiver so BOTH
+    /// shallow reads (top-level `apiVersion` / `kind` on the resource
+    /// root, callers thread `Some(res)`) AND one-level-nested reads
+    /// (`metadata.name` walking through `res.get("metadata")`,
+    /// callers thread the `Option<&Value>` handle the `.get()` step
+    /// returns) reach the same owner. The `key` slot is the wire-form
+    /// name the underlying [`ValueGetExt::get_str`] looks up on the
+    /// object; the `error_slot` slot is the diagnostic label stamped
+    /// into the error's `Display` output. The two are decoupled so
+    /// `metadata.name` can look up `"name"` on the `metadata` sub-
+    /// object while reporting the dotted `"metadata.name"` path an
+    /// operator bisecting a fault sees in the log.
+    ///
+    /// Ok arm returns `String` (owned) rather than the borrowed
+    /// `&str` [`ValueGetExt::get_str`] returns — every downstream
+    /// slot on the [`RenderedResourceCoords`] struct is an owned
+    /// `String`, so the primitive absorbs the `str::to_string`
+    /// coerce that pre-lift lived at three hand-authored callsites.
+    /// Err arm carries an `anyhow::Error` whose `Display` reads
+    /// exactly `"<Self::MISSING_MESSAGE_PREFIX> <error_slot>"` —
+    /// byte-identical to the pre-lift hand-authored `anyhow!(
+    /// "rendered resource missing {slot}")` wire form.
+    ///
+    /// ### Fires on all four absent-shape corners
+    ///
+    /// The primitive returns `Err` on ALL four ways a required
+    /// slot can miss:
+    ///
+    /// 1. Receiver is `None` — the `metadata.name` corner when the
+    ///    top-level `metadata` object itself is absent (the caller
+    ///    threaded `res.get("metadata")` which returned `None`).
+    /// 2. Slot is absent — the receiver is present but does not
+    ///    carry a value at `key`.
+    /// 3. Slot is present but non-string — a fixture bug that
+    ///    stamped a JSON number / bool / object / array at the
+    ///    slot; the `get_str` step falls through and the primitive
+    ///    reports the slot as missing (matching the pre-lift
+    ///    behavior where every non-string variant surfaced as the
+    ///    same `"missing"` diagnostic — pinning "cannot be applied
+    ///    via kube-rs's dynamic API surface" as the shared
+    ///    failure mode).
+    /// 4. Receiver is non-object — a resource authored as a JSON
+    ///    array / string / null at any of the levels the primitive
+    ///    walks (the `get_str` step returns `None` verbatim).
+    ///
+    /// All four corners produce the SAME wire form so an operator's
+    /// `rg "rendered resource missing"` sweep hits exactly one
+    /// footprint per faulted slot, not four differently-worded
+    /// diagnostics per absent-shape variant.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 4-link `.get_str(<key>).ok_or_else(|| anyhow!("rendered
+    /// resource missing <slot>"))?.to_string()` shape recurred at 3
+    /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE substrate owner
+    /// here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — a regression that drifted the diagnostic prefix
+    /// wording at ONE site would silently pass the two sibling
+    /// pins and fail HERE; post-lift the wire form is owned once
+    /// at [`Self::MISSING_MESSAGE_PREFIX`] and every downstream
+    /// composition inherits the rename mechanically).
+    fn required_str(
+        v: Option<&Value>,
+        key: &'static str,
+        error_slot: &'static str,
+    ) -> anyhow::Result<String> {
+        v.and_then(|x| x.get_str(key))
+            .map(str::to_string)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "{prefix} {slot}",
+                    prefix = Self::MISSING_MESSAGE_PREFIX,
+                    slot = error_slot,
+                )
+            })
     }
 
     /// `metadata.namespace` slice with the K8s canonical `"default"`
@@ -653,6 +737,191 @@ mod tests {
                 "slot {slot} error must be canonical"
             );
         }
+    }
+
+    // ─── RenderedResourceCoords::required_str substrate pins ────────
+    //
+    // Fail-before-pass-after granularity: the
+    // `RenderedResourceCoords::required_str` inherent associated
+    // function did not exist before this commit, so each test below
+    // fails to compile pre-lift. Post-lift they collectively pin the
+    // required-string-extract shape at ONE substrate owner — a
+    // regression that swaps `MISSING_MESSAGE_PREFIX`, decouples the
+    // `key` / `error_slot` slot pair with a wrong ordering, drops the
+    // `str::to_string` coerce (returning `&str` and forcing every
+    // consumer to re-stamp `.to_string()` per site), or narrows the
+    // receiver from `Option<&Value>` to `&Value` (silently breaking
+    // the `metadata.name` corner where the caller threads the
+    // `res.get("metadata")` result directly) surfaces HERE rather
+    // than as silent operator-facing skew across the three pre-lift
+    // consumers on `from_json`.
+
+    #[test]
+    fn required_str_present_string_slot_returns_owned_string() {
+        // Ok-arm invariant: a present string slot at `key` on a
+        // `Some(&Value::Object)` receiver returns `Ok(<owned>)` —
+        // the primitive absorbs the `.to_string()` coerce the three
+        // pre-lift restatements each stamped at the tail.
+        let res = json!({"apiVersion": "kustomize.toolkit.fluxcd.io/v1"});
+        let got =
+            RenderedResourceCoords::required_str(Some(&res), "apiVersion", "apiVersion").unwrap();
+        assert_eq!(got, "kustomize.toolkit.fluxcd.io/v1");
+    }
+
+    #[test]
+    fn required_str_none_receiver_errors_with_canonical_wire_form() {
+        // Absent-shape corner 1: the caller threads `None`
+        // (`res.get("metadata")` returned `None` because the top-
+        // level `metadata` slot itself is absent). The primitive
+        // errors with the SAME wire form the two other absent
+        // corners produce, keeping the operator-facing footprint
+        // singular.
+        let e = RenderedResourceCoords::required_str(None, "name", "metadata.name")
+            .expect_err("None receiver must error");
+        assert_eq!(e.to_string(), "rendered resource missing metadata.name");
+    }
+
+    #[test]
+    fn required_str_absent_slot_errors_with_canonical_wire_form() {
+        // Absent-shape corner 2: the receiver is present but the
+        // slot at `key` is not stamped on it. Wire form matches
+        // the `None`-receiver corner and the non-string corner.
+        let res = json!({"kind": "K"});
+        let e = RenderedResourceCoords::required_str(Some(&res), "apiVersion", "apiVersion")
+            .expect_err("absent slot must error");
+        assert_eq!(e.to_string(), "rendered resource missing apiVersion");
+    }
+
+    #[test]
+    fn required_str_non_string_slot_errors_with_canonical_wire_form() {
+        // Absent-shape corner 3: the slot is present but stamped
+        // as a JSON number / bool / object / array — every
+        // non-`Value::String` variant falls through the underlying
+        // `get_str` gate and produces the SAME `"missing"` diagnostic.
+        // Pinning EVERY non-string variant here (not just number)
+        // guarantees an operator's error-stream grep collapses all
+        // fixture-authoring bugs at this slot onto one footprint.
+        for bad in [
+            json!({"apiVersion": 42}),
+            json!({"apiVersion": true}),
+            json!({"apiVersion": {}}),
+            json!({"apiVersion": [1]}),
+            json!({"apiVersion": null}),
+        ] {
+            let e = RenderedResourceCoords::required_str(Some(&bad), "apiVersion", "apiVersion")
+                .expect_err("non-string slot must error");
+            assert_eq!(e.to_string(), "rendered resource missing apiVersion");
+        }
+    }
+
+    #[test]
+    fn required_str_non_object_receiver_errors_with_canonical_wire_form() {
+        // Absent-shape corner 4: the receiver itself is not a
+        // `Value::Object` — a resource authored as a JSON array,
+        // string, or null at any of the levels the primitive
+        // walks. The underlying `get_str` step returns `None`
+        // verbatim (matching the pre-lift chain's own behavior)
+        // and the primitive stamps the canonical wire form.
+        for bad in [json!([1, 2, 3]), json!("stringified"), Value::Null] {
+            let e = RenderedResourceCoords::required_str(Some(&bad), "name", "metadata.name")
+                .expect_err("non-object receiver must error");
+            assert_eq!(e.to_string(), "rendered resource missing metadata.name");
+        }
+    }
+
+    #[test]
+    fn required_str_decouples_key_from_error_slot_at_metadata_name_shape() {
+        // Slot-decoupling pin: for the `metadata.name` corner the
+        // primitive looks up `key = "name"` on the metadata sub-
+        // object while stamping `error_slot = "metadata.name"` into
+        // the error's `Display` output — the two are NOT the same
+        // string, and a regression that collapsed them (using
+        // `key` for both the lookup AND the error slug, or
+        // vice-versa) would silently pass the shallow `apiVersion`
+        // / `kind` pins above (where `key == error_slot`) and fail
+        // HERE. Present-arm: lookup succeeds on the metadata sub-
+        // object's `name` slot, returns the owned string.
+        let res = json!({"metadata": {"name": "demo"}});
+        let metadata = res.get("metadata");
+        let got = RenderedResourceCoords::required_str(metadata, "name", "metadata.name").unwrap();
+        assert_eq!(got, "demo");
+        // Absent-arm: same slot-decoupling but the `name` sub-slot
+        // is absent — the error slug is the DOTTED path, not the
+        // shallow `"name"` key.
+        let res_no_name = json!({"metadata": {}});
+        let metadata_empty = res_no_name.get("metadata");
+        let e = RenderedResourceCoords::required_str(metadata_empty, "name", "metadata.name")
+            .expect_err("absent metadata.name must error");
+        assert_eq!(e.to_string(), "rendered resource missing metadata.name");
+    }
+
+    #[test]
+    fn required_str_error_wire_form_composes_missing_message_prefix_verbatim() {
+        // Wire-form composition pin: the error's `Display` is
+        // exactly `"<Self::MISSING_MESSAGE_PREFIX> <error_slot>"` —
+        // the leading prefix comes from the `const` owner + a
+        // single space + the caller-supplied slug. A regression
+        // that switched the separator (a colon, an em-dash) or
+        // dropped the prefix (returning just the slot slug) would
+        // silently invert every operator-facing log grep footprint;
+        // this pin binds the composition to the ONE prefix const
+        // so a future rename lands atomically at both the source
+        // and the pins.
+        let e = RenderedResourceCoords::required_str(None, "name", "metadata.name")
+            .expect_err("None receiver must error");
+        let expected = format!(
+            "{prefix} metadata.name",
+            prefix = RenderedResourceCoords::MISSING_MESSAGE_PREFIX,
+        );
+        assert_eq!(e.to_string(), expected);
+    }
+
+    #[test]
+    fn required_str_shape_parity_matches_pre_lift_hand_authored_chain_bytewise() {
+        // Byte-shape parity pin: on every corner (present, absent,
+        // non-string, non-object, None-receiver) the primitive's
+        // output MUST match the pre-lift hand-authored
+        // `.get_str(<key>).ok_or_else(|| anyhow!("rendered resource
+        // missing <slot>"))?.to_string()` chain bytewise — the
+        // Ok-arm string equals the raw `get_str` slice as an owned
+        // `String`, and the Err-arm `Display` equals the pre-lift
+        // `anyhow!(...)` output verbatim. A regression that inserted
+        // a normalization (a trim, an NFC-fold) into the Ok arm or
+        // altered the diagnostic wrapping in the Err arm surfaces
+        // HERE rather than as silent per-consumer schema drift.
+        let cases: &[(Value, &'static str, &'static str)] = &[
+            (json!({"apiVersion": "v1"}), "apiVersion", "apiVersion"),
+            (json!({"kind": "K"}), "kind", "kind"),
+        ];
+        for (res, key, error_slot) in cases {
+            let via_primitive =
+                RenderedResourceCoords::required_str(Some(res), key, error_slot).unwrap();
+            let via_pre_lift = res.get_str(key).unwrap().to_string();
+            assert_eq!(via_primitive, via_pre_lift);
+        }
+        let empty = json!({"other": "value"});
+        let err_via_primitive =
+            RenderedResourceCoords::required_str(Some(&empty), "apiVersion", "apiVersion")
+                .expect_err("absent slot must error");
+        let err_via_pre_lift = anyhow::anyhow!("rendered resource missing apiVersion");
+        assert_eq!(err_via_primitive.to_string(), err_via_pre_lift.to_string());
+    }
+
+    #[test]
+    fn required_str_missing_message_prefix_matches_pre_lift_wire_form_verbatim() {
+        // Const-owner pin: the pre-lift hand-authored `anyhow!("rendered
+        // resource missing X")` restatements each embedded the leading
+        // `"rendered resource missing"` prefix as an inline literal.
+        // Post-lift the prefix lives at ONE const owner — a rename lands
+        // there and the three consumers on `from_json` inherit the
+        // rename mechanically. This pin binds the const to the pre-lift
+        // spelling so a rename shows up at BOTH the const definition
+        // AND this pin as a coherent atomic edit, not as a silent
+        // diff between the const and its downstream consumers.
+        assert_eq!(
+            RenderedResourceCoords::MISSING_MESSAGE_PREFIX,
+            "rendered resource missing",
+        );
     }
 
     #[test]

@@ -30,6 +30,60 @@ use serde::{Deserialize, Serialize};
 
 use crate::ephemeral::EphemeralSpec;
 
+/// Kind spelling of the [`EphemeralPool`] CRD as it appears in a K8s
+/// [`OwnerReference.kind`][ownref] field. Peer to [`crate::PROCESS_KIND`]
+/// on the tatara-CRD-kind axis — centralizes the ONE literal every
+/// site that composes an OwnerReference pointing at a pool would
+/// otherwise hand-inline as `"EphemeralPool".into()`.
+///
+/// Pre-lift the SAME literal recurred at TWO workspace-wide sites
+/// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold:
+///
+/// * the `#[kube(kind = "EphemeralPool", ...)]` derive on the CRD
+///   struct in this module (the kube-derived source of truth for the
+///   [`kube::Resource::kind`] projection); and
+/// * the bare `"EphemeralPool".into()` string literal at
+///   [`tatara-pool-reconciler::controller_pool::build_member_process`]'s
+///   pool-cascade `OwnerReference` composer — the ONE production
+///   restatement that emits a live wire-form K8s owner reference
+///   pointing at this CRD.
+///
+/// Post-lift the OwnerReference composer routes through this ONE
+/// substrate owner. A rename to (e.g.) `EphemeralWorkerPool` under a
+/// future CRD migration lands at ONE arm here (plus the paired
+/// `#[kube(kind = ...)]` slot on the struct) and the pool-reconciler's
+/// cascade-deletion owner reference stays coherent by construction.
+///
+/// Byte-shape pinned by
+/// [`tests::ephemeral_pool_kind_matches_kube_derived_kind_bytewise`]
+/// against the [`kube::Resource::kind`] projection so a rename that
+/// touched only the const (or only the `#[kube]` slot) surfaces
+/// HERE rather than as silent operator-facing skew at the
+/// cascade-delete owner reference the pool controller stamps on every
+/// member Process.
+///
+/// Peer on the tatara-CRD-kind axis to [`crate::PROCESS_KIND`] (which
+/// centralizes the `"Process"` kind literal that
+/// [`crate::owner_reference_json`] composes for the Process CRD's own
+/// owner-ref emit sites). A future addition for the peer
+/// [`EphemeralAllocation`][crate::allocation::EphemeralAllocation] +
+/// [`ProcessTable`][crate::table::ProcessTable] CRDs lands as sibling
+/// consts on the same axis if either grows a production
+/// OwnerReference restatement.
+///
+/// Theory grounding: THEORY.md §VI.1 (generation over composition —
+/// the `"EphemeralPool"` wire-form kind literal recurred at TWO
+/// hand-authored sites past the PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger, and is lifted to ONE substrate const here). THEORY.md
+/// §II.1 invariant 5 (composition preserves proofs — the byte-shape
+/// pin below binds the const at fail-before-pass-after granularity;
+/// a regression that renamed the kube-derived kind projection would
+/// surface at this module's test rather than as silent skew at the
+/// pool controller's cascade-delete owner reference).
+///
+/// [ownref]: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
+pub const EPHEMERAL_POOL_KIND: &str = "EphemeralPool";
+
 /// `EphemeralPool` CRD spec — typed pool of warm Processes.
 ///
 /// ```yaml
@@ -2362,6 +2416,43 @@ mod tests {
     // the test module so the lib body doesn't carry an otherwise-unused
     // `use std::str::FromStr;` at the file head.
     use std::str::FromStr;
+
+    // ─── EPHEMERAL_POOL_KIND substrate pins ─────────────────────────
+    //
+    // Bind [`EPHEMERAL_POOL_KIND`] at fail-before-pass-after granularity
+    // so a regression that renamed the kube-derived `Kind` projection
+    // without updating the const (or vice-versa) surfaces HERE rather
+    // than as silent operator-facing skew at the pool controller's
+    // cascade-delete owner reference the pre-lift bare
+    // `"EphemeralPool".into()` literal stamped verbatim.
+
+    #[test]
+    fn ephemeral_pool_kind_matches_kube_derived_kind_bytewise() {
+        // Cross-form coherence pin: the substrate's PascalCase wire
+        // form MUST byte-match the `kube::Resource`-derived `kind`
+        // projection on [`EphemeralPool`] — the SAME string the
+        // `#[kube(kind = "EphemeralPool", ...)]` derive slot names and
+        // the SAME string [`EphemeralPool::crd`] returns for the emitted
+        // CRD manifest. A regression that drifted [`EPHEMERAL_POOL_KIND`]
+        // (or the paired `#[kube(kind = ...)]` slot) would silently
+        // skew the pool controller's cascade-delete OwnerReference at
+        // [`tatara-pool-reconciler::controller_pool::build_member_process`]
+        // against the actual K8s API-server-registered kind, orphaning
+        // every member Process on pool deletion.
+        use kube::Resource;
+        assert_eq!(EPHEMERAL_POOL_KIND, EphemeralPool::kind(&()));
+    }
+
+    #[test]
+    fn ephemeral_pool_kind_matches_pre_lift_bare_literal_bytewise() {
+        // Byte-identical parity with the pre-lift bare `"EphemeralPool"`
+        // string literal the `OwnerReference { kind: ... }` slot at
+        // [`tatara-pool-reconciler::controller_pool::build_member_process`]
+        // hand-authored. A regression that drifted the const surfaces
+        // HERE rather than as silent K8s-API-server-side kind skew at
+        // the pool controller's cascade-delete owner reference.
+        assert_eq!(EPHEMERAL_POOL_KIND, "EphemeralPool");
+    }
 
     /// SLOT-BINDING CONTRACT: [`MatchKey::new`] threads every input
     /// verbatim into its named slot — a future field addition or

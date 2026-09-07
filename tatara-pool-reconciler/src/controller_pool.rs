@@ -698,11 +698,36 @@ fn build_member_process(
     proc.metadata.annotations = Some(metadata_annotations);
 
     // Owner reference so K8s cascade-deletes members on Pool deletion.
+    //
+    // Both wire-form identity slots route through the ONE substrate
+    // owner apiece:
+    //
+    // * `api_version` — [`tatara_process::api_version`] composes the
+    //   canonical `<GROUP>/<VERSION>` = `"tatara.pleme.io/v1alpha1"`
+    //   shape every tatara CRD stamps; a future group / version bump
+    //   lands at [`tatara_process::GROUP`] / [`tatara_process::VERSION`]
+    //   and every downstream OwnerReference (including this one) picks
+    //   up the upgrade mechanically.
+    // * `kind` — [`tatara_process::pool::EPHEMERAL_POOL_KIND`] centralizes
+    //   the `"EphemeralPool"` wire-form kind literal that the
+    //   `#[kube(kind = "EphemeralPool", ...)]` derive slot on
+    //   [`tatara_process::pool::EphemeralPool`] names; a future rename
+    //   under a CRD migration lands at ONE const there and the paired
+    //   `#[kube]` slot, and this cascade-delete owner reference stays
+    //   coherent by construction (byte-shape pinned by
+    //   `tatara-process::pool::tests::ephemeral_pool_kind_matches_
+    //   kube_derived_kind_bytewise`).
+    //
+    // Pre-lift both slots restated the wire form as bare
+    // `"tatara.pleme.io/v1alpha1".into()` / `"EphemeralPool".into()`
+    // string literals — each was ONE production restatement of a
+    // canonical value already owned upstream, opening a silent-drift
+    // path against a future version / kind bump.
     if let (Some(uid), Some(name)) = (pool.metadata.uid.as_ref(), pool.metadata.name.as_ref()) {
         proc.metadata.owner_references = Some(vec![
             k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference {
-                api_version: "tatara.pleme.io/v1alpha1".into(),
-                kind: "EphemeralPool".into(),
+                api_version: tatara_process::api_version(),
+                kind: tatara_process::pool::EPHEMERAL_POOL_KIND.to_string(),
                 name: name.clone(),
                 uid: uid.clone(),
                 controller: Some(true),
@@ -774,5 +799,75 @@ mod tests {
         p.metadata.annotations = Some(anns);
         assert!(process_belongs_to_pool(&p, "demo-pool"));
         assert!(!process_belongs_to_pool(&p, "other"));
+    }
+
+    #[test]
+    fn build_member_process_owner_reference_routes_wire_form_through_substrate() {
+        // Substrate-composition pin: the cascade-delete OwnerReference
+        // that [`build_member_process`] stamps on every emitted member
+        // Process MUST carry `api_version` sourced from
+        // [`tatara_process::api_version`] and `kind` sourced from
+        // [`tatara_process::pool::EPHEMERAL_POOL_KIND`]. A regression
+        // that reintroduced a bare `"tatara.pleme.io/v1alpha1"` /
+        // `"EphemeralPool"` string literal at either slot would slip
+        // past this pin only if the underlying substrate primitives
+        // ALSO drifted, keeping the two shapes in lockstep by
+        // construction. Byte-identical parity with the pre-lift
+        // hand-authored literals is asserted at both slots so a
+        // regression at either substrate primitive alone surfaces
+        // HERE rather than at the K8s API server on the next Pool
+        // delete cascade.
+        let template = tatara_process::ephemeral::EphemeralSpec {
+            aplicacao: tatara_process::intent::AplicacaoIntent::chart_only("oci://x", "1"),
+            ttl: "1h".into(),
+            teardown: tatara_process::lifetime::TeardownPolicy::Always,
+            max_concurrent: 0,
+            postconditions: vec![],
+            preconditions: vec![],
+            verify_timeout: None,
+            classification: None,
+            parent: None,
+            exports: vec![],
+            routing: None,
+        };
+        let spec = tatara_process::pool::PoolSpec {
+            desired_size: 1,
+            ..tatara_process::pool::PoolSpec::with_template(template)
+        };
+        let mut pool = EphemeralPool::new("demo-pool", spec);
+        pool.metadata.uid = Some("pool-uid".into());
+        pool.metadata.namespace = Some("pool-ns".into());
+
+        let proc = build_member_process(&pool, "demo-pool-0", 0, "demo-pool")
+            .expect("build_member_process succeeds on a uid-stamped pool");
+        let refs = proc
+            .metadata
+            .owner_references
+            .as_ref()
+            .expect("member Process carries an ownerReferences vec");
+        assert_eq!(refs.len(), 1, "exactly ONE cascade-delete owner ref");
+        let r = &refs[0];
+        assert_eq!(
+            r.api_version,
+            tatara_process::api_version(),
+            "api_version slot routes through tatara_process::api_version() substrate owner",
+        );
+        assert_eq!(
+            r.api_version, "tatara.pleme.io/v1alpha1",
+            "api_version matches pre-lift bare literal byte-identically",
+        );
+        assert_eq!(
+            r.kind,
+            tatara_process::pool::EPHEMERAL_POOL_KIND,
+            "kind slot routes through tatara_process::pool::EPHEMERAL_POOL_KIND substrate owner",
+        );
+        assert_eq!(
+            r.kind, "EphemeralPool",
+            "kind matches pre-lift bare literal byte-identically",
+        );
+        assert_eq!(r.name, "demo-pool");
+        assert_eq!(r.uid, "pool-uid");
+        assert_eq!(r.controller, Some(true));
+        assert_eq!(r.block_owner_deletion, Some(true));
     }
 }

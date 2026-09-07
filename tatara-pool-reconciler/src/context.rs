@@ -167,9 +167,19 @@ impl PoolContext {
     /// kind surfaces at the resource-url pins rather than as silent
     /// watch-misroute against a wrong collection).
     ///
+    /// Delegates through the workspace-wide substrate owner
+    /// [`tatara_process::api::all`] — sibling to
+    /// [`tatara_process::process_api::namespaced`] on the (scope × K)
+    /// axis pair, closing the `Api::all(<client>)` shape at ONE
+    /// substrate primitive across every cluster-scoped tatara-CRD
+    /// binder site (the peer callers on
+    /// [`tatara_reconciler::context::Context`] +
+    /// [`Self::allocations_all_api`] below all route through the same
+    /// owner).
+    ///
     /// [ctrl]: kube::runtime::controller::Controller::new
     pub fn pools_all_api(&self) -> Api<EphemeralPool> {
-        Api::all(self.kube.clone())
+        tatara_process::api::all(self.kube.clone())
     }
 
     /// Cluster-scoped `Api<EphemeralAllocation>` bound to this
@@ -184,9 +194,16 @@ impl PoolContext {
     /// anchor — this primitive shares that owner's contract on the
     /// `EphemeralAllocation`-typed collection axis.
     ///
+    /// Delegates through the workspace-wide substrate owner
+    /// [`tatara_process::api::all`] — sibling to
+    /// [`tatara_process::process_api::namespaced`] on the (scope × K)
+    /// axis pair, closing the `Api::all(<client>)` shape at ONE
+    /// substrate primitive across every cluster-scoped tatara-CRD
+    /// binder site.
+    ///
     /// [ctrl]: kube::runtime::controller::Controller::new
     pub fn allocations_all_api(&self) -> Api<EphemeralAllocation> {
-        Api::all(self.kube.clone())
+        tatara_process::api::all(self.kube.clone())
     }
 }
 

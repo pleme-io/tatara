@@ -74,8 +74,15 @@ impl Context {
     /// a namespaced one, so the primitive's signature encodes that
     /// invariant structurally — a caller cannot accidentally pass a
     /// namespace and get a broken `Api::namespaced` back.
+    ///
+    /// Delegates through the workspace-wide substrate owner
+    /// [`tatara_process::api::all`] — sibling to
+    /// [`tatara_process::process_api::namespaced`] on the (scope × K)
+    /// axis pair, closing the `Api::all(<client>)` shape at ONE
+    /// substrate primitive across every cluster-scoped tatara-CRD
+    /// binder site.
     pub fn process_table_api(&self) -> Api<ProcessTable> {
-        Api::all(self.kube.clone())
+        tatara_process::api::all(self.kube.clone())
     }
 
     /// Cluster-scoped `Api<Process>` bound to this context's client —
@@ -104,8 +111,15 @@ impl Context {
     /// filter, a client-side QPS limiter, or a fixture-backed client
     /// for CI/smoke-tests onto every cluster-wide Process read lands
     /// at ONE substrate method here.
+    ///
+    /// Delegates through the workspace-wide substrate owner
+    /// [`tatara_process::api::all`] — sibling to
+    /// [`tatara_process::process_api::namespaced`] on the (scope × K)
+    /// axis pair, closing the `Api::all(<client>)` shape at ONE
+    /// substrate primitive across every cluster-scoped tatara-CRD
+    /// binder site.
     pub fn processes_all_api(&self) -> Api<Process> {
-        Api::all(self.kube.clone())
+        tatara_process::api::all(self.kube.clone())
     }
 
     /// Handler-entry composer on the (namespace, name, api) tuple axis —

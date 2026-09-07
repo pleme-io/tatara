@@ -6,6 +6,7 @@
 
 pub mod allocation;
 pub mod anyhow_flatten;
+pub mod api;
 pub mod attestation;
 pub mod boundary;
 pub mod classification;

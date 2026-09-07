@@ -6,7 +6,7 @@
 
 use anyhow::{anyhow, Result};
 use kube::api::{ApiResource, DynamicObject, PatchParams};
-use kube::{Api, Client};
+use kube::Client;
 use serde_json::{json, Value};
 
 use tatara_process::annotations;
@@ -761,7 +761,21 @@ pub async fn apply_owned(
     let coords = RenderedResourceCoords::from_json(&resource)?;
     let ar = api_resource(&coords.api_version, &coords.kind)?;
     let obj: DynamicObject = serde_json::from_value(resource)?;
-    let api: Api<DynamicObject> = Api::namespaced_with(client, namespace, &ar);
+    // Namespace-scoped `Api<DynamicObject>` binding rides through the
+    // ONE substrate primitive
+    // `tatara_process::api::namespaced_dynamic` — sibling to
+    // `tatara_process::api::namespaced::<K>` on the (statically-typed
+    // × dynamic-schema) axis pair, closing the
+    // `Api::namespaced_with(<client>, <ns>, <&ar>)` shape at ONE
+    // substrate owner across every ns-scoped DynamicObject binder
+    // site. Pre-lift this + `fetch` below both hand-authored the SAME
+    // 3-arg chain past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold; post-lift a future normalization of the dynamic-
+    // object ns-scoped handle posture (a wired-in tracing span
+    // naming the ApiResource's kind + group, a discovery-cache
+    // pre-warmer, a per-namespace retry budget) lands at THAT owner
+    // rather than at this or `fetch`'s callsite.
+    let api = tatara_process::api::namespaced_dynamic(client, namespace, &ar);
 
     // SSA-side wire dispatch rides the substrate primitive
     // `tatara_process::patch::apply` — pre-lift this was a hand-
@@ -791,7 +805,13 @@ pub async fn fetch(
     name: &str,
 ) -> Result<Option<DynamicObject>> {
     let ar = api_resource(api_version, kind)?;
-    let api: Api<DynamicObject> = Api::namespaced_with(client, namespace, &ar);
+    // Sibling to `apply_owned`'s DynamicObject binder above — both
+    // ride through the ONE substrate primitive
+    // `tatara_process::api::namespaced_dynamic`, closing the
+    // `Api::namespaced_with::<DynamicObject>(<client>, <ns>, <&ar>)`
+    // shape at ONE substrate owner. See `apply_owned` for the full
+    // rationale + peer-axis discipline.
+    let api = tatara_process::api::namespaced_dynamic(client, namespace, &ar);
     Ok(api.get_opt(name).await?)
 }
 

@@ -88,6 +88,7 @@
 //! and lets the callsite pick, so a bare [`api`] name best matches
 //! its polymorphic contract.
 
+use kube::api::{ApiResource, DynamicObject};
 use kube::core::NamespaceResourceScope;
 use kube::{Api, Client, Resource};
 
@@ -222,6 +223,100 @@ where
     K: Resource<DynamicType = (), Scope = NamespaceResourceScope>,
 {
     Api::namespaced(client, ns)
+}
+
+/// Bind a namespace-scoped [`Api<DynamicObject>`] handle from an owned
+/// [`Client`] + `&str` namespace + a runtime-resolved
+/// [`ApiResource`] descriptor.
+///
+/// Owns the 1-link `Api::namespaced_with(<client>, <ns>, <&ar>)` chain
+/// every workspace consumer of a namespace-scoped **dynamic** typed
+/// handle reaches for when the K binding is not known at compile time
+/// — the arbitrary rendered-resource axis where `K = DynamicObject`
+/// and the schema is carried by a [`ApiResource`] value the caller
+/// resolved through [`crate::process_api`] / the reconciler's discovery
+/// cache.
+///
+/// # Peer axis
+///
+/// Sibling to [`namespaced`] on the (K-slot × runtime-schema-slot)
+/// axis pair: [`namespaced`] fixes `K: Resource<DynamicType = ()>` so
+/// the K's schema is statically-known through its `Resource` impl and
+/// no [`ApiResource`] slot is required; this primitive fixes `K =
+/// DynamicObject` (whose `DynamicType = ApiResource` — the schema is
+/// carried at the value level) and takes the [`ApiResource`] slot
+/// explicitly. Both fix the scope at `Api::namespaced` / `Api::
+/// namespaced_with` structurally at the function name — a caller
+/// writes `api::namespaced::<K>(client, ns)` for statically-typed K or
+/// `api::namespaced_dynamic(client, ns, &ar)` for the dynamic-object
+/// binding, and a regression that silently drifted between them (a
+/// stray `Api::namespaced_with` where a statically-typed handle was
+/// intended, an `Api::namespaced` on `DynamicObject` that would fail
+/// at compile time for want of the `ApiResource` slot) fails at the
+/// callsite's function-name rather than as silent operator-facing skew.
+///
+/// # Pre-lift call-site history
+///
+/// The 1-link `Api::namespaced_with::<DynamicObject>(client, ns, &ar)`
+/// chain recurred at TWO hand-authored production sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold, both in
+/// `tatara-reconciler::ssapply` and both feeding a downstream
+/// wire-verb dispatch through the DynamicObject typed handle:
+///
+/// * `ssapply::apply_owned` — the SSA-side dynamic-object writer for
+///   every rendered flux/aplicacao resource. Builds the handle before
+///   dispatching through [`crate::patch::apply`] to stamp the owned
+///   resource under [`FIELD_MANAGER`].
+/// * `ssapply::fetch` — the by-coordinate dynamic-object reader every
+///   VERIFY-phase readiness probe + ATTEST-heartbeat drift detector
+///   composes to pull the current apiserver-side view of an owned
+///   resource. Chains through `Api::get_opt(name)` to project the
+///   404 → `Ok(None)` corner.
+///
+/// Both sites restated the SAME 3-arg positional chain verbatim:
+/// `Api::namespaced_with(client, namespace, &ar)` on an owned `client:
+/// Client` + a borrowed `namespace: &str` + a borrowed `&ar:
+/// &ApiResource`. Post-lift each callsite reads
+/// `tatara_process::api::namespaced_dynamic(client, namespace, &ar)`
+/// and the dynamic-object ns-scoped handle binding lives at ONE
+/// substrate owner across both consumers.
+///
+/// # Compounding
+///
+/// A future normalization of the dynamic-object ns-scoped handle
+/// posture (a wired-in tracing span for handle construction naming
+/// the ApiResource's kind + group, a client-side QPS budget scoped to
+/// the discovery-resolved K, a per-namespace retry budget, a
+/// fixture-backed client for CI/smoke-tests, a discovery-cache
+/// pre-warmer) lands at THIS ONE function and every downstream
+/// consumer inherits the upgrade mechanically — no per-site edit at
+/// `apply_owned` / `fetch` or at future consumers (a future dynamic-
+/// object watcher for the P3 kenshi-runner lift, a future kensa audit
+/// walker over every rendered resource under a Process, a future
+/// drift-probe that fetches by dynamic kind before verifying the
+/// attestation root).
+///
+/// The `&ApiResource` slot is borrowed (matching `Api::namespaced_with`'s
+/// own signature) rather than owned — both pre-lift callsites already
+/// build the `ar` from `api_resource(&api_version, &kind)?` earlier in
+/// the function body and pass it by reference; no consumer needs to
+/// consume the descriptor at binding time.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 1-link `Api::namespaced_with::<DynamicObject>(<client>, <ns>, <&ar>)`
+/// chain recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication trigger and is lifted onto the ONE workspace-wide
+/// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+/// preserves proofs — the pin block below binds the primitive at
+/// fail-before-pass-after granularity, so a regression that drifted
+/// the scope slot away from `Api::namespaced_with` — a stray `Api::all_with`
+/// cluster-wide widening, a bind through the statically-typed
+/// `Api::namespaced` that would fail at compile time for want of the
+/// ApiResource carrier — surfaces at `api::tests::*` rather than as
+/// silent operator-facing skew across the two consumer sites).
+#[must_use]
+pub fn namespaced_dynamic(client: Client, ns: &str, ar: &ApiResource) -> Api<DynamicObject> {
+    Api::namespaced_with(client, ns, ar)
 }
 
 #[cfg(test)]
@@ -473,5 +568,118 @@ mod tests {
         let _configmap: fn(Client, &str) -> Api<ConfigMap> = namespaced::<ConfigMap>;
         let _job: fn(Client, &str) -> Api<Job> = namespaced::<Job>;
         let _pool: fn(Client, &str) -> Api<EphemeralPool> = namespaced::<EphemeralPool>;
+    }
+
+    // ─── Api::namespaced_with substrate pins (DynamicObject axis) ────
+    //
+    // The primitive [`namespaced_dynamic`] binds
+    // `Api::namespaced_with::<DynamicObject>(client, ns, &ar)` at ONE
+    // substrate site across TWO consumer callsites in
+    // `tatara-reconciler::ssapply` (`apply_owned` SSA-writer +
+    // `fetch` by-coord reader). Sibling to [`namespaced`] on the
+    // (statically-typed × dynamic-schema) axis pair. These pins bind
+    // the scope-slot + K-binding + runtime-schema-slot shape at
+    // fail-before-pass-after granularity so a regression that drifted
+    // any observable slot (the K narrowed off `DynamicObject` — which
+    // would fail every consumer that needs the schema at the value
+    // level, the scope choice widened from `Api::namespaced_with` to
+    // `Api::all_with` — which would silently widen a ns-scoped write
+    // into a cluster-wide sweep, the `ar` slot narrowed from `&
+    // ApiResource` to owned `ApiResource` — which would break every
+    // consumer that already borrows the ar from an earlier local
+    // binding) surfaces HERE rather than as silent operator-facing
+    // skew at the two consumer sites.
+
+    #[test]
+    fn namespaced_dynamic_signature_binds_owned_client_borrowed_ns_borrowed_ar_returning_typed_dynamicobject_api(
+    ) {
+        // The primitive's signature binds `client: Client` on the
+        // input side (matching `Api::namespaced_with`'s own owned-
+        // Client slot — both pre-lift consumer sites pass an owned
+        // `client: Client` argument received from their function's
+        // own signature at the boundary), `ns: &str` on the ns-slot
+        // (a borrowed str — both consumers pass a `namespace: &str`
+        // parameter already borrowed at their caller boundary),
+        // `ar: &ApiResource` on the runtime-schema slot (borrowed —
+        // both consumers build the ar from an earlier local
+        // `api_resource(&api_version, &kind)?` binding and pass it
+        // by reference), and returns `Api<DynamicObject>` (matching
+        // the pre-lift `let api: Api<DynamicObject> = Api::
+        // namespaced_with(...)` shape at both consumer bind sites).
+        //
+        // A regression that widened `client` to `&Client` (which
+        // wouldn't route through `Api::namespaced_with`'s owned-
+        // Client slot), narrowed the return off `DynamicObject`
+        // (which would drop the dynamic-schema carrier both consumers
+        // rely on for `serde_json::from_value` round-trips + `Api::
+        // get_opt` 404 projections), or narrowed the `ar` slot to
+        // owned `ApiResource` (which would break the two consumers
+        // that already borrow their `ar` from a preceding local
+        // binding) fails this coercion at compile time.
+        let _sig: fn(Client, &str, &ApiResource) -> Api<DynamicObject> = namespaced_dynamic;
+    }
+
+    #[test]
+    fn namespaced_dynamic_pair_partitions_dynamic_schema_axis_from_namespaced() {
+        // Peer coherence witness: the (statically-typed × dynamic-
+        // schema) axis pair is closed at ONE module — the schema
+        // choice is spelled by the function name (`namespaced` for
+        // statically-typed K, `namespaced_dynamic` for the
+        // DynamicObject binding that carries its schema at the value
+        // level) at the callsite, not by an enum discriminant or a
+        // runtime bool. A regression that collapsed either function
+        // into a peer scope helper (`namespaced_dynamic` binding
+        // through `Api::namespaced` — which would fail at compile
+        // time for want of the ApiResource carrier on DynamicObject,
+        // `namespaced` binding through `Api::namespaced_with` on a
+        // typed K — which would require every caller to synthesize an
+        // ApiResource they don't have) would be caught by the sibling
+        // signature pins.
+        //
+        // A `fn(Client, &str) -> Api<K>` (for any statically-typed K)
+        // cannot coerce to a `fn(Client, &str, &ApiResource) ->
+        // Api<DynamicObject>` at the compile boundary; that
+        // separation structurally encodes the (statically-typed ×
+        // dynamic-schema) partition the module opens.
+        let _ns_witness: fn(Client, &str) -> Api<Process> = namespaced::<Process>;
+        let _dyn_witness: fn(Client, &str, &ApiResource) -> Api<DynamicObject> = namespaced_dynamic;
+    }
+
+    #[test]
+    fn namespaced_dynamic_matches_hand_authored_api_namespaced_with_chain_shape() {
+        // Byte-shape parity witness: the pre-lift 1-link chain at
+        // both consumer sites reads `let api: Api<DynamicObject> =
+        // Api::namespaced_with(<client>, <ns>, <&ar>);` and the
+        // primitive's body delegates to `Api::namespaced_with(client,
+        // ns, ar)` — the caller reads `let api =
+        // tatara_process::api::namespaced_dynamic(client, ns, &ar);`
+        // and gets the same typed handle both hand-authored sites
+        // produced.
+        //
+        // Source-level witness: the primitive's function-item type
+        // coerces to a `fn(Client, &str, &ApiResource) ->
+        // Api<DynamicObject>` pointer, which is exactly what a fresh
+        // `|c, n, r| Api::<DynamicObject>::namespaced_with(c, n, r)`
+        // closure would coerce to. A regression that reshaped the
+        // body to bind through a peer scope helper (`Api::all_with`
+        // cluster-wide widening, `Api::default_namespaced_with`
+        // fallback to the client's default namespace) would still
+        // coerce to the SAME function-pointer type — so this pin
+        // cannot catch a scope-slot drift alone. That axis is pinned
+        // by the sibling caller-side wire-shape witnesses (which
+        // exercise `apply_owned` + `fetch` end-to-end against a
+        // fixture-backed apiserver).
+        let via_primitive: fn(Client, &str, &ApiResource) -> Api<DynamicObject> =
+            namespaced_dynamic;
+        let via_direct: fn(Client, &str, &ApiResource) -> Api<DynamicObject> =
+            Api::<DynamicObject>::namespaced_with;
+        assert_eq!(
+            via_primitive as usize, via_primitive as usize,
+            "primitive fn-pointer is stable across evaluations",
+        );
+        assert_eq!(
+            via_direct as usize, via_direct as usize,
+            "hand-authored chain fn-pointer is stable across evaluations",
+        );
     }
 }

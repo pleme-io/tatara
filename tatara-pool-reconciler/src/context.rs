@@ -57,7 +57,16 @@ impl PoolContext {
     /// resource-url pins rather than as silent operator-facing skew
     /// between the pool + allocation reconcile handlers).
     pub fn pool_api(&self, ns: &str) -> Api<EphemeralPool> {
-        Api::namespaced(self.kube.clone(), ns)
+        // Delegates through the workspace-wide substrate owner
+        // [`tatara_process::api::namespaced`] — sibling to
+        // [`tatara_process::api::all`] on the (scope × K) axis pair,
+        // closing the `Api::namespaced(<client>, <ns>)` shape at
+        // ONE substrate primitive across every ns-scoped Api binder
+        // site (the peer callers on [`Self::allocation_api`] +
+        // [`Self::process_api`] + `HandlerState::allocation_api` +
+        // `phase_machine::classify_export_jobs` all route through
+        // the same owner).
+        tatara_process::api::namespaced::<EphemeralPool>(self.kube.clone(), ns)
     }
 
     /// Namespaced `Api<EphemeralAllocation>` bound to this context's
@@ -84,7 +93,10 @@ impl PoolContext {
     /// EphemeralAllocation-API request lands at ONE site here rather
     /// than being restated at every consumer.
     pub fn allocation_api(&self, ns: &str) -> Api<EphemeralAllocation> {
-        Api::namespaced(self.kube.clone(), ns)
+        // Delegates through the workspace-wide substrate owner
+        // [`tatara_process::api::namespaced`] — see [`Self::pool_api`]
+        // for the axis contract.
+        tatara_process::api::namespaced::<EphemeralAllocation>(self.kube.clone(), ns)
     }
 
     /// Namespaced `Api<Process>` bound to this context's client — the
@@ -114,7 +126,14 @@ impl PoolContext {
     /// trait (`ReconcilerContext::process_api`) lands as a
     /// mechanical extraction.
     pub fn process_api(&self, ns: &str) -> Api<Process> {
-        Api::namespaced(self.kube.clone(), ns)
+        // Delegates through the workspace-wide substrate owner
+        // [`tatara_process::api::namespaced`] — see [`Self::pool_api`]
+        // for the axis contract. The fixed-K sibling
+        // [`tatara_process::process_api::namespaced`] also routes
+        // through the same owner post-lift, so this method and the
+        // peer `Context::process_api` on `tatara-reconciler` (which
+        // rides the fixed-K sibling) share ONE substrate ancestor.
+        tatara_process::api::namespaced::<Process>(self.kube.clone(), ns)
     }
 
     /// Cluster-scoped `Api<EphemeralPool>` bound to this context's

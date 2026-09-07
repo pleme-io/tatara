@@ -133,7 +133,17 @@ use std::collections::BTreeMap;
 /// `configmap::tests::*` rather than as silent operator-facing skew
 /// across the four consumer sites).
 pub fn namespaced(client: Client, ns: &str) -> Api<ConfigMap> {
-    Api::namespaced(client, ns)
+    // Delegates through the workspace-wide substrate owner
+    // [`crate::api::namespaced`] — sibling to [`crate::api::all`] on
+    // the (scope × K) axis pair, closing the `Api::namespaced
+    // (<client>, <ns>)` shape at ONE substrate primitive across every
+    // ns-scoped Api binder site. Post-lift a future normalization of
+    // the ns-scoped Api posture (tracing span, QPS budget, fixture-
+    // backed client, wired-in `PatchParams` field manager for SSA)
+    // lands at THAT owner rather than at this fixed-K sibling —
+    // which now carries the K = ConfigMap guarantee exclusively, not
+    // the `Api::namespaced` shape it used to co-own.
+    crate::api::namespaced::<ConfigMap>(client, ns)
 }
 
 /// Compose a namespaced [`ConfigMap`] resource carrying a typed

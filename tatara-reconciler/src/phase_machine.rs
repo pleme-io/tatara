@@ -758,7 +758,13 @@ pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
 
     // 4. Watch all our export Jobs. Use a label selector that picks
     //    up only this Process's exports — not any sibling Process's.
-    let jobs_api: Api<k8s_openapi::api::batch::v1::Job> = Api::namespaced(ctx.kube.clone(), &ns);
+    //    Routes through the workspace-wide substrate owner
+    //    `tatara_process::api::namespaced::<K>` — sibling to
+    //    `tatara_process::api::all` on the (scope × K) axis pair,
+    //    closing the `Api::namespaced(<client>, <ns>)` shape at ONE
+    //    substrate primitive across every ns-scoped Api binder site.
+    let jobs_api: Api<k8s_openapi::api::batch::v1::Job> =
+        tatara_process::api::namespaced(ctx.kube.clone(), &ns);
     let selector = format!(
         "{}={},{}=export",
         tatara_process::annotations::PROCESS,

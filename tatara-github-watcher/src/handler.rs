@@ -53,7 +53,25 @@ impl HandlerState {
     /// compile rather than silently issuing a REST request under the
     /// wrong resource plural.
     pub fn allocation_api(&self) -> Api<EphemeralAllocation> {
-        Api::namespaced(self.kube.clone(), &self.config.namespace)
+        // Delegates through the workspace-wide substrate owner
+        // [`tatara_process::api::namespaced`] — sibling to
+        // [`tatara_process::api::all`] on the (scope × K) axis pair,
+        // closing the `Api::namespaced(<client>, <ns>)` shape at ONE
+        // substrate primitive across every ns-scoped Api binder site
+        // (the peer callers on [`tatara_pool_reconciler::context::
+        // PoolContext::{pool_api,allocation_api,process_api}`],
+        // [`tatara_reconciler::phase_machine::classify_export_jobs`]'s
+        // jobs_api binding, plus the two fixed-K siblings
+        // [`tatara_process::process_api::namespaced`] +
+        // [`tatara_process::configmap::namespaced`], all route
+        // through the same owner). A future normalization of the
+        // ns-scoped Api posture (tracing span, QPS budget, fixture-
+        // backed client, wired-in `PatchParams` field manager) lands
+        // at THAT owner rather than at this per-handler wrapper.
+        tatara_process::api::namespaced::<EphemeralAllocation>(
+            self.kube.clone(),
+            &self.config.namespace,
+        )
     }
 }
 

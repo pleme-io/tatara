@@ -139,7 +139,18 @@ use crate::crd::Process;
 /// `process_api::tests::*` rather than as silent operator-facing
 /// skew across the three consumer sites).
 pub fn namespaced(client: Client, ns: &str) -> Api<Process> {
-    Api::namespaced(client, ns)
+    // Delegates through the workspace-wide substrate owner
+    // [`crate::api::namespaced`] — sibling to
+    // [`crate::api::all`] on the (scope × K) axis pair, closing the
+    // `Api::namespaced(<client>, <ns>)` shape at ONE substrate
+    // primitive across every ns-scoped Api binder site. Post-lift a
+    // future normalization of the ns-scoped Api posture (tracing
+    // span, QPS budget, fixture-backed client, wired-in `PatchParams`
+    // field manager) lands at THAT owner rather than at this
+    // fixed-K sibling — which now carries the K = Process guarantee
+    // exclusively, not the `Api::namespaced` shape it used to
+    // co-own.
+    crate::api::namespaced::<Process>(client, ns)
 }
 
 #[cfg(test)]

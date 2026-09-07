@@ -17,6 +17,11 @@
 //!   type-guard, partitioned from the three above by SOURCE (`None`
 //!   from the slot-typecheck, not a lifted error type) but sharing the
 //!   `.map_err(|_| anyhow!("<slug>: …"))?` display-prefix wire format.
+//!   The module also owns the READ-side [`ValueGetExt`] projector
+//!   (`.get_i64(<key>) -> Option<i64>`) — sibling of the three
+//!   MUTATION-side traits below on the (read, mutate) axis, closing
+//!   the READ half of the `serde_json::Value` substrate the four
+//!   traits jointly own.
 //!
 //! Pre-lift the shape was hand-authored at THREE adjacent private
 //! helpers in `tatara-reconciler::ssapply` past the ★★ PRIME-DIRECTIVE
@@ -339,6 +344,127 @@ impl JsonMapObjectEntryExt for Map<String, Value> {
         self.entry(slot)
             .or_insert_with(|| Value::Object(Map::new()))
             .as_object_mut_or(slot)
+    }
+}
+
+/// Substrate extension trait over `serde_json::Value` — the ONE
+/// substrate owner of the paired `.get(<key>).and_then(|v| v.as_i64())`
+/// two-link READ chain every downstream projection walks to pull an
+/// integer counter off a Kubernetes-status blob without asserting the
+/// slot is present, without asserting its variant, and without
+/// asserting it fits `i64`.
+///
+/// READ-side counterpart to the three MUTATION-side siblings already in
+/// this module — [`ValueObjectExt::as_object_mut_or`],
+/// [`JsonMapStrExt::insert_str`], [`JsonMapObjectEntryExt::object_slot_mut_or`]
+/// — partitioning the substrate along the (read, mutate) axis on the
+/// same `serde_json::Value` / `serde_json::Map<String, Value>` carrier
+/// pair.
+///
+/// Pre-lift the two-link chain was hand-authored at THREE adjacent
+/// slots inside `tatara-reconciler::boundary::fetch_job_status`, each
+/// projecting one `batch/v1::Job` `status.<counter>` field out of the
+/// fetched `serde_json::Value` object into a private `JobStatusView`
+/// row past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold:
+///
+/// * `status.get("succeeded").and_then(|v| v.as_i64())` — the
+///   Job-completion counter every `JobAttested` + `ClosedLoopAuth`
+///   postcondition evaluator gates on (`succeeded < 1` short-circuits
+///   to `Satisfaction::Unsatisfied("… still running (…)")`).
+/// * `status.get("failed").and_then(|v| v.as_i64())` — the
+///   Job-failure counter the same evaluators gate on
+///   (`failed > 0` short-circuits to
+///   `Satisfaction::Unsatisfied("… failed (status.failed={n})")`).
+/// * `status.get("active").and_then(|v| v.as_i64())` — the
+///   Job-in-flight counter the "still running" diagnostic tail
+///   reports as `(succeeded={s}, active={a})`.
+///
+/// All THREE sites walked the SAME two-link chain — `.get(<key>)` on a
+/// `serde_json::Value` already known to be the status object, then
+/// `.and_then(|v| v.as_i64())` on the returned `Option<&Value>` — and
+/// each was followed by an `if let Some(...)` write into the
+/// [`JobStatusView`] row initialised from `Default::default()`. Post-
+/// lift each callsite reads `status.get_i64(<key>)` and the two-link
+/// READ chain lives at ONE substrate owner here.
+///
+/// ### Naming — `get_i64`, not `as_i64` or `i64_at`
+///
+/// Same discipline as the three sibling traits above — the trait method
+/// deliberately does NOT collide with `serde_json::Value::as_i64` (the
+/// inherent projection on a single `Value` handle) nor with
+/// `serde_json::Value::get` (the inherent slot-lookup returning
+/// `Option<&Value>`). A name collision would let a caller who has
+/// `ValueGetExt` in scope resolve to one of the inherent methods by
+/// accident (inherent methods win over trait methods in method
+/// resolution) and silently drop half of the paired chain. The
+/// `get_i64(<key>)` shape names the intent: look up the slot at
+/// `<key>`, project the returned handle to `i64`, in ONE call.
+///
+/// ### `#[must_use]`
+///
+/// Every consumer either binds the returned `Option<i64>` into a
+/// downstream `if let Some(n) = ...` / `.unwrap_or_default()` / struct-
+/// field construction. Dropping the return silently discards the
+/// projection entirely, which is never the intended semantic at the
+/// three pre-lift consumers (each downstream write depends on the
+/// returned counter).
+///
+/// ### Composability
+///
+/// * Key slot is `&str` — matches every pre-lift `.get("<literal>")`
+///   callsite and the inherent `serde_json::Value::get`'s primary
+///   `str`-index arm. A caller with a runtime-computed key (a
+///   `String` produced by a template composer) reaches through
+///   `.get_i64(&s)` mechanically via `Deref<Target = str>`.
+/// * Returns `Option<i64>` matching the composed inherent chain's own
+///   return; a consumer wanting the "absent or non-integer → 0"
+///   fallback composes `.unwrap_or_default()` (or `.unwrap_or(0)`) at
+///   the callsite, keeping the "should this counter default to 0 or
+///   fail loud" decision at the caller rather than baking it into the
+///   primitive.
+/// * Non-object receivers (a `Value::String`, a `Value::Null`) return
+///   `None` verbatim via the inherent `Value::get`'s own non-object-
+///   arm behaviour, matching the pre-lift chain's semantics on the
+///   corner where the caller's status blob is malformed.
+///
+/// A future normalization — a per-fleet clamp that rejects negative
+/// counters (the K8s API server never emits them, but a fixture
+/// authoring bug could), a `Value::Number` fallback that accepts
+/// `f64` counters truncated to `i64`, a `checked` overflow arm that
+/// promotes an out-of-range integer to a diagnostic rather than a
+/// silent `None` — lands at THIS ONE substrate primitive and every
+/// downstream Job-status / Deployment-replica / HPA-desired-count
+/// counter reader inherits the upgrade mechanically. No per-site edit
+/// at any of the 3 listed callers or at future consumers (a
+/// Deployment `readyReplicas` projection, an HPA `currentReplicas`
+/// gate, a StatefulSet `updatedReplicas` freshness check).
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// two-link `.get(<key>).and_then(|v| v.as_i64())` chain recurred at
+/// three hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication trigger, and is lifted to ONE substrate owner here).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
+/// regression that drifted the projection axis at ONE site — a swap
+/// of `as_i64` for `as_u64` narrowing the accepted range, a swap of
+/// `.get(<key>)` for `.pointer("<key>")` losing the direct-child
+/// semantics — would silently pass every downstream `JobStatusView`
+/// composition and surface as a wrong counter at operator-facing
+/// diagnostic wording; post-lift the projection lives at ONE typed
+/// owner so a regression surfaces at [`tests::get_i64_null_arm_returns_none`]
+/// / peers rather than as silent operator-facing drift).
+pub trait ValueGetExt {
+    /// Look up `key` on this JSON object and project the returned
+    /// handle to `i64`; returns `None` when the slot is absent, when
+    /// the receiver is not a JSON object, or when the slot's variant
+    /// is not integer-shaped.
+    #[must_use = "a JSON i64 projection that isn't bound swallows the counter entirely"]
+    fn get_i64(&self, key: &str) -> Option<i64>;
+}
+
+impl ValueGetExt for Value {
+    #[inline]
+    fn get_i64(&self, key: &str) -> Option<i64> {
+        self.get(key).and_then(Value::as_i64)
     }
 }
 
@@ -767,5 +893,154 @@ mod tests {
                 .unwrap_err();
             assert_eq!(format!("{err_primitive}"), format!("{err_pre_lift}"));
         }
+    }
+
+    // ─── ValueGetExt::get_i64 substrate pins ─────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `ValueGetExt::get_i64`
+    // trait method did not exist before this commit, so each test below
+    // fails to compile pre-lift. Post-lift they collectively pin the
+    // paired READ-shape at ONE substrate owner — a regression that
+    // narrowed the projection to `as_u64` (silently losing every
+    // negative counter K8s fixtures can carry for a JSON authoring
+    // bug), swapped the slot lookup to `.pointer(<key>)` (losing the
+    // direct-child semantics), promoted a present-but-non-integer
+    // corner to `Some(0)` (silently paving over a malformed status
+    // blob), or drifted the receiver-non-object arm from `None → Some(default)`
+    // (silently synthesising a zero counter on a null status blob)
+    // surfaces HERE rather than as silent operator-facing skew across
+    // the three `boundary.rs::fetch_job_status` pre-lift consumers
+    // whose JobStatusView row initialised at `Default::default()` and
+    // conditionally overwrote each field on `Some(i64)`.
+
+    #[test]
+    fn get_i64_present_integer_slot_returns_the_value() {
+        // Primary Ok-arm invariant: a `Value::Number(i)` present at the
+        // slot projects to `Some(i)`. Sweeps the three representative
+        // counters every pre-lift `JobStatusView` field carried (a
+        // completed Job's `succeeded=1`, a failed Job's `failed=3`, a
+        // freshly-scheduled Job's `active=5`) so a regression at ONE
+        // counter axis surfaces here rather than at the downstream
+        // diagnostic.
+        let status = json!({ "succeeded": 1, "failed": 3, "active": 5 });
+        assert_eq!(status.get_i64("succeeded"), Some(1));
+        assert_eq!(status.get_i64("failed"), Some(3));
+        assert_eq!(status.get_i64("active"), Some(5));
+    }
+
+    #[test]
+    fn get_i64_absent_slot_returns_none() {
+        // Absent-slot corner: a fresh `batch/v1::Job` before its
+        // controller has stamped any counter into `status` (the JSON
+        // is `{}` or missing the counter key). Every pre-lift consumer
+        // routed this corner through the `if let Some(...)` guard so
+        // the `JobStatusView` field kept its `Default::default()` `0`
+        // seed. A regression that returned `Some(0)` on the absent
+        // corner would collapse the "not yet reported" ↔ "reported
+        // zero" distinction the K8s status protocol keeps.
+        let status = json!({});
+        assert_eq!(status.get_i64("succeeded"), None);
+        assert_eq!(status.get_i64("any_missing_key"), None);
+    }
+
+    #[test]
+    fn get_i64_present_but_non_integer_slot_returns_none() {
+        // Present-but-non-integer corner: a `Value::String`, a
+        // `Value::Bool`, a `Value::Object`, or a `Value::Array` at the
+        // slot ALL fall through to `None` — matches the pre-lift
+        // `.and_then(|v| v.as_i64())` chain exactly. A regression that
+        // promoted a `Value::String("1")` to `Some(1)` (adding a
+        // parse-string fallback) would silently accept a malformed
+        // status blob whose author stringified a counter.
+        let status = json!({
+            "stringy": "1",
+            "boolean": true,
+            "object": {},
+            "array": [],
+            "null_valued": null,
+        });
+        assert_eq!(status.get_i64("stringy"), None);
+        assert_eq!(status.get_i64("boolean"), None);
+        assert_eq!(status.get_i64("object"), None);
+        assert_eq!(status.get_i64("array"), None);
+        assert_eq!(status.get_i64("null_valued"), None);
+    }
+
+    #[test]
+    fn get_i64_negative_counter_survives_the_projection() {
+        // Negative-integer corner: `as_i64` accepts negatives; `as_u64`
+        // does not. A regression that narrowed the projection to
+        // `as_u64` under a mistaken "K8s counters are always non-
+        // negative" refactor would silently drop every negative
+        // counter a JSON authoring bug could stamp — hiding the bug
+        // rather than surfacing it as a counter the diagnostic reports
+        // verbatim.
+        let status = json!({ "n": -1 });
+        assert_eq!(status.get_i64("n"), Some(-1));
+    }
+
+    #[test]
+    fn get_i64_non_object_receiver_returns_none_verbatim() {
+        // Non-object receiver corner: a caller who reached this
+        // primitive on a `Value::Null` / `Value::Bool` / `Value::Array`
+        // handle (a malformed fetch response, an upstream default-value
+        // fallback) MUST get `None` back rather than a panic or a
+        // synthesized `Some(default)`. Matches the pre-lift chain's
+        // behaviour: `Value::get` on a non-object receiver returns
+        // `None`, `and_then` short-circuits.
+        assert_eq!(Value::Null.get_i64("any"), None);
+        assert_eq!(Value::Bool(true).get_i64("any"), None);
+        assert_eq!(json!([1, 2, 3]).get_i64("any"), None);
+        assert_eq!(json!("scalar").get_i64("any"), None);
+    }
+
+    #[test]
+    fn get_i64_matches_pre_lift_hand_authored_chain_shape() {
+        // Byte-shape parity pin: `<value>.get_i64(<key>)` MUST return
+        // the SAME `Option<i64>` the pre-lift hand-authored
+        // `.get(<key>).and_then(|v| v.as_i64())` chain produced.
+        // Sweeps the six pre-lift-reachable input corners (the three
+        // "value present" + three "value absent/malformed" arms every
+        // fetch_job_status callsite reached) so a regression at the
+        // primitive that broke byte identity with the pre-lift chain at
+        // ONE corner surfaces here rather than as a per-counter
+        // divergence at the fetched-Job projection.
+        let status = json!({
+            "succeeded": 2,
+            "failed": 0,
+            "active": 7,
+            "stringy": "1",
+            "null_valued": null,
+        });
+        for key in [
+            "succeeded",
+            "failed",
+            "active",
+            "stringy",
+            "null_valued",
+            "missing",
+        ] {
+            let via_primitive = status.get_i64(key);
+            let via_pre_lift = status.get(key).and_then(|v| v.as_i64());
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "corner `{key}` must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn get_i64_composes_with_unwrap_or_default_at_default_seed_shape() {
+        // Downstream composition pin: the canonical caller shape
+        // post-lift is `<status>.get_i64(<key>).unwrap_or_default()` —
+        // matches the pre-lift `JobStatusView::default()` seed +
+        // conditional `if let Some(n)` write pattern. A regression that
+        // reshaped the return form (an `i64` bare default, a
+        // `Result<i64, _>` fallible arm) would break this composition.
+        let status = json!({ "succeeded": 4 });
+        // Absent slot composes to the type default (0 for i64).
+        assert_eq!(status.get_i64("missing").unwrap_or_default(), 0_i64);
+        // Present slot composes to the projected counter.
+        assert_eq!(status.get_i64("succeeded").unwrap_or_default(), 4_i64);
     }
 }

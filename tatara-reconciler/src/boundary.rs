@@ -25,6 +25,7 @@ use serde_json::Value;
 
 use tatara_process::boundary::{Condition, ConditionKind};
 use tatara_process::flux_resource::FluxResource;
+use tatara_process::json_object::ValueGetExt;
 use tatara_process::k8s_builtin_resource::K8sBuiltinResource;
 use tatara_process::kube_error::KubeResultExt;
 use tatara_process::phase::ProcessPhase;
@@ -1058,17 +1059,28 @@ async fn fetch_job_status(client: Client, ns: &str, name: &str) -> Result<JobLoo
         return Ok(JobLookup::Missing);
     };
     let status = obj.data.get("status").cloned().unwrap_or(Value::Null);
-    let mut view = JobStatusView::default();
-    if let Some(s) = status.get("succeeded").and_then(|v| v.as_i64()) {
-        view.succeeded = s;
-    }
-    if let Some(f) = status.get("failed").and_then(|v| v.as_i64()) {
-        view.failed = f;
-    }
-    if let Some(a) = status.get("active").and_then(|v| v.as_i64()) {
-        view.active = a;
-    }
-    Ok(JobLookup::Found(view))
+    // Three `<status>.get(<key>).and_then(|v| v.as_i64())` READ chains
+    // — one per JobStatusView counter — now route through the ONE
+    // substrate primitive `tatara_process::json_object::ValueGetExt::
+    // get_i64`. Pre-lift the same two-link chain was hand-authored at
+    // THREE adjacent slots here past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold, each restating the SAME `.get + as_i64`
+    // pair with only the counter-key literal (`"succeeded"` /
+    // `"failed"` / `"active"`) differing. Post-lift the projection
+    // sink lives at ONE substrate owner — a future normalization on
+    // the projection (a per-fleet clamp rejecting negative counters,
+    // a `Value::Number` fallback that accepts truncated `f64`
+    // counters, an overflow-arm promotion) lands at ONE primitive and
+    // every downstream Kubernetes-status counter reader inherits the
+    // upgrade mechanically. The absent-slot / non-integer-slot corners
+    // fall through to `unwrap_or_default()` == 0, matching the pre-
+    // lift `JobStatusView::default()` seed + conditional-write shape
+    // bytewise.
+    Ok(JobLookup::Found(JobStatusView {
+        succeeded: status.get_i64("succeeded").unwrap_or_default(),
+        failed: status.get_i64("failed").unwrap_or_default(),
+        active: status.get_i64("active").unwrap_or_default(),
+    }))
 }
 
 #[derive(Debug, PartialEq, Eq)]

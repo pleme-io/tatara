@@ -225,7 +225,25 @@ impl Default for PoolReconcilerConfig {
     fn default() -> Self {
         Self {
             controller_namespace: "tatara-pool-system".into(),
-            heartbeat_seconds: 30,
+            // Bare `30u64` was hand-authored pre-lift, restating the
+            // workspace-canonical steady-state heartbeat cadence the
+            // substrate owner [`tatara_process::requeue::HEARTBEAT_SECONDS`]
+            // already binds. Peer to `ReconcilerConfig::default().
+            // heartbeat_seconds` on the "config-default seed for the
+            // steady-state heartbeat cadence" axis — one of FOUR
+            // workspace-wide restatements of `30` past the ★★
+            // PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at
+            // `ReconcilerConfig::default().heartbeat_seconds`,
+            // `tatara-reconciler::main::Cli::heartbeat_seconds`'s
+            // clap `default_value_t`, and `tatara-pool-reconciler
+            // ::main::Args::heartbeat_seconds`'s clap `default_value_t`).
+            // Post-lift all four default seeds ride ONE substrate
+            // const so a future workspace-wide heartbeat re-tuning
+            // lands at `requeue::HEARTBEAT_SECONDS` and every
+            // downstream config default + CLI arg default inherits
+            // the upgrade mechanically. Pinned by
+            // [`tests::heartbeat_seconds_default_routes_through_substrate_const`].
+            heartbeat_seconds: tatara_process::requeue::HEARTBEAT_SECONDS,
             spawn_timeout: "10m".into(),
             field_manager: "tatara-pool-reconciler".into(),
         }
@@ -617,6 +635,52 @@ mod tests {
             c.allocations_all_api().resource_url(),
             hand_authored_allocs.resource_url(),
             "allocations_all_api must be byte-identical to the pre-lift `Api::all(client.clone())` chain",
+        );
+    }
+
+    // ─── heartbeat_seconds default-seed substrate coherence ────────
+    //
+    // Peer to the same-named pin block in
+    // `tatara-reconciler::context::tests` — both pool-side and
+    // process-side `Default` impls now route their
+    // `heartbeat_seconds: u64` seed through the ONE substrate owner
+    // [`tatara_process::requeue::HEARTBEAT_SECONDS`]. Pre-lift each
+    // seed spelled a bare `30u64` literal, one of FOUR workspace-wide
+    // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold. These pins bind the config-default → substrate-const
+    // routing at fail-before-pass-after granularity so a regression
+    // that reintroduced a bare `30` literal surfaces here rather
+    // than as silent operator-visible cadence skew at the pool +
+    // allocation reconcile-tail requeue sites.
+
+    #[test]
+    fn heartbeat_seconds_default_routes_through_substrate_const() {
+        // Byte-identity pin — see the sibling pin in
+        // `tatara-reconciler::context::tests` for the axis contract.
+        assert_eq!(
+            PoolReconcilerConfig::default().heartbeat_seconds,
+            tatara_process::requeue::HEARTBEAT_SECONDS,
+        );
+    }
+
+    #[test]
+    fn heartbeat_seconds_default_composes_with_after_secs_at_reconcile_tails() {
+        // Composition pin — pool + allocation reconcile-tail sites
+        // both call `after_secs(ctx.config.heartbeat_seconds)` on the
+        // return path, and the default seed must produce the same
+        // requeue Action the substrate's named `heartbeat()` intent
+        // produces. See the sibling pin in
+        // `tatara-reconciler::context::tests` for the axis contract.
+        let cfg = PoolReconcilerConfig::default();
+        let composed = format!(
+            "{:?}",
+            tatara_process::requeue::after_secs(cfg.heartbeat_seconds),
+        );
+        let via_intent = format!("{:?}", tatara_process::requeue::heartbeat());
+        assert_eq!(
+            composed, via_intent,
+            "after_secs(PoolReconcilerConfig::default().heartbeat_seconds) must byte-shape-match \
+             tatara_process::requeue::heartbeat() — the config seed drifted from the substrate intent",
         );
     }
 }

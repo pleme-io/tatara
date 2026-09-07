@@ -198,7 +198,25 @@ impl Default for ReconcilerConfig {
         Self {
             controller_namespace: "tatara-system".into(),
             default_boundary_timeout_seconds: 900,
-            heartbeat_seconds: 30,
+            // Bare `30u64` was hand-authored pre-lift, restating the
+            // workspace-canonical steady-state heartbeat cadence the
+            // substrate owner [`tatara_process::requeue::HEARTBEAT_SECONDS`]
+            // already binds — one of FOUR workspace-wide restatements
+            // of the same `30`-second budget past the ★★
+            // PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at
+            // `PoolReconcilerConfig::default().heartbeat_seconds`,
+            // `tatara-reconciler::main::Cli::heartbeat_seconds`'s
+            // clap `default_value_t`, and `tatara-pool-reconciler
+            // ::main::Args::heartbeat_seconds`'s clap `default_value_t`).
+            // Post-lift all four default seeds ride ONE substrate
+            // const so a future workspace-wide heartbeat re-tuning
+            // (a bounded-rate limiter's floor, a per-fleet override
+            // via env, a shift to a millisecond-precision path)
+            // lands at `requeue::HEARTBEAT_SECONDS` and every downstream
+            // config default + CLI arg default inherits the upgrade
+            // mechanically. Pinned by
+            // [`tests::heartbeat_seconds_default_routes_through_substrate_const`].
+            heartbeat_seconds: tatara_process::requeue::HEARTBEAT_SECONDS,
             process_table_name: "proc".into(),
             export_worker_image: "ghcr.io/pleme-io/tatara-export-worker:0.2.0".into(),
             export_worker_service_account: "tatara-export-worker".into(),
@@ -677,6 +695,67 @@ mod tests {
         assert_ne!(
             processes, table,
             "the two cluster-scoped peer primitives must resolve to distinct collections"
+        );
+    }
+
+    // ─── heartbeat_seconds default-seed substrate coherence ────────
+    //
+    // The `heartbeat_seconds: u64` slot in [`ReconcilerConfig`]
+    // seeds its `Default` value through the workspace-canonical
+    // substrate const [`tatara_process::requeue::HEARTBEAT_SECONDS`]
+    // — the ONE owner of the "steady-state heartbeat cadence"
+    // second-count that [`tatara_process::requeue::heartbeat`] +
+    // every FSM-tail requeue call already binds to. Pre-lift a
+    // bare `30u64` restated the value at ONE of FOUR workspace-wide
+    // sites (this file's `Default` impl, `PoolReconcilerConfig::
+    // default().heartbeat_seconds`, `tatara-reconciler::main::Cli
+    // ::heartbeat_seconds`'s clap default, and `tatara-pool-
+    // reconciler::main::Args::heartbeat_seconds`'s clap default),
+    // opening a silent-drift path against a future workspace-wide
+    // heartbeat re-tuning.
+    //
+    // These pins bind the config-default → substrate-const routing
+    // at fail-before-pass-after granularity so a regression that
+    // reintroduced a bare `30` literal at this seed — silently
+    // orphaning it from the substrate owner — surfaces here rather
+    // than as operator-visible cadence skew at the reconcile handler
+    // tails (where `after_secs(ctx.config.heartbeat_seconds)` reads
+    // the config slot back and requeues on it).
+
+    #[test]
+    fn heartbeat_seconds_default_routes_through_substrate_const() {
+        // Byte-identity pin: the `Default::default()` seed MUST
+        // agree with the substrate owner. A regression that seeded
+        // a stale literal (a partial "tune-down to 15s" that missed
+        // this Default arm) would silently split the two consumers
+        // and surface as a drift where the CLI-parsed value + the
+        // requeue helpers diverge.
+        assert_eq!(
+            ReconcilerConfig::default().heartbeat_seconds,
+            tatara_process::requeue::HEARTBEAT_SECONDS,
+        );
+    }
+
+    #[test]
+    fn heartbeat_seconds_default_composes_with_after_secs_at_reconcile_tails() {
+        // Composition pin: the seed the reconciler reads back
+        // through `ctx.config.heartbeat_seconds` at every
+        // `Ok(after_secs(cfg.heartbeat_seconds))` return site must
+        // produce the exact same requeue Action the substrate's
+        // named `heartbeat()` intent produces. A regression that
+        // decoupled the two would silently make the reconciler's
+        // config-driven heartbeat requeue diverge from the intent
+        // the substrate names.
+        let cfg = ReconcilerConfig::default();
+        let composed = format!(
+            "{:?}",
+            tatara_process::requeue::after_secs(cfg.heartbeat_seconds),
+        );
+        let via_intent = format!("{:?}", tatara_process::requeue::heartbeat());
+        assert_eq!(
+            composed, via_intent,
+            "after_secs(ReconcilerConfig::default().heartbeat_seconds) must byte-shape-match \
+             tatara_process::requeue::heartbeat() — the config seed drifted from the substrate intent",
         );
     }
 }

@@ -35,8 +35,20 @@ struct Cli {
     /// Health + metrics bind address.
     #[arg(long, env = "TATARA_HEALTH_ADDR", default_value = "0.0.0.0:8080")]
     health_addr: SocketAddr,
-    /// Heartbeat interval in seconds.
-    #[arg(long, env = "TATARA_HEARTBEAT_SECONDS", default_value_t = 30u64)]
+    /// Heartbeat interval in seconds. Default seeds through the
+    /// workspace-canonical substrate const
+    /// [`tatara_process::requeue::HEARTBEAT_SECONDS`] — pre-lift a
+    /// bare `30u64` restated the value one of FOUR workspace-wide
+    /// times past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+    /// (peers at both `Default` impls of `ReconcilerConfig` /
+    /// `PoolReconcilerConfig` + the sibling `Args::heartbeat_seconds`
+    /// clap default in `tatara-pool-reconciler::main`). Post-lift a
+    /// future workspace-wide heartbeat re-tuning lands at ONE const.
+    #[arg(
+        long,
+        env = "TATARA_HEARTBEAT_SECONDS",
+        default_value_t = tatara_process::requeue::HEARTBEAT_SECONDS,
+    )]
     heartbeat_seconds: u64,
     /// Container image stamped into every tatara-export-worker Job
     /// the reconciler emits during the `Releasing` phase.

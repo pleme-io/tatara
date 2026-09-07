@@ -32,7 +32,16 @@ struct Args {
         default_value = "tatara-pool-system"
     )]
     controller_namespace: String,
-    #[arg(long, env = "TATARA_POOL_HEARTBEAT_SECONDS", default_value_t = 30)]
+    /// Heartbeat interval in seconds. Default seeds through the
+    /// workspace-canonical substrate const
+    /// [`tatara_process::requeue::HEARTBEAT_SECONDS`] — see the
+    /// sibling doc-comment on `tatara-reconciler::main::Cli::
+    /// heartbeat_seconds` for the four-site restatement audit.
+    #[arg(
+        long,
+        env = "TATARA_POOL_HEARTBEAT_SECONDS",
+        default_value_t = tatara_process::requeue::HEARTBEAT_SECONDS,
+    )]
     heartbeat_seconds: u64,
     #[arg(long, env = "TATARA_POOL_SPAWN_TIMEOUT", default_value = "10m")]
     spawn_timeout: String,

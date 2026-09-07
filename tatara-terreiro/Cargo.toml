@@ -15,22 +15,30 @@ tatara-nix = { path = "../tatara-nix" , version = "0.2.65" }
 # Arena allocation — the terreiro's namesake. One Bump per sealed environment.
 bumpalo = { version = "3", features = ["collections"] }
 
-# Canonical identity for sealed snapshots (BLAKE3 of the spec + registered
-# domains + preloaded macro library).
-blake3 = "1"
-hex = "0.4"
-
 # Serialization for snapshots on disk.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 thiserror = "2"
 
-# Nord-themed CLI UX for the tatara-terreiro binary.
+# Nord-themed CLI UX for the tatara-terreiro binary. Also owns the
+# `tatara_ui::hash::hex_blake3_of_json` substrate — the ONE
+# `T: Serialize` → 64-lowercase-hex BLAKE3 identity-string projector
+# that `compute_id` routes through for the sealed-snapshot
+# `TerreiroId`, so `blake3` + `hex` are no longer prod deps of this
+# crate (only dev-deps, for the byte-shape parity pins).
 tatara-ui = { path = "../tatara-ui" , version = "0.2.65" }
 
 [dev-dependencies]
 tempfile = "3"
+
+# Test-only: byte-shape parity pins in `lib.rs` re-derive the pre-lift
+# hand-authored `serde_json::to_vec + hex::encode(blake3::hash(_)
+# .as_bytes())` chain and compare against `compute_id`'s output — so
+# a regression at the `tatara_ui::hash::hex_blake3_of_json` substrate
+# surfaces at THIS crate's identity slot rather than as silent drift.
+blake3 = "1"
+hex = "0.4"
 
 [[bin]]
 name = "tatara-terreiro"

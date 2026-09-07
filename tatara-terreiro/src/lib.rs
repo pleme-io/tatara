@@ -355,9 +355,19 @@ pub struct TerreiroSnapshot {
 }
 
 /// Compute the content-addressable identity of a terreiro.
+///
+/// Delegates the two-line `serde_json::to_vec(spec).unwrap_or_default()` +
+/// `hex::encode(blake3::hash(&bytes).as_bytes())` chain to
+/// [`tatara_ui::hash::hex_blake3_of_json`], the ONE substrate owner of
+/// the `T: Serialize` → 64-lowercase-hex-BLAKE3 identity-string
+/// projection this crate composes with. Wrapping the returned
+/// [`String`] in a [`TerreiroId`] newtype stays here — the site owns
+/// its identity-slot shape; the substrate owns the byte-projection.
+///
+/// Byte-shape parity with the pre-lift hand-authored chain is pinned
+/// at [`tests::compute_id_matches_pre_lift_hand_authored_chain_bytewise`].
 fn compute_id(spec: &CompilerSpec) -> TerreiroId {
-    let bytes = serde_json::to_vec(spec).unwrap_or_default();
-    TerreiroId(hex::encode(blake3::hash(&bytes).as_bytes()))
+    TerreiroId(tatara_ui::hash::hex_blake3_of_json(spec))
 }
 
 // ── tests ────────────────────────────────────────────────────────────
@@ -493,6 +503,83 @@ mod tests {
         let mut t = Terreiro::from_spec(basic_spec()).unwrap();
         let id = t.seal().clone();
         assert!(format!("{id}").starts_with("terreiro:"));
+    }
+
+    // ── substrate parity pins for `compute_id` ───────────────────────
+    //
+    // The three tests below bind [`compute_id`] to the pre-lift
+    // hand-authored `serde_json::to_vec(spec).unwrap_or_default()` +
+    // `hex::encode(blake3::hash(&bytes).as_bytes())` chain observably,
+    // so any regression that reshaped the internal composition (a
+    // swap to `blake3::hash(x).to_hex().to_string()`, a dropped
+    // `.unwrap_or_default()` residual arm, a hex-crate major-version
+    // bump missed at the substrate) surfaces HERE — at `TerreiroId`'s
+    // identity slot — rather than as silent drift between this
+    // terreiro's on-disk snapshot round-trip and the substrate owner's
+    // own `hex_blake3_of_json_matches_pre_lift_hand_authored_chain_bytewise`
+    // pin one crate over.
+
+    /// Fail-before-pass-after granularity: the [`TerreiroId`] a sealed
+    /// terreiro derives MUST match the pre-lift two-line hand-authored
+    /// hash-composition chain byte-for-byte.
+    #[test]
+    fn compute_id_matches_pre_lift_hand_authored_chain_bytewise() {
+        let spec = basic_spec();
+        let id = compute_id(&spec);
+        let pre_lift = {
+            let bytes = serde_json::to_vec(&spec).unwrap_or_default();
+            hex::encode(blake3::hash(&bytes).as_bytes())
+        };
+        assert_eq!(
+            id.0, pre_lift,
+            "TerreiroId's hex-BLAKE3 body drifted from the pre-lift \
+             `serde_json::to_vec + hex::encode(blake3::hash(_).as_bytes())` chain",
+        );
+    }
+
+    /// [`compute_id`] returns the canonical 64-lowercase-hex shape
+    /// (BLAKE3's 32-byte digest, lowercase-hex-encoded, no `blake3:`
+    /// scheme prefix) — matches the substrate's own length + charset
+    /// invariants and the existing `seal_yields_stable_id` pin.
+    #[test]
+    fn compute_id_returns_canonical_64_lowercase_hex_shape() {
+        let id = compute_id(&basic_spec());
+        assert_eq!(
+            id.0.len(),
+            64,
+            "TerreiroId hex body should be BLAKE3's 32-byte digest as 64 hex chars",
+        );
+        assert!(
+            id.0.chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+            "TerreiroId hex body should be lowercase [0-9a-f]; got {}",
+            id.0,
+        );
+        assert!(
+            !id.0.starts_with("blake3:"),
+            "TerreiroId hex body should NOT carry a scheme prefix; got {}",
+            id.0,
+        );
+    }
+
+    /// Distinct `CompilerSpec` values project to distinct
+    /// [`TerreiroId`]s — the substrate's determinism invariant on the
+    /// input axis. Complementary to `sealed_terreiros_with_same_spec_share_id`
+    /// (the same-input axis) and `different_specs_yield_different_ids`
+    /// (which exercises `seal()`; this one exercises `compute_id`
+    /// directly so a regression at the substrate surfaces without a
+    /// terreiro-lifecycle detour).
+    #[test]
+    fn compute_id_distinct_specs_project_to_distinct_ids() {
+        let a = compute_id(&basic_spec());
+        let b = compute_id(&CompilerSpec {
+            name: "distinct".into(),
+            ..basic_spec()
+        });
+        assert_ne!(
+            a, b,
+            "distinct CompilerSpecs must project to distinct TerreiroIds",
+        );
     }
 
     // ── end-to-end: Lisp → eval → realize → on-disk artifact ─────────

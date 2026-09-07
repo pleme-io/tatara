@@ -15,6 +15,7 @@ use tatara_process::flux_resource::FluxResource;
 use tatara_process::json_object::{
     JsonMapObjectEntryExt, JsonMapStrExt, ValueGetExt, ValueObjectExt,
 };
+use tatara_process::k8s_condition::K8sConditionStatus;
 use tatara_process::k8s_wire_identity::K8sWireIdentity;
 use tatara_process::kube_error::KubeResultExt;
 use tatara_process::prelude::{FluxResourceRef, Process, RenderedResourceCoords};
@@ -1133,9 +1134,33 @@ pub fn ready_condition_value(data: &Value) -> ReadyState {
         if typ != "Ready" {
             continue;
         }
-        return match c.get_str("status") {
-            Some("True") => ReadyState::Ready,
-            Some("False") => ReadyState::NotReady(c.get_str("message").map(String::from)),
+        // The `metav1.Condition.status` wire-form literal now routes
+        // through the ONE substrate primitive
+        // `tatara_process::k8s_condition::K8sConditionStatus::from_wire_str`.
+        // Pre-lift the two arms hand-authored the K8s ConditionStatus
+        // closed set as bare `Some("True")` / `Some("False")` pattern
+        // literals — SIBLINGS of the same wire-form the writer side
+        // in `tatara_process::status::ProcessCondition::{ready,
+        // not_ready, attested}` restated inline as `status: "True".
+        // into()` / `status: "False".into()`. The five sites (three
+        // writers + two readers) restated the SAME exact-case ASCII
+        // literal set on opposite sides of the `status.conditions[]`
+        // wire, silently coupled by byte-agreement. Post-lift both
+        // sides compose through `K8sConditionStatus` and a case-drift
+        // at either end (`"true"`, `"FALSE"`, an accidental `.trim`)
+        // becomes unrepresentable at the closed-set level. Any input
+        // outside the K8s closed set (case-drift, whitespace,
+        // unrelated literals) parses to `None` and falls through to
+        // `ReadyState::Unknown` — byte-identical to the pre-lift
+        // `_ => ReadyState::Unknown` fallthrough arm.
+        return match c
+            .get_str("status")
+            .and_then(K8sConditionStatus::from_wire_str)
+        {
+            Some(K8sConditionStatus::True) => ReadyState::Ready,
+            Some(K8sConditionStatus::False) => {
+                ReadyState::NotReady(c.get_str("message").map(String::from))
+            }
             _ => ReadyState::Unknown,
         };
     }

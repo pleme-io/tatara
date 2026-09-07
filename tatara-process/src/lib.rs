@@ -28,6 +28,7 @@ pub mod identity;
 pub mod intent;
 pub mod json_object;
 pub mod k8s_builtin_resource;
+pub mod k8s_condition;
 pub mod k8s_object_ref;
 pub mod k8s_wire_identity;
 pub mod kube_error;
@@ -103,6 +104,7 @@ pub mod prelude {
         HELM_LIFECYCLE_DEFAULT_RETRIES, HELM_LIFECYCLE_DEFAULT_TIMEOUT,
     };
     pub use crate::k8s_builtin_resource::K8sBuiltinResource;
+    pub use crate::k8s_condition::K8sConditionStatus;
     pub use crate::k8s_object_ref::K8sObjectRef;
     pub use crate::k8s_wire_identity::K8sWireIdentity;
     pub use crate::lifetime::{

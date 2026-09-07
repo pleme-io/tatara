@@ -8,6 +8,7 @@ use serde_json::Value;
 use crate::boundary::Condition;
 use crate::crd::Process;
 use crate::json_object::ValueGetExt;
+use crate::k8s_condition::K8sConditionStatus;
 
 /// Standard K8s Condition (shape of `metav1.Condition`).
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -27,7 +28,7 @@ impl ProcessCondition {
     pub fn ready(reason: impl Into<String>, message: Option<String>) -> Self {
         Self {
             type_: "Ready".into(),
-            status: "True".into(),
+            status: K8sConditionStatus::True.as_wire_str().into(),
             last_transition_time: Utc::now(),
             reason: Some(reason.into()),
             message,
@@ -37,7 +38,7 @@ impl ProcessCondition {
     pub fn not_ready(reason: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             type_: "Ready".into(),
-            status: "False".into(),
+            status: K8sConditionStatus::False.as_wire_str().into(),
             last_transition_time: Utc::now(),
             reason: Some(reason.into()),
             message: Some(message.into()),
@@ -47,7 +48,7 @@ impl ProcessCondition {
     pub fn attested(root: &str) -> Self {
         Self {
             type_: "Attested".into(),
-            status: "True".into(),
+            status: K8sConditionStatus::True.as_wire_str().into(),
             last_transition_time: Utc::now(),
             reason: Some("AttestationWritten".into()),
             message: Some(format!("composed_root={root}")),
@@ -631,6 +632,88 @@ pub struct ComplianceStatus {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    // ─── ProcessCondition writer / K8sConditionStatus substrate pins ─
+    //
+    // Byte-shape parity pins between `ProcessCondition::{ready,
+    // not_ready, attested}` writer output and the pre-lift hand-
+    // authored `"True"` / `"False"` `status` slot literals every
+    // downstream K8s API server + K8s-Condition-reading peer depends
+    // on. Post-lift the writers compose through
+    // `K8sConditionStatus::<V>.as_wire_str()`; these pins catch a
+    // regression at the substrate primitive (a lower-case drift, a
+    // whitespace prefix, a `serde(rename)` addition on the enum)
+    // that would silently reshape every emitted Process
+    // `status.conditions[]` slot away from the K8s wire form.
+
+    /// Fail-before-pass-after: `ProcessCondition::ready` emits the
+    /// exact-case ASCII `"True"` on the `status` slot the K8s API
+    /// server accepts, byte-identical to the pre-lift hand-authored
+    /// `status: "True".into()` literal. A regression at the substrate
+    /// primitive (a `to_lowercase` pass, a case-drifted variant
+    /// literal in `k8s_condition::K8sConditionStatus::as_wire_str`)
+    /// surfaces HERE, not as silent operator-facing wire-form skew
+    /// on the emitted Process CRD.
+    #[test]
+    fn ready_writer_status_slot_matches_pre_lift_true_literal_bytewise() {
+        let c = ProcessCondition::ready("ObservedRunning", Some("healthy".into()));
+        assert_eq!(c.type_, "Ready");
+        assert_eq!(c.status, "True");
+    }
+
+    /// Fail-before-pass-after: `ProcessCondition::not_ready` emits
+    /// the exact-case ASCII `"False"` on the `status` slot, byte-
+    /// identical to the pre-lift hand-authored `status: "False".
+    /// into()` literal.
+    #[test]
+    fn not_ready_writer_status_slot_matches_pre_lift_false_literal_bytewise() {
+        let c = ProcessCondition::not_ready("ObservedFailed", "boom");
+        assert_eq!(c.type_, "Ready");
+        assert_eq!(c.status, "False");
+    }
+
+    /// Fail-before-pass-after: `ProcessCondition::attested` emits
+    /// the exact-case ASCII `"True"` on the `status` slot with the
+    /// `"Attested"` type row, byte-identical to the pre-lift hand-
+    /// authored `type_: "Attested".into()` + `status: "True".into()`
+    /// pair.
+    #[test]
+    fn attested_writer_status_slot_matches_pre_lift_true_literal_bytewise() {
+        let c = ProcessCondition::attested("blake3:abc123");
+        assert_eq!(c.type_, "Attested");
+        assert_eq!(c.status, "True");
+        // Message body preserves the composed_root diagnostic
+        // wording verbatim — the substrate lift only reshaped the
+        // `status` slot, not the human-facing message.
+        assert_eq!(c.message.as_deref(), Some("composed_root=blake3:abc123"));
+        assert_eq!(c.reason.as_deref(), Some("AttestationWritten"));
+    }
+
+    /// Writer/reader wire-form parity: the `status` slot every
+    /// writer here emits is the SAME byte-shape the
+    /// `K8sConditionStatus::from_wire_str` reader in
+    /// `tatara-reconciler::ssapply::ready_condition_value` accepts.
+    /// A regression that drifted `as_wire_str` at ONE variant would
+    /// silently desynchronize every writer/reader pair in the
+    /// workspace; this pin surfaces the drift at the substrate.
+    #[test]
+    fn writer_output_round_trips_through_from_wire_str() {
+        let ready = ProcessCondition::ready("R", None);
+        assert_eq!(
+            K8sConditionStatus::from_wire_str(&ready.status),
+            Some(K8sConditionStatus::True),
+        );
+        let not_ready = ProcessCondition::not_ready("R", "why");
+        assert_eq!(
+            K8sConditionStatus::from_wire_str(&not_ready.status),
+            Some(K8sConditionStatus::False),
+        );
+        let attested = ProcessCondition::attested("blake3:zzz");
+        assert_eq!(
+            K8sConditionStatus::from_wire_str(&attested.status),
+            Some(K8sConditionStatus::True),
+        );
+    }
 
     // ─── RenderedResourceCoords substrate pins ──────────────────────
 

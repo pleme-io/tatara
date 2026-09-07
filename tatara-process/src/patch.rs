@@ -1091,7 +1091,7 @@ mod tests {
         // compose so a regression on any one lands here.
         let spec_body = json!({"spec": {"suspended": true}});
         let meta_body = json!({
-            "metadata": {"finalizers": ["tatara.pleme.io/process-finalizer"]},
+            "metadata": {"finalizers": [crate::finalizers::PROCESS]},
         });
         let strip_body = json!({
             "metadata": {"annotations": {"tatara.pleme.io/signal": serde_json::Value::Null}},

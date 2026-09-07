@@ -620,35 +620,49 @@ pub async fn remove_finalizer(
 mod tests {
     use super::*;
 
+    // The four `add_finalizer` / `remove_finalizer_from` tests below
+    // route their finalizer-key input through the substrate owner
+    // [`tatara_process::finalizers::PROCESS`] rather than restating
+    // the `"tatara.pleme.io/process-finalizer"` wire form inline at
+    // every callsite. A regression that renamed the substrate const
+    // (a future group-segment shift, a suffix swap) or decoupled the
+    // reconciler production callsites at `phase_machine::handle_pending`
+    // / `handle_reaped` (which reach through
+    // `tatara_process::PROCESS_FINALIZER`) would surface at the
+    // substrate's own byte-shape pin in
+    // [`tatara_process::finalizers::tests::process_wire_form_pin`]
+    // rather than requiring coherent edits at eight test callsites
+    // here.
+
     #[test]
     fn add_finalizer_appends_when_absent() {
         let existing = vec!["other.io/finalizer".to_string()];
-        let result = add_finalizer(&existing, "tatara.pleme.io/process-finalizer").unwrap();
+        let result = add_finalizer(&existing, tatara_process::finalizers::PROCESS).unwrap();
         assert_eq!(result.len(), 2);
-        assert!(result.contains(&"tatara.pleme.io/process-finalizer".to_string()));
+        assert!(result.contains(&tatara_process::finalizers::PROCESS.to_string()));
     }
 
     #[test]
     fn add_finalizer_idempotent_when_present() {
-        let existing = vec!["tatara.pleme.io/process-finalizer".to_string()];
-        assert!(add_finalizer(&existing, "tatara.pleme.io/process-finalizer").is_none());
+        let existing = vec![tatara_process::finalizers::PROCESS.to_string()];
+        assert!(add_finalizer(&existing, tatara_process::finalizers::PROCESS).is_none());
     }
 
     #[test]
     fn remove_finalizer_strips_when_present() {
         let existing = vec![
             "a".to_string(),
-            "tatara.pleme.io/process-finalizer".to_string(),
+            tatara_process::finalizers::PROCESS.to_string(),
             "b".to_string(),
         ];
-        let result = remove_finalizer_from(&existing, "tatara.pleme.io/process-finalizer").unwrap();
+        let result = remove_finalizer_from(&existing, tatara_process::finalizers::PROCESS).unwrap();
         assert_eq!(result, vec!["a".to_string(), "b".to_string()]);
     }
 
     #[test]
     fn remove_finalizer_idempotent_when_absent() {
         let existing = vec!["other.io/x".to_string()];
-        assert!(remove_finalizer_from(&existing, "tatara.pleme.io/process-finalizer").is_none());
+        assert!(remove_finalizer_from(&existing, tatara_process::finalizers::PROCESS).is_none());
     }
 
     // ─── bootstrap_process_table_spec substrate pins ─────────────────
@@ -1028,7 +1042,7 @@ mod tests {
     #[test]
     fn finalizers_metadata_patch_wraps_list_in_two_slot_metadata_body() {
         let list = vec![
-            "tatara.pleme.io/process-finalizer".to_string(),
+            tatara_process::finalizers::PROCESS.to_string(),
             "other.io/finalizer".to_string(),
         ];
         let v = finalizers_metadata_patch(&list);
@@ -1048,7 +1062,7 @@ mod tests {
         assert_eq!(finalizers.len(), 2);
         assert_eq!(
             finalizers[0].as_str(),
-            Some("tatara.pleme.io/process-finalizer")
+            Some(tatara_process::finalizers::PROCESS)
         );
         assert_eq!(finalizers[1].as_str(), Some("other.io/finalizer"));
     }
@@ -1081,10 +1095,10 @@ mod tests {
         // rather than at every downstream K8s round-trip.
         for new in [
             Vec::<String>::new(),
-            vec!["tatara.pleme.io/process-finalizer".to_string()],
+            vec![tatara_process::finalizers::PROCESS.to_string()],
             vec![
                 "a".to_string(),
-                "tatara.pleme.io/process-finalizer".to_string(),
+                tatara_process::finalizers::PROCESS.to_string(),
                 "b".to_string(),
             ],
         ] {

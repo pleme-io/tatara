@@ -19,7 +19,11 @@ use crate::allocation_decide::{decide_allocation_reconcile, AllocationDecision};
 use crate::context::PoolContext;
 use crate::ReconcilerError;
 
-const ALLOC_FINALIZER: &str = "tatara.pleme.io/allocation-finalizer";
+/// Wire-form finalizer key routes through the workspace-canonical
+/// substrate owner at [`tatara_process::finalizers::ALLOCATION`]; a
+/// future Bound → Releasing → Released cascade-delete gate will call
+/// `patch::ensure_finalizer` / `remove_finalizer` with this const.
+const ALLOC_FINALIZER: &str = tatara_process::finalizers::ALLOCATION;
 
 pub async fn reconcile(
     alloc: Arc<EphemeralAllocation>,

@@ -27,7 +27,11 @@ use crate::desired::{decide_pool_convergence, ConvergenceAction, PoolMemberSnaps
 use crate::naming::member_process_name;
 use crate::pool_decide::{decide_pool_reconcile_now, PoolDecision};
 
-const POOL_FINALIZER: &str = "tatara.pleme.io/pool-finalizer";
+/// Wire-form finalizer key routes through the workspace-canonical
+/// substrate owner at [`tatara_process::finalizers::POOL`]; a future
+/// member-Process orphan-reap gate will call `patch::ensure_finalizer`
+/// / `remove_finalizer` with this const.
+const POOL_FINALIZER: &str = tatara_process::finalizers::POOL;
 
 /// One reconcile pass over a Pool. The kube-rs `Controller` calls this.
 pub async fn reconcile(

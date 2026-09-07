@@ -19,6 +19,7 @@ pub mod env;
 pub mod ephemeral;
 pub mod err_ctx;
 pub mod export;
+pub mod finalizers;
 pub mod flux_resource;
 pub mod hash;
 pub mod hostname;
@@ -844,7 +845,14 @@ pub mod annotations {
 }
 
 /// Standard finalizer for the Process reconciler.
-pub const PROCESS_FINALIZER: &str = "tatara.pleme.io/process-finalizer";
+///
+/// Re-export of [`finalizers::PROCESS`] — the substrate-owner
+/// per-CRD finalizer family lives at [`crate::finalizers`]; this
+/// top-level const stays put for downstream consumers that predate
+/// the module, and is coherence-pinned against
+/// [`finalizers::PROCESS`] by
+/// [`finalizers::tests::process_finalizer_top_level_reexport_routes_through_finalizers_process`].
+pub const PROCESS_FINALIZER: &str = finalizers::PROCESS;
 
 /// Shared schemars helpers — emit OpenAPI schemas Kubernetes accepts.
 /// Free-form `serde_json::Value` fields default to an *empty* schema

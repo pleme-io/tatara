@@ -673,6 +673,65 @@ impl ValueGetExt for Value {
     }
 }
 
+/// Receiver-shape widening of the READ-projection axis-family — the
+/// same three methods extended from `Value` (the `Value::Object` arm's
+/// walker) to `Map<String, Value>` (the object interior itself),
+/// closing the receiver-shape gap so a caller who already holds an
+/// `&Map<String, Value>` handle (via `.as_object().unwrap()`, via
+/// [`ValueObjectExt::as_object_mut_or`], via the two `JsonMap*Ext`
+/// siblings' returns, or via a helper like `ssapply::ownership_kv_pair`
+/// that composes and returns a `Map` directly) reaches the SAME
+/// `get_i64` / `get_str` / `get_array` methods without a
+/// `Value::Object(m)` rewrap detour.
+///
+/// Pre-lift the `.get(<key>).and_then(Value::as_<T>)` two-link chain
+/// was hand-authored at 30 `Map<String, Value>`-receiver sites past the
+/// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold — 19 in
+/// `tatara-reconciler::patch` tests (the phase-status wire-shape pins
+/// walking `obj = v.as_object().unwrap()` and `metadata = obj.get(
+/// "metadata").and_then(Value::as_object).unwrap()` receivers) plus
+/// 11 in `tatara-reconciler::ssapply` tests (the ownership-tag +
+/// composed-coord pins walking the `Map` handles returned by
+/// `ownership_annotations` / `ownership_labels` /
+/// `ownership_annotations_by_coord`). Post-lift each callsite reads
+/// `<map>.get_str(<key>)` / `<map>.get_array(<key>)` and the READ
+/// chain rides through the SAME substrate owner the `Value`-receiver
+/// callers already threaded through.
+///
+/// The axis-family invariant (a caller who imports `ValueGetExt`
+/// reaches every axis through the same trait handle — pinned at
+/// [`tests::get_array_axis_family_reaches_i64_str_and_array_through_one_trait_import`]
+/// and its `get_str` sibling) extends verbatim to the `Map` receiver:
+/// a single `use tatara_process::json_object::ValueGetExt;` unlocks
+/// every axis on both receiver shapes. A future new axis (e.g. a
+/// `get_bool` for `Value::Bool` slots) adds one method on the trait
+/// and inherits both impls; there is no separate `MapGetExt` peer to
+/// keep in sync.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// two-link chain recurred at 30 `Map`-receiver sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication trigger, and rides through the
+/// same substrate owner the pre-existing `Value`-receiver impl above
+/// already pinned). THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the receiver-shape widening carries the axis-family
+/// invariant across without splitting it into two traits).
+impl ValueGetExt for Map<String, Value> {
+    #[inline]
+    fn get_i64(&self, key: &str) -> Option<i64> {
+        self.get(key).and_then(Value::as_i64)
+    }
+
+    #[inline]
+    fn get_str(&self, key: &str) -> Option<&str> {
+        self.get(key).and_then(Value::as_str)
+    }
+
+    #[inline]
+    fn get_array(&self, key: &str) -> Option<&Vec<Value>> {
+        self.get(key).and_then(Value::as_array)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1711,6 +1770,187 @@ mod tests {
         }
         let mixed = json!({ "n": 7, "s": "hello", "a": [1, 2, 3] });
         let (n, s, a) = probe(&mixed);
+        assert_eq!(n, Some(7));
+        assert_eq!(s, Some("hello"));
+        assert_eq!(a.map(Vec::len), Some(3));
+    }
+
+    // ─── ValueGetExt receiver-shape widening — Map impl pins ─────────
+    //
+    // Fail-before-pass-after granularity: `impl ValueGetExt for
+    // Map<String, Value>` did not exist before this commit, so each
+    // test below fails to compile pre-lift (a bare `Map<String, Value>`
+    // receiver has no `.get_str(<key>)` inherent method — only the
+    // upstream `.get(<key>).and_then(Value::as_str)` chain — so the
+    // callsite fails method resolution). Post-lift they collectively
+    // pin the widening at ONE substrate owner — a regression that
+    // dropped the `Map` impl and re-forced every `&Map` receiver into
+    // a `Value::Object(m.clone())` rewrap detour would surface HERE
+    // rather than as silent per-emit skew across the 30
+    // `Map`-receiver pre-lift consumers in `tatara-reconciler::
+    // {patch,ssapply}` tests.
+
+    #[test]
+    fn map_receiver_reaches_str_i64_and_array_axes_through_the_same_trait() {
+        // Receiver-parity pin: an `&Map<String, Value>` handle reaches
+        // the SAME three axes (`get_str`, `get_i64`, `get_array`) the
+        // `&Value` receiver already exposes. A regression that
+        // implemented only one axis on the Map arm (a copy-paste
+        // omission at the impl block) would surface here as one of the
+        // three assertions failing to compile / returning `None`.
+        let obj: Map<String, Value> = json!({
+            "s": "hello",
+            "n": 42,
+            "a": [1, 2, 3],
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        assert_eq!(obj.get_str("s"), Some("hello"));
+        assert_eq!(obj.get_i64("n"), Some(42));
+        assert_eq!(obj.get_array("a").map(Vec::len), Some(3));
+    }
+
+    #[test]
+    fn map_receiver_get_str_matches_pre_lift_hand_authored_chain_bytewise() {
+        // Byte-shape parity pin: `<map>.get_str(<key>)` on a
+        // `&Map<String, Value>` MUST return the SAME `Option<&str>` the
+        // pre-lift `.get(<key>).and_then(Value::as_str)` chain
+        // produced. Sweeps every pre-lift-reachable corner (present
+        // string, present non-string, absent) so a regression at the
+        // Map impl that broke byte identity with the pre-lift chain at
+        // ONE corner surfaces here rather than as a per-slot divergence
+        // at every `patch::phase_status_*` / `ssapply::ownership_*` pin.
+        let obj: Map<String, Value> = json!({
+            "phase": "Running",
+            "phaseSince": "2026-01-01T00:00:00Z",
+            "message": "",
+            "numeric": 7,
+            "null_valued": null,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        for key in [
+            "phase",
+            "phaseSince",
+            "message",
+            "numeric",
+            "null_valued",
+            "missing",
+        ] {
+            let via_primitive = obj.get_str(key);
+            let via_pre_lift = obj.get(key).and_then(Value::as_str);
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "corner `{key}` on Map receiver must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn map_receiver_get_array_matches_pre_lift_hand_authored_chain_bytewise() {
+        // Sibling to the `get_str` byte-parity pin on the array axis
+        // — sweeps present-array / present-non-array / absent so a
+        // regression at the Map impl's `get_array` arm surfaces here
+        // rather than as silent drift at
+        // `patch::finalizers_metadata_patch_wraps_list_in_two_slot_metadata_body`
+        // and its peers whose `metadata.get("finalizers").and_then(
+        // Value::as_array)` chain lifts through this substrate.
+        let obj: Map<String, Value> = json!({
+            "finalizers": ["tatara.pleme.io/process-finalizer", "other.io/finalizer"],
+            "fluxResources": [],
+            "stringy": "not-array",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        for key in ["finalizers", "fluxResources", "stringy", "missing"] {
+            let via_primitive = obj.get_array(key);
+            let via_pre_lift = obj.get(key).and_then(Value::as_array);
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "corner `{key}` on Map receiver's array axis must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn map_receiver_get_i64_matches_pre_lift_hand_authored_chain_bytewise() {
+        // Sibling to the `get_str` / `get_array` byte-parity pins on
+        // the integer axis — closes the third axis of the family and
+        // pins that a Map-receiver caller reaching this arm gets the
+        // SAME `Option<i64>` the pre-lift chain produced.
+        let obj: Map<String, Value> = json!({
+            "succeeded": 2,
+            "failed": 0,
+            "active": 5,
+            "stringy": "1",
+            "null_valued": null,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        for key in [
+            "succeeded",
+            "failed",
+            "active",
+            "stringy",
+            "null_valued",
+            "missing",
+        ] {
+            let via_primitive = obj.get_i64(key);
+            let via_pre_lift = obj.get(key).and_then(Value::as_i64);
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "corner `{key}` on Map receiver's integer axis must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn map_receiver_get_str_matches_value_object_arm_bytewise() {
+        // Cross-receiver coherence pin: an `&Map<String, Value>`
+        // receiver's `.get_str(<key>)` MUST return the SAME
+        // `Option<&str>` that walking the equivalent `Value::Object(m)`
+        // through the pre-existing `Value` impl would. A regression
+        // that specialised the Map arm (a slot-name-normalisation
+        // pass, a per-fleet trim) at ONE receiver but not the other
+        // would silently split the two receiver shapes' behaviour and
+        // break the "widening preserves semantics" invariant.
+        let v: Value = json!({
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "phase": "Running",
+        });
+        let m: &Map<String, Value> = v.as_object().unwrap();
+        for key in ["apiVersion", "kind", "phase", "missing"] {
+            assert_eq!(
+                <Map<String, Value> as ValueGetExt>::get_str(m, key),
+                <Value as ValueGetExt>::get_str(&v, key),
+                "receiver-shape parity: `{key}` must project identically through both impls",
+            );
+        }
+    }
+
+    #[test]
+    fn map_receiver_axis_family_reaches_all_three_axes_through_one_trait_import() {
+        // Axis-family + receiver-shape pin combined: a generic
+        // `T: ValueGetExt` bound reaches ALL THREE axes on the Map
+        // receiver — the SAME structural invariant the pre-existing
+        // `get_array_axis_family_reaches_...` sibling pins for the
+        // `Value` receiver. This test walks the SAME `probe`-style
+        // generic through the Map arm, so a regression that split the
+        // trait into per-axis peers would break the invariant on both
+        // receiver shapes simultaneously.
+        fn probe<T: ValueGetExt>(t: &T) -> (Option<i64>, Option<&str>, Option<&Vec<Value>>) {
+            (t.get_i64("n"), t.get_str("s"), t.get_array("a"))
+        }
+        let m: Map<String, Value> = json!({ "n": 7, "s": "hello", "a": [1, 2, 3] })
+            .as_object()
+            .unwrap()
+            .clone();
+        let (n, s, a) = probe(&m);
         assert_eq!(n, Some(7));
         assert_eq!(s, Some("hello"));
         assert_eq!(a.map(Vec::len), Some(3));

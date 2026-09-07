@@ -1775,12 +1775,12 @@ mod tests {
         let m = ownership_kv_pair("demo-ns/demo-app");
         assert_eq!(m.len(), 2);
         assert_eq!(
-            m.get(annotations::MANAGED_BY).and_then(Value::as_str),
+            m.get_str(annotations::MANAGED_BY),
             Some(FIELD_MANAGER),
             "MANAGED_BY slot must carry FIELD_MANAGER"
         );
         assert_eq!(
-            m.get(annotations::PROCESS).and_then(Value::as_str),
+            m.get_str(annotations::PROCESS),
             Some("demo-ns/demo-app"),
             "PROCESS slot must ride the caller-supplied process_ref verbatim"
         );
@@ -1927,12 +1927,12 @@ mod tests {
         // construction; a regression that re-hard-coded the literal
         // fails this assertion.
         assert_eq!(
-            m.get(annotations::MANAGED_BY).and_then(Value::as_str),
+            m.get_str(annotations::MANAGED_BY),
             Some(FIELD_MANAGER),
             "MANAGED_BY slot must carry FIELD_MANAGER, not a hand-authored literal"
         );
         assert_eq!(
-            m.get(annotations::PROCESS).and_then(Value::as_str),
+            m.get_str(annotations::PROCESS),
             Some("demo-ns/demo-app"),
             "PROCESS slot must ride the caller-supplied process_ref verbatim"
         );
@@ -1957,7 +1957,7 @@ mod tests {
         ] {
             let m = ownership_annotations(input);
             assert_eq!(
-                m.get(annotations::PROCESS).and_then(Value::as_str),
+                m.get_str(annotations::PROCESS),
                 Some(input),
                 "PROCESS slot must ride {input:?} verbatim"
             );
@@ -2068,12 +2068,12 @@ mod tests {
         // construction; a regression that re-hard-coded the literal
         // fails this assertion.
         assert_eq!(
-            m.get(annotations::MANAGED_BY).and_then(Value::as_str),
+            m.get_str(annotations::MANAGED_BY),
             Some(FIELD_MANAGER),
             "MANAGED_BY slot must carry FIELD_MANAGER, not a hand-authored literal"
         );
         assert_eq!(
-            m.get(annotations::PROCESS).and_then(Value::as_str),
+            m.get_str(annotations::PROCESS),
             Some("demo-ns/demo-app"),
             "PROCESS slot must ride the caller-supplied process_ref verbatim"
         );
@@ -2095,7 +2095,7 @@ mod tests {
         ] {
             let m = ownership_labels(input);
             assert_eq!(
-                m.get(annotations::PROCESS).and_then(Value::as_str),
+                m.get_str(annotations::PROCESS),
                 Some(input),
                 "PROCESS slot must ride {input:?} verbatim"
             );
@@ -2150,12 +2150,9 @@ mod tests {
         // emit site.
         let m = ownership_annotations_by_coord("demo-ns", "ephemeral-demo");
         assert_eq!(m.len(), 2);
+        assert_eq!(m.get_str(annotations::MANAGED_BY), Some(FIELD_MANAGER),);
         assert_eq!(
-            m.get(annotations::MANAGED_BY).and_then(Value::as_str),
-            Some(FIELD_MANAGER),
-        );
-        assert_eq!(
-            m.get(annotations::PROCESS).and_then(Value::as_str),
+            m.get_str(annotations::PROCESS),
             Some("demo-ns/ephemeral-demo"),
         );
     }
@@ -2664,7 +2661,7 @@ mod tests {
         // `<ns>/<name>` shape every downstream `PROCESS=<ref>`
         // label-selector composes against.
         assert_eq!(
-            composed.get(annotations::PROCESS).and_then(Value::as_str),
+            composed.get_str(annotations::PROCESS),
             Some("demo/ephemeral-demo"),
         );
     }

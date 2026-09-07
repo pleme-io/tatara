@@ -619,6 +619,7 @@ pub async fn remove_finalizer(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tatara_process::json_object::ValueGetExt;
 
     // The four `add_finalizer` / `remove_finalizer_from` tests below
     // route their finalizer-key input through the substrate owner
@@ -827,13 +828,12 @@ mod tests {
             "base owns exactly two slots — no third-slot leaks"
         );
         assert_eq!(
-            obj.get("phase").and_then(Value::as_str),
+            obj.get_str("phase"),
             Some("Running"),
             "phase key present and serialises as the discriminant string",
         );
         assert!(
-            tatara_process::time::parse_rfc3339_opt(obj.get("phaseSince").and_then(Value::as_str))
-                .is_some(),
+            tatara_process::time::parse_rfc3339_opt(obj.get_str("phaseSince")).is_some(),
             "phaseSince key present and is a valid RFC-3339 timestamp",
         );
         // The sibling third-slot keys must NOT leak into the base — a
@@ -858,9 +858,8 @@ mod tests {
         let before = Utc::now();
         let v = phase_status_base(ProcessPhase::Attested);
         let after = Utc::now();
-        let stamped =
-            tatara_process::time::parse_rfc3339_opt(v.get("phaseSince").and_then(Value::as_str))
-                .expect("phaseSince is an RFC-3339 timestamp");
+        let stamped = tatara_process::time::parse_rfc3339_opt(v.get_str("phaseSince"))
+            .expect("phaseSince is an RFC-3339 timestamp");
         let stamped_utc = stamped.with_timezone(&chrono::Utc);
         assert!(
             (before..=after).contains(&stamped_utc),
@@ -937,15 +936,12 @@ mod tests {
             ("extra", &extra),
         ] {
             assert_eq!(
-                v.get("phase").and_then(Value::as_str),
+                v.get_str("phase"),
                 Some("Running"),
                 "{name} must carry the shared `phase` slot with the same discriminant",
             );
             assert!(
-                tatara_process::time::parse_rfc3339_opt(
-                    v.get("phaseSince").and_then(Value::as_str)
-                )
-                .is_some(),
+                tatara_process::time::parse_rfc3339_opt(v.get_str("phaseSince")).is_some(),
                 "{name} must carry the shared `phaseSince` slot as an RFC-3339 timestamp",
             );
         }
@@ -975,18 +971,17 @@ mod tests {
         // All three slots present, no extras.
         assert_eq!(obj.len(), 3);
         assert_eq!(
-            obj.get("phase").and_then(Value::as_str),
+            obj.get_str("phase"),
             Some("Execing"),
             "phase key present and serialises as the discriminant string"
         );
         assert_eq!(
-            obj.get("message").and_then(Value::as_str),
+            obj.get_str("message"),
             Some("dependencies satisfied"),
             "message key present and rides through verbatim"
         );
         assert!(
-            tatara_process::time::parse_rfc3339_opt(obj.get("phaseSince").and_then(Value::as_str))
-                .is_some(),
+            tatara_process::time::parse_rfc3339_opt(obj.get_str("phaseSince")).is_some(),
             "phaseSince key present and is a valid RFC-3339 timestamp"
         );
     }
@@ -997,16 +992,13 @@ mod tests {
         // (e.g. controller.rs "deletion requested",
         // phase_machine.rs "dependencies satisfied").
         let a = phase_status_msg(ProcessPhase::Exiting, "deletion requested");
-        assert_eq!(
-            a.get("message").and_then(Value::as_str),
-            Some("deletion requested")
-        );
+        assert_eq!(a.get_str("message"), Some("deletion requested"));
         // Owned String — the shape at every format!(...) site
         // (e.g. phase_machine.rs `format!("releasing → {next} — {reason}")`).
         let owned: String = format!("releasing → {} — {}", ProcessPhase::Zombie, "TTL expired");
         let b = phase_status_msg(ProcessPhase::Releasing, owned);
         assert_eq!(
-            b.get("message").and_then(Value::as_str),
+            b.get_str("message"),
             Some("releasing → Zombie — TTL expired")
         );
     }
@@ -1016,9 +1008,8 @@ mod tests {
         let before = Utc::now();
         let v = phase_status_msg(ProcessPhase::Reconverging, "drift");
         let after = Utc::now();
-        let stamped =
-            tatara_process::time::parse_rfc3339_opt(v.get("phaseSince").and_then(Value::as_str))
-                .expect("phaseSince is an RFC-3339 timestamp");
+        let stamped = tatara_process::time::parse_rfc3339_opt(v.get_str("phaseSince"))
+            .expect("phaseSince is an RFC-3339 timestamp");
         let stamped_utc = stamped.with_timezone(&chrono::Utc);
         assert!(
             (before..=after).contains(&stamped_utc),
@@ -1056,8 +1047,7 @@ mod tests {
         // leak that would silently overwrite unrelated metadata on merge.
         assert_eq!(metadata.len(), 1);
         let finalizers = metadata
-            .get("finalizers")
-            .and_then(Value::as_array)
+            .get_array("finalizers")
             .expect("metadata.finalizers is an array (K8s expects list, never null/object)");
         assert_eq!(finalizers.len(), 2);
         assert_eq!(
@@ -1314,17 +1304,16 @@ mod tests {
         let obj = v.as_object().expect("object");
         assert_eq!(obj.len(), 3);
         assert_eq!(
-            obj.get("phase").and_then(Value::as_str),
+            obj.get_str("phase"),
             Some("Running"),
             "phase key present and serialises as the discriminant string"
         );
         assert!(
-            tatara_process::time::parse_rfc3339_opt(obj.get("phaseSince").and_then(Value::as_str))
-                .is_some(),
+            tatara_process::time::parse_rfc3339_opt(obj.get_str("phaseSince")).is_some(),
             "phaseSince key present and is a valid RFC-3339 timestamp"
         );
         assert!(
-            obj.get("fluxResources").and_then(Value::as_array).is_some(),
+            obj.get_array("fluxResources").is_some(),
             "extra key present under its caller-named slot",
         );
     }
@@ -1334,9 +1323,8 @@ mod tests {
         let before = Utc::now();
         let v = phase_status_with(ProcessPhase::Attested, "attestation", serde_json::json!({}));
         let after = Utc::now();
-        let stamped =
-            tatara_process::time::parse_rfc3339_opt(v.get("phaseSince").and_then(Value::as_str))
-                .expect("phaseSince is an RFC-3339 timestamp");
+        let stamped = tatara_process::time::parse_rfc3339_opt(v.get_str("phaseSince"))
+            .expect("phaseSince is an RFC-3339 timestamp");
         let stamped_utc = stamped.with_timezone(&chrono::Utc);
         assert!(
             (before..=after).contains(&stamped_utc),
@@ -1409,7 +1397,7 @@ mod tests {
         let refs: Vec<i32> = vec![1, 2, 3];
         let vec_val = phase_status_with(ProcessPhase::Running, "list", &refs);
         assert_eq!(
-            vec_val.get("list").and_then(Value::as_array).map(Vec::len),
+            vec_val.get_array("list").map(Vec::len),
             Some(3),
             "borrowed &Vec<Serialize> rides through as an array of length 3"
         );
@@ -1571,7 +1559,7 @@ mod tests {
                 "transition_msg's body must own `phase` + `phaseSince` + `message` for phase `{phase}` — no slot loss",
             );
             assert_eq!(
-                obj.get("message").and_then(Value::as_str),
+                obj.get_str("message"),
                 Some(msg),
                 "transition_msg's `message` slot must ride through under the fixed `message` key verbatim for phase `{phase}`",
             );
@@ -1592,7 +1580,7 @@ mod tests {
         // the input for each.
         let literal_body = phase_status_msg(ProcessPhase::Zombie, "static literal reason");
         assert_eq!(
-            literal_body.get("message").and_then(Value::as_str),
+            literal_body.get_str("message"),
             Some("static literal reason"),
             "`&'static str` literals ride through the impl Into<String> bound verbatim",
         );
@@ -1600,7 +1588,7 @@ mod tests {
         let owned: String = format!("releasing → {} — {}", ProcessPhase::Exiting, "teardown");
         let owned_body = phase_status_msg(ProcessPhase::Releasing, owned.clone());
         assert_eq!(
-            owned_body.get("message").and_then(Value::as_str),
+            owned_body.get_str("message"),
             Some(owned.as_str()),
             "`format!(...)`-owned Strings ride through the impl Into<String> bound verbatim",
         );
@@ -1740,10 +1728,7 @@ mod tests {
         let before = Utc::now();
         let body = phase_status_with(ProcessPhase::Attested, "attestation", &());
         let after = Utc::now();
-        let ts = body
-            .get("phaseSince")
-            .and_then(Value::as_str)
-            .expect("phaseSince present");
+        let ts = body.get_str("phaseSince").expect("phaseSince present");
         let parsed = chrono::DateTime::parse_from_rfc3339(ts).expect("RFC-3339 timestamp");
         let parsed_utc = parsed.with_timezone(&Utc);
         assert!(

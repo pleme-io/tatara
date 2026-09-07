@@ -348,11 +348,23 @@ impl JsonMapObjectEntryExt for Map<String, Value> {
 }
 
 /// Substrate extension trait over `serde_json::Value` — the ONE
-/// substrate owner of the paired `.get(<key>).and_then(|v| v.as_i64())`
-/// two-link READ chain every downstream projection walks to pull an
-/// integer counter off a Kubernetes-status blob without asserting the
-/// slot is present, without asserting its variant, and without
-/// asserting it fits `i64`.
+/// substrate owner of the paired `.get(<key>).and_then(|v| v.as_<T>())`
+/// two-link READ chain every downstream projection walks to pull a
+/// typed leaf off a Kubernetes-status blob (or an equivalent
+/// rendered-resource JSON object) without asserting the slot is
+/// present, without asserting its variant, and without asserting the
+/// slot fits the target scalar type.
+///
+/// The trait carries ONE method per typed READ axis; the axis-family
+/// is [`Self::get_i64`] (integer counters) + [`Self::get_str`]
+/// (string slots). Adding a new axis (a `get_bool` for `Value::Bool`,
+/// a `get_object` for `Value::Object`, a `get_array` for
+/// `Value::Array`) lands as ONE new method here + ONE impl arm,
+/// inheriting the naming, `#[must_use]`, and inline discipline the
+/// existing axes pin. Never open a peer trait for a new axis —
+/// keep every READ projection on the ONE substrate owner so a
+/// caller who imports `ValueGetExt` reaches every axis through the
+/// same trait handle.
 ///
 /// READ-side counterpart to the three MUTATION-side siblings already in
 /// this module — [`ValueObjectExt::as_object_mut_or`],
@@ -459,12 +471,108 @@ pub trait ValueGetExt {
     /// is not integer-shaped.
     #[must_use = "a JSON i64 projection that isn't bound swallows the counter entirely"]
     fn get_i64(&self, key: &str) -> Option<i64>;
+
+    /// Look up `key` on this JSON object and project the returned
+    /// handle to `&str`; returns `None` when the slot is absent, when
+    /// the receiver is not a JSON object, or when the slot's variant
+    /// is not `Value::String`.
+    ///
+    /// String-axis sibling of [`Self::get_i64`] on the same
+    /// `.get(<key>).and_then(|v| v.as_<T>())` READ-chain lift. Pre-lift
+    /// the two-link chain was hand-authored at SEVEN production sites
+    /// across two crates past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// threshold:
+    ///
+    /// * `tatara-process::status::RenderedResourceCoords::from_json`
+    ///   — FOUR paired reads (`apiVersion`, `kind`, `metadata.name`,
+    ///   `metadata.namespace`) that project the four rendered-resource
+    ///   coordinate slots off a `serde_json::Value` rendered manifest
+    ///   into the typed `RenderedResourceCoords` row; the required
+    ///   three (`apiVersion` / `kind` / `metadata.name`) compose with
+    ///   `.ok_or_else(|| anyhow!("rendered resource missing X"))?
+    ///   .to_string()`, and the optional `metadata.namespace` composes
+    ///   with `.map(str::to_string)`.
+    /// * `tatara-reconciler::ssapply::ready_condition_value` — THREE
+    ///   paired reads (`type`, `status`, `message`) inside the
+    ///   condition-walker's per-condition classifier, each pulling a
+    ///   `Value::String` slot off a K8s Condition object off the
+    ///   `status.conditions[]` array.
+    ///
+    /// All seven sites walked the SAME two-link chain — `.get(<key>)`
+    /// on a `serde_json::Value` already known to be an object, then
+    /// `.and_then(|v| v.as_str())` on the returned `Option<&Value>` —
+    /// and each composed different downstream tails (fallible
+    /// `.ok_or_else(...)?.to_string()`, optional `.map(String::from)`,
+    /// pattern-match `Some("True")` / `Some("False")` / `_`). Post-lift
+    /// each callsite reads `<value>.get_str(<key>)` and the two-link
+    /// READ chain lives at ONE substrate owner here.
+    ///
+    /// ### Naming — `get_str`, not `as_str` or `str_at`
+    ///
+    /// Same discipline as [`Self::get_i64`] — the trait method
+    /// deliberately does NOT collide with `serde_json::Value::as_str`
+    /// (the inherent projection on a single `Value` handle) nor with
+    /// `serde_json::Value::get` (the inherent slot-lookup returning
+    /// `Option<&Value>`). A name collision would let a caller who has
+    /// [`ValueGetExt`] in scope resolve to one of the inherent methods
+    /// by accident (inherent methods win over trait methods in method
+    /// resolution) and silently drop half of the paired chain. The
+    /// `get_str(<key>)` shape names the intent: look up the slot at
+    /// `<key>`, project the returned handle to `&str`, in ONE call.
+    ///
+    /// ### `#[must_use]`
+    ///
+    /// Every pre-lift consumer binds the returned `Option<&str>` into
+    /// a downstream `.ok_or_else(...)?.to_string()` / `.map(String::from)`
+    /// / `.map(str::to_string)` / pattern-match arm. Dropping the
+    /// return silently discards the projection entirely, which is
+    /// never the intended semantic at any of the seven pre-lift
+    /// consumers.
+    ///
+    /// ### Return lifetime
+    ///
+    /// The `&str` borrows the same buffer the underlying
+    /// `Value::String` variant owns; the `Option<&str>` is bounded by
+    /// the receiver's lifetime (`&'_ self`), so a caller holding onto
+    /// the returned slice keeps the receiver borrowed. Matches the
+    /// pre-lift chain's own borrow shape (`v.as_str()` borrows through
+    /// the `&Value`).
+    ///
+    /// A future normalization on the projection — a Unicode
+    /// normalization pass (NFC-folding annotation values), a
+    /// per-fleet trim of leading/trailing whitespace, a rejection of
+    /// empty-string arms as "the caller meant absent" — lands at THIS
+    /// ONE substrate primitive and every downstream `apiVersion` /
+    /// `kind` / `metadata.name` / K8s-condition-string reader
+    /// inherits the upgrade mechanically.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the two-link `.get(<key>).and_then(|v| v.as_str())` chain
+    /// recurred at SEVEN production sites across two crates past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
+    /// ONE substrate owner here on the string axis of the same
+    /// READ-chain axis-family the `get_i64` sibling opened for the
+    /// integer axis). THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — a regression that drifted the projection
+    /// axis at ONE site would silently pass every downstream
+    /// composition and surface as a wrong slot at operator-facing
+    /// diagnostic wording; post-lift the projection lives at ONE
+    /// typed owner so a regression surfaces at
+    /// [`tests::get_str_present_string_slot_returns_the_slice`] /
+    /// peers rather than as silent operator-facing drift).
+    #[must_use = "a JSON &str projection that isn't bound swallows the slot entirely"]
+    fn get_str(&self, key: &str) -> Option<&str>;
 }
 
 impl ValueGetExt for Value {
     #[inline]
     fn get_i64(&self, key: &str) -> Option<i64> {
         self.get(key).and_then(Value::as_i64)
+    }
+
+    #[inline]
+    fn get_str(&self, key: &str) -> Option<&str> {
+        self.get(key).and_then(Value::as_str)
     }
 }
 
@@ -1042,5 +1150,216 @@ mod tests {
         assert_eq!(status.get_i64("missing").unwrap_or_default(), 0_i64);
         // Present slot composes to the projected counter.
         assert_eq!(status.get_i64("succeeded").unwrap_or_default(), 4_i64);
+    }
+
+    // ─── ValueGetExt::get_str substrate pins ─────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `ValueGetExt::get_str`
+    // trait method did not exist before this commit, so each test below
+    // fails to compile pre-lift. Post-lift they collectively pin the
+    // paired READ-shape at ONE substrate owner — a regression that
+    // narrowed the projection to the wrong variant (accepting
+    // `Value::Number`-stringified slots via a fallback, or accepting
+    // `Value::Null` as `Some("")`), swapped the slot lookup to
+    // `.pointer(<key>)` (losing the direct-child semantics), promoted
+    // an absent slot to `Some("")` (silently paving over a missing
+    // required slot), or drifted the receiver-non-object arm from
+    // `None` (silently synthesising an empty string on a null status
+    // blob) surfaces HERE rather than as silent operator-facing skew
+    // across the SEVEN pre-lift consumers (`status::from_json`'s four
+    // rendered-resource coordinate reads + `ssapply::ready_condition_value`'s
+    // three K8s Condition slot reads).
+
+    #[test]
+    fn get_str_present_string_slot_returns_the_slice() {
+        // Primary Ok-arm invariant: a `Value::String(s)` present at the
+        // slot projects to `Some(s.as_str())`. Sweeps the four
+        // representative slots the pre-lift `RenderedResourceCoords::
+        // from_json` consumer walked (`apiVersion`, `kind`,
+        // `metadata.name`, `metadata.namespace`) so a regression at
+        // ONE axis surfaces here rather than at the downstream
+        // typed row's coordinate.
+        let manifest = json!({
+            "apiVersion": "helm.toolkit.fluxcd.io/v2",
+            "kind": "HelmRelease",
+            "name": "demo-app",
+            "namespace": "demo",
+        });
+        assert_eq!(
+            manifest.get_str("apiVersion"),
+            Some("helm.toolkit.fluxcd.io/v2"),
+        );
+        assert_eq!(manifest.get_str("kind"), Some("HelmRelease"));
+        assert_eq!(manifest.get_str("name"), Some("demo-app"));
+        assert_eq!(manifest.get_str("namespace"), Some("demo"));
+    }
+
+    #[test]
+    fn get_str_absent_slot_returns_none() {
+        // Absent-slot corner: a rendered manifest whose author forgot
+        // the `apiVersion` slot (a common authoring bug) MUST return
+        // `None` so `RenderedResourceCoords::from_json` fails loud
+        // rather than silently synthesising an empty apiVersion. A
+        // regression that returned `Some("")` on the absent corner
+        // would collapse the "not authored" ↔ "authored empty"
+        // distinction the fail-loud gate depends on.
+        let manifest = json!({ "kind": "HelmRelease" });
+        assert_eq!(manifest.get_str("apiVersion"), None);
+        assert_eq!(manifest.get_str("any_missing_key"), None);
+    }
+
+    #[test]
+    fn get_str_present_but_non_string_slot_returns_none() {
+        // Present-but-non-string corner: a `Value::Number`,
+        // `Value::Bool`, `Value::Object`, `Value::Array`, or
+        // `Value::Null` at the slot ALL fall through to `None` —
+        // matches the pre-lift `.and_then(|v| v.as_str())` chain
+        // exactly. A regression that stringified a `Value::Number`
+        // (adding a `to_string()` fallback) would silently accept a
+        // malformed manifest whose author numeric-typed a
+        // conventionally-string slot.
+        let manifest = json!({
+            "numeric": 1,
+            "boolean": true,
+            "object": {},
+            "array": [],
+            "null_valued": null,
+        });
+        assert_eq!(manifest.get_str("numeric"), None);
+        assert_eq!(manifest.get_str("boolean"), None);
+        assert_eq!(manifest.get_str("object"), None);
+        assert_eq!(manifest.get_str("array"), None);
+        assert_eq!(manifest.get_str("null_valued"), None);
+    }
+
+    #[test]
+    fn get_str_empty_string_slot_survives_the_projection() {
+        // Empty-string corner: a `Value::String("")` present at the
+        // slot MUST project to `Some("")` — matches the pre-lift
+        // `.and_then(|v| v.as_str())` chain exactly, keeping the
+        // "authored empty" arm distinct from the "not authored" arm
+        // upstream. A regression that promoted `Some("")` to `None`
+        // under a "reject empty strings" refactor would silently
+        // collapse the two arms and turn a valid empty `metadata.
+        // namespace` (a cluster-scoped resource) into a fail-loud
+        // error at the required-slot gates.
+        let manifest = json!({ "namespace": "" });
+        assert_eq!(manifest.get_str("namespace"), Some(""));
+    }
+
+    #[test]
+    fn get_str_non_object_receiver_returns_none_verbatim() {
+        // Non-object receiver corner: a caller who reached this
+        // primitive on a `Value::Null` / `Value::Bool` / `Value::Array`
+        // handle (a malformed fetch response, an upstream default-value
+        // fallback, a `serde_json::Value::Null` metadata slot chained
+        // through `.and_then`) MUST get `None` back rather than a
+        // panic or a synthesized `Some("")`. Matches the pre-lift
+        // chain's behaviour: `Value::get` on a non-object receiver
+        // returns `None`, `and_then` short-circuits.
+        assert_eq!(Value::Null.get_str("any"), None);
+        assert_eq!(Value::Bool(true).get_str("any"), None);
+        assert_eq!(json!([1, 2, 3]).get_str("any"), None);
+        assert_eq!(json!("scalar").get_str("any"), None);
+    }
+
+    #[test]
+    fn get_str_matches_pre_lift_hand_authored_chain_shape() {
+        // Byte-shape parity pin: `<value>.get_str(<key>)` MUST return
+        // the SAME `Option<&str>` the pre-lift hand-authored
+        // `.get(<key>).and_then(|v| v.as_str())` chain produced.
+        // Sweeps every pre-lift-reachable input corner (three
+        // "value present" + three "value absent/malformed" arms every
+        // status.rs / ssapply.rs callsite reached) so a regression at
+        // the primitive that broke byte identity with the pre-lift
+        // chain at ONE corner surfaces here rather than as a
+        // per-slot divergence downstream.
+        let manifest = json!({
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "type": "Ready",
+            "numeric": 1,
+            "null_valued": null,
+        });
+        for key in [
+            "apiVersion",
+            "kind",
+            "type",
+            "numeric",
+            "null_valued",
+            "missing",
+        ] {
+            let via_primitive = manifest.get_str(key);
+            let via_pre_lift = manifest.get(key).and_then(|v| v.as_str());
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "corner `{key}` must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn get_str_composes_with_ok_or_else_at_from_json_shape() {
+        // Downstream composition pin: the canonical caller shape at
+        // `RenderedResourceCoords::from_json` is
+        // `<manifest>.get_str(<key>).ok_or_else(|| anyhow!("rendered
+        // resource missing X"))?.to_string()`. A regression that
+        // reshaped the return form (an `&str` bare default, a
+        // `Result<&str, _>` fallible arm) would break this
+        // composition. Additionally sweeps the peer
+        // `.map(String::from)` / `.map(str::to_string)` optional-slot
+        // arm the `namespace` slot uses.
+        let manifest = json!({ "apiVersion": "v1" });
+        let ok_arm: String = manifest
+            .get_str("apiVersion")
+            .ok_or_else(|| anyhow::anyhow!("missing"))
+            .unwrap()
+            .to_string();
+        assert_eq!(ok_arm, "v1");
+        let err_arm = manifest
+            .get_str("kind")
+            .ok_or_else(|| anyhow::anyhow!("rendered resource missing kind"))
+            .unwrap_err();
+        assert_eq!(format!("{err_arm}"), "rendered resource missing kind");
+        let opt_present: Option<String> = manifest.get_str("apiVersion").map(str::to_string);
+        assert_eq!(opt_present.as_deref(), Some("v1"));
+        let opt_absent: Option<String> = manifest.get_str("kind").map(String::from);
+        assert!(opt_absent.is_none());
+    }
+
+    #[test]
+    fn get_str_return_lifetime_borrows_receiver_not_owned() {
+        // Return-lifetime pin: the `&str` MUST borrow the receiver's
+        // buffer rather than a fresh owned `String`. A regression that
+        // reshaped the return to `Option<String>` (adding a
+        // `to_string()` inside the primitive) would inflate every
+        // callsite's allocation count and break `metadata.and_then(|m|
+        // m.get_str("name"))`'s per-lookup zero-alloc guarantee. Bind
+        // the invariant structurally: the borrow reaches back through
+        // the receiver.
+        let manifest = json!({ "apiVersion": "helm.toolkit.fluxcd.io/v2" });
+        let s: &str = manifest.get_str("apiVersion").unwrap();
+        let raw: &str = manifest.get("apiVersion").and_then(|v| v.as_str()).unwrap();
+        assert!(std::ptr::eq(s.as_ptr(), raw.as_ptr()));
+    }
+
+    #[test]
+    fn get_str_axis_family_reaches_i64_and_str_through_one_trait_import() {
+        // Axis-family pin: a caller who imports `ValueGetExt` reaches
+        // BOTH the string axis (`get_str`) and the integer axis
+        // (`get_i64`) through the SAME trait handle. A regression that
+        // opened a peer `ValueGetStrExt` (or a peer trait per axis)
+        // would break this — the caller would have to import each
+        // trait separately and a partial import would silently miss
+        // one axis at method-resolution time.
+        //
+        // Structurally: a bound `T: ValueGetExt` reaches both methods.
+        fn probe<T: ValueGetExt>(t: &T) -> (Option<i64>, Option<&str>) {
+            (t.get_i64("n"), t.get_str("s"))
+        }
+        let mixed = json!({ "n": 7, "s": "hello" });
+        let (n, s) = probe(&mixed);
+        assert_eq!(n, Some(7));
+        assert_eq!(s, Some("hello"));
     }
 }

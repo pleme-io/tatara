@@ -12,7 +12,9 @@ use serde_json::{json, Value};
 use tatara_process::annotations;
 use tatara_process::anyhow_flatten::FlattenCtxExt;
 use tatara_process::flux_resource::FluxResource;
-use tatara_process::json_object::{JsonMapObjectEntryExt, JsonMapStrExt, ValueObjectExt};
+use tatara_process::json_object::{
+    JsonMapObjectEntryExt, JsonMapStrExt, ValueGetExt, ValueObjectExt,
+};
 use tatara_process::k8s_wire_identity::K8sWireIdentity;
 use tatara_process::kube_error::KubeResultExt;
 use tatara_process::prelude::{FluxResourceRef, Process, RenderedResourceCoords};
@@ -1104,17 +1106,26 @@ pub fn ready_condition_value(data: &Value) -> ReadyState {
         return ReadyState::Unknown;
     };
     for c in conditions {
-        let Some(typ) = c.get("type").and_then(|v| v.as_str()) else {
+        // Three `.get(<key>).and_then(|v| v.as_str())` READ chains
+        // (`type`, `status`, `message`) now route through the ONE
+        // substrate primitive
+        // `tatara_process::json_object::ValueGetExt::get_str` — the
+        // string-axis sibling of `get_i64` on the same
+        // `.get(<key>).and_then(|v| v.as_<T>())` READ-chain axis-family.
+        // Pre-lift each Condition-slot read hand-wrote the paired
+        // chain; post-lift the projection lives at ONE typed owner and
+        // every K8s-Condition classifier (Deployment `Available`, HPA
+        // `AbleToScale`, StatefulSet `Ready`) inherits normalizations
+        // at the substrate.
+        let Some(typ) = c.get_str("type") else {
             continue;
         };
         if typ != "Ready" {
             continue;
         }
-        return match c.get("status").and_then(|v| v.as_str()) {
+        return match c.get_str("status") {
             Some("True") => ReadyState::Ready,
-            Some("False") => {
-                ReadyState::NotReady(c.get("message").and_then(|v| v.as_str()).map(String::from))
-            }
+            Some("False") => ReadyState::NotReady(c.get_str("message").map(String::from)),
             _ => ReadyState::Unknown,
         };
     }

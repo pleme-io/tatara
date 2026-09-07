@@ -7,6 +7,7 @@ use serde_json::Value;
 
 use crate::boundary::Condition;
 use crate::crd::Process;
+use crate::json_object::ValueGetExt;
 
 /// Standard K8s Condition (shape of `metav1.Condition`).
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -382,25 +383,31 @@ impl RenderedResourceCoords {
     /// missing X"` in `apply_owned` vs `"rendered resource missing
     /// X"` in `flux_ref_from_json`).
     pub fn from_json(res: &Value) -> anyhow::Result<Self> {
+        // Four `.get(<key>).and_then(|v| v.as_str())` READ chains
+        // (`apiVersion`, `kind`, `metadata.name`, `metadata.namespace`)
+        // now route through the ONE substrate primitive
+        // `crate::json_object::ValueGetExt::get_str` — the string-axis
+        // sibling of `get_i64` on the same
+        // `.get(<key>).and_then(|v| v.as_<T>())` READ-chain axis-family.
+        // A future normalization (Unicode NFC-fold, whitespace trim,
+        // empty-string rejection) lands at the substrate primitive and
+        // every downstream `apiVersion` / `kind` /
+        // `metadata.{name,namespace}` reader inherits it mechanically.
         let api_version = res
-            .get("apiVersion")
-            .and_then(|v| v.as_str())
+            .get_str("apiVersion")
             .ok_or_else(|| anyhow::anyhow!("rendered resource missing apiVersion"))?
             .to_string();
         let kind = res
-            .get("kind")
-            .and_then(|v| v.as_str())
+            .get_str("kind")
             .ok_or_else(|| anyhow::anyhow!("rendered resource missing kind"))?
             .to_string();
         let metadata = res.get("metadata");
         let name = metadata
-            .and_then(|m| m.get("name"))
-            .and_then(|v| v.as_str())
+            .and_then(|m| m.get_str("name"))
             .ok_or_else(|| anyhow::anyhow!("rendered resource missing metadata.name"))?
             .to_string();
         let namespace = metadata
-            .and_then(|m| m.get("namespace"))
-            .and_then(|v| v.as_str())
+            .and_then(|m| m.get_str("namespace"))
             .map(str::to_string);
         Ok(Self {
             api_version,

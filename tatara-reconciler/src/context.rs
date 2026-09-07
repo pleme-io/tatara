@@ -253,7 +253,7 @@ mod tests {
         let api = ctx().process_api("default");
         let url = api.resource_url();
         assert!(
-            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            url.starts_with(&tatara_process::api_url_prefix()),
             "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
         );
         assert!(
@@ -284,7 +284,8 @@ mod tests {
         );
         // Both urls agree on the group/version/collection axes; only
         // the namespace slot differs.
-        for slot in ["/apis/tatara.pleme.io/v1alpha1/", "/processes"] {
+        let api_prefix = tatara_process::api_url_prefix();
+        for slot in [api_prefix.as_str(), "/processes"] {
             assert!(
                 a.resource_url().contains(slot) && b.resource_url().contains(slot),
                 "both context-sourced Apis must target the same collection slot {slot:?}; got {} vs {}",
@@ -357,7 +358,7 @@ mod tests {
         let api = ctx().process_table_api();
         let url = api.resource_url();
         assert!(
-            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            url.starts_with(&tatara_process::api_url_prefix()),
             "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
         );
         assert!(
@@ -458,7 +459,7 @@ mod tests {
         let api = ctx().processes_all_api();
         let url = api.resource_url();
         assert!(
-            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            url.starts_with(&tatara_process::api_url_prefix()),
             "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
         );
         assert!(

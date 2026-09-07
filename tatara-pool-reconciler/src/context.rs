@@ -269,7 +269,7 @@ mod tests {
         let api = ctx().pool_api("default");
         let url = api.resource_url();
         assert!(
-            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            url.starts_with(&tatara_process::api_url_prefix()),
             "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
         );
         assert!(
@@ -315,7 +315,7 @@ mod tests {
         let api = ctx().allocation_api("default");
         let url = api.resource_url();
         assert!(
-            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            url.starts_with(&tatara_process::api_url_prefix()),
             "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
         );
         assert!(
@@ -349,7 +349,7 @@ mod tests {
         let api = ctx().process_api("default");
         let url = api.resource_url();
         assert!(
-            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            url.starts_with(&tatara_process::api_url_prefix()),
             "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
         );
         assert!(
@@ -414,7 +414,8 @@ mod tests {
         // version + namespace slots — only the terminal collection
         // differs.
         let c = ctx();
-        for slot in ["/apis/tatara.pleme.io/v1alpha1/", "/namespaces/shared-ns/"] {
+        let api_prefix = tatara_process::api_url_prefix();
+        for slot in [api_prefix.as_str(), "/namespaces/shared-ns/"] {
             for url in [
                 c.pool_api("shared-ns").resource_url().to_string(),
                 c.allocation_api("shared-ns").resource_url().to_string(),
@@ -467,7 +468,7 @@ mod tests {
         let api = ctx().pools_all_api();
         let url = api.resource_url();
         assert!(
-            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            url.starts_with(&tatara_process::api_url_prefix()),
             "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
         );
         assert!(
@@ -493,7 +494,7 @@ mod tests {
         let api = ctx().allocations_all_api();
         let url = api.resource_url();
         assert!(
-            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            url.starts_with(&tatara_process::api_url_prefix()),
             "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
         );
         assert!(

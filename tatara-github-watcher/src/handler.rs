@@ -308,7 +308,7 @@ mod tests {
             let api = state.allocation_api();
             let url = api.resource_url();
             assert!(
-                url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+                url.starts_with(&tatara_process::api_url_prefix()),
                 "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
             );
             assert!(

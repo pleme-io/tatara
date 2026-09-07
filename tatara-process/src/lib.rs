@@ -171,6 +171,42 @@ pub fn api_version() -> String {
     format!("{GROUP}/{VERSION}")
 }
 
+/// Canonical `/apis/<GROUP>/<VERSION>/` prefix as an owned `String` —
+/// the ONE K8s REST-path shape every typed `Api::namespaced` /
+/// `Api::all` primitive built off a tatara CRD kind (`Process`,
+/// `ProcessTable`, `EphemeralPool`, `EphemeralAllocation`) emits at
+/// [`kube::Api::resource_url`]. Peer to [`api_version`] — composed
+/// from the SAME [`GROUP`] + [`VERSION`] pair, wrapped in the fixed
+/// `/apis/{…}/` HTTP-path envelope that the K8s API server exposes
+/// every custom-resource group under.
+///
+/// Pre-lift the wire-form literal `"/apis/tatara.pleme.io/v1alpha1/"`
+/// recurred at ELEVEN hand-authored sites across three separate test
+/// modules — six across `tatara-reconciler::context` (`process_api`,
+/// `process_table_api`, `processes_all_api` scope pins), four across
+/// `tatara-pool-reconciler::context` (`pool_api`, `allocation_api`,
+/// `pools_all_api`, `allocations_all_api` scope pins), and one at
+/// `tatara-github-watcher::handler` (`allocation_api` scope pin) —
+/// each restating the same URL prefix a bump of `GROUP` or `VERSION`
+/// would silently miss at every one. Post-lift each of the eleven
+/// sites composes the prefix through this substrate function, so a
+/// future group rename or `v1alpha1` → `v1beta1` bump lands at ONE
+/// composer and the eleven downstream scope guards inherit the shape
+/// mechanically.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// proofs. A regression that drifted the URL prefix at ONE site (a
+/// group typo, a `/apis/` → `/api/` mis-spelling, a stale `v1alpha1`
+/// left behind after a workspace-wide `VERSION` bump) surfaces at the
+/// [`api_url_prefix_tests`] pins below rather than as silent
+/// scope-guard drift between the three reconciler + watcher test
+/// suites (which pre-lift already disagreed with each other on
+/// nothing but were free to drift independently).
+#[must_use]
+pub fn api_url_prefix() -> String {
+    format!("/apis/{GROUP}/{VERSION}/")
+}
+
 /// Substrate-primitive composer for the canonical
 /// **namespace-qualified process reference** — the `<ns>/<name>`
 /// string every consumer that grepped, keyed, or annotated a
@@ -907,6 +943,50 @@ mod owner_reference_tests {
         // future VERSION bump that missed this test would land as
         // an operator-visible reference-mismatch after apply.
         assert_eq!(api_version(), "tatara.pleme.io/v1alpha1");
+    }
+
+    #[test]
+    fn api_url_prefix_composes_apis_group_version_slash() {
+        // Composition pin: any bump of GROUP or VERSION lands at
+        // ONE composer.
+        assert_eq!(super::api_url_prefix(), format!("/apis/{GROUP}/{VERSION}/"));
+    }
+
+    #[test]
+    fn api_url_prefix_byte_matches_wire_form_pre_lift() {
+        // Byte-identity pin: the frozen wire-form literal
+        // `"/apis/tatara.pleme.io/v1alpha1/"` that eleven
+        // hand-authored scope guards across `tatara-reconciler::
+        // context`, `tatara-pool-reconciler::context`, and
+        // `tatara-github-watcher::handler` restated pre-lift must
+        // equal the composed shape now sourced through the ONE
+        // owner. A future group rename or VERSION bump that missed
+        // this pin would land as a silent scope-guard mismatch at
+        // every downstream Api-primitive test.
+        assert_eq!(super::api_url_prefix(), "/apis/tatara.pleme.io/v1alpha1/");
+    }
+
+    #[test]
+    fn api_url_prefix_carries_api_version_between_apis_and_trailing_slash() {
+        // Cross-primitive pin: the URL prefix and the `apiVersion`
+        // wire form share the SAME `<GROUP>/<VERSION>` shape,
+        // wrapped by the fixed `/apis/…/` HTTP-path envelope. A
+        // regression that drifted the two composers apart (a bump
+        // that missed one of the two owners) surfaces here rather
+        // than as an operator-visible mismatch between an emitted
+        // ownerReference's `apiVersion` and the REST url every typed
+        // `Api` primitive routes through.
+        let prefix = super::api_url_prefix();
+        let version = api_version();
+        assert!(
+            prefix.starts_with("/apis/") && prefix.ends_with('/'),
+            "prefix must be wrapped as `/apis/…/`; got {prefix}"
+        );
+        let inner = &prefix["/apis/".len()..prefix.len() - 1];
+        assert_eq!(
+            inner, version,
+            "prefix inner slot must equal api_version(); got inner={inner:?} version={version:?}"
+        );
     }
 
     #[test]

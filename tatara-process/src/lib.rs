@@ -160,16 +160,118 @@ pub const VERSION: &str = "v1alpha1";
 /// [ownref]: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
 pub const PROCESS_KIND: &str = "Process";
 
+/// Canonical `<GROUP>/<VERSION>` `apiVersion` string as a compile-time
+/// `&'static str` — the ONE typed wire-form binding every tatara CRD
+/// stamps on its own `apiVersion` slot.
+///
+/// Peer to [`GROUP`] + [`VERSION`] on the CRD-group×version axis:
+/// where those two consts own the group segment + the version segment
+/// separately (each addressable in its own right — the [`api_url_prefix`]
+/// composer weaves them into the REST-URL envelope, `#[kube(group = ...,
+/// version = ...)]` derive slots on every tatara CRD struct address
+/// them individually), this const owns the two-segment compose product
+/// every wire-form emit — every K8s `apiVersion:` slot the reconciler
+/// stamps + every [`PROCESS_WIRE_IDENTITY`] projection — routes
+/// through.
+///
+/// Byte-shape pinned against `format!("{GROUP}/{VERSION}")` by
+/// [`owner_reference_tests::api_version_const_composes_group_and_version_bytewise`]
+/// so a rename of [`GROUP`] or a version bump on [`VERSION`] that
+/// missed the const surfaces HERE rather than as silent SSA-apply
+/// skew at every downstream OwnerReference / apiVersion-slot emit
+/// site.
+///
+/// Sibling to the runtime [`api_version`] fn — [`API_VERSION`] is the
+/// `&'static str` typed form (const-callable, feeds
+/// [`PROCESS_WIRE_IDENTITY`]); [`api_version`] returns
+/// [`API_VERSION`]`.to_string()` for owned-String call sites (SSA
+/// re-injection helpers that thread the `apiVersion` slot through a
+/// per-site cloned map).
+pub const API_VERSION: &str = "tatara.pleme.io/v1alpha1";
+
+/// Typed K8s wire-form identity of the tatara `Process` CRD — the
+/// [`k8s_wire_identity::K8sWireIdentity`] projection carrying
+/// `(apiVersion, kind) = (API_VERSION, PROCESS_KIND)` at ONE
+/// compile-time `const`.
+///
+/// Peer on the K8s-wire-form-identity axis-family to the three
+/// pre-existing closed-set `.wire_identity()` projections:
+///
+/// * [`k8s_builtin_resource::K8sBuiltinResource::wire_identity`] owns
+///   the K8s built-in axis (`Job` / `ConfigMap`) — the resources the
+///   reconciler fetches from Kubernetes itself.
+/// * [`flux_resource::FluxResource::wire_identity`] owns the
+///   FluxCD-controller axis (`Kustomization` / `HelmRelease` /
+///   `OCIRepository`).
+/// * [`routing_edge_resource::RoutingEdgeResource::wire_identity`]
+///   owns the routing-edge axis (`Ingress` / `DNSEndpoint`).
+/// * [`PROCESS_WIRE_IDENTITY`] (this const) owns the tatara `Process`
+///   CRD's own wire-form identity — pre-lift the fourth arm was the
+///   open corner every peer closed-set called out in its own docs as
+///   "the tatara `Process` CRD's `(apiVersion, kind)` pair" but which
+///   itself lived only as two disjoint consts + a runtime
+///   [`api_version`] fn threaded through the [`owner_reference_json`]
+///   composer's hand-inlined `json!` slots.
+///
+/// Together the four owners partition every K8s wire-form identity
+/// the workspace's reconcilers reach at run time; the pin
+/// [`owner_reference_tests::process_wire_identity_is_disjoint_from_every_peer_wire_form_axis`]
+/// binds the four axes pairwise-distinct at fail-before-pass-after
+/// granularity so a future variant addition on any peer that
+/// accidentally overlapped this pair (a hypothetical
+/// `K8sBuiltinResource::Process` copy-paste, a Flux-side `Process`
+/// naming collision) surfaces at that pin rather than as silent
+/// cross-axis ambiguity at every reconciler dispatch.
+///
+/// Consumed by [`owner_reference_json`] via
+/// [`k8s_wire_identity::K8sWireIdentity::resource_json`] — pre-lift
+/// the OwnerReference composer hand-inlined the (apiVersion, kind)
+/// pair as two adjacent `json!` slots referencing [`api_version`] +
+/// [`PROCESS_KIND`] separately, leaving a silent-drift path where a
+/// copy-paste that dropped ONE reference (an `apiVersion` bump that
+/// missed the sibling `kind`, a rename of one const that didn't
+/// touch the other) would emit an OwnerReference no K8s controller
+/// recognizes (a 404 at wire time diagnosed as a broken CRD). Post-
+/// lift the emit routes through the ONE typed pair, and the drift
+/// trap is unrepresentable — a caller cannot skew the two slots
+/// because the composer takes the identity as a single struct.
+///
+/// A future consumer of the tatara `Process` wire-form identity — a
+/// second OwnerReference emit site (P3 kenshi-runner's
+/// `TestSuiteBinding` owner-ref, a P1 caixa-tatara-emitted
+/// `HelmRelease`'s parent-Process reference), a future admission-
+/// webhook that filters on the CRD's `(apiVersion, kind)` pair, a
+/// fleet-wide audit walker enumerating every tatara-owned resource —
+/// reads through this ONE const rather than re-composing the pair
+/// from [`API_VERSION`] + [`PROCESS_KIND`] separately.
+///
+/// Theory grounding: THEORY.md §II.1 invariant 5 — composition
+/// preserves proofs. The two-slot (apiVersion, kind) composition
+/// lives at ONE typed algebra projection here; a regression that
+/// drifted either slot surfaces at this module's pins rather than as
+/// silent operator-visible OwnerReference skew. THEORY.md §III —
+/// typescape. The typed [`k8s_wire_identity::K8sWireIdentity`] pair
+/// bounds the axis of variation at the type level — a callsite that
+/// receives a `K8sWireIdentity` cannot skew the two slots at compose
+/// time.
+pub const PROCESS_WIRE_IDENTITY: k8s_wire_identity::K8sWireIdentity =
+    k8s_wire_identity::K8sWireIdentity::new(API_VERSION, PROCESS_KIND);
+
 /// Canonical `<GROUP>/<VERSION>` as an owned `String` — the ONE
-/// K8s `apiVersion` shape every tatara CRD stamps. Composed from
-/// [`GROUP`] + [`VERSION`] so a bump of either constant lands here
-/// exactly once; pre-lift, two `tatara-reconciler` sites hand-wrote
+/// K8s `apiVersion` shape every tatara CRD stamps. Delegates to the
+/// compile-time [`API_VERSION`] const so a bump of [`GROUP`] or
+/// [`VERSION`] that missed the const surfaces at
+/// [`owner_reference_tests::api_version_const_composes_group_and_version_bytewise`]
+/// rather than as silent skew between the runtime fn and the typed
+/// [`PROCESS_WIRE_IDENTITY`] const that shares the same wire form.
+///
+/// Pre-lift, two `tatara-reconciler` sites hand-wrote
 /// `format!("{}/{}", tatara_process::GROUP, tatara_process::VERSION)`
 /// while a third inlined the literal `"tatara.pleme.io/v1alpha1"`,
-/// opening a silent drift path if `VERSION` ever advances past
-/// `v1alpha1`.
+/// opening a silent drift path if [`VERSION`] ever advances past
+/// `v1alpha1`; both are covered by the ONE substrate owner here.
 pub fn api_version() -> String {
-    format!("{GROUP}/{VERSION}")
+    API_VERSION.to_string()
 }
 
 /// Canonical `/apis/<GROUP>/<VERSION>/` prefix as an owned `String` —
@@ -288,14 +390,26 @@ pub fn qualified_process_ref(ns: &str, name: &str) -> String {
 ///
 /// [ownref]: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
 pub fn owner_reference_json(name: &str, uid: &str) -> serde_json::Value {
-    serde_json::json!({
-        "apiVersion": api_version(),
-        "kind": PROCESS_KIND,
+    // Route the (apiVersion, kind) pair through the ONE typed
+    // wire-identity const [`PROCESS_WIRE_IDENTITY`] via
+    // [`k8s_wire_identity::K8sWireIdentity::resource_json`] — the
+    // composer stamps the identity slots on top of the caller's
+    // 4-slot extras map (name / uid / controller / blockOwnerDeletion)
+    // and the identity slots win over any accidental extras collision
+    // by construction. Pre-lift the two identity slots were hand-
+    // inlined as adjacent `json!` slots referencing `api_version()` +
+    // `PROCESS_KIND` separately, so a copy-paste that dropped one
+    // reference (or drifted one const under a group rename) would
+    // silently emit an OwnerReference no K8s controller recognizes.
+    // Post-lift the wire-form pair binds structurally at ONE typed
+    // [`PROCESS_WIRE_IDENTITY`] const and the drift trap is
+    // unrepresentable.
+    PROCESS_WIRE_IDENTITY.resource_json(serde_json::json!({
         "name": name,
         "uid": uid,
         "controller": true,
         "blockOwnerDeletion": true,
-    })
+    }))
 }
 
 /// Substrate-primitive builder for a Process-owned resource's
@@ -925,14 +1039,197 @@ mod owner_reference_tests {
     //! composed `format!("{}/{}", GROUP, VERSION)` at two sites and
     //! the frozen literal `"tatara.pleme.io/v1alpha1"` at the third).
     use super::{
-        api_version, owner_reference_json, owner_references_json, GROUP, PROCESS_KIND, VERSION,
+        api_version, owner_reference_json, owner_references_json, API_VERSION, GROUP, PROCESS_KIND,
+        PROCESS_WIRE_IDENTITY, VERSION,
     };
+    use crate::flux_resource::FluxResource;
+    use crate::k8s_builtin_resource::K8sBuiltinResource;
+    use crate::k8s_wire_identity::K8sWireIdentity;
+    use crate::routing_edge_resource::RoutingEdgeResource;
     use serde_json::json;
 
     #[test]
     fn api_version_composes_group_and_version() {
         // Any bump of GROUP or VERSION lands at ONE composer.
         assert_eq!(api_version(), format!("{GROUP}/{VERSION}"));
+    }
+
+    // ─── API_VERSION const substrate pins ───────────────────────────
+    //
+    // The compile-time `&'static str` [`API_VERSION`] const feeds the
+    // typed [`PROCESS_WIRE_IDENTITY`] const and delegates the runtime
+    // [`api_version`] fn — these pins bind the const at fail-before-
+    // pass-after granularity so a regression that drifted the const
+    // (a rename that touched [`GROUP`] but not the const's baked
+    // literal, a VERSION bump that only updated [`VERSION`]) surfaces
+    // HERE rather than as silent operator-facing skew between the
+    // typed-const consumers and the fn-based consumers on the same
+    // wire-form axis.
+
+    #[test]
+    fn api_version_const_composes_group_and_version_bytewise() {
+        // Cross-const coherence pin: the compile-time [`API_VERSION`]
+        // must be byte-identical to the runtime `format!("{GROUP}/
+        // {VERSION}")` composition. A regression that drifted either
+        // the const or the two segment consts would surface HERE
+        // rather than as silent skew between [`PROCESS_WIRE_IDENTITY`]
+        // (which composes over the const) and [`api_url_prefix`]
+        // (which composes over the two segment consts at runtime).
+        assert_eq!(API_VERSION, format!("{GROUP}/{VERSION}"));
+    }
+
+    #[test]
+    fn api_version_const_byte_matches_wire_form_pre_lift() {
+        // Byte-identity pin: the frozen wire-form literal is the SAME
+        // string every downstream consumer (the typed
+        // [`PROCESS_WIRE_IDENTITY`] const, the runtime [`api_version`]
+        // fn, every K8s `apiVersion:` slot the reconciler stamps)
+        // must emit. Peer of the pre-existing runtime pin
+        // [`api_version_byte_matches_wire_form_pre_lift`]; both close
+        // the axis at the SAME wire form.
+        assert_eq!(API_VERSION, "tatara.pleme.io/v1alpha1");
+    }
+
+    #[test]
+    fn api_version_fn_delegates_through_const_owner() {
+        // Routing pin: the runtime `api_version()` fn returns
+        // [`API_VERSION`]`.to_string()` — the ONE substrate owner of
+        // the wire-form literal. A regression that re-open-coded the
+        // fn's body (restoring the pre-lift `format!("{GROUP}/
+        // {VERSION}")` composition, or inlining a stale literal) would
+        // surface HERE rather than as silent skew between the two
+        // sibling emit paths (typed-const vs owned-String).
+        assert_eq!(api_version(), API_VERSION);
+    }
+
+    #[test]
+    fn api_version_const_is_reachable_at_compile_time() {
+        // Compile-time reachability pin: [`API_VERSION`] is a `const
+        // &'static str` so a caller can bind it into a `const` slot —
+        // exactly what [`PROCESS_WIRE_IDENTITY`] does through
+        // [`K8sWireIdentity::new`]'s `const fn`. A regression that
+        // widened the const to an owned `String` or a `Lazy<String>`
+        // would fail-loudly at this coercion rather than at the
+        // silent runtime-vs-const composition boundary at
+        // [`PROCESS_WIRE_IDENTITY`].
+        const AV: &str = API_VERSION;
+        assert_eq!(AV, "tatara.pleme.io/v1alpha1");
+    }
+
+    // ─── PROCESS_WIRE_IDENTITY substrate pins ───────────────────────
+    //
+    // The typed [`PROCESS_WIRE_IDENTITY`] const closes the fourth arm
+    // of the K8s-wire-form-identity axis-family (peer to
+    // [`K8sBuiltinResource::wire_identity`],
+    // [`FluxResource::wire_identity`],
+    // [`RoutingEdgeResource::wire_identity`]). These pins bind the
+    // const at fail-before-pass-after granularity so a regression that
+    // drifted either slot (an `apiVersion` slot that stopped routing
+    // through [`API_VERSION`], a `kind` slot that stopped routing
+    // through [`PROCESS_KIND`]) surfaces HERE rather than as silent
+    // OwnerReference-emit skew at every downstream consumer.
+
+    #[test]
+    fn process_wire_identity_pairs_api_version_and_kind_through_substrate_owners() {
+        // Slot-routing pin: both slots MUST route through the ONE
+        // substrate owner per slot ([`API_VERSION`] for the
+        // `apiVersion` slot, [`PROCESS_KIND`] for the `kind` slot).
+        // A regression that re-inlined either slot's literal at the
+        // const declaration would surface HERE rather than as silent
+        // skew between the wire-identity const and its slot owners.
+        assert_eq!(PROCESS_WIRE_IDENTITY.api_version, API_VERSION);
+        assert_eq!(PROCESS_WIRE_IDENTITY.kind, PROCESS_KIND);
+    }
+
+    #[test]
+    fn process_wire_identity_byte_matches_wire_form_pre_lift() {
+        // Byte-identity pin: the const's `(apiVersion, kind)` pair
+        // must equal the two frozen wire-form strings every pre-lift
+        // consumer hand-authored — a regression that drifted either
+        // slot would surface HERE rather than as a wire-time 404 the
+        // K8s API server would misdiagnose as a broken CRD.
+        assert_eq!(
+            PROCESS_WIRE_IDENTITY.api_version,
+            "tatara.pleme.io/v1alpha1"
+        );
+        assert_eq!(PROCESS_WIRE_IDENTITY.kind, "Process");
+    }
+
+    #[test]
+    fn process_wire_identity_is_const_reachable() {
+        // Compile-time reachability pin: [`PROCESS_WIRE_IDENTITY`] is
+        // a compile-time `const K8sWireIdentity` so a caller can bind
+        // it into a `const` slot. A regression that dropped the
+        // `const fn` qualifier on [`K8sWireIdentity::new`] or widened
+        // [`API_VERSION`] off the `&'static str` axis would fail-loudly
+        // HERE rather than as a runtime dispatch at every OwnerReference
+        // emit site.
+        const ID: K8sWireIdentity = PROCESS_WIRE_IDENTITY;
+        assert_eq!(ID.api_version, "tatara.pleme.io/v1alpha1");
+        assert_eq!(ID.kind, "Process");
+    }
+
+    #[test]
+    fn process_wire_identity_is_disjoint_from_every_peer_wire_form_axis() {
+        // Cross-substrate coherence pin: the tatara `Process` CRD's
+        // typed `(apiVersion, kind)` pair MUST NOT collide with any
+        // variant of the three peer closed-set axes on the K8s wire-
+        // form-identity axis-family
+        // ([`K8sBuiltinResource`] / [`FluxResource`] /
+        // [`RoutingEdgeResource`]) — a hypothetical variant addition
+        // on any peer that copy-pasted the tatara `Process` pair
+        // (a `FluxResource::Process` renaming collision, a
+        // `K8sBuiltinResource::Process` typo) would silently let a
+        // reconciler dispatch reach through the wrong closed set. Pin
+        // the disjointness so every future addition to any peer axis
+        // that would collide with this const surfaces HERE.
+        for k in K8sBuiltinResource::ALL {
+            assert_ne!(
+                (
+                    PROCESS_WIRE_IDENTITY.api_version,
+                    PROCESS_WIRE_IDENTITY.kind
+                ),
+                (k.api_version(), k.kind()),
+                "PROCESS_WIRE_IDENTITY must not share a wire-form pair with K8sBuiltinResource {k:?}"
+            );
+        }
+        for f in FluxResource::ALL {
+            assert_ne!(
+                (
+                    PROCESS_WIRE_IDENTITY.api_version,
+                    PROCESS_WIRE_IDENTITY.kind
+                ),
+                (f.api_version(), f.kind()),
+                "PROCESS_WIRE_IDENTITY must not share a wire-form pair with FluxResource {f:?}"
+            );
+        }
+        for r in RoutingEdgeResource::ALL {
+            assert_ne!(
+                (
+                    PROCESS_WIRE_IDENTITY.api_version,
+                    PROCESS_WIRE_IDENTITY.kind
+                ),
+                (r.api_version(), r.kind()),
+                "PROCESS_WIRE_IDENTITY must not share a wire-form pair with RoutingEdgeResource {r:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn owner_reference_json_routes_apiversion_and_kind_through_process_wire_identity() {
+        // Routing pin: the `owner_reference_json` composer's
+        // `(apiVersion, kind)` pair MUST match the typed
+        // [`PROCESS_WIRE_IDENTITY`] const's `(api_version, kind)`
+        // fields byte-for-byte. Post-lift the composer routes through
+        // [`K8sWireIdentity::resource_json`], so this equality holds
+        // by construction; a regression that re-open-coded the two
+        // slots at the composer body (restoring the pre-lift `json!`
+        // inline reference to `api_version()` + `PROCESS_KIND`
+        // separately) would surface HERE rather than as silent skew
+        // between the OwnerReference emit and the typed const owner.
+        let v = owner_reference_json("p", "u");
+        assert_eq!(v["apiVersion"], PROCESS_WIRE_IDENTITY.api_version);
+        assert_eq!(v["kind"], PROCESS_WIRE_IDENTITY.kind);
     }
 
     #[test]

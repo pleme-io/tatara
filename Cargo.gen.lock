@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "7f4cfd615e0045dba57dd5dfbdf963cef54718d02cd405960604c3f527677150",
+  "cargo_lock_sha256": "cf221dd244a657da4d720fe7fda6f251df6af6918746eb245dca54eb79779164",
   "manifest_sha256": {
     "Cargo.toml": "5e48404b6d349468269daf2f5b4f32a2f543faa94393a7a4fde69699df3afd99",
     "ro-cli/Cargo.toml": "2ced04a89b495ebfd22542e0b31ad4f4500d44a4a0a0465d2fdf14bc053530dd",
@@ -20,10 +20,10 @@
     "tatara-kube/Cargo.toml": "58e7ec45fb54fddb985bde8f440b48aac8d2210fb9970fb14a975b1d8597c141",
     "tatara-lattice/Cargo.toml": "2824e194c5dc4cffb6c09d11bc49831fcfdc044b1a430c15929b6462c9672682",
     "tatara-lisp-derive/Cargo.toml": "c93fe5fafe97a7f46f465c779b207b957fb03c92e593fd1974be3d2d8d617ad3",
-    "tatara-lisp/Cargo.toml": "a2efa63ca62e870f88a9ab554a8c1bdb8bb2a9771a5f17bd7d867bffcf297741",
+    "tatara-lisp/Cargo.toml": "c337354738668adc831e35ca3b1fcf53d7cc1ef1724592aa65c24e00aca06f8f",
     "tatara-mcp/Cargo.toml": "440588ce76923a7902356aa86292d1a50190a75bb91c75b7c14a18b7f675091c",
     "tatara-net/Cargo.toml": "ab7fa28c8d8ad4d843672fb63e96e7fdae5e151f07eb7930e59c32f659925a62",
-    "tatara-nix/Cargo.toml": "dfed556e9857ede67fcbed7d55eaf84743f00a0316ae383be240df12f71f259d",
+    "tatara-nix/Cargo.toml": "c3cddbd3ec6e06054d78e20a7e88e1945f60a560fb0ba1aa2a2081f629d5bedb",
     "tatara-operator/Cargo.toml": "f199eb6464d2c002bedbef7b5cb1a693f2d484ba042de9d429aba107ee8cac76",
     "tatara-os/Cargo.toml": "b4fa80f59595fb1147a9492af167e38758895cd003d7e1b43b14be0c2a5c38f3",
     "tatara-pkgs/Cargo.toml": "5f25a11a250cfa1f154640e2e81a95d001806dff4a708307c0be034eef082bca",
@@ -32,7 +32,7 @@
     "tatara-reconciler/Cargo.toml": "8c822db34d673e39b870a6f6b4582058ab9546714dd9cad580f7fd0a26ed35ad",
     "tatara-terreiro/Cargo.toml": "03b96b6ff1942cf97eb2c9c1b38c80258cdb56fbabe74b132d0048eb2020c053",
     "tatara-testing/Cargo.toml": "711da4ca4ce6b28b51af7b368442ea042079b9389defc0ce8691937712d51c49",
-    "tatara-ui/Cargo.toml": "fdffeeb69f118d8f310dd94b79a463facd905e0cfc0db192ee0a8f4126aaf45f",
+    "tatara-ui/Cargo.toml": "0ad37c9a69f854cfd53b674caf2972ff7fa02d0363e52b74762b3d0ce99c567c",
     "tatara-vm/Cargo.toml": "5d297b87076be28aa4d29df30176b7698d1e376e40ea90fcd273d6e184150a2c",
     "tatara-wasm/Cargo.toml": "f12f2c2a2c6bf54058cf359d7d75b37a9d4debcee3ee4675388f914bb6e3a353"
   },
@@ -17384,26 +17384,6 @@
       "tatara-nix-0.2.588": {
         "runtime_dependencies": [
           {
-            "name": "blake3",
-            "package_key": "blake3-1.8.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "hex",
-            "package_key": "hex-0.4.3",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
             "name": "serde",
             "package_key": "serde-1.0.228",
             "kind": "normal",
@@ -18831,26 +18811,6 @@
       },
       "tatara-ui-0.2.588": {
         "runtime_dependencies": [
-          {
-            "name": "blake3",
-            "package_key": "blake3-1.8.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "hex",
-            "package_key": "hex-0.4.3",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
           {
             "name": "libc",
             "package_key": "libc-0.2.186",

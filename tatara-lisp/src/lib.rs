@@ -32,6 +32,7 @@ pub mod diagnostic;
 pub mod domain;
 pub mod env;
 pub mod error;
+pub mod hash;
 pub mod macro_expand;
 pub mod reader;
 

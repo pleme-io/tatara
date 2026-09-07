@@ -10,8 +10,6 @@ license.workspace = true
 tatara-lisp = { path = "../tatara-lisp" , version = "0.3" }
 tatara-lisp-derive = { path = "../tatara-lisp-derive" , version = "0.3" }
 
-blake3 = "1"
-hex = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
@@ -19,3 +17,16 @@ owo-colors = "4"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+# Byte-shape parity pin for the `hash::hex_blake3_of_json` re-export
+# — asserts the delegate onto `tatara_lisp::hash::hex_blake3_of_json`
+# remains byte-identical to the pre-lift hand-authored
+# `hex::encode(blake3::hash(&bytes).as_bytes())` chain both in-crate
+# consumers (`ThemeSpec::id` + `EventStream::run_hash`) walked before
+# the substrate lift. Production code in this crate no longer reaches
+# for `blake3` or `hex` directly (the substrate does), so both demote
+# from `[dependencies]` to `[dev-dependencies]` where they exist ONLY
+# as test-only re-derivations feeding the parity assertion.
+blake3 = "1"
+hex = "0.4"

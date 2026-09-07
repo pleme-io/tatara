@@ -11,10 +11,6 @@ tatara-lisp = { path = "../tatara-lisp" , version = "0.3" }
 tatara-lisp-derive = { path = "../tatara-lisp-derive" , version = "0.3" }
 tatara-lattice = { path = "../tatara-lattice" , version = "0.2.65" }
 
-# Canonical hashing for StorePath + attestation
-blake3 = "1"
-hex = "0.4"
-
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -24,3 +20,19 @@ tempfile = "3"
 
 # Errors
 thiserror = "2"
+
+[dev-dependencies]
+# Byte-shape parity pin for the `store::StoreHash::of` post-lift
+# delegation to `tatara_lisp::hash::hex_blake3_of_json` — asserts the
+# substrate's `blake3::Hash::to_hex().to_string()` composition remains
+# byte-identical to the pre-lift `hex::encode(blake3::hash(&bytes)
+# .as_bytes())` hand-authored chain every downstream StorePath +
+# realize-cache slot walked. Production code in this crate no longer
+# reaches for `blake3` or `hex` directly (the substrate does), so both
+# demote from `[dependencies]` to `[dev-dependencies]` where they
+# exist ONLY as test-only re-derivations feeding the parity pin — a
+# future re-introduction of the two-line chain in this crate would
+# ALSO need to re-promote both deps, surfacing the drift at review
+# time rather than after ship.
+blake3 = "1"
+hex = "0.4"

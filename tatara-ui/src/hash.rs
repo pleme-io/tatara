@@ -1,4 +1,5 @@
-//! Substrate primitive over the `serde_json::to_vec(v)
+//! Thin delegate onto [`tatara_lisp::hash::hex_blake3_of_json`] — the
+//! workspace-wide ONE substrate owner of the `serde_json::to_vec(v)
 //! .unwrap_or_default()` + `hex::encode(blake3::hash(&bytes).as_bytes())`
 //! two-line chain every `T: Serialize` → BLAKE3-hex identity slot in
 //! this crate restated by hand pre-lift.
@@ -27,18 +28,33 @@
 //! `hex_blake3_of_json(self)` and the two-link chain lives at ONE
 //! substrate owner.
 //!
+//! ### Post-lift redirect (workspace-wide unification)
+//!
+//! Since a follow-up round routed `tatara-terreiro::compute_id` and
+//! `tatara-nix::store::StoreHash::of` — the third and fourth
+//! consumers of the same identity-projection shape — the substrate is
+//! now owned at `tatara_lisp::hash::hex_blake3_of_json`, upstream of
+//! every current consumer (`tatara-lisp` is depended on by every
+//! `#[derive(TataraDomain)]` crate). This function stays here as a
+//! thin re-export delegate so in-crate callsites keep their local
+//! `crate::hash::hex_blake3_of_json` spelling, but the composition is
+//! authored at the workspace root of the identity-projection axis.
+//! Production code in this crate no longer reaches for `blake3` or
+//! `hex` directly (the substrate does), so both demote to
+//! `[dev-dependencies]` in the manifest — a future re-introduction of
+//! the two-line chain here would ALSO need to re-promote both deps,
+//! surfacing the drift at review time.
+//!
 //! Sibling in shape to `tatara_process::hash::hex_blake3` (the flat
 //! `hex::encode(blake3::hash(bytes).as_bytes())` half — the byte-input
 //! projector without the `serde_json::to_vec` prefix) and to
 //! `tatara_process::three_pillar::pillar_bytes` (the `serde_json::to_vec
 //! (v).unwrap_or_default()` half — the value-to-bytes projector without
 //! the hex-BLAKE3 tail). Those two live in `tatara-process` because
-//! that crate owns the three-pillar attestation surface; this in-crate
-//! composer partitions the same shape by SITE (a UI-run identity, not
-//! a K8s process attestation pillar) so `tatara-ui` — a leaf CLI-UX
-//! crate that does not otherwise reach for `tatara-process`'s K8s
-//! surface — closes the composition here rather than dragging in the
-//! kube-rs + k8s-openapi transitive dep graph for a hash function.
+//! that crate owns the three-pillar attestation surface; the workspace-
+//! wide value-to-hex-BLAKE3 identity projector lives at
+//! `tatara_lisp::hash` because every downstream consumer already
+//! depends on `tatara-lisp` for its `#[derive(TataraDomain)]`.
 //!
 //! ### `T: Serialize + ?Sized`
 //!
@@ -71,10 +87,15 @@
 use serde::Serialize;
 
 /// The lowercase-64-hex BLAKE3 digest of `v`'s canonical JSON
-/// serialization — the ONE substrate owner of the two-line
+/// serialization — a thin delegate onto
+/// [`tatara_lisp::hash::hex_blake3_of_json`], the workspace-wide ONE
+/// substrate owner of the two-line
 /// `serde_json::to_vec(v).unwrap_or_default()` +
 /// `hex::encode(blake3::hash(&bytes).as_bytes())` chain every
-/// `T: Serialize` → identity-string projector in this crate walks.
+/// `T: Serialize` → identity-string projector walks. This re-export
+/// keeps in-crate callsites spelled as
+/// `crate::hash::hex_blake3_of_json` for locality while the byte-
+/// projection is authored at the workspace root.
 ///
 /// # Invariants
 ///
@@ -99,8 +120,7 @@ use serde::Serialize;
 /// the OBSERVABLE contract.
 #[must_use]
 pub fn hex_blake3_of_json<T: Serialize + ?Sized>(v: &T) -> String {
-    let bytes = serde_json::to_vec(v).unwrap_or_default();
-    hex::encode(blake3::hash(&bytes).as_bytes())
+    tatara_lisp::hash::hex_blake3_of_json(v)
 }
 
 #[cfg(test)]

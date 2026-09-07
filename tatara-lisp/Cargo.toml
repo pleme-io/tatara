@@ -31,6 +31,16 @@ blake3 = "1"
 # attestation + render cache reuse). Turn on with `--features iac-forge`.
 iac-forge = { version = "0.1", optional = true }
 
+[dev-dependencies]
+# Byte-shape parity pin for the `hash::hex_blake3_of_json` substrate
+# — asserts blake3's own `Hash::to_hex().to_string()` spelling is
+# byte-identical to the pre-lift `hex::encode(blake3::hash(_)
+# .as_bytes())` chain every downstream identity slot walked. Production
+# code in this crate does NOT reach for `hex`; the composer uses
+# `blake3::Hash::to_hex` directly, so `hex` stays a dev-only
+# regression-guard for the parity assertion.
+hex = "0.4"
+
 [features]
 default = []
 iac-forge = ["dep:iac-forge"]

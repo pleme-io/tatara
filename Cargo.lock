@@ -6185,6 +6185,7 @@ name = "tatara-lisp"
 version = "0.3.27"
 dependencies = [
  "blake3",
+ "hex",
  "iac-forge",
  "serde",
  "serde_json",

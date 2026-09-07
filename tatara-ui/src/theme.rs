@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
-use crate::palette::{Rgb, Role, RoleMap, NORD};
+use crate::palette::{Rgb, RoleMap, NORD};
 
 /// A theme is a named palette binding + sigil overrides + a BLAKE3-stable
 /// identity. Themes compose (`extends`) and snapshot to disk.

@@ -357,14 +357,15 @@ impl JsonMapObjectEntryExt for Map<String, Value> {
 ///
 /// The trait carries ONE method per typed READ axis; the axis-family
 /// is [`Self::get_i64`] (integer counters) + [`Self::get_str`]
-/// (string slots). Adding a new axis (a `get_bool` for `Value::Bool`,
-/// a `get_object` for `Value::Object`, a `get_array` for
-/// `Value::Array`) lands as ONE new method here + ONE impl arm,
-/// inheriting the naming, `#[must_use]`, and inline discipline the
-/// existing axes pin. Never open a peer trait for a new axis —
-/// keep every READ projection on the ONE substrate owner so a
-/// caller who imports `ValueGetExt` reaches every axis through the
-/// same trait handle.
+/// (string slots) + [`Self::get_array`] (JSON array slots). Adding a
+/// new axis (a `get_bool` for `Value::Bool`, a `get_object` for
+/// `Value::Object`, a `get_f64` for `Value::Number` truncated to
+/// `f64`) lands as ONE new method here + ONE impl arm, inheriting
+/// the naming, `#[must_use]`, and inline discipline the existing
+/// axes pin. Never open a peer trait for a new axis — keep every
+/// READ projection on the ONE substrate owner so a caller who
+/// imports `ValueGetExt` reaches every axis through the same trait
+/// handle.
 ///
 /// READ-side counterpart to the three MUTATION-side siblings already in
 /// this module — [`ValueObjectExt::as_object_mut_or`],
@@ -562,6 +563,97 @@ pub trait ValueGetExt {
     /// peers rather than as silent operator-facing drift).
     #[must_use = "a JSON &str projection that isn't bound swallows the slot entirely"]
     fn get_str(&self, key: &str) -> Option<&str>;
+
+    /// Look up `key` on this JSON object and project the returned
+    /// handle to `&Vec<Value>`; returns `None` when the slot is
+    /// absent, when the receiver is not a JSON object, or when the
+    /// slot's variant is not `Value::Array`.
+    ///
+    /// Array-axis sibling of [`Self::get_i64`] + [`Self::get_str`]
+    /// on the same `.get(<key>).and_then(|v| v.as_<T>())` READ-chain
+    /// axis-family. Pre-lift the two-link chain was hand-authored at
+    /// TWO production sites across two crates past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold:
+    ///
+    /// * `tatara-reconciler::ssapply::ready_condition_value` — the
+    ///   tail of the `data.get("status").and_then(|s|
+    ///   s.get("conditions")).and_then(|c| c.as_array())` walker that
+    ///   opens the K8s Condition classifier every DynamicObject
+    ///   readiness probe rides through.
+    /// * `tatara-closed-loop-probe::probe::count_jwks_keys` — the
+    ///   JWKS-response walker that counts issuer-side public keys off
+    ///   the `keys` slot for the closed-loop probe's per-run
+    ///   `jwks_key_count` diagnostic.
+    ///
+    /// Both sites walked the SAME two-link chain — `.get(<key>)` on a
+    /// `serde_json::Value` already known to be an object, then
+    /// `.and_then(|v| v.as_array())` on the returned `Option<&Value>`
+    /// — and composed different downstream tails (`Some(conditions)`
+    /// pattern-match on the reconciler side, `.map(|xs| xs.len() as
+    /// u64)` on the probe side). Post-lift each callsite reads
+    /// `<value>.get_array(<key>)` and the two-link READ chain lives at
+    /// ONE substrate owner here. The probe-side variant additionally
+    /// sheds the pre-lift `.get("keys").cloned()` allocation because
+    /// this primitive borrows through the receiver rather than
+    /// cloning.
+    ///
+    /// ### Naming — `get_array`, not `as_array` or `array_at`
+    ///
+    /// Same discipline as [`Self::get_i64`] + [`Self::get_str`] — the
+    /// trait method deliberately does NOT collide with
+    /// `serde_json::Value::as_array` (the inherent projection on a
+    /// single `Value` handle) nor with `serde_json::Value::get` (the
+    /// inherent slot-lookup returning `Option<&Value>`). A name
+    /// collision would let a caller who has [`ValueGetExt`] in scope
+    /// resolve to one of the inherent methods by accident (inherent
+    /// methods win over trait methods in method resolution) and
+    /// silently drop half of the paired chain. The `get_array(<key>)`
+    /// shape names the intent: look up the slot at `<key>`, project
+    /// the returned handle to `&Vec<Value>`, in ONE call.
+    ///
+    /// ### `#[must_use]`
+    ///
+    /// Every pre-lift consumer binds the returned `Option<&Vec<Value>>`
+    /// into a downstream `let Some(...) = ... else { return ... }`
+    /// short-circuit or a `.map(|xs| xs.len() as u64).unwrap_or(0)`
+    /// counter composition. Dropping the return silently discards the
+    /// projection entirely, which is never the intended semantic at
+    /// either pre-lift consumer.
+    ///
+    /// ### Return lifetime
+    ///
+    /// The `&Vec<Value>` borrows the same buffer the underlying
+    /// `Value::Array` variant owns; the `Option<&Vec<Value>>` is
+    /// bounded by the receiver's lifetime (`&'_ self`), so a caller
+    /// iterating the returned slice keeps the receiver borrowed.
+    /// Matches the pre-lift chain's own borrow shape (`v.as_array()`
+    /// borrows through the `&Value`), and in the probe.rs case
+    /// eliminates the pre-lift `.cloned()` on the intermediate
+    /// `Value` that only existed to sidestep the borrow.
+    ///
+    /// A future normalization on the projection — a rejection of
+    /// empty arrays as "the caller meant absent", an accept-scalar
+    /// coercion (a `Value::String` promoted to a one-element array),
+    /// a per-fleet cap on array length that short-circuits pathological
+    /// payloads — lands at THIS ONE substrate primitive and every
+    /// downstream K8s-Condition classifier / JWKS-array counter /
+    /// future array-slot reader inherits the upgrade mechanically.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the two-link `.get(<key>).and_then(|v| v.as_array())` chain
+    /// recurred at two production sites across two crates past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+    /// substrate owner here on the array axis of the same READ-chain
+    /// axis-family the `get_i64` + `get_str` siblings already own).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
+    /// regression that drifted the projection axis at ONE site would
+    /// silently pass every downstream composition and surface as a
+    /// wrong slot at operator-facing diagnostic wording; post-lift the
+    /// projection lives at ONE typed owner so a regression surfaces
+    /// at [`tests::get_array_present_array_slot_returns_the_slice`] /
+    /// peers rather than as silent operator-facing drift).
+    #[must_use = "a JSON array projection that isn't bound swallows the slot entirely"]
+    fn get_array(&self, key: &str) -> Option<&Vec<Value>>;
 }
 
 impl ValueGetExt for Value {
@@ -573,6 +665,11 @@ impl ValueGetExt for Value {
     #[inline]
     fn get_str(&self, key: &str) -> Option<&str> {
         self.get(key).and_then(Value::as_str)
+    }
+
+    #[inline]
+    fn get_array(&self, key: &str) -> Option<&Vec<Value>> {
+        self.get(key).and_then(Value::as_array)
     }
 }
 
@@ -1361,5 +1458,261 @@ mod tests {
         let (n, s) = probe(&mixed);
         assert_eq!(n, Some(7));
         assert_eq!(s, Some("hello"));
+    }
+
+    // ─── ValueGetExt::get_array substrate pins ───────────────────────
+    //
+    // Fail-before-pass-after granularity: the `ValueGetExt::get_array`
+    // trait method did not exist before this commit, so each test below
+    // fails to compile pre-lift. Post-lift they collectively pin the
+    // paired READ-shape at ONE substrate owner — a regression that
+    // narrowed the projection to the wrong variant (accepting an
+    // object slot via a `.values().collect()` synthesis, promoting an
+    // absent slot to `Some(&Vec::new())`), swapped the slot lookup to
+    // `.pointer(<key>)` (losing the direct-child semantics), or
+    // drifted the receiver-non-object arm from `None` (silently
+    // synthesising an empty array on a null status blob) surfaces
+    // HERE rather than as silent operator-facing skew across the two
+    // pre-lift consumers (`ssapply::ready_condition_value`'s
+    // `status.conditions` walker + `probe::count_jwks_keys`'s `keys`
+    // counter).
+
+    #[test]
+    fn get_array_present_array_slot_returns_the_slice() {
+        // Primary Ok-arm invariant: a `Value::Array` present at the
+        // slot projects to `Some(&Vec::new())`-shaped borrow. Sweeps
+        // the two representative shapes the pre-lift consumers walked
+        // (a K8s `status.conditions` array of Condition objects on the
+        // reconciler side; a JWKS `keys` array of key objects on the
+        // probe side).
+        let status = json!({
+            "conditions": [
+                { "type": "Ready", "status": "True" },
+                { "type": "Progressing", "status": "False" },
+            ],
+        });
+        let via = status.get_array("conditions").expect("Value::Array");
+        assert_eq!(via.len(), 2);
+        assert_eq!(via[0]["type"], "Ready");
+
+        let jwks = json!({
+            "keys": [
+                { "kty": "RSA", "kid": "1" },
+                { "kty": "RSA", "kid": "2" },
+                { "kty": "EC",  "kid": "3" },
+            ],
+        });
+        assert_eq!(
+            jwks.get_array("keys").map(Vec::len),
+            Some(3),
+            "probe count_jwks_keys composition must reach the same tail as pre-lift",
+        );
+    }
+
+    #[test]
+    fn get_array_absent_slot_returns_none() {
+        // Absent-slot corner: a fresh K8s status blob whose controller
+        // has not stamped `conditions` yet (the `data.get("status")`
+        // walker yields an object without the slot) MUST return
+        // `None` so the caller's `let Some(...) = ... else { return
+        // ReadyState::Unknown }` short-circuit fires. A regression that
+        // returned `Some(&Vec::new())` on the absent corner would
+        // silently drive the caller into an empty for-loop and skip
+        // the fail-safe.
+        let status = json!({});
+        assert_eq!(status.get_array("conditions"), None);
+        assert_eq!(status.get_array("any_missing_key"), None);
+    }
+
+    #[test]
+    fn get_array_present_but_non_array_slot_returns_none() {
+        // Present-but-non-array corner: a `Value::String`,
+        // `Value::Number`, `Value::Bool`, `Value::Object`, or
+        // `Value::Null` at the slot ALL fall through to `None` —
+        // matches the pre-lift `.and_then(|v| v.as_array())` chain
+        // exactly. A regression that wrapped a scalar in a single-
+        // element array under a "tolerant" refactor would silently
+        // accept a malformed status blob whose author collapsed the
+        // conditions array to a single scalar.
+        let status = json!({
+            "stringy": "ready",
+            "numeric": 1,
+            "boolean": true,
+            "object": { "nested": true },
+            "null_valued": null,
+        });
+        assert_eq!(status.get_array("stringy"), None);
+        assert_eq!(status.get_array("numeric"), None);
+        assert_eq!(status.get_array("boolean"), None);
+        assert_eq!(status.get_array("object"), None);
+        assert_eq!(status.get_array("null_valued"), None);
+    }
+
+    #[test]
+    fn get_array_empty_array_slot_survives_the_projection() {
+        // Empty-array corner: a `Value::Array` with zero elements at
+        // the slot MUST project to `Some(&Vec::new())` — matches the
+        // pre-lift chain exactly, keeping the "authored empty" arm
+        // distinct from the "not authored" arm upstream. The probe
+        // consumer's `.map(|xs| xs.len() as u64).unwrap_or(0)` tail
+        // depends on this: an authored-empty JWKS array reports 0
+        // keys, distinct from a JWKS response missing the `keys` slot
+        // altogether (which the caller could later choose to log
+        // differently).
+        let jwks = json!({ "keys": [] });
+        let arr = jwks.get_array("keys").expect("Value::Array");
+        assert!(arr.is_empty());
+        assert_eq!(jwks.get_array("keys").map(Vec::len), Some(0));
+    }
+
+    #[test]
+    fn get_array_non_object_receiver_returns_none_verbatim() {
+        // Non-object receiver corner: a caller who reached this
+        // primitive on a `Value::Null` / `Value::Bool` / `Value::Array`
+        // handle (a malformed fetch response, an upstream default-value
+        // fallback, a `serde_json::Value::Null` intermediate chained
+        // through `.and_then`) MUST get `None` back rather than a
+        // panic or a synthesized `Some(&Vec::new())`. Matches the
+        // pre-lift chain's behaviour: `Value::get` on a non-object
+        // receiver returns `None`, `and_then` short-circuits.
+        assert_eq!(Value::Null.get_array("any"), None);
+        assert_eq!(Value::Bool(true).get_array("any"), None);
+        assert_eq!(json!([1, 2, 3]).get_array("any"), None);
+        assert_eq!(json!("scalar").get_array("any"), None);
+    }
+
+    #[test]
+    fn get_array_matches_pre_lift_hand_authored_chain_shape() {
+        // Byte-shape parity pin: `<value>.get_array(<key>)` MUST return
+        // the SAME `Option<&Vec<Value>>` the pre-lift hand-authored
+        // `.get(<key>).and_then(|v| v.as_array())` chain produced.
+        // Sweeps every pre-lift-reachable input corner (three
+        // "value present" + three "value absent/malformed" arms
+        // covering the two pre-lift consumers) so a regression at the
+        // primitive that broke byte identity with the pre-lift chain
+        // at ONE corner surfaces here rather than as a per-slot
+        // divergence downstream.
+        let manifest = json!({
+            "conditions": [{ "type": "Ready" }],
+            "keys": [{ "kid": "1" }, { "kid": "2" }],
+            "empty": [],
+            "stringy": "not-an-array",
+            "null_valued": null,
+        });
+        for key in [
+            "conditions",
+            "keys",
+            "empty",
+            "stringy",
+            "null_valued",
+            "missing",
+        ] {
+            let via_primitive = manifest.get_array(key);
+            let via_pre_lift = manifest.get(key).and_then(|v| v.as_array());
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "corner `{key}` must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn get_array_composes_with_len_map_at_probe_count_jwks_keys_shape() {
+        // Downstream composition pin: the canonical caller shape at
+        // `probe::count_jwks_keys` is `<body_val>.get_array(<key>).
+        // map(|xs| xs.len() as u64).unwrap_or(0)` — matches the
+        // pre-lift `.get(<key>).cloned().and_then(|k| k.as_array().
+        // map(|xs| xs.len() as u64)).unwrap_or(0)` chain shed of its
+        // pre-lift `.cloned()` allocation. A regression that reshaped
+        // the return form (an `Option<Vec<Value>>` owned, a
+        // `Result<...>` fallible arm) would break this composition
+        // AND reintroduce the eliminated allocation.
+        let jwks = json!({ "keys": [{ "kid": "1" }, { "kid": "2" }, { "kid": "3" }] });
+        let n: u64 = jwks
+            .get_array("keys")
+            .map(|xs| xs.len() as u64)
+            .unwrap_or(0);
+        assert_eq!(n, 3);
+        // Missing slot composes to 0 through the same unwrap_or arm.
+        let empty = json!({});
+        let z: u64 = empty
+            .get_array("keys")
+            .map(|xs| xs.len() as u64)
+            .unwrap_or(0);
+        assert_eq!(z, 0);
+    }
+
+    #[test]
+    fn get_array_composes_with_let_else_short_circuit_at_ready_condition_shape() {
+        // Downstream composition pin: the canonical caller shape at
+        // `ssapply::ready_condition_value` is `let Some(conditions) =
+        // <data>.get("status").and_then(|s| s.get_array("conditions"))
+        // else { return ReadyState::Unknown; }` — the walker rides
+        // the `get_array` primitive on the tail of a nested walk. A
+        // regression that changed the return to `Option<Vec<Value>>`
+        // owned would break the `for c in conditions` borrow-iterate
+        // pattern downstream (each `c` borrows through the receiver).
+        let data = json!({
+            "status": {
+                "conditions": [
+                    { "type": "Ready",       "status": "True" },
+                    { "type": "Progressing", "status": "False" },
+                ],
+            },
+        });
+        let conditions = data
+            .get("status")
+            .and_then(|s| s.get_array("conditions"))
+            .expect("nested walk resolves");
+        assert_eq!(conditions.len(), 2);
+        // Verifies borrow-through-receiver: iterate without cloning.
+        let types: Vec<&str> = conditions
+            .iter()
+            .filter_map(|c| c.get_str("type"))
+            .collect();
+        assert_eq!(types, vec!["Ready", "Progressing"]);
+    }
+
+    #[test]
+    fn get_array_return_lifetime_borrows_receiver_not_owned() {
+        // Return-lifetime pin: the `&Vec<Value>` MUST borrow the
+        // receiver's buffer rather than a fresh owned `Vec`. A
+        // regression that reshaped the return to `Option<Vec<Value>>`
+        // (adding a `.clone()` inside the primitive) would inflate
+        // every callsite's allocation count and — for the
+        // ssapply.rs caller — reintroduce a per-reconcile clone of
+        // every K8s Condition on every DynamicObject readiness probe.
+        // Bind the invariant structurally: the borrow reaches back
+        // through the receiver.
+        let manifest = json!({ "keys": [{ "kid": "1" }, { "kid": "2" }] });
+        let via_primitive: &Vec<Value> = manifest.get_array("keys").unwrap();
+        let via_raw: &Vec<Value> = manifest.get("keys").and_then(|v| v.as_array()).unwrap();
+        assert!(std::ptr::eq(via_primitive.as_ptr(), via_raw.as_ptr()));
+    }
+
+    #[test]
+    fn get_array_axis_family_reaches_i64_str_and_array_through_one_trait_import() {
+        // Axis-family pin: a caller who imports `ValueGetExt` reaches
+        // the integer axis (`get_i64`), the string axis (`get_str`),
+        // AND the array axis (`get_array`) through the SAME trait
+        // handle. A regression that opened a peer `ValueGetArrayExt`
+        // (or a peer trait per axis) would break this — the caller
+        // would have to import each trait separately and a partial
+        // import would silently miss one axis at method-resolution
+        // time.
+        //
+        // Structurally: a bound `T: ValueGetExt` reaches all three
+        // methods. This test extends the pre-existing
+        // `get_str_axis_family_reaches_i64_and_str_through_one_trait_import`
+        // sibling to cover the new axis; either drops means the
+        // axis-family invariant no longer holds.
+        fn probe<T: ValueGetExt>(t: &T) -> (Option<i64>, Option<&str>, Option<&Vec<Value>>) {
+            (t.get_i64("n"), t.get_str("s"), t.get_array("a"))
+        }
+        let mixed = json!({ "n": 7, "s": "hello", "a": [1, 2, 3] });
+        let (n, s, a) = probe(&mixed);
+        assert_eq!(n, Some(7));
+        assert_eq!(s, Some("hello"));
+        assert_eq!(a.map(Vec::len), Some(3));
     }
 }

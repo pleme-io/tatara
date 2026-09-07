@@ -1098,10 +1098,20 @@ pub fn ready_condition(obj: &DynamicObject) -> ReadyState {
 
 /// Same extraction but operating on raw JSON — testable without a cluster.
 pub fn ready_condition_value(data: &Value) -> ReadyState {
-    let conditions = data
-        .get("status")
-        .and_then(|s| s.get("conditions"))
-        .and_then(|c| c.as_array());
+    // The trailing `.get("conditions").and_then(|c| c.as_array())`
+    // paired READ chain now routes through the ONE substrate primitive
+    // `tatara_process::json_object::ValueGetExt::get_array` — the
+    // array-axis sibling of `get_str` + `get_i64` on the same
+    // `.get(<key>).and_then(|v| v.as_<T>())` READ-chain axis-family.
+    // Pre-lift the array-axis half hand-wrote the paired chain; post-
+    // lift the projection lives at ONE typed owner and every K8s-status
+    // list walker (Deployment `conditions`, HPA `conditions`,
+    // StatefulSet `conditions`) inherits normalizations at the
+    // substrate. The outer `status` walk stays hand-authored because
+    // the intermediate handle is `&Value` (not a walked-in string) and
+    // the axis-family owns the trailing typed-projection step, not the
+    // nested-object walk.
+    let conditions = data.get("status").and_then(|s| s.get_array("conditions"));
     let Some(conditions) = conditions else {
         return ReadyState::Unknown;
     };

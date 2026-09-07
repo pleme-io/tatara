@@ -5,6 +5,7 @@ use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::time::Duration;
+use tatara_process::json_object::ValueGetExt;
 
 #[derive(Debug, Clone)]
 pub struct ServiceEndpoint {
@@ -197,8 +198,14 @@ fn extract_token(body: &str) -> Result<String> {
         .with_context(|| format!("parse issuer auth response: {body}"))?;
     // The reference issuer returns `{ "token": "<jwt>" }` on success; tolerate
     // common variants without locking to a single shape.
+    //
+    // The `.get(field).and_then(|v| v.as_str())` paired READ chain
+    // routes through the ONE substrate primitive
+    // `tatara_process::json_object::ValueGetExt::get_str` — the
+    // string-axis sibling of `get_i64` + `get_array` on the same
+    // `.get(<key>).and_then(|v| v.as_<T>())` READ-chain axis-family.
     for field in ["token", "access_token", "auth_token", "jwt"] {
-        if let Some(t) = v.get(field).and_then(|v| v.as_str()) {
+        if let Some(t) = v.get_str(field) {
             return Ok(t.to_string());
         }
     }
@@ -206,10 +213,18 @@ fn extract_token(body: &str) -> Result<String> {
 }
 
 fn count_jwks_keys(body: &str) -> u64 {
+    // The `.get("keys").cloned()` + `.and_then(|k| k.as_array().map(...))`
+    // paired chain routes through the ONE substrate primitive
+    // `tatara_process::json_object::ValueGetExt::get_array` — the
+    // array-axis sibling of `get_str` + `get_i64` on the same
+    // `.get(<key>).and_then(|v| v.as_<T>())` READ-chain axis-family.
+    // The pre-lift `.cloned()` intermediate existed only to sidestep
+    // the borrow through the `.and_then` closure chain; the substrate
+    // primitive borrows through the receiver directly, so the clone
+    // disappears at the callsite.
     serde_json::from_str::<Value>(body)
         .ok()
-        .and_then(|v| v.get("keys").cloned())
-        .and_then(|k| k.as_array().map(|xs| xs.len() as u64))
+        .and_then(|v| v.get_array("keys").map(|xs| xs.len() as u64))
         .unwrap_or(0)
 }
 

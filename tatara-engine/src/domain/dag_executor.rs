@@ -18,6 +18,8 @@ use tatara_core::domain::convergence_graph::ConvergenceGraph;
 use tatara_core::domain::convergence_state::{BoundaryPhase, ConvergenceOutcome, ConvergencePoint};
 use tatara_core::domain::point_id::PointId;
 
+use super::attestation::pillar_hash;
+
 /// Result of executing a single convergence point through its boundary.
 #[derive(Debug, Clone)]
 pub struct PointExecutionResult {
@@ -254,7 +256,7 @@ impl DagExecutor {
             input_attestation.unwrap_or("genesis"),
             point.boundary.postconditions.len(),
         );
-        let attestation = format!("blake3:{}", blake3::hash(attestation_data.as_bytes()));
+        let attestation = pillar_hash(attestation_data.as_bytes());
 
         info!(
             point = %point.name,

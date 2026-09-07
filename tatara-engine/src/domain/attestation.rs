@@ -11,6 +11,83 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Substrate primitive over `&[u8]` — the ONE substrate owner of the
+/// `format!("blake3:{}", blake3::hash(<bytes>))` two-link chain every
+/// three-pillar producer restated by hand at the "cast an input
+/// payload into its wire-form BLAKE3 hash string" boundary.
+///
+/// Sibling on the composed-hash axis to [`compose_root`] below: this
+/// primitive owns the PER-PILLAR shape (`&[u8] → "blake3:{hex}"`);
+/// `compose_root` owns the FOUR-PILLAR shape (already-hashed pillar
+/// strings → composed root string). Both carry the `"blake3:"` scheme
+/// prefix as a private literal so a future scheme change (a length
+/// tag, a version discriminator, a per-fleet suffix) lands at these
+/// two substrate owners rather than at the pre-lift hand-authored
+/// sites listed below.
+///
+/// Pre-lift the two-link chain was hand-authored at FOUR production
+/// emit sites across `tatara-engine` past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold:
+///
+/// * [`ConvergenceAttestation::produce`] × 3 — the three-pillar seed
+///   family (`artifact_hash`, `control_hash` inside a `.map` over the
+///   optional-slot input, `intent_hash`), each restating the same
+///   `format!("blake3:{}", blake3::hash(<slot>))` shape verbatim.
+/// * `dag_executor::execute_boundary` × 1 — the ATTEST-phase
+///   attestation-string composer, restating the same shape over the
+///   `attestation_data.as_bytes()` payload that carries the point's
+///   name + input-attestation + postcondition count.
+///
+/// All FOUR pre-lift sites restated the SAME two-link chain verbatim,
+/// differing only in the `&[u8]` payload each callsite fed in and (at
+/// site #2) the `.map` wrap for the optional-slot input. A regression
+/// that drifted the scheme prefix at ONE site (a `b3:` shorthand, an
+/// uppercase `BLAKE3:` variant, an accidental spelling drift under a
+/// future refactor), swapped the `blake3::hash` receiver spelling
+/// (`.to_hex()`, `.as_bytes()` + `hex::encode`), or reversed the
+/// prefix / hex order would silently break parity between the produce
+/// path (`ConvergenceAttestation::produce`) and the ATTEST-phase
+/// stamp in the executor — surfacing as verify failures on some
+/// nodes and passes on others.
+///
+/// Post-lift each callsite reads `pillar_hash(<slot>)` and the
+/// scheme-tagged pillar-hash shape lives at ONE substrate owner here.
+///
+/// ### Byte-shape parity
+///
+/// The `format!("blake3:{}", blake3::hash(bytes))` spelling produces
+/// `"blake3:" + 64-lowercase-hex-chars` — the `blake3::Hash: Display`
+/// impl encodes as lowercase hex. Byte-shape parity with the pre-lift
+/// spelling is pinned at
+/// [`tests::pillar_hash_matches_pre_lift_format_scheme_hex_spelling_bytewise`]
+/// so a substrate-side canonicalization the pre-lift chain does NOT
+/// apply (a case-flip on the hex, a scheme rename, a length-tag
+/// insertion) surfaces at THIS pin rather than as silent
+/// produce/verify skew across every three-pillar consumer.
+///
+/// ### `#[must_use]`
+///
+/// Every consumer stores the returned hex into a pillar slot
+/// (`artifact_hash` / `control_hash` / `intent_hash`) or into the
+/// executor's boundary-attestation output. Dropping the return means
+/// the hash was computed for no observable reason — the attribute
+/// surfaces that as a warning at every call site.
+///
+/// Theory anchor: THEORY.md §V.3 (three-pillar attestation — the
+/// canonical pillar-hash shape is `"blake3:{hex}"`; this substrate
+/// pins the shape at ONE owner). THEORY.md §VI.1 (generation over
+/// composition — the two-link chain recurred at FOUR hand-authored
+/// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
+/// lifted to ONE substrate owner here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — the pin below binds the primitive
+/// byte-identically to the pre-lift spelling so a regression at ONE
+/// substrate function surfaces at ONE pin rather than as silent
+/// forgery-adjacent skew across every downstream consumer).
+#[must_use]
+pub(crate) fn pillar_hash(bytes: &[u8]) -> String {
+    format!("blake3:{}", blake3::hash(bytes))
+}
+
 /// A convergence attestation — the three-pillar CertificationArtifact
 /// produced by each convergence point's boundary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,9 +177,9 @@ impl ConvergenceAttestation {
         generation: u64,
         previous_root: Option<String>,
     ) -> Self {
-        let artifact_hash = format!("blake3:{}", blake3::hash(artifact_data));
-        let control_hash = control_data.map(|d| format!("blake3:{}", blake3::hash(d)));
-        let intent_hash = format!("blake3:{}", blake3::hash(intent_data));
+        let artifact_hash = pillar_hash(artifact_data);
+        let control_hash = control_data.map(pillar_hash);
+        let intent_hash = pillar_hash(intent_data);
 
         let composed_root = compose_root(
             &artifact_hash,
@@ -360,6 +437,139 @@ mod tests {
 
             assert_eq!(via_primitive, via_pre_lift);
         }
+    }
+
+    // ─── pillar_hash substrate pins ────────────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `pillar_hash` free
+    // function did not exist before this commit, so each test below
+    // fails to compile pre-lift. Post-lift they collectively pin the
+    // scheme-tagged pillar-hash shape at ONE substrate owner — a
+    // regression that drifted the `"blake3:"` scheme prefix, swapped
+    // the `blake3::hash` receiver spelling (`.to_hex()`, `.as_bytes()`
+    // + `hex::encode`), reversed the prefix / hex order, or leaked a
+    // canonicalization the pre-lift `format!` chain does NOT apply
+    // surfaces HERE rather than as silent produce/verify skew across
+    // every three-pillar consumer.
+
+    #[test]
+    fn pillar_hash_matches_pre_lift_format_scheme_hex_spelling_bytewise() {
+        // Byte-identical parity with the pre-lift `format!("blake3:{}",
+        // blake3::hash(x))` spelling every three-pillar producer + the
+        // dag_executor ATTEST-phase composer walked. Swept across
+        // representative payload shapes (empty, short ASCII, JSON-like,
+        // large binary) so a substrate-side canonicalization the
+        // pre-lift chain does NOT apply (a hex-case flip, a `blake3:`
+        // scheme rename, a length-tag insertion, a re-ordering of
+        // prefix/hex) surfaces HERE rather than as silent forgery-
+        // adjacent skew at every downstream consumer.
+        for buf in [
+            b"" as &[u8],
+            b"x",
+            b"artifact-payload",
+            b"{\"kind\":\"tatara.export\"}",
+            &[0u8; 128],
+            &[0xFFu8; 256],
+        ] {
+            assert_eq!(
+                pillar_hash(buf),
+                format!("blake3:{}", blake3::hash(buf)),
+                "pillar_hash drifted from pre-lift `format!(\"blake3:{{}}\", blake3::hash(_))` for buf.len()={}",
+                buf.len(),
+            );
+        }
+    }
+
+    #[test]
+    fn pillar_hash_output_carries_blake3_scheme_prefix() {
+        // Wire-format pin: every pillar hash MUST begin with the
+        // `"blake3:"` scheme prefix, matching the composed_root's own
+        // scheme discipline and the pre-lift `format!` template. A
+        // regression that dropped the prefix (writing bare hex) or
+        // drifted the spelling (`b3:`, `BLAKE3:`, `blake3=`) would
+        // silently break downstream consumers whose prefix-strip or
+        // regex step expects the exact `"blake3:"` scheme.
+        assert!(
+            pillar_hash(b"any").starts_with("blake3:"),
+            "pillar_hash output must carry the `blake3:` scheme prefix",
+        );
+        assert!(
+            pillar_hash(b"").starts_with("blake3:"),
+            "pillar_hash output must carry the `blake3:` scheme prefix on the empty input too",
+        );
+    }
+
+    #[test]
+    fn pillar_hash_output_is_scheme_plus_64_lowercase_hex_chars() {
+        // Shape pin: the `blake3::Hash: Display` impl encodes as
+        // lowercase hex (64 chars for BLAKE3's 32-byte digest); the
+        // composed output is thus `"blake3:" (7 chars) + 64 hex chars
+        // = 71 chars`. Pin the invariant so a downstream reader's
+        // width assumption (a fixed-width slot, a regex `^blake3:
+        // [0-9a-f]{64}$`) surfaces here rather than as a parse
+        // failure downstream.
+        let out = pillar_hash(b"pillar-input");
+        assert_eq!(out.len(), 7 + 64, "pillar_hash length must be 7 + 64");
+        assert!(out.starts_with("blake3:"));
+        let hex = &out[7..];
+        assert_eq!(hex.len(), 64);
+        assert!(
+            hex.chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+            "pillar_hash hex tail must be lowercase [0-9a-f]: {hex:?}",
+        );
+    }
+
+    #[test]
+    fn pillar_hash_deterministic_and_distinct_inputs_distinct_outputs() {
+        // Same input → same output (BLAKE3 + format! are both pure).
+        // Distinct inputs → distinct outputs (no hex-layer collision,
+        // no shared-prefix truncation, no substrate-side normalization
+        // that collapses payloads).
+        assert_eq!(pillar_hash(b"same"), pillar_hash(b"same"));
+        assert_ne!(pillar_hash(b"a"), pillar_hash(b"b"));
+    }
+
+    #[test]
+    fn pillar_hash_empty_input_matches_known_digest_with_scheme_prefix() {
+        // Known BLAKE3 digest of the empty input, wearing the
+        // `"blake3:"` scheme prefix. A rename of the underlying algo
+        // (an accidental switch to sha2, a salt smuggled through the
+        // Hasher::new constructor) or a drift in the scheme spelling
+        // would land here rather than as silent attestation-chain
+        // drift across every downstream consumer.
+        assert_eq!(
+            pillar_hash(b""),
+            "blake3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        );
+    }
+
+    #[test]
+    fn produce_pillars_route_through_pillar_hash_by_construction() {
+        // Cross-consumer coherence: an attestation `produce()`-ed
+        // through `ConvergenceAttestation::produce` MUST expose
+        // pillar hashes byte-identical to `pillar_hash` over the
+        // same input payloads. Pre-lift this held because the four
+        // sites open-coded the same `format!` template; post-lift it
+        // holds because both callers route through ONE substrate
+        // primitive. A regression that specialized `produce`'s
+        // pillar-hash step (a per-pillar salt, a version prefix) or
+        // reshaped `pillar_hash`'s output would surface HERE rather
+        // than as silent produce/verify skew at every three-pillar
+        // consumer.
+        let att = ConvergenceAttestation::produce(
+            b"artifact-payload",
+            Some(b"control-payload"),
+            b"intent-payload",
+            0,
+            None,
+        );
+        assert_eq!(att.artifact_hash, pillar_hash(b"artifact-payload"));
+        assert_eq!(
+            att.control_hash.as_deref(),
+            Some(pillar_hash(b"control-payload").as_str())
+        );
+        assert_eq!(att.intent_hash, pillar_hash(b"intent-payload"));
     }
 
     #[test]

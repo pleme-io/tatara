@@ -30,7 +30,7 @@
     "tatara-pool-reconciler/Cargo.toml": "e81beb9c132404726a52a6645ed478cb271690852dce04dab349d937f839115b",
     "tatara-process/Cargo.toml": "c38400dc8d51dd8641032b4155746bb4f4e469f84e4cb54d6aec90611bd1b556",
     "tatara-reconciler/Cargo.toml": "8c822db34d673e39b870a6f6b4582058ab9546714dd9cad580f7fd0a26ed35ad",
-    "tatara-terreiro/Cargo.toml": "c08386ff730f541dfbf438f68dada22f1dad3b62957557d8a67131f0c4622201",
+    "tatara-terreiro/Cargo.toml": "03b96b6ff1942cf97eb2c9c1b38c80258cdb56fbabe74b132d0048eb2020c053",
     "tatara-testing/Cargo.toml": "711da4ca4ce6b28b51af7b368442ea042079b9389defc0ce8691937712d51c49",
     "tatara-ui/Cargo.toml": "fdffeeb69f118d8f310dd94b79a463facd905e0cfc0db192ee0a8f4126aaf45f",
     "tatara-vm/Cargo.toml": "5d297b87076be28aa4d29df30176b7698d1e376e40ea90fcd273d6e184150a2c",
@@ -18613,32 +18613,12 @@
       "tatara-terreiro-0.2.587": {
         "runtime_dependencies": [
           {
-            "name": "blake3",
-            "package_key": "blake3-1.8.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
             "name": "bumpalo",
             "package_key": "bumpalo-3.20.3",
             "kind": "normal",
             "features": [
               "collections"
             ],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "hex",
-            "package_key": "hex-0.4.3",
-            "kind": "normal",
-            "features": [],
             "uses_default_features": true,
             "optional": false,
             "target": null,

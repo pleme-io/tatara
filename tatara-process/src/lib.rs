@@ -43,6 +43,7 @@ pub mod receipt;
 pub mod requeue;
 pub mod routing;
 pub mod routing_edge_resource;
+pub mod secret_env;
 pub mod serde_defaults;
 pub mod signal;
 pub mod spec;

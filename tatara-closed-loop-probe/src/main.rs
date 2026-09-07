@@ -99,10 +99,19 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    let access_id =
-        std::env::var("ACCESS_ID").context("ACCESS_ID env var (from auth Secret) required")?;
-    let access_key =
-        std::env::var("ACCESS_KEY").context("ACCESS_KEY env var (from auth Secret) required")?;
+    // OS-env-var-from-Secret pull rides the substrate primitive
+    // `tatara_process::secret_env::required_secret` — pre-lift this
+    // was a hand-authored `std::env::var("<VAR>").context("<VAR> env
+    // var (from auth Secret) required")?` chain, one of TWO
+    // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold (peer at the sibling `ACCESS_KEY` pull
+    // immediately below). Post-lift the shared diagnostic wording
+    // lives at ONE substrate owner and a future closed-loop probe
+    // for a database / IdP / message broker that reaches for its
+    // own Secret-projected env vars inherits the wording
+    // mechanically through the same call.
+    let access_id = tatara_process::secret_env::required_secret("ACCESS_ID")?;
+    let access_key = tatara_process::secret_env::required_secret("ACCESS_KEY")?;
 
     info!(
         issuer = %args.issuer_service,

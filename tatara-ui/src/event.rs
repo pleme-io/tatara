@@ -148,9 +148,20 @@ impl EventStream {
     }
 
     /// BLAKE3 of the canonical JSON — the run-identity hash.
+    ///
+    /// Two-line `serde_json::to_vec + hex::encode(blake3::hash(...))`
+    /// chain rides through the ONE substrate primitive
+    /// [`crate::hash::hex_blake3_of_json`] — sibling to
+    /// [`crate::theme::ThemeSpec::id`] on the (`T: Serialize` →
+    /// 64-lowercase-hex identity string) axis. Pre-lift the SAME chain
+    /// was hand-authored at both sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold; post-lift the composition lives at ONE
+    /// owner and every downstream identity-slot consumer (a future
+    /// `tatara replay <hash>` command line, a future `LogEnvelope::hash`
+    /// on a peer log-shaped receiver) inherits its normalizations
+    /// mechanically.
     pub fn run_hash(&self) -> String {
-        let bytes = serde_json::to_vec(self).unwrap_or_default();
-        hex::encode(blake3::hash(&bytes).as_bytes())
+        crate::hash::hex_blake3_of_json(self)
     }
 }
 

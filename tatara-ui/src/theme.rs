@@ -131,9 +131,20 @@ impl ThemeSpec {
     /// Content-addressable identity — BLAKE3 of the canonical JSON.
     /// Two specs with the same JSON produce the same id. Invariant across
     /// renderers, machines, runs.
+    ///
+    /// Two-line `serde_json::to_vec + hex::encode(blake3::hash(...))`
+    /// chain rides through the ONE substrate primitive
+    /// [`crate::hash::hex_blake3_of_json`] — sibling to
+    /// [`crate::event::EventStream::run_hash`] on the (`T: Serialize` →
+    /// 64-lowercase-hex identity string) axis. Pre-lift the SAME chain
+    /// was hand-authored at both sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold; post-lift the composition lives at ONE
+    /// owner and a future normalization (a canonical-JSON serializer,
+    /// a size-cap guard, a swap onto `blake3::Hash::to_hex().to_string()`,
+    /// a `tracing::warn!` on the residual `Err` arm) lands at the
+    /// substrate rather than at every identity-slot composer.
     pub fn id(&self) -> ThemeId {
-        let bytes = serde_json::to_vec(self).unwrap_or_default();
-        ThemeId(hex::encode(blake3::hash(&bytes).as_bytes()))
+        ThemeId(crate::hash::hex_blake3_of_json(self))
     }
 }
 

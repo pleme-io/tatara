@@ -31,6 +31,7 @@
 extern crate self as tatara_ui;
 
 pub mod event;
+pub mod hash;
 pub mod palette;
 pub mod render;
 pub mod sigil;

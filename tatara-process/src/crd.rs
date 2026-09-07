@@ -240,6 +240,78 @@ impl Process {
         Ok((ns, name))
     }
 
+    /// `(name, uid)` coordinates as owned `String`s — BOTH slots
+    /// REQUIRED, spelled with the workspace-canonical
+    /// `"Process has no metadata.<slot>"` wire-form message
+    /// [`Self::owned_coordinates_or_err`] pins on the name-gate.
+    ///
+    /// Sibling to [`Self::owned_coordinates_or_err`] on the
+    /// (metadata × pair × required) axis of the coordinate-primitive
+    /// family, partitioned by SLOT PAIR:
+    /// * [`Self::owned_coordinates_or_err`] → `(namespace, name)`, the
+    ///   pair every kube-rs `Api::patch` / `Api::delete` / `Api::get`
+    ///   call takes positionally on a namespaced-scoped `Api<Process>`
+    ///   handle (namespace fallback-defaulted, name gate REQUIRED).
+    /// * this method → `(name, uid)`, the pair
+    ///   [`crate::owner_reference_json`] / [`crate::owner_references_json`]
+    ///   take positionally to compose a K8s OwnerReference entry
+    ///   pointing at this `Process` (BOTH gates REQUIRED — an empty
+    ///   `uid` string would collide with the `is_empty` gate on
+    ///   [`crate::owner_references_json`] and silently drop the owner
+    ///   reference, so the missing-uid corner errors here rather than
+    ///   propagates as a silent orphan).
+    ///
+    /// Pre-lift the paired 2-slot required-extract shape was hand-
+    /// authored at `tatara-reconciler::ssapply::build_owner_reference`
+    /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, restating
+    /// the SAME `.metadata.<slot>.clone().ok_or_else(|| anyhow!(
+    /// "<prefix> missing metadata.<slot>"))?` chain at BOTH the name
+    /// gate AND the uid gate. The pre-lift wire-form drifted from the
+    /// workspace-canonical spelling [`Self::owned_coordinates_or_err`]
+    /// pins (`"Process has no metadata.name"`) to a lowercase-verb
+    /// variant (`"process missing metadata.name"`) — post-lift both
+    /// gates route through THIS primitive and inherit the workspace-
+    /// canonical wire-form mechanically, closing a workspace-wide
+    /// operator-facing wire-form drift.
+    ///
+    /// Return-tuple axis order matches
+    /// [`crate::owner_reference_json`]'s positional-argument order
+    /// exactly (`fn owner_reference_json(name: &str, uid: &str) ->
+    /// Value`), so the caller composes without a per-callsite axis-
+    /// swap step.
+    ///
+    /// The name gate fires BEFORE the uid gate: on a `Process` fixture
+    /// missing BOTH slots, the returned error names `metadata.name`
+    /// (matches [`Self::owned_coordinates_or_err`]'s two-gate
+    /// ordering, so the two owned-required-extract primitives in the
+    /// family report the same "first-missing-slot" slug at the paired
+    /// missing-both corner).
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the paired `.metadata.<slot>.clone().ok_or_else(...)` chain
+    /// restated two hand-authored gates past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication trigger). THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — a regression that swapped the
+    /// two gates, drifted the wire-form back to the lowercase-verb
+    /// spelling, reshaped the axis order of the return tuple, or
+    /// relaxed either gate to a silent-string fallback surfaces at
+    /// the tests below rather than as silent operator-facing drift at
+    /// every downstream [`crate::owner_reference_json`] consumer that
+    /// ingests this pair positionally).
+    pub fn owned_name_and_uid_or_err(&self) -> anyhow::Result<(String, String)> {
+        let name = self
+            .metadata
+            .name
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("Process has no metadata.name"))?;
+        let uid = self
+            .metadata
+            .uid
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("Process has no metadata.uid"))?;
+        Ok((name, uid))
+    }
+
     /// `(namespace, name)` coordinates in the BORROW + NAME-REQUIRED
     /// corner of the primitive family — namespace half falls back to
     /// [`Self::DEFAULT_NAMESPACE`], but the name half is REQUIRED
@@ -6376,5 +6448,205 @@ mod tests {
             serde_json::to_value(&via_at_phase).unwrap(),
             serde_json::to_value(&via_default).unwrap(),
         );
+    }
+
+    // ─── Process::owned_name_and_uid_or_err substrate pins ─────────────
+    //
+    // Fail-before-pass-after granularity: the
+    // `Process::owned_name_and_uid_or_err` method did not exist before
+    // this commit, so each test below fails to compile pre-lift.
+    // Post-lift they collectively pin the paired 2-slot required-
+    // extract shape at ONE substrate owner — a regression that swapped
+    // the two gates (uid before name), drifted the wire-form back to
+    // the pre-lift `tatara-reconciler::ssapply::build_owner_reference`
+    // lowercase-verb spelling (`"process missing metadata.name"`),
+    // relaxed either gate to a silent-string fallback (an `unwrap_or_default`
+    // that would silently propagate as an orphan owner reference at
+    // `owner_references_json`'s empty-uid `is_empty` gate), or reshaped
+    // the axis order of the return tuple (`(uid, name)` — bytewise
+    // wrong at the `owner_reference_json(name, uid)` positional-arg
+    // consumer) surfaces HERE rather than as silent operator-facing
+    // drift at the pre-lift ssapply consumer whose downstream fed
+    // `owner_reference_json` positionally.
+
+    #[test]
+    fn owned_name_and_uid_or_err_returns_owned_pair_when_both_slots_present() {
+        // Happy-path pin: both slots populated — method returns owned
+        // `String`s in `(name, uid)` axis order (matches
+        // `owner_reference_json(name, uid)` positional-arg order).
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.uid = Some("uid-abc-123".into());
+        let (name, uid) = p.owned_name_and_uid_or_err().unwrap();
+        assert_eq!(name, "api-gateway");
+        assert_eq!(uid, "uid-abc-123");
+        // Ownership pin: type inference above binds name/uid as owned
+        // Strings — a regression that returned `&str` would fail to
+        // compile at the following .push_str() call. Holds the "owned"
+        // half of the primitive's contract.
+        let mut owned_uid = uid;
+        owned_uid.push_str("-mutated");
+        assert_eq!(owned_uid, "uid-abc-123-mutated");
+    }
+
+    #[test]
+    fn owned_name_and_uid_or_err_errors_when_metadata_uid_absent() {
+        // Uid-gate pin: name populated (via `Process::new`), uid
+        // absent → Err mentioning `metadata.uid`. Load-bearing at
+        // the pre-lift `ssapply::build_owner_reference` caller whose
+        // downstream `owner_reference_json` cannot compose without
+        // both slots.
+        let p = Process::new("some-proc", empty_spec());
+        // Process::new leaves metadata.uid = None by default.
+        let err = p.owned_name_and_uid_or_err().unwrap_err();
+        assert_eq!(err.to_string(), "Process has no metadata.uid");
+    }
+
+    #[test]
+    fn owned_name_and_uid_or_err_errors_when_metadata_name_absent() {
+        // Name-gate pin: name absent → Err mentioning `metadata.name`.
+        // The name gate fires FIRST — see the paired ordering pin
+        // below for the missing-both corner.
+        let mut p = Process::new("scratch", empty_spec());
+        p.metadata.name = None;
+        p.metadata.uid = Some("uid-42".into());
+        let err = p.owned_name_and_uid_or_err().unwrap_err();
+        assert_eq!(err.to_string(), "Process has no metadata.name");
+    }
+
+    #[test]
+    fn owned_name_and_uid_or_err_reports_name_first_when_both_slots_absent() {
+        // Ordering pin: on a `Process` fixture missing BOTH slots the
+        // returned error names `metadata.name` (matches how
+        // `owned_coordinates_or_err` orders its two gates on the
+        // sibling `(namespace, name)` primitive — the "first-missing-
+        // slot" slug the family surfaces at the paired missing-both
+        // corner is consistently the FIRST gate). A regression that
+        // swapped the two gates would flip the reported slug and
+        // surface HERE rather than as a subtle wire-form drift in
+        // operator alerts bisecting a "which slot is missing" fault.
+        let mut p = Process::new("scratch", empty_spec());
+        p.metadata.name = None;
+        p.metadata.uid = None;
+        let err = p.owned_name_and_uid_or_err().unwrap_err();
+        assert_eq!(err.to_string(), "Process has no metadata.name");
+    }
+
+    #[test]
+    fn owned_name_and_uid_or_err_wire_form_matches_owned_coordinates_or_err_family_spelling() {
+        // Cross-primitive wire-form coherence pin — BOTH gates of this
+        // method's error output use the workspace-canonical
+        // `"Process has no metadata.<slot>"` spelling
+        // `Self::owned_coordinates_or_err` pins in the family. A
+        // regression that reverted either gate to the pre-lift
+        // `ssapply::build_owner_reference` lowercase-verb spelling
+        // (`"process missing metadata.<slot>"`) would reopen a
+        // workspace-wide operator-facing wire-form drift the lift
+        // closed, and surface HERE rather than as silent
+        // divergence between the two owned-required-extract primitives
+        // in the family (operators bisecting a "which slot faulted"
+        // alert see a mixed-case grep footprint when the two are out
+        // of sync).
+        let mut p_name_absent = Process::new("s", empty_spec());
+        p_name_absent.metadata.name = None;
+        assert_eq!(
+            p_name_absent
+                .owned_name_and_uid_or_err()
+                .unwrap_err()
+                .to_string(),
+            "Process has no metadata.name",
+        );
+        let p_uid_absent = Process::new("s", empty_spec());
+        // `Process::new` leaves metadata.uid = None.
+        assert_eq!(
+            p_uid_absent
+                .owned_name_and_uid_or_err()
+                .unwrap_err()
+                .to_string(),
+            "Process has no metadata.uid",
+        );
+    }
+
+    #[test]
+    fn owned_name_and_uid_or_err_matches_pre_lift_reconciler_helper_shape() {
+        // Byte-identical parity pin between the paired required-extract
+        // primitive here and the pre-lift
+        // `tatara-reconciler::ssapply::build_owner_reference` helper
+        // shape — the exact 2-slot unwrap chain the pre-lift caller
+        // spelled by hand (with the wire-form updated from the pre-lift
+        // lowercase-verb spelling to the workspace-canonical
+        // `owned_coordinates_or_err`-family spelling — the intentional
+        // wire-form drift-close per the primitive's docs).
+        //
+        // Sweeps every corner every callsite plausibly encounters
+        // (both slots present, uid absent, name absent, both absent).
+        // A regression that inserted a normalization step at the
+        // primitive that the pre-lift chain does NOT apply — or vice
+        // versa — surfaces here rather than as silent drift between
+        // the pre-lift consumer callsite and the ONE substrate owner
+        // it now routes through.
+        fn pre_lift(p: &Process) -> anyhow::Result<(String, String)> {
+            let name = p
+                .metadata
+                .name
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("Process has no metadata.name"))?;
+            let uid = p
+                .metadata
+                .uid
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("Process has no metadata.uid"))?;
+            Ok((name, uid))
+        }
+        // Both present.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.uid = Some("uid-1".into());
+        assert_eq!(
+            p.owned_name_and_uid_or_err().unwrap(),
+            pre_lift(&p).unwrap()
+        );
+        // Uid absent (name populated by Process::new).
+        let p = Process::new("api", empty_spec());
+        assert_eq!(
+            p.owned_name_and_uid_or_err().unwrap_err().to_string(),
+            pre_lift(&p).unwrap_err().to_string(),
+        );
+        // Name absent, uid present.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.name = None;
+        p.metadata.uid = Some("uid-1".into());
+        assert_eq!(
+            p.owned_name_and_uid_or_err().unwrap_err().to_string(),
+            pre_lift(&p).unwrap_err().to_string(),
+        );
+        // Both absent — the name gate fires first at both routes.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.name = None;
+        p.metadata.uid = None;
+        assert_eq!(
+            p.owned_name_and_uid_or_err().unwrap_err().to_string(),
+            pre_lift(&p).unwrap_err().to_string(),
+        );
+    }
+
+    #[test]
+    fn owned_name_and_uid_or_err_axis_order_matches_owner_reference_json_positional_args() {
+        // Cross-substrate composition pin — the `(name, uid)` tuple
+        // this primitive returns MUST feed
+        // `crate::owner_reference_json(name, uid)` positionally without
+        // an axis-swap step. A regression that reshaped the return
+        // tuple to `(uid, name)` would type-check silently (both
+        // arguments are `&str`) but produce a bytewise wrong owner
+        // reference whose `name` slot carried the uid string. Load-
+        // bearing at every downstream K8s apiserver reader of the
+        // stamped OwnerReference (garbage-collector cascade-delete
+        // fan-out, the `KUBECTL get -o wide` output an operator
+        // inspects, every controller reconciling a downstream-owned
+        // resource).
+        let mut p = Process::new("owner-name", empty_spec());
+        p.metadata.uid = Some("owner-uid".into());
+        let (name, uid) = p.owned_name_and_uid_or_err().unwrap();
+        let owner_ref = crate::owner_reference_json(&name, &uid);
+        assert_eq!(owner_ref["name"], "owner-name");
+        assert_eq!(owner_ref["uid"], "owner-uid");
     }
 }

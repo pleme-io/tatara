@@ -1133,16 +1133,24 @@ pub fn ready_condition_value(data: &Value) -> ReadyState {
 }
 
 fn build_owner_reference(p: &Process) -> Result<Value> {
-    let name = p
-        .metadata
-        .name
-        .clone()
-        .ok_or_else(|| anyhow!("process missing metadata.name"))?;
-    let uid = p
-        .metadata
-        .uid
-        .clone()
-        .ok_or_else(|| anyhow!("process missing metadata.uid"))?;
+    // Route the paired 2-slot `.metadata.<slot>.clone().ok_or_else(...)`
+    // required-extract through the substrate primitive
+    // `Process::owned_name_and_uid_or_err` — sibling to
+    // `Process::owned_coordinates_or_err` on the (metadata × pair ×
+    // required) axis of the coordinate-primitive family, partitioned
+    // by SLOT PAIR (this consumer wants `(name, uid)` for the
+    // downstream `owner_reference_json` positional call, not the
+    // `(namespace, name)` pair the kube-rs `Api::patch` family
+    // consumes). Pre-lift this callsite hand-authored the paired chain
+    // with a lowercase-verb wire-form (`"process missing
+    // metadata.<slot>"`) that drifted from the workspace-canonical
+    // spelling every other missing-metadata gate on `Process` uses
+    // (`"Process has no metadata.<slot>"`); post-lift the primitive
+    // stamps the canonical spelling at BOTH gates, closing the drift.
+    // Axis order of the returned pair matches
+    // `owner_reference_json(name, uid)` positional-arg order, so the
+    // call composes without a per-callsite axis-swap.
+    let (name, uid) = p.owned_name_and_uid_or_err()?;
     Ok(tatara_process::owner_reference_json(&name, &uid))
 }
 

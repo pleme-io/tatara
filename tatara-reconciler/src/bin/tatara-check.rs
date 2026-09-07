@@ -9,12 +9,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use kube::CustomResourceExt;
 use tatara_lisp::{domain, read, Expander, Sexp};
-use tatara_process::allocation::EphemeralAllocation;
 use tatara_process::intent::IntentKind;
-use tatara_process::pool::EphemeralPool;
-use tatara_process::prelude::{Process, ProcessTable};
+use tatara_reconciler::known_crd::KnownCrd;
 
 #[derive(Default)]
 struct Report {
@@ -208,12 +205,15 @@ fn check_crd_in_sync(args: &[Sexp], root: &Path, report: &mut Report) {
         Some(p) => root.join(p),
         None => return report.fail("crd-in-sync", "expected (crd-in-sync <Kind> \"path\")"),
     };
-    let current = match kind {
-        "Process" => serde_yaml::to_string(&Process::crd()),
-        "ProcessTable" => serde_yaml::to_string(&ProcessTable::crd()),
-        "EphemeralPool" => serde_yaml::to_string(&EphemeralPool::crd()),
-        "EphemeralAllocation" => serde_yaml::to_string(&EphemeralAllocation::crd()),
-        other => return report.fail(format!("crd-in-sync {other}"), "unknown CRD kind"),
+    // Kind-string → typed CRD dispatch rides through the ONE substrate
+    // primitive `tatara_reconciler::known_crd::KnownCrd` — sibling to
+    // the identical dispatch in `check_yaml_parses_as` below AND in
+    // `tatara-crd-gen::main`; see [`KnownCrd`]'s docstring for the
+    // full pre-lift rationale and the coverage-drift closure the lift
+    // provides.
+    let current = match KnownCrd::from_kind(kind) {
+        Some(k) => k.emit_crd_yaml(),
+        None => return report.fail(format!("crd-in-sync {kind}"), "unknown CRD kind"),
     };
     let current = match current {
         Ok(s) => s,
@@ -277,19 +277,22 @@ fn check_yaml_parses_as(args: &[Sexp], root: &Path, report: &mut Report) {
         Ok(s) => s,
         Err(e) => return report.fail(label, format!("read: {e}")),
     };
-    let result: Result<serde_yaml::Value, _> = match kind {
-        "Process" => match serde_yaml::from_str::<Process>(&src) {
-            Ok(_) => Ok(serde_yaml::Value::Null),
-            Err(e) => Err(e),
-        },
-        "ProcessTable" => match serde_yaml::from_str::<ProcessTable>(&src) {
-            Ok(_) => Ok(serde_yaml::Value::Null),
-            Err(e) => Err(e),
-        },
-        other => return report.fail(label, format!("unknown kind: {other}")),
+    // Kind-string → typed-CRD parse rides through the ONE substrate
+    // primitive `tatara_reconciler::known_crd::KnownCrd::parse_yaml_as`
+    // — pre-lift the dispatcher hand-authored a TWO-arm match on only
+    // `"Process"` + `"ProcessTable"`, so an operator authoring
+    // `(yaml-parses-as EphemeralPool "…")` got a runtime
+    // `"unknown kind"` even though the CRD ships in this workspace.
+    // Post-lift the closed set on [`KnownCrd::ALL`] covers all FOUR
+    // CRDs by construction — `EphemeralPool` + `EphemeralAllocation`
+    // are now first-class targets for this check without a per-arm
+    // edit here.
+    let result = match KnownCrd::from_kind(kind) {
+        Some(k) => k.parse_yaml_as(&src),
+        None => return report.fail(label, format!("unknown kind: {kind}")),
     };
     match result {
-        Ok(_) => report.pass(label),
+        Ok(()) => report.pass(label),
         Err(e) => report.fail(label, format!("parse: {e}")),
     }
 }

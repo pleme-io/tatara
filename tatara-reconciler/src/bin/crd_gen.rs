@@ -3,22 +3,22 @@
 //! ```sh
 //! tatara-crd-gen > chart/tatara/templates/crds/all.yaml
 //! ```
+//!
+//! The four-CRD closed set rides through the ONE substrate primitive
+//! [`tatara_reconciler::known_crd::KnownCrd`] — pre-lift the emit
+//! surface hand-authored the 4-entry inline array `[Process::crd(),
+//! ProcessTable::crd(), EphemeralPool::crd(), EphemeralAllocation::crd()]`,
+//! sibling to the SAME 4-arm dispatcher in `tatara-check`'s
+//! `check_crd_in_sync` past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+//! trigger. Post-lift both bins iterate `KnownCrd::ALL` and dispatch
+//! through `emit_crd_yaml`; a fifth CRD lands at ONE variant on the
+//! closed set and both emit paths inherit it mechanically.
 
-use kube::CustomResourceExt;
-
-use tatara_process::allocation::EphemeralAllocation;
-use tatara_process::pool::EphemeralPool;
-use tatara_process::prelude::{Process, ProcessTable};
+use tatara_reconciler::known_crd::KnownCrd;
 
 fn main() {
-    let crds = [
-        Process::crd(),
-        ProcessTable::crd(),
-        EphemeralPool::crd(),
-        EphemeralAllocation::crd(),
-    ];
-    for crd in crds {
-        let yaml = serde_yaml::to_string(&crd).expect("CRD is serializable");
+    for k in KnownCrd::ALL {
+        let yaml = k.emit_crd_yaml().expect("CRD is serializable");
         println!("---\n{yaml}");
     }
 }

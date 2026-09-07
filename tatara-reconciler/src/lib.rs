@@ -18,6 +18,7 @@ pub mod context;
 pub mod controller;
 pub mod edges;
 pub mod ephemeral_defaults;
+pub mod known_crd;
 pub mod lifetime_clock;
 pub mod patch;
 pub mod phase_machine;

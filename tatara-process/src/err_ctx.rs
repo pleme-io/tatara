@@ -1,8 +1,25 @@
 //! Substrate primitive over `Result<T, E>` for any `E: `[`std::fmt::
 //! Display`] — the ONE substrate owner of the generic `.map_err(|e|
-//! anyhow::anyhow!("<ctx>: {e}"))` display-prefix wrap-shape for
-//! consumers whose source error is a bare `Display` type NOT already
-//! covered by a per-error-type flatten-wrap peer.
+//! anyhow::anyhow!("<ctx>: {e}"))` display-prefix wrap-shape.
+//!
+//! Every one of the sibling per-error-type peers ([`crate::kube_error::
+//! KubeResultExt`], [`crate::anyhow_flatten::FlattenCtxExt`],
+//! [`crate::hostname::HostnameResultExt`]) delegates its body onto
+//! this trait's `err_ctx` / `err_ctx_with` — the specialized peers
+//! stay for the naming discipline (each name is deliberately DISTINCT
+//! from [`anyhow::Context::context`] to prevent silent resolution to
+//! the chain-wrap semantics that would drop the source error's
+//! `Display` output from every `tracing::error!(error = %e, ...)`
+//! log line), but the byte-shape body itself lives at ONE substrate
+//! owner here. Pre-lift each peer restated the SAME
+//! `.map_err(|e| anyhow::anyhow!("{ctx}: {e}"))` closure by hand,
+//! pinned equal only by peer-side byte-shape tests; post-delegation
+//! byte-shape agreement holds by CONSTRUCTION and the cross-peer
+//! agreement tests in this module ([`tests::err_ctx_agrees_with_kube_ctx_on_kube_error_result`],
+//! [`tests::err_ctx_agrees_with_flatten_ctx_on_anyhow_result`],
+//! [`tests::err_ctx_agrees_with_hostname_ctx_on_hostname_error_result`],
+//! plus the `_with` peers) route the delegation invariant through
+//! this substrate.
 //!
 //! Peer of the type-specific flatten-wrap trait trio already in this
 //! crate on the same display-prefix wrap axis, partitioning the space
@@ -21,16 +38,16 @@
 //!   collides with [`anyhow::Context::context`]'s naming so the
 //!   distinct-method-name discipline (flatten-prefix vs. chain-wrap
 //!   semantics) is load-bearing at every phase-machine callsite.
-//! * [`ErrCtxExt::err_ctx`] (this trait) — the generic fallback for
-//!   any `E: Display` NOT covered by the three specialized peers,
-//!   so a new consumer whose source error is a fresh
+//! * [`ErrCtxExt::err_ctx`] (this trait) — the shared substrate body
+//!   the three specialized peers delegate onto, AND the reachable
+//!   surface for any new consumer whose source error is a fresh
 //!   [`crate::tagged_union::declare_tagged_union_error`]-derived
 //!   variant (e.g. [`crate::export::ArtifactError`],
 //!   [`crate::intent::IntentError`],
-//!   [`crate::lifetime::LifetimeError`]) reaches the display-prefix
-//!   wrap-shape mechanically at ONE substrate owner instead of
-//!   opening a fourth per-error-type peer trait for every fresh
-//!   [`thiserror`]-derived enum.
+//!   [`crate::lifetime::LifetimeError`]). Such a consumer reaches the
+//!   display-prefix wrap-shape mechanically at THIS ONE substrate
+//!   owner instead of opening a fourth per-error-type peer trait for
+//!   every fresh [`thiserror`]-derived enum.
 //!
 //! Pre-lift the shape was hand-authored at TWO
 //! `tatara-export-worker/src/main.rs` sites past the ★★ PRIME-DIRECTIVE
@@ -274,9 +291,13 @@ mod tests {
         // `anyhow::Result<T>`, the generic `err_ctx` and the
         // specialized peer
         // [`crate::anyhow_flatten::FlattenCtxExt::flatten_ctx`] MUST
-        // produce byte-identical `Display` output. A regression that
-        // drifted either surface would surface HERE rather than as
-        // silent operator-facing skew between consumers migrated
+        // produce byte-identical `Display` output. Post-delegation
+        // (both bodies routed onto this substrate owner) byte-shape
+        // agreement holds by CONSTRUCTION rather than by two
+        // independent hand-authored `.map_err(|e| anyhow!)` closures
+        // pinned equal by convention; a regression that re-open-coded
+        // the specialized peer's body surfaces HERE rather than as
+        // silent operator-facing skew between the consumers migrated
         // onto the generic and consumers still routed through the
         // specialized peer.
         use crate::anyhow_flatten::FlattenCtxExt;
@@ -286,6 +307,119 @@ mod tests {
             format!("{}", a.err_ctx("source").unwrap_err()),
             format!("{}", b.flatten_ctx("source").unwrap_err()),
             "generic err_ctx and specialized flatten_ctx must agree on anyhow::Result"
+        );
+    }
+
+    #[test]
+    fn err_ctx_with_agrees_with_flatten_ctx_with_on_dynamic_slug() {
+        // Owned-string peer coherence pin: sibling to the static-slug
+        // pin above, walking the `_with` peer instead. Pre-delegation
+        // the two owned-string bodies were byte-identical by
+        // convention (each restating the SAME
+        // `.map_err(|e| anyhow!("{ctx}: {e}"))` chain); post-
+        // delegation the specialized `flatten_ctx_with` routes onto
+        // this substrate's `err_ctx_with`, and byte-shape agreement
+        // holds by CONSTRUCTION. A regression that re-open-coded
+        // `flatten_ctx_with`'s body — dropping the delegation and
+        // restoring the pre-lift inline closure with a drifted
+        // separator or a swapped-slots typo — surfaces HERE rather
+        // than as silent skew between the four static-slug consumers
+        // and the one `format!`-slug consumer in the reconciler's
+        // phase-machine log stream.
+        use crate::anyhow_flatten::FlattenCtxExt;
+        let slug = format!("evaluate {:?}", "HelmReleaseReleased");
+        let a: anyhow::Result<()> = Err(anyhow::anyhow!("underlying failure"));
+        let b: anyhow::Result<()> = Err(anyhow::anyhow!("underlying failure"));
+        assert_eq!(
+            format!("{}", a.err_ctx_with(slug.clone()).unwrap_err()),
+            format!("{}", b.flatten_ctx_with(slug).unwrap_err()),
+            "generic err_ctx_with and specialized flatten_ctx_with must agree on anyhow::Result"
+        );
+    }
+
+    #[test]
+    fn err_ctx_agrees_with_kube_ctx_on_kube_error_result() {
+        // Cross-substrate coherence pin: on the specific input shape
+        // `Result<T, kube::Error>`, the generic `err_ctx` and the
+        // specialized peer
+        // [`crate::kube_error::KubeResultExt::kube_ctx`] MUST produce
+        // byte-identical `Display` output. Post-delegation (the
+        // specialized peer's body routes onto this substrate) byte-
+        // shape agreement holds by CONSTRUCTION — `kube::Error:
+        // Display` so the generic `err_ctx` impl applies to the same
+        // input type. A regression that re-open-coded `kube_ctx`'s
+        // body — dropping the delegation and restoring the pre-lift
+        // inline closure — surfaces HERE rather than as silent
+        // operator-facing skew between the 25+ K8s-round-trip
+        // consumers and the sibling peer families.
+        use crate::kube_error::KubeResultExt;
+        use kube::core::ErrorResponse;
+        let mk = || {
+            kube::Error::Api(ErrorResponse {
+                status: "Failure".into(),
+                message: "test code 404".into(),
+                reason: "NotFound".into(),
+                code: 404,
+            })
+        };
+        let a: Result<(), kube::Error> = Err(mk());
+        let b: Result<(), kube::Error> = Err(mk());
+        assert_eq!(
+            format!("{}", a.err_ctx("install finalizer").unwrap_err()),
+            format!("{}", b.kube_ctx("install finalizer").unwrap_err()),
+            "generic err_ctx and specialized kube_ctx must agree on Result<_, kube::Error>"
+        );
+    }
+
+    #[test]
+    fn err_ctx_with_agrees_with_kube_ctx_with_on_dynamic_slug() {
+        // Owned-string peer coherence pin on the Kube axis: sibling
+        // to the static-slug pin above, walking the `_with` peer
+        // instead. Post-delegation the specialized `kube_ctx_with`
+        // routes onto this substrate's `err_ctx_with`, and byte-
+        // shape agreement holds by CONSTRUCTION.
+        use crate::kube_error::KubeResultExt;
+        use kube::core::ErrorResponse;
+        let mk = || {
+            kube::Error::Api(ErrorResponse {
+                status: "Failure".into(),
+                message: "test code 409".into(),
+                reason: "AlreadyExists".into(),
+                code: 409,
+            })
+        };
+        let slug = format!("patch (releasing→{})", "Exiting");
+        let a: Result<(), kube::Error> = Err(mk());
+        let b: Result<(), kube::Error> = Err(mk());
+        assert_eq!(
+            format!("{}", a.err_ctx_with(slug.clone()).unwrap_err()),
+            format!("{}", b.kube_ctx_with(slug).unwrap_err()),
+            "generic err_ctx_with and specialized kube_ctx_with must agree on Result<_, kube::Error>"
+        );
+    }
+
+    #[test]
+    fn err_ctx_agrees_with_hostname_ctx_on_hostname_error_result() {
+        // Cross-substrate coherence pin: on the specific input shape
+        // `Result<T, HostnameError>`, the generic `err_ctx` and the
+        // specialized peer
+        // [`crate::hostname::HostnameResultExt::hostname_ctx`] MUST
+        // produce byte-identical `Display` output. Post-delegation
+        // the specialized peer's body routes onto this substrate;
+        // [`crate::hostname::HostnameError`] impls `Display` via
+        // `thiserror` so the generic `err_ctx` impl applies to the
+        // same input type. A regression that re-open-coded
+        // `hostname_ctx`'s body surfaces HERE rather than as silent
+        // operator-facing skew between `render_routing`'s
+        // hostname-format consumer and the sibling peer families.
+        use crate::hostname::{HostnameError, HostnameResultExt};
+        let mk = || HostnameError::ReservedApp("auth".to_string());
+        let a: Result<(), HostnameError> = Err(mk());
+        let b: Result<(), HostnameError> = Err(mk());
+        assert_eq!(
+            format!("{}", a.err_ctx("render routing").unwrap_err()),
+            format!("{}", b.hostname_ctx("render routing").unwrap_err()),
+            "generic err_ctx and specialized hostname_ctx must agree on Result<_, HostnameError>"
         );
     }
 }

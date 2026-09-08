@@ -141,9 +141,27 @@ pub trait HostnameResultExt<T>: Sized {
 }
 
 impl<T> HostnameResultExt<T> for Result<T, HostnameError> {
+    // Delegates the display-prefix wrap-shape body to the generic
+    // substrate owner [`crate::err_ctx::ErrCtxExt`]. Pre-lift the body
+    // restated the `.map_err(|e| anyhow::anyhow!("{context}: {e}"))`
+    // closure by hand, byte-identical to the three sibling specialized
+    // peers ([`crate::kube_error::KubeResultExt`],
+    // [`crate::anyhow_flatten::FlattenCtxExt`],
+    // [`crate::err_ctx::ErrCtxExt`] itself). Post-lift the byte-shape
+    // body lives at ONE substrate owner + this impl is a naming-layer
+    // delegate — [`HostnameError`] impls `Display` via `thiserror` so
+    // the generic [`crate::err_ctx::ErrCtxExt`] impl applies to
+    // `Result<T, HostnameError>` directly. Pinned by
+    // [`crate::err_ctx::tests::err_ctx_agrees_with_hostname_ctx_on_hostname_error_result`]
+    // so a regression that re-open-coded the body would surface there
+    // rather than as silent operator-facing skew between the
+    // hostname-side consumer (`render_routing`) and the sibling peer
+    // families.
+
     #[inline]
     fn hostname_ctx(self, context: &'static str) -> anyhow::Result<T> {
-        self.map_err(|e| anyhow::anyhow!("{context}: {e}"))
+        use crate::err_ctx::ErrCtxExt;
+        self.err_ctx(context)
     }
 }
 

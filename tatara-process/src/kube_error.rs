@@ -209,14 +209,33 @@ pub trait KubeResultExt<T>: Sized {
 }
 
 impl<T> KubeResultExt<T> for Result<T, Error> {
+    // Both peers delegate the display-prefix wrap-shape body to the
+    // generic substrate owner [`crate::err_ctx::ErrCtxExt`]. Pre-lift
+    // both bodies restated the SAME `.map_err(|e| anyhow::anyhow!
+    // ("{context}: {e}"))` closure by hand, byte-identical to the
+    // three sibling specialized peers ([`crate::anyhow_flatten::
+    // FlattenCtxExt`], [`crate::hostname::HostnameResultExt`],
+    // [`crate::err_ctx::ErrCtxExt`] itself). Post-lift the byte-shape
+    // body lives at ONE substrate owner + this impl is a naming-layer
+    // delegate — `kube::Error: Display` so the generic
+    // [`crate::err_ctx::ErrCtxExt`] impl applies to
+    // `Result<T, kube::Error>` directly. Pinned by
+    // [`crate::err_ctx::tests::err_ctx_agrees_with_kube_ctx_on_kube_error_result`]
+    // and [`crate::err_ctx::tests::err_ctx_with_agrees_with_kube_ctx_with_on_dynamic_slug`]
+    // so a regression that re-open-coded either body would surface
+    // there rather than as silent operator-facing skew between the
+    // Kube-side consumers and the sibling peer families.
+
     #[inline]
     fn kube_ctx(self, context: &'static str) -> anyhow::Result<T> {
-        self.map_err(|e| anyhow::anyhow!("{context}: {e}"))
+        use crate::err_ctx::ErrCtxExt;
+        self.err_ctx(context)
     }
 
     #[inline]
     fn kube_ctx_with(self, context: String) -> anyhow::Result<T> {
-        self.map_err(|e| anyhow::anyhow!("{context}: {e}"))
+        use crate::err_ctx::ErrCtxExt;
+        self.err_ctx_with(context)
     }
 }
 

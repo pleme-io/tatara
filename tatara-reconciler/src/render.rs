@@ -493,7 +493,29 @@ fn mark_resources_as_adopting(resources: Vec<Value>, process: &Process) -> Vec<V
                         // encapsulation-mode / adopted-release annotation
                         // pair mechanically alongside every other JSON-
                         // mutating helper.
-                        anns_obj.insert_str("tatara.pleme.io/encapsulation-mode", "Adopt");
+                        //
+                        // Both key slots route through
+                        // [`tatara_process::annotations`] — the ONE
+                        // workspace-wide owner of every
+                        // `tatara.pleme.io/…` annotation key. Pre-lift
+                        // the two keys were bare string literals inline
+                        // here, bypassing the substrate that already
+                        // owns every peer annotation key
+                        // (`SIGNAL`, `RELEASED_FROM`, `POOL`, `POOL_SLOT`,
+                        // `REQUESTOR`, `ALLOCATION`, `REQUESTOR_KIND`,
+                        // `APP`, `ROUTING_FORM`, `RETURN_TRIGGER`,
+                        // etc.). Post-lift a future rename (a
+                        // `tatara.pleme.io/v2/…` migration, a per-fleet
+                        // prefix override, a collapse into a compound
+                        // encapsulation payload key) lands at ONE
+                        // `pub const` in the substrate and every
+                        // downstream consumer (operator dashboards,
+                        // admission webhooks, audit-trail scrapers)
+                        // inherits the upgrade mechanically.
+                        anns_obj.insert_str(
+                            tatara_process::annotations::ENCAPSULATION_MODE,
+                            tatara_process::encapsulates::EncapsulationMode::Adopt.as_str(),
+                        );
                         if let Some(adopt) = adoption_ref {
                             // The `<ns>/<release>` join rides through the
                             // workspace-wide substrate composer
@@ -503,7 +525,7 @@ fn mark_resources_as_adopting(resources: Vec<Value>, process: &Process) -> Vec<V
                             // renders through, matching the same-shape
                             // routing at the SSA-time ownership seed.
                             anns_obj.insert_str(
-                                "tatara.pleme.io/adopted-release",
+                                tatara_process::annotations::ADOPTED_RELEASE,
                                 tatara_process::qualified_process_ref(
                                     &adopt.namespace,
                                     &adopt.release_name,

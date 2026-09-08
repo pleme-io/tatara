@@ -1101,6 +1101,40 @@ pub mod annotations {
     /// substrate and every downstream consumer inherits the upgrade
     /// mechanically.
     pub const RETURN_TRIGGER: &str = "tatara.pleme.io/return-trigger";
+    /// Stamped by
+    /// `tatara-reconciler::render::mark_resources_as_adopting` on every
+    /// emitted resource of a Process whose
+    /// [`crate::encapsulates::EncapsulatesSpec.mode`] gates the Adopt
+    /// arm. Value is the wire-form spelling of the corresponding
+    /// [`crate::encapsulates::EncapsulationMode`] variant
+    /// (`"Adopt"` today; future modes ride through the same closed set),
+    /// so downstream consumers (operator dashboards, admission webhooks,
+    /// audit-trail scrapers) can filter which owned resources were
+    /// stamped for adoption vs greenfield management vs pure observation
+    /// without re-deriving the mode from the parent Process spec. Peer
+    /// to [`ADOPTED_RELEASE`] on the same encapsulation-diagnostic
+    /// axis-family; both keys travel together at the same emit site so
+    /// a future rename (a `tatara.pleme.io/v2/encapsulation-mode`
+    /// migration, a per-fleet override, a collapse into a compound
+    /// `tatara.pleme.io/encapsulation` payload key) lands at ONE
+    /// `pub const` in the substrate and every downstream consumer
+    /// inherits the upgrade mechanically.
+    pub const ENCAPSULATION_MODE: &str = "tatara.pleme.io/encapsulation-mode";
+    /// Peer to [`ENCAPSULATION_MODE`] on the encapsulation-diagnostic
+    /// axis-family: stamped by
+    /// `tatara-reconciler::render::mark_resources_as_adopting` on every
+    /// emitted resource of a Process whose
+    /// [`crate::encapsulates::EncapsulationKind`] gates the
+    /// [`crate::encapsulates::ExistingHelmRelease`] arm. Value is the
+    /// `<ns>/<release>` qualified reference of the pre-existing
+    /// HelmRelease the Process is adopting, composed through the
+    /// workspace-wide [`crate::qualified_process_ref`] `<ns>/<name>`
+    /// substrate composer (never as a hand-authored `format!("{}/{}",
+    /// ns, release)` chain). Downstream consumers (operator dashboards,
+    /// audit-trail scrapers, cross-namespace release-lineage walkers)
+    /// grep for this key to answer "which pre-existing release did this
+    /// Process take over".
+    pub const ADOPTED_RELEASE: &str = "tatara.pleme.io/adopted-release";
 }
 
 /// Standard finalizer for the Process reconciler.
@@ -3163,6 +3197,155 @@ mod annotations_pins {
             body["metadata"]["annotations"]["tatara.pleme.io/return-trigger"],
             "true",
             "byte-shape parity — the pre-lift hand-authored key spelling routes through the constant to the same nested slot",
+        );
+    }
+
+    // ── Encapsulation-diagnostic axis pins ──────────────────────────
+    //
+    // Pins the two newly-lifted encapsulation-diagnostic annotation
+    // keys ([`crate::annotations::ENCAPSULATION_MODE`],
+    // [`crate::annotations::ADOPTED_RELEASE`]) at their canonical
+    // wire-form byte-values. Pre-lift the two keys were bare
+    // `"tatara.pleme.io/encapsulation-mode"` /
+    // `"tatara.pleme.io/adopted-release"` string literals inline at
+    // `tatara-reconciler::render::mark_resources_as_adopting`'s two
+    // `anns_obj.insert_str(...)` writer sites — the ONE remaining
+    // hand-authored annotation-key pair in the workspace's active
+    // reconciler after every sibling annotation key already routed
+    // through a `pub const` in the substrate. Post-lift the writer
+    // routes through the substrate constants; these pins bind each
+    // constant's byte-shape + tatara-namespace membership + partition-
+    // distinctness against every peer key so a future edit that
+    // drifted the constants (a typo'd suffix, an incoming rename that
+    // collapsed the pair onto a peer key, a
+    // `tatara.pleme.io/v2/encapsulation-mode` migration landing at
+    // only the writer, a collapse into a compound
+    // `tatara.pleme.io/encapsulation` payload key) surfaces HERE
+    // rather than as silent operator-facing skew between the render
+    // emitter and every downstream reader (an operator dashboard
+    // filtering adopted resources, an admission-webhook gate on the
+    // encapsulation mode, an audit-trail scraper following the
+    // `<ns>/<release>` adoption lineage).
+
+    #[test]
+    fn encapsulation_mode_matches_pre_lift_wire_string() {
+        assert_eq!(
+            annotations::ENCAPSULATION_MODE,
+            "tatara.pleme.io/encapsulation-mode",
+        );
+    }
+
+    #[test]
+    fn adopted_release_matches_pre_lift_wire_string() {
+        assert_eq!(
+            annotations::ADOPTED_RELEASE,
+            "tatara.pleme.io/adopted-release",
+        );
+    }
+
+    #[test]
+    fn encapsulation_diagnostic_axis_keys_are_distinct() {
+        // A copy-paste that duplicated one key's value across the pair
+        // (an oversight during the initial lift, or a future rename
+        // that merged the two keys by mistake) collapses BOTH
+        // downstream readers onto the same wire string and silently
+        // loses one of the two axes — an operator dashboard would
+        // still see the mode via ENCAPSULATION_MODE but every
+        // `<ns>/<release>` back-reference consumer would read the
+        // mode literal where the qualified reference used to sit.
+        // Pin the closed set is partition-distinct.
+        assert_ne!(
+            annotations::ENCAPSULATION_MODE,
+            annotations::ADOPTED_RELEASE
+        );
+    }
+
+    #[test]
+    fn encapsulation_diagnostic_axis_keys_share_tatara_namespace() {
+        // Same reverse-DNS namespace invariant every sibling
+        // annotation key on the workspace enforces above — a rename
+        // that dropped the prefix on either constant would collide
+        // with an arbitrary third-party operator's annotations on the
+        // same emitted resource (a HelmRelease, a Kustomization, an
+        // adopted secondary) and silently corrupt every
+        // encapsulation-diagnostic read.
+        for key in [
+            annotations::ENCAPSULATION_MODE,
+            annotations::ADOPTED_RELEASE,
+        ] {
+            assert!(
+                key.starts_with("tatara.pleme.io/"),
+                "annotation key {key:?} must inhabit tatara.pleme.io/ namespace",
+            );
+        }
+    }
+
+    #[test]
+    fn encapsulation_diagnostic_axis_keys_partition_distinct_from_every_peer() {
+        // Cross-family distinctness pin — the encapsulation-diagnostic
+        // axis (ENCAPSULATION_MODE, ADOPTED_RELEASE) is stamped on
+        // every RESOURCE the reconciler emits for an Adopt-mode
+        // Process, whereas every peer annotation key on the workspace
+        // is stamped on the PROCESS itself (SIGNAL, RELEASED_FROM,
+        // POOL, POOL_SLOT, REQUESTOR, ALLOCATION, REQUESTOR_KIND,
+        // RETURN_TRIGGER) OR on emitted routing edges (APP,
+        // ROUTING_FORM) OR on export-worker Jobs (ROLE, EXPORT_INDEX).
+        // A copy-paste that collapsed the pair onto any peer would
+        // let one write silently overwrite the other. Pin that both
+        // constants are unique across every substrate-owned peer.
+        let diag_axis = [
+            annotations::ENCAPSULATION_MODE,
+            annotations::ADOPTED_RELEASE,
+        ];
+        let peers = [
+            annotations::MANAGED_BY,
+            annotations::PROCESS,
+            annotations::PID,
+            annotations::CONTENT_HASH,
+            annotations::ATTESTATION_ROOT,
+            annotations::GENERATION,
+            annotations::SIGNAL,
+            annotations::RELEASED_FROM,
+            annotations::ROLE,
+            annotations::EXPORT_INDEX,
+            annotations::APP,
+            annotations::ROUTING_FORM,
+            annotations::REQUESTOR,
+            annotations::ALLOCATION,
+            annotations::REQUESTOR_KIND,
+            annotations::POOL,
+            annotations::POOL_SLOT,
+            annotations::RETURN_TRIGGER,
+        ];
+        for d in diag_axis {
+            for p in peers {
+                assert_ne!(
+                    d, p,
+                    "encapsulation-diagnostic key {d:?} collides with peer annotation key {p:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn encapsulation_mode_value_slot_routes_through_encapsulation_mode_closed_set() {
+        // Value-side pin — the render emitter's `ENCAPSULATION_MODE`
+        // slot writes the wire-form spelling of an
+        // [`crate::encapsulates::EncapsulationMode`] variant. Pre-lift
+        // the site hand-authored the fixed `"Adopt"` literal;
+        // post-lift the writer feeds
+        // `EncapsulationMode::Adopt.as_str()` — the SAME closed-set
+        // owner every peer consumer (the reconciler's status-condition
+        // reason string, the operator dashboard's per-mode filter, the
+        // admission webhook's Adopt/Manage/Observe dispatch) routes
+        // through. A regression that drifted the closed-set wire form
+        // (a lowercase `"adopt"`, a `"Adoption"` typo) surfaces at
+        // `EncapsulationMode::as_str`'s own pin AND here at the value
+        // slot the render emitter stamps.
+        assert_eq!(
+            crate::encapsulates::EncapsulationMode::Adopt.as_str(),
+            "Adopt",
+            "the render emitter's ENCAPSULATION_MODE value slot must byte-match the closed-set wire form",
         );
     }
 }

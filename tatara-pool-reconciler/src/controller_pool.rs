@@ -91,9 +91,18 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     // namespace-wide owned-members walk here inherits any future
     // paginated `limit` / reconciler-budget `timeout` / resource-
     // version-continuation normalization mechanically.
+    // Diagnostic-body head routes through the ONE substrate composer
+    // `tatara_process::list::error_ctx` — pre-lift this was a hand-
+    // authored `format!("list Processes in {ns}")` chain, one of TWO
+    // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold (peer at
+    // `controller_allocation::reconcile_inner`'s
+    // `format!("list Pools in {ns}")` sibling). Post-lift both
+    // consumers share ONE substrate owner and the `": {e}"` tail
+    // rides through `kube_ctx_with` unchanged.
     let all_processes = tatara_process::list::default(&process_api)
         .await
-        .kube_ctx_with(format!("list Processes in {ns}"))?;
+        .kube_ctx_with(tatara_process::list::error_ctx("Processes", &ns))?;
     let mut members: Vec<PoolMember> = Vec::new();
     let mut owned: Vec<Process> = Vec::new();
     for p in all_processes.items {

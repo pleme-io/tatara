@@ -78,9 +78,20 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
     // namespace-wide EphemeralPool walk here inherits any future
     // paginated `limit` / reconciler-budget `timeout` / resource-
     // version-continuation normalization mechanically.
+    // Diagnostic-body head routes through the ONE substrate composer
+    // `tatara_process::list::error_ctx` — pre-lift this was a hand-
+    // authored `format!("list Pools in {ns}")` chain, one of TWO
+    // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold (peer at `controller_pool::reconcile_pool`'s
+    // `format!("list Processes in {ns}")` sibling). Post-lift both
+    // consumers share ONE substrate owner and the `": {e}"` tail
+    // rides through `kube_ctx_with` unchanged; a future normalization
+    // (a per-kind structured-error variant, a namespace-prefix
+    // convention, a `tracing`-annotated span) lands at ONE substrate
+    // composer.
     let pools = tatara_process::list::default(&pool_api)
         .await
-        .kube_ctx_with(format!("list Pools in {ns}"))?
+        .kube_ctx_with(tatara_process::list::error_ctx("Pools", &ns))?
         .items;
 
     // 2. Build a lookup of pool name → members (sourced from each Pool's status).

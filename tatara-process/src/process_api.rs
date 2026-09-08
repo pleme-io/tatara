@@ -245,11 +245,15 @@ pub fn namespaced(client: Client, ns: &str) -> Api<Process> {
 /// invariant 5 (composition preserves proofs — the pin block below
 /// binds the composer at fail-before-pass-after granularity, so a
 /// regression that reordered the head slots, drifted the fixed
-/// `"Process"` resource-kind literal back to lowercase, dropped the
-/// qualified-ref routing, or narrowed the accepted verb set to a
-/// hardcoded closed set surfaces at `process_api::tests::error_ctx_*`
-/// rather than as silent operator-facing skew across the two consumer
-/// sites).
+/// `"Process"` resource-kind literal back to lowercase (or off
+/// [`crate::PROCESS_KIND`] entirely, bypassing the routing pin at
+/// [`tests::error_ctx_routes_kind_slot_through_process_kind_owner`],
+/// which binds the Kind slot to that `pub const` as the ONE
+/// workspace-wide owner of the tatara `Process` CRD's `kind:` slot),
+/// dropped the qualified-ref routing, or narrowed the accepted verb
+/// set to a hardcoded closed set surfaces at
+/// `process_api::tests::error_ctx_*` rather than as silent operator-
+/// facing skew across the two consumer sites).
 #[must_use]
 pub fn error_ctx(verb: &str, ns: &str, name: &str) -> String {
     // Delegates through the workspace-wide substrate owner
@@ -262,7 +266,23 @@ pub fn error_ctx(verb: &str, ns: &str, name: &str) -> String {
     // at THAT owner rather than at this fixed-Kind peer — which
     // now carries the `Kind = "Process"` guarantee exclusively,
     // not the 4-slot shape it used to co-own.
-    crate::qualified_error_ctx(verb, "Process", ns, name)
+    //
+    // The fixed `Kind = "Process"` slot routes through the typed
+    // wire-form identity owner [`crate::PROCESS_KIND`] rather than
+    // the pre-lift hand-authored `"Process"` literal — the ONE
+    // workspace-wide owner of the tatara `Process` CRD's `kind:`
+    // slot every SSA-time re-injection helper + every
+    // [`crate::PROCESS_WIRE_IDENTITY`] projection already routes
+    // through. Post-lift a rename of the CRD kind spelling (a
+    // hypothetical `Process` → `TataraProcess` migration, a
+    // per-fleet canonicalization for cross-cluster identity) lands
+    // at ONE `pub const` in the substrate and this diagnostic body
+    // inherits the upgrade mechanically alongside
+    // `owner_reference_json`, `PROCESS_WIRE_IDENTITY`, and every
+    // downstream Process-scoped emit / fetch consumer. Pinned by
+    // `process_api::tests::
+    // error_ctx_routes_kind_slot_through_process_kind_owner`.
+    crate::qualified_error_ctx(verb, crate::PROCESS_KIND, ns, name)
 }
 
 #[cfg(test)]
@@ -607,6 +627,79 @@ mod tests {
         assert!(
             source_chain[0].contains("test failure"),
             "the chained source must carry the underlying kube::Error's Display: got {source_chain:?}",
+        );
+    }
+
+    #[test]
+    fn error_ctx_routes_kind_slot_through_process_kind_owner() {
+        // Routing pin — the fixed `Kind = "Process"` slot at this
+        // per-Kind peer's `qualified_error_ctx` call rides through
+        // the workspace-wide wire-form identity owner
+        // [`crate::PROCESS_KIND`] rather than a bare inline
+        // `"Process"` literal. Pre-lift the composer hand-authored
+        // the Kind slot as a bare literal at the
+        // `qualified_error_ctx` boundary; post-lift the slot binds
+        // to the ONE workspace-wide `pub const` every SSA-time
+        // re-injection helper +
+        // [`crate::PROCESS_WIRE_IDENTITY`] projection already routes
+        // through — so a future rename of the CRD kind spelling
+        // reaches this diagnostic body mechanically alongside every
+        // downstream Process-scoped emit / fetch site on the same
+        // axis.
+        //
+        // A regression that inlined the `"Process"` literal back
+        // at the `qualified_error_ctx` call (drifting the primitive
+        // off the PROCESS_KIND axis owner + reopening the case-fold
+        // /typo-drift surface a hand-authored `process` / `proc`
+        // spelling would fall into silently, exactly the drift the
+        // most recent commit `+ close workspace-wide singular-
+        // Process kind-casing drift` closed) surfaces HERE rather
+        // than as silent per-Kind wire-form skew where the error-
+        // ctx head disagrees with the sibling
+        // `PROCESS_WIRE_IDENTITY.kind` spelling.
+        for (verb, ns, name) in [
+            ("fetch", "default", "api"),
+            ("get", "tatara-system", "reconciler-canary"),
+            ("patch", "demo-ns", "target"),
+            ("delete", "ns-1", "resource.dotted.name"),
+        ] {
+            let via_composer = error_ctx(verb, ns, name);
+            let via_typed_owner = crate::qualified_error_ctx(verb, crate::PROCESS_KIND, ns, name);
+            assert_eq!(
+                via_composer, via_typed_owner,
+                "error_ctx must route the Kind slot through \
+                 crate::PROCESS_KIND for ({verb:?}, {ns:?}, {name:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn error_ctx_kind_slot_matches_process_wire_identity_kind_projection() {
+        // Cross-substrate coherence pin — the Kind slot the
+        // composer stamps into every diagnostic body MUST agree
+        // byte-for-byte with the same axis-family's
+        // [`crate::PROCESS_WIRE_IDENTITY.kind`] projection. Post-
+        // lift both routes read `crate::PROCESS_KIND`; a
+        // regression that drifted this composer off the const
+        // (a re-inlined `"Process"` literal, a hand-authored
+        // `to_string()` copy) would leave the error-ctx head
+        // disagreeing with the resource `kind:` slot every SSA-
+        // apply / owner-reference emit stamps — the exact silent-
+        // skew corner the four-arm K8s wire-form identity axis-
+        // family exists to close.
+        let via_composer = error_ctx("fetch", "default", "api");
+        let expected_kind_slot = crate::PROCESS_WIRE_IDENTITY.kind;
+        assert!(
+            via_composer.contains(expected_kind_slot),
+            "error_ctx output {via_composer:?} must contain \
+             PROCESS_WIRE_IDENTITY.kind ({expected_kind_slot:?}) as its Kind slot",
+        );
+        // Reflexive: passing PROCESS_KIND into qualified_error_ctx
+        // yields byte-identical output (the composer routes both
+        // sides through the same const).
+        assert_eq!(
+            via_composer,
+            crate::qualified_error_ctx("fetch", crate::PROCESS_KIND, "default", "api"),
         );
     }
 

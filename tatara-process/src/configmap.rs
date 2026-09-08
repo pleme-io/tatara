@@ -292,10 +292,15 @@ pub fn with_data(
 /// invariant 5 (composition preserves proofs — the pin block below
 /// binds the composer at fail-before-pass-after granularity, so a
 /// regression that reordered the head slots, drifted the fixed
-/// `"ConfigMap"` resource-kind literal, or dropped the qualified-ref
-/// routing back to a bare `format!("{ns}/{name}")` surfaces at
-/// `configmap::tests::error_ctx_*` rather than as silent operator-
-/// facing skew across the two consumer sites).
+/// `"ConfigMap"` resource-kind literal (bypassing the routing pin at
+/// [`tests::error_ctx_routes_kind_slot_through_k8s_builtin_resource_configmap_owner`],
+/// which binds the Kind slot to
+/// [`crate::k8s_builtin_resource::K8sBuiltinResource::ConfigMap::kind`]
+/// as the ONE workspace-wide owner of the K8s-built-in wire-form
+/// identity), or dropped the qualified-ref routing back to a bare
+/// `format!("{ns}/{name}")` surfaces at `configmap::tests::error_ctx_*`
+/// rather than as silent operator-facing skew across the two consumer
+/// sites).
 #[must_use]
 pub fn error_ctx(verb: &str, ns: &str, name: &str) -> String {
     // Delegates through the workspace-wide substrate owner
@@ -308,7 +313,27 @@ pub fn error_ctx(verb: &str, ns: &str, name: &str) -> String {
     // at THAT owner rather than at this fixed-Kind peer — which
     // now carries the `Kind = "ConfigMap"` guarantee exclusively,
     // not the 4-slot shape it used to co-own.
-    crate::qualified_error_ctx(verb, "ConfigMap", ns, name)
+    //
+    // The fixed `Kind = "ConfigMap"` slot routes through the typed
+    // K8s-built-in wire-form identity owner
+    // [`crate::k8s_builtin_resource::K8sBuiltinResource::ConfigMap`]
+    // via its `const fn kind()` projection rather than the pre-lift
+    // hand-authored `"ConfigMap"` literal — the ONE workspace-wide
+    // owner of the `(apiVersion, kind)` pair every K8s-builtin-
+    // facing site in the reconciler routes through. Post-lift a
+    // Kubernetes-side kind spelling change (a `Configmap` typo
+    // rename at the K8s API server, a hypothetical cross-version
+    // rename) lands at ONE arm of the K8sBuiltinResource closed set
+    // and this diagnostic body inherits the upgrade mechanically
+    // alongside every emit / fetch site on the same axis. Pinned
+    // by `configmap::tests::
+    // error_ctx_routes_kind_slot_through_k8s_builtin_resource_configmap_owner`.
+    crate::qualified_error_ctx(
+        verb,
+        crate::k8s_builtin_resource::K8sBuiltinResource::ConfigMap.kind(),
+        ns,
+        name,
+    )
 }
 
 #[cfg(test)]
@@ -631,6 +656,50 @@ mod tests {
             assert_eq!(
                 via_composer, via_qualified,
                 "error_ctx must route the (ns, name) join through qualified_process_ref for ns={ns:?} name={name:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn error_ctx_routes_kind_slot_through_k8s_builtin_resource_configmap_owner() {
+        // Routing pin — the fixed `Kind = "ConfigMap"` slot at
+        // this per-Kind peer's `qualified_error_ctx` call rides
+        // through the typed K8s-built-in wire-form identity owner
+        // [`crate::k8s_builtin_resource::K8sBuiltinResource::ConfigMap`]
+        // via its `const fn kind()` projection rather than a bare
+        // inline `"ConfigMap"` literal. Pre-lift the composer
+        // hand-authored the Kind slot as a bare literal at the
+        // `qualified_error_ctx` boundary; post-lift the slot binds
+        // to the ONE workspace-wide K8s-built-in owner every emit /
+        // fetch site on the same axis already routes through — so a
+        // future spelling change at the K8s API server side reaches
+        // this diagnostic body mechanically without a per-peer edit.
+        //
+        // A regression that inlined the `"ConfigMap"` literal back
+        // at the `qualified_error_ctx` call (drifting the primitive
+        // off the K8sBuiltinResource axis owner + reopening the
+        // typo-drift surface a hand-authored `Configmap` /
+        // `configmap` spelling would fall into silently) surfaces
+        // HERE rather than as silent per-Kind wire-form skew where
+        // the error-ctx head disagrees with the sibling
+        // `verify_receipt_cm` fetch's SSA-fetched kind.
+        for (verb, ns, name) in [
+            ("patch", "default", "my-receipt-cm"),
+            ("create", "probe-ns", "closed-loop-receipt"),
+            ("get", "demo-ns", "cm-with-hyphen"),
+            ("delete", "ns-1", "cm.dotted.name"),
+        ] {
+            let via_composer = error_ctx(verb, ns, name);
+            let via_typed_owner = crate::qualified_error_ctx(
+                verb,
+                crate::k8s_builtin_resource::K8sBuiltinResource::ConfigMap.kind(),
+                ns,
+                name,
+            );
+            assert_eq!(
+                via_composer, via_typed_owner,
+                "error_ctx must route the Kind slot through \
+                 K8sBuiltinResource::ConfigMap.kind() for ({verb:?}, {ns:?}, {name:?})",
             );
         }
     }

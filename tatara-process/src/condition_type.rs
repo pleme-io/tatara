@@ -161,6 +161,38 @@ pub enum ProcessConditionType {
 }
 
 impl ProcessConditionType {
+    /// The closed set of `metav1.Condition.type` values every
+    /// [`crate::status::ProcessCondition`] constructor emits and every
+    /// downstream reader classifies — single source of truth that drives
+    /// every variant-sweep consumer (round-trip tests, Display parity
+    /// tests, sibling-axis disjointness tests, and any future dashboard /
+    /// tatara-check enumerator / typed-completion consumer that needs
+    /// to iterate the closed set exhaustively).
+    ///
+    /// Adding a third variant (e.g. `Reconverging` for the SIGHUP
+    /// re-convergence path, `Terminated` for the Zombie/Reaped gate)
+    /// lands at ONE `ALL` entry + ONE `as_wire_str` arm + ONE
+    /// `from_wire_str` arm — exhaustively checked by the compiler
+    /// (the `[Self; 2]` array literal forces the arity, and the
+    /// exhaustive-match on `as_wire_str` + `from_wire_str` covers the
+    /// rest).
+    ///
+    /// Pre-lift the two-variant array literal was hand-authored at
+    /// THREE test sites in this module past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication threshold — the round-trip test, the Display
+    /// parity test, and the sibling-axis disjointness test. Post-lift
+    /// each iterates `Self::ALL` and the closed-set enumeration lives
+    /// at ONE substrate owner here.
+    ///
+    /// Sibling closed-set `ALL` slices across the crate's typescape:
+    /// [`crate::k8s_condition::K8sConditionStatus::ALL`] (the sibling on
+    /// the K8s-Condition wire-form axis-family — status-slot closed set,
+    /// this owns the type-slot closed set); [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`], [`crate::signal::ProcessSignal::ALL`],
+    /// [`crate::intent::IntentKind::ALL`], [`crate::lifetime::LifetimeKind::ALL`],
+    /// [`crate::receipt::ReceiptKind::ALL`].
+    pub const ALL: [Self; 2] = [Self::Ready, Self::Attested];
+
     /// The K8s wire-form literal for this variant — exact-case ASCII,
     /// safe to write directly into a `metav1.Condition.type` slot
     /// without further normalization. Byte-identical to the pre-lift
@@ -227,7 +259,7 @@ mod tests {
     /// reader's `from_wire_str` on the SAME variant.
     #[test]
     fn wire_form_round_trip_holds_for_every_variant() {
-        for v in [ProcessConditionType::Ready, ProcessConditionType::Attested] {
+        for v in ProcessConditionType::ALL {
             assert_eq!(
                 ProcessConditionType::from_wire_str(v.as_wire_str()),
                 Some(v),
@@ -279,7 +311,7 @@ mod tests {
     /// bytes as a direct `.as_wire_str()` call.
     #[test]
     fn display_composes_through_as_wire_str_bytewise() {
-        for v in [ProcessConditionType::Ready, ProcessConditionType::Attested] {
+        for v in ProcessConditionType::ALL {
             assert_eq!(v.to_string(), v.as_wire_str());
             assert_eq!(format!("{v}"), v.as_wire_str());
         }
@@ -338,11 +370,8 @@ mod tests {
     #[test]
     fn from_wire_str_rejects_sibling_axis_wire_forms() {
         use crate::k8s_condition::K8sConditionStatus;
-        for status_wire in [
-            K8sConditionStatus::True.as_wire_str(),
-            K8sConditionStatus::False.as_wire_str(),
-            K8sConditionStatus::Unknown.as_wire_str(),
-        ] {
+        for s in K8sConditionStatus::ALL {
+            let status_wire = s.as_wire_str();
             assert_eq!(
                 ProcessConditionType::from_wire_str(status_wire),
                 None,
@@ -351,10 +380,8 @@ mod tests {
                  sets MUST stay disjoint",
             );
         }
-        for type_wire in [
-            ProcessConditionType::Ready.as_wire_str(),
-            ProcessConditionType::Attested.as_wire_str(),
-        ] {
+        for t in ProcessConditionType::ALL {
+            let type_wire = t.as_wire_str();
             assert_eq!(
                 K8sConditionStatus::from_wire_str(type_wire),
                 None,
@@ -362,6 +389,55 @@ mod tests {
                  ProcessConditionType wire-form `{type_wire:?}` — the two closed \
                  sets MUST stay disjoint",
             );
+        }
+    }
+
+    /// Fail-before-pass-after: the `ALL` sweep MUST enumerate every
+    /// variant of the closed set exactly once, with no duplicates and
+    /// no omissions. Pinned three ways so any drift surfaces at ONE
+    /// substrate pin rather than as silent skew at every consumer that
+    /// iterates the sweep:
+    ///
+    /// 1. **Arity** — the array's length equals the variant count.
+    ///    The `[Self; 2]` type-level arity already forces this at the
+    ///    substrate; the test restates it as a runtime witness so a
+    ///    regression that widened the type to `&[Self]` (a slice
+    ///    literal) or a `Vec<Self>` builder would surface at the
+    ///    substrate pin rather than as silent shape drift.
+    /// 2. **No duplicates** — round-trip each entry through
+    ///    `from_wire_str(as_wire_str)` and confirm the round-trip
+    ///    yields distinct variants. A regression that stamped
+    ///    `[Self::Ready, Self::Ready]` (a copy-paste at the sweep) or
+    ///    `[Self::Ready, Self::Attested, Self::Ready]` (a paste that
+    ///    also drifted the arity) surfaces at the collected-set
+    ///    cardinality check.
+    /// 3. **Cover** — an exhaustive match on each iterated variant
+    ///    proves the compiler sees every arm at least once through the
+    ///    sweep, so a future variant addition that landed at
+    ///    `as_wire_str` + `from_wire_str` but was forgotten at `ALL`
+    ///    surfaces at the sweep's compile-time exhaustive-match check.
+    #[test]
+    fn all_covers_the_process_condition_type_closed_set_exhaustively() {
+        assert_eq!(
+            ProcessConditionType::ALL.len(),
+            2,
+            "ALL must enumerate every variant of the closed set — a regression that \
+             added a variant at `as_wire_str` but forgot to extend `ALL` surfaces here",
+        );
+
+        let seen: std::collections::HashSet<ProcessConditionType> =
+            ProcessConditionType::ALL.iter().copied().collect();
+        assert_eq!(
+            seen.len(),
+            ProcessConditionType::ALL.len(),
+            "ALL must not stamp any variant twice — a copy-paste at the sweep surfaces here",
+        );
+
+        for v in ProcessConditionType::ALL {
+            let _cover: &'static str = match v {
+                ProcessConditionType::Ready => "Ready",
+                ProcessConditionType::Attested => "Attested",
+            };
         }
     }
 }

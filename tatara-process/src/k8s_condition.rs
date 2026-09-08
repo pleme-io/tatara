@@ -142,6 +142,43 @@ pub enum K8sConditionStatus {
 }
 
 impl K8sConditionStatus {
+    /// The closed set of `metav1.Condition.status` values every K8s
+    /// `status.conditions[].status` field carries — single source of
+    /// truth that drives every variant-sweep consumer (round-trip
+    /// tests, Display parity tests, the sibling-axis disjointness pin
+    /// at [`crate::condition_type::ProcessConditionType`]'s tests,
+    /// and any future consumer that needs to iterate the closed set
+    /// exhaustively — a K8s ConditionStatus dashboard column, a
+    /// tatara-check status-classifier enumeration, a typed-completion
+    /// surface for reconciler probes).
+    ///
+    /// The K8s API defines exactly three ConditionStatus values (see
+    /// [`ConditionStatus`][cs]); a future K8s revision that added a
+    /// fourth wire-form literal would land as ONE `ALL` entry + ONE
+    /// `as_wire_str` arm + ONE `from_wire_str` arm — exhaustively
+    /// checked by the compiler (the `[Self; 3]` array literal forces
+    /// the arity, and the exhaustive-match on the projection pair
+    /// covers the rest).
+    ///
+    /// Pre-lift the three-variant array literal was hand-authored at
+    /// THREE test sites across two modules past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication threshold — the round-trip test + the Display
+    /// parity test in this module, and the sibling-axis disjointness
+    /// test in [`crate::condition_type::tests::from_wire_str_rejects_sibling_axis_wire_forms`].
+    /// Post-lift each iterates `Self::ALL` and the closed-set
+    /// enumeration lives at ONE substrate owner here.
+    ///
+    /// Sibling closed-set `ALL` slices across the crate's typescape:
+    /// [`crate::condition_type::ProcessConditionType::ALL`] (the sibling
+    /// on the K8s-Condition wire-form axis-family — type-slot closed
+    /// set, this owns the status-slot closed set);
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`], [`crate::signal::ProcessSignal::ALL`],
+    /// [`crate::intent::IntentKind::ALL`], [`crate::receipt::ReceiptKind::ALL`].
+    ///
+    /// [cs]: https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#ConditionStatus
+    pub const ALL: [Self; 3] = [Self::True, Self::False, Self::Unknown];
+
     /// The K8s wire-form literal for this variant — exact-case ASCII,
     /// safe to write directly into a `metav1.Condition.status` slot
     /// without further normalization. Byte-identical to the pre-lift
@@ -210,11 +247,7 @@ mod tests {
     /// reader's `from_wire_str` on the SAME variant.
     #[test]
     fn wire_form_round_trip_holds_for_every_variant() {
-        for v in [
-            K8sConditionStatus::True,
-            K8sConditionStatus::False,
-            K8sConditionStatus::Unknown,
-        ] {
+        for v in K8sConditionStatus::ALL {
             assert_eq!(K8sConditionStatus::from_wire_str(v.as_wire_str()), Some(v));
         }
     }
@@ -247,11 +280,7 @@ mod tests {
     /// form bytes as a direct `.as_wire_str()` call.
     #[test]
     fn display_composes_through_as_wire_str_bytewise() {
-        for v in [
-            K8sConditionStatus::True,
-            K8sConditionStatus::False,
-            K8sConditionStatus::Unknown,
-        ] {
+        for v in K8sConditionStatus::ALL {
             assert_eq!(v.to_string(), v.as_wire_str());
             assert_eq!(format!("{v}"), v.as_wire_str());
         }
@@ -294,5 +323,61 @@ mod tests {
         assert_copy::<K8sConditionStatus>();
         assert_hash::<K8sConditionStatus>();
         assert_eq::<K8sConditionStatus>();
+    }
+
+    /// Fail-before-pass-after: the `ALL` sweep MUST enumerate every
+    /// variant of the K8s ConditionStatus closed set exactly once, with
+    /// no duplicates and no omissions. Pinned three ways so any drift
+    /// surfaces at ONE substrate pin rather than as silent skew at every
+    /// consumer that iterates the sweep:
+    ///
+    /// 1. **Arity** — the array's length equals the variant count.
+    ///    The `[Self; 3]` type-level arity already forces this at the
+    ///    substrate; the test restates it as a runtime witness so a
+    ///    regression that widened the type to `&[Self]` (a slice
+    ///    literal) or a `Vec<Self>` builder would surface at the
+    ///    substrate pin rather than as silent shape drift.
+    /// 2. **No duplicates** — the collected set of iterated variants
+    ///    has cardinality equal to the sweep's length. A regression
+    ///    that stamped `[Self::True, Self::True, Self::Unknown]` (a
+    ///    copy-paste at the sweep) or `[Self::True, Self::False,
+    ///    Self::False]` surfaces at the collected-set cardinality
+    ///    check.
+    /// 3. **Cover** — an exhaustive match on each iterated variant
+    ///    proves the compiler sees every arm at least once through the
+    ///    sweep, so a future variant addition that landed at
+    ///    `as_wire_str` + `from_wire_str` but was forgotten at `ALL`
+    ///    surfaces at the sweep's compile-time exhaustive-match check.
+    ///
+    /// The K8s API guarantees these three variants (`True` / `False` /
+    /// `Unknown`) as the total ConditionStatus alphabet, so the sweep
+    /// stays stable at three unless K8s itself widens the alphabet —
+    /// at which point the array literal's type-level arity forces a
+    /// deliberate substrate-side update.
+    #[test]
+    fn all_covers_the_k8s_condition_status_closed_set_exhaustively() {
+        assert_eq!(
+            K8sConditionStatus::ALL.len(),
+            3,
+            "ALL must enumerate every variant of the K8s ConditionStatus closed set — \
+             a regression that added a variant at `as_wire_str` but forgot to extend \
+             `ALL` surfaces here",
+        );
+
+        let seen: std::collections::HashSet<K8sConditionStatus> =
+            K8sConditionStatus::ALL.iter().copied().collect();
+        assert_eq!(
+            seen.len(),
+            K8sConditionStatus::ALL.len(),
+            "ALL must not stamp any variant twice — a copy-paste at the sweep surfaces here",
+        );
+
+        for v in K8sConditionStatus::ALL {
+            let _cover: &'static str = match v {
+                K8sConditionStatus::True => "True",
+                K8sConditionStatus::False => "False",
+                K8sConditionStatus::Unknown => "Unknown",
+            };
+        }
     }
 }

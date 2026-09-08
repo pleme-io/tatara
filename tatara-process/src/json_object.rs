@@ -372,15 +372,15 @@ impl JsonMapObjectEntryExt for Map<String, Value> {
 ///
 /// The trait carries ONE method per typed READ axis; the axis-family
 /// is [`Self::get_i64`] (integer counters) + [`Self::get_str`]
-/// (string slots) + [`Self::get_array`] (JSON array slots). Adding a
-/// new axis (a `get_bool` for `Value::Bool`, a `get_object` for
-/// `Value::Object`, a `get_f64` for `Value::Number` truncated to
-/// `f64`) lands as ONE new method here + ONE impl arm, inheriting
-/// the naming, `#[must_use]`, and inline discipline the existing
-/// axes pin. Never open a peer trait for a new axis — keep every
-/// READ projection on the ONE substrate owner so a caller who
-/// imports `ValueGetExt` reaches every axis through the same trait
-/// handle.
+/// (string slots) + [`Self::get_array`] (JSON array slots) +
+/// [`Self::get_bool`] (boolean flags). Adding a further axis
+/// (a `get_object` for `Value::Object`, a `get_f64` for
+/// `Value::Number` truncated to `f64`) lands as ONE new method here
+/// + ONE impl arm per receiver shape, inheriting the naming,
+/// `#[must_use]`, and inline discipline the existing axes pin.
+/// Never open a peer trait for a new axis — keep every READ
+/// projection on the ONE substrate owner so a caller who imports
+/// `ValueGetExt` reaches every axis through the same trait handle.
 ///
 /// READ-side counterpart to the three MUTATION-side siblings already in
 /// this module — [`ValueObjectExt::as_object_mut_or`],
@@ -669,6 +669,98 @@ pub trait ValueGetExt {
     /// peers rather than as silent operator-facing drift).
     #[must_use = "a JSON array projection that isn't bound swallows the slot entirely"]
     fn get_array(&self, key: &str) -> Option<&Vec<Value>>;
+
+    /// Look up `key` on this JSON object and project the returned
+    /// handle to `bool`; returns `None` when the slot is absent, when
+    /// the receiver is not a JSON object, or when the slot's variant
+    /// is not `Value::Bool`.
+    ///
+    /// Boolean-axis sibling of [`Self::get_i64`] / [`Self::get_str`] /
+    /// [`Self::get_array`] on the same `.get(<key>).and_then(|v|
+    /// v.as_<T>())` READ-chain axis-family. Completes the axis-family
+    /// coverage over the four most-common `Value` scalar / collection
+    /// shapes an operator reads out of a K8s status / spec blob or a
+    /// rendered-resource JSON object: integer counter (`succeeded`,
+    /// `failed`, `active`, `replicas`), string slot (`apiVersion`,
+    /// `kind`, `metadata.name`, `type`, `status`, `message`), array
+    /// slot (`conditions`, `finalizers`, `keys`), and boolean flag
+    /// (`controller`, `blockOwnerDeletion`, `spec.suspended`,
+    /// `hostNetwork`, `automountServiceAccountToken`,
+    /// `identity.name_override`).
+    ///
+    /// The axis was named as the next extension point in the
+    /// `ValueGetExt` docstring's own guidance ("Adding a new axis
+    /// (a `get_bool` for `Value::Bool`, …) lands as ONE new method
+    /// here + ONE impl arm"), and this method opens it. A future
+    /// consumer walking a `blockOwnerDeletion` / `controller` bit off
+    /// a K8s OwnerReference JSON, an `identity.name_override` flag off
+    /// a `phase_status_with(phase, "identity", …)` patch body, or a
+    /// `spec.suspended` gate off a SIGSTOP-driven spec toggle reaches
+    /// this substrate rather than re-authoring the two-link
+    /// `.get(<key>).and_then(|v| v.as_bool())` chain by hand.
+    ///
+    /// ### Naming — `get_bool`, not `as_bool` or `bool_at`
+    ///
+    /// Same discipline as the three sibling axes — the trait method
+    /// deliberately does NOT collide with `serde_json::Value::as_bool`
+    /// (the inherent projection on a single `Value` handle) nor with
+    /// `serde_json::Value::get` (the inherent slot-lookup returning
+    /// `Option<&Value>`). A name collision would let a caller who has
+    /// [`ValueGetExt`] in scope resolve to one of the inherent methods
+    /// by accident (inherent methods win over trait methods in method
+    /// resolution) and silently drop half of the paired chain. The
+    /// `get_bool(<key>)` shape names the intent: look up the slot at
+    /// `<key>`, project the returned handle to `bool`, in ONE call.
+    ///
+    /// ### `#[must_use]`
+    ///
+    /// Every consumer either binds the returned `Option<bool>` into a
+    /// downstream `if let Some(b) = ...` gate, a
+    /// `.unwrap_or_default()` / `.unwrap_or(false)` fallback, or a
+    /// pattern-match arm. Dropping the return silently discards the
+    /// projection entirely, which is never the intended semantic at
+    /// any downstream boolean-flag consumer.
+    ///
+    /// ### Composability
+    ///
+    /// * Key slot is `&str` — matches the sibling axes verbatim;
+    ///   `&'static str` literals and runtime-composed `String`
+    ///   handles both coerce.
+    /// * Returns `Option<bool>` matching the composed inherent chain's
+    ///   own return; a consumer wanting the "absent or non-bool →
+    ///   false" fallback composes `.unwrap_or_default()` (or
+    ///   `.unwrap_or(false)`) at the callsite, keeping the "should
+    ///   this flag default to false or fail loud" decision at the
+    ///   caller rather than baking it into the primitive.
+    /// * Non-object receivers (a `Value::String`, a `Value::Null`)
+    ///   return `None` verbatim via the inherent `Value::get`'s own
+    ///   non-object-arm behaviour, matching the pre-lift chain's
+    ///   semantics on the corner where the caller's status blob is
+    ///   malformed.
+    ///
+    /// A future normalization on the projection — a stricter
+    /// `Value::String("true")` / `Value::String("false")` coercion for
+    /// K8s wire-form drift (K8s occasionally serialises booleans as
+    /// stringified values in edge cases), a per-fleet default policy
+    /// for the absent-slot corner, a `checked` corner that fails loud
+    /// on `Value::Number(0)` / `Value::Number(1)` coercion attempts —
+    /// lands at THIS ONE substrate primitive and every downstream
+    /// boolean-flag reader inherits the upgrade mechanically. No
+    /// per-site edit at any consumer that adopts this primitive.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the projection lives at ONE typed owner on
+    /// the same axis-family the three sibling axes already open; a
+    /// regression that drifted the projection axis at ONE site would
+    /// silently pass every downstream composition and surface as a
+    /// wrong flag at operator-facing gate wording). THEORY.md §III
+    /// (typescape — the axis-family completes coverage over the four
+    /// most-common `Value` shapes any K8s status / spec / manifest
+    /// reader projects, so a caller who imports `ValueGetExt` reaches
+    /// integer counters, string slots, array slots, AND boolean
+    /// flags through ONE trait handle).
+    #[must_use = "a JSON bool projection that isn't bound swallows the flag entirely"]
+    fn get_bool(&self, key: &str) -> Option<bool>;
 }
 
 impl ValueGetExt for Value {
@@ -685,6 +777,11 @@ impl ValueGetExt for Value {
     #[inline]
     fn get_array(&self, key: &str) -> Option<&Vec<Value>> {
         self.get(key).and_then(Value::as_array)
+    }
+
+    #[inline]
+    fn get_bool(&self, key: &str) -> Option<bool> {
+        self.get(key).and_then(Value::as_bool)
     }
 }
 
@@ -715,11 +812,14 @@ impl ValueGetExt for Value {
 ///
 /// The axis-family invariant (a caller who imports `ValueGetExt`
 /// reaches every axis through the same trait handle — pinned at
-/// [`tests::get_array_axis_family_reaches_i64_str_and_array_through_one_trait_import`]
-/// and its `get_str` sibling) extends verbatim to the `Map` receiver:
-/// a single `use tatara_process::json_object::ValueGetExt;` unlocks
-/// every axis on both receiver shapes. A future new axis (e.g. a
-/// `get_bool` for `Value::Bool` slots) adds one method on the trait
+/// [`tests::get_array_axis_family_reaches_i64_str_and_array_through_one_trait_import`],
+/// its `get_str` sibling, and the fourth-axis sibling
+/// [`tests::get_bool_axis_family_reaches_i64_str_array_and_bool_through_one_trait_import`])
+/// extends verbatim to the `Map` receiver: a single
+/// `use tatara_process::json_object::ValueGetExt;` unlocks every
+/// axis on both receiver shapes. A future new axis (e.g. a
+/// `get_object` for `Value::Object` slots, a `get_f64` for
+/// `Value::Number` truncated to `f64`) adds one method on the trait
 /// and inherits both impls; there is no separate `MapGetExt` peer to
 /// keep in sync.
 ///
@@ -744,6 +844,11 @@ impl ValueGetExt for Map<String, Value> {
     #[inline]
     fn get_array(&self, key: &str) -> Option<&Vec<Value>> {
         self.get(key).and_then(Value::as_array)
+    }
+
+    #[inline]
+    fn get_bool(&self, key: &str) -> Option<bool> {
+        self.get(key).and_then(Value::as_bool)
     }
 }
 
@@ -1788,6 +1893,254 @@ mod tests {
         assert_eq!(n, Some(7));
         assert_eq!(s, Some("hello"));
         assert_eq!(a.map(Vec::len), Some(3));
+    }
+
+    // ─── ValueGetExt::get_bool substrate pins ───────────────────────
+    //
+    // Fail-before-pass-after granularity: the `ValueGetExt::get_bool`
+    // trait method did not exist before this commit, so each test
+    // below fails to compile pre-lift (a bare `Value` receiver has no
+    // `.get_bool(<key>)` inherent method — only the upstream
+    // `.get(<key>).and_then(|v| v.as_bool())` chain). Post-lift they
+    // collectively pin the boolean-axis projection at ONE substrate
+    // owner — a regression that drifted the projection axis
+    // (`as_bool` → `as_str` narrowing the accepted variant, `.get()`
+    // → `.pointer()` losing the direct-child semantics), promoted the
+    // absent-slot corner to a synthesis (`None → Ok(false)`
+    // fallthrough that would silently swallow a mistyped slot), or
+    // narrowed the `Option<bool>` return to a bare `bool` (dropping
+    // the "absent vs false" distinction) surfaces HERE rather than
+    // as silent operator-facing skew across every downstream K8s
+    // boolean-flag consumer (a `controller` / `blockOwnerDeletion`
+    // OwnerReference gate, a `spec.suspended` SIGSTOP toggle read,
+    // an `identity.name_override` phase-status probe, a
+    // `hostNetwork` pod-spec gate).
+
+    #[test]
+    fn get_bool_present_bool_slot_returns_the_flag() {
+        // Ok-arm invariant on both polarities: a `Value::Bool(true)`
+        // slot projects to `Some(true)` and a `Value::Bool(false)`
+        // slot projects to `Some(false)`. A regression that only
+        // returned `Some(true)` on the truthy arm and folded the
+        // falsy arm to `None` (a "presence + truth" conflation) would
+        // silently gate every downstream `spec.suspended = false`
+        // resume-arm consumer as "flag absent" and mis-fire the
+        // heartbeat pause release.
+        let obj = json!({ "on": true, "off": false });
+        assert_eq!(obj.get_bool("on"), Some(true));
+        assert_eq!(obj.get_bool("off"), Some(false));
+    }
+
+    #[test]
+    fn get_bool_absent_slot_returns_none() {
+        // Absent-slot arm: a missing key returns `None` verbatim,
+        // matching the composed inherent chain's semantics. A
+        // regression that promoted the absent corner to `Some(false)`
+        // (folding "the operator didn't set the flag" into "the
+        // operator set the flag false") would silently invert the
+        // meaning at every consumer whose `unwrap_or(true)` fallback
+        // expected the absent corner to reach the true arm.
+        let obj = json!({ "on": true });
+        assert!(obj.get_bool("missing").is_none());
+    }
+
+    #[test]
+    fn get_bool_wrong_variant_returns_none() {
+        // Wrong-variant arm: a slot present but non-boolean
+        // (`Value::String`, `Value::Number`, `Value::Null`,
+        // `Value::Array`, `Value::Object`) projects to `None` — the
+        // primitive does NOT coerce a `Value::String("true")` /
+        // `Value::Number(1)` into a boolean, matching the inherent
+        // `Value::as_bool` semantics. A regression that added truthy
+        // coercion would silently promote a K8s wire-form drift (a
+        // stringified boolean) into an accepted flag at every
+        // consumer, which is never the intended semantic at any
+        // downstream boolean-flag reader — a K8s API server returning
+        // a stringified boolean signals wire-form drift the consumer
+        // should notice.
+        let obj = json!({
+            "stringy": "true",
+            "numeric": 1,
+            "null_valued": null,
+            "arrayed": [true],
+            "nested": { "on": true },
+        });
+        assert!(obj.get_bool("stringy").is_none());
+        assert!(obj.get_bool("numeric").is_none());
+        assert!(obj.get_bool("null_valued").is_none());
+        assert!(obj.get_bool("arrayed").is_none());
+        assert!(obj.get_bool("nested").is_none());
+    }
+
+    #[test]
+    fn get_bool_non_object_receiver_returns_none() {
+        // Non-object receiver arm: a `Value::String` / `Value::Null`
+        // / `Value::Array` / `Value::Number` / `Value::Bool` receiver
+        // returns `None` verbatim via the inherent `Value::get`'s
+        // own non-object-arm behaviour — the primitive doesn't
+        // special-case the case where the caller's status blob is
+        // malformed at the receiver level. Matches the sibling axis
+        // methods' `get_i64` / `get_str` / `get_array` behaviour on
+        // the same corner.
+        assert!(Value::Null.get_bool("k").is_none());
+        assert!(Value::String("hi".into()).get_bool("k").is_none());
+        assert!(json!([true, false]).get_bool("k").is_none());
+        assert!(json!(1).get_bool("k").is_none());
+        assert!(json!(true).get_bool("k").is_none());
+    }
+
+    #[test]
+    fn get_bool_matches_pre_lift_hand_authored_chain_bytewise() {
+        // Byte-shape parity pin: `<value>.get_bool(<key>)` MUST return
+        // the SAME `Option<bool>` the pre-lift `.get(<key>).and_then(
+        // Value::as_bool)` two-link chain produced. Sweeps every
+        // reachable corner (both polarities present, wrong-variant,
+        // absent) so a regression at the primitive that broke byte
+        // identity with the pre-lift chain at ONE corner surfaces
+        // here rather than as a subtle per-slot divergence at
+        // downstream K8s-flag readers.
+        let v = json!({
+            "on": true,
+            "off": false,
+            "stringy": "true",
+            "numeric": 1,
+            "null_valued": null,
+        });
+        for key in ["on", "off", "stringy", "numeric", "null_valued", "missing"] {
+            let via_primitive = v.get_bool(key);
+            let via_pre_lift = v.get(key).and_then(Value::as_bool);
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "corner `{key}` on Value receiver must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn get_bool_axis_family_reaches_i64_str_array_and_bool_through_one_trait_import() {
+        // Axis-family completion pin: a caller who imports
+        // `ValueGetExt` reaches the integer axis (`get_i64`), the
+        // string axis (`get_str`), the array axis (`get_array`), AND
+        // the boolean axis (`get_bool`) through the SAME trait
+        // handle. Structurally: a bound `T: ValueGetExt` reaches all
+        // four methods. Extends the pre-existing
+        // `get_array_axis_family_reaches_i64_str_and_array_through_one_trait_import`
+        // sibling to cover the fourth axis; a regression that
+        // opened a peer `ValueGetBoolExt` (or split the trait into
+        // per-axis peers) would fail this bound at compile time
+        // rather than surface as a silent "one axis is missing on
+        // one receiver" drift at every downstream consumer.
+        fn probe<T: ValueGetExt>(
+            t: &T,
+        ) -> (Option<i64>, Option<&str>, Option<&Vec<Value>>, Option<bool>) {
+            (
+                t.get_i64("n"),
+                t.get_str("s"),
+                t.get_array("a"),
+                t.get_bool("b"),
+            )
+        }
+        let mixed = json!({ "n": 7, "s": "hello", "a": [1, 2, 3], "b": true });
+        let (n, s, a, b) = probe(&mixed);
+        assert_eq!(n, Some(7));
+        assert_eq!(s, Some("hello"));
+        assert_eq!(a.map(Vec::len), Some(3));
+        assert_eq!(b, Some(true));
+    }
+
+    #[test]
+    fn map_receiver_get_bool_matches_pre_lift_hand_authored_chain_bytewise() {
+        // Receiver-parity pin on the boolean axis: an `&Map<String,
+        // Value>` handle reaches `.get_bool(<key>)` and returns the
+        // SAME `Option<bool>` the `Value` receiver's arm produces for
+        // an equivalent `Value::Object(m)` walk. Sibling to
+        // `map_receiver_get_i64_matches_pre_lift_hand_authored_chain_bytewise`
+        // on the integer axis; both close the "widening preserves
+        // semantics" invariant across all four axes of the family.
+        let obj: Map<String, Value> = json!({
+            "on": true,
+            "off": false,
+            "stringy": "true",
+            "numeric": 1,
+            "null_valued": null,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        for key in ["on", "off", "stringy", "numeric", "null_valued", "missing"] {
+            let via_primitive = obj.get_bool(key);
+            let via_pre_lift = obj.get(key).and_then(Value::as_bool);
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "corner `{key}` on Map receiver's boolean axis must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn map_receiver_get_bool_matches_value_object_arm_bytewise() {
+        // Cross-receiver coherence pin on the boolean axis: an
+        // `&Map<String, Value>` receiver's `.get_bool(<key>)` MUST
+        // return the SAME `Option<bool>` walking the equivalent
+        // `Value::Object(m)` through the pre-existing `Value` impl
+        // would. Sibling to
+        // `map_receiver_get_str_matches_value_object_arm_bytewise` on
+        // the string axis — a regression that specialised the Map
+        // arm's boolean projection at ONE receiver but not the other
+        // would silently split the two receiver shapes' behaviour
+        // and break the "widening preserves semantics" invariant on
+        // the boolean axis specifically.
+        let v: Value = json!({
+            "controller": true,
+            "blockOwnerDeletion": true,
+            "suspended": false,
+            "nested": { "on": true },
+        });
+        let m: &Map<String, Value> = v.as_object().unwrap();
+        for key in [
+            "controller",
+            "blockOwnerDeletion",
+            "suspended",
+            "nested",
+            "missing",
+        ] {
+            assert_eq!(
+                <Map<String, Value> as ValueGetExt>::get_bool(m, key),
+                <Value as ValueGetExt>::get_bool(&v, key),
+                "receiver-shape parity: `{key}` must project identically through both impls",
+            );
+        }
+    }
+
+    #[test]
+    fn map_receiver_axis_family_reaches_all_four_axes_through_one_trait_import() {
+        // Axis-family completion pin on the Map receiver: a generic
+        // `T: ValueGetExt` bound reaches ALL FOUR axes on the Map
+        // arm — the SAME structural invariant the sibling
+        // `get_bool_axis_family_reaches_i64_str_array_and_bool_through_one_trait_import`
+        // pins for the `Value` receiver. Walking the SAME `probe`-
+        // style generic through the Map arm here means a regression
+        // that split the trait into per-axis peers would break the
+        // invariant on both receiver shapes simultaneously.
+        fn probe<T: ValueGetExt>(
+            t: &T,
+        ) -> (Option<i64>, Option<&str>, Option<&Vec<Value>>, Option<bool>) {
+            (
+                t.get_i64("n"),
+                t.get_str("s"),
+                t.get_array("a"),
+                t.get_bool("b"),
+            )
+        }
+        let m: Map<String, Value> = json!({ "n": 7, "s": "hello", "a": [1, 2, 3], "b": true })
+            .as_object()
+            .unwrap()
+            .clone();
+        let (n, s, a, b) = probe(&m);
+        assert_eq!(n, Some(7));
+        assert_eq!(s, Some("hello"));
+        assert_eq!(a.map(Vec::len), Some(3));
+        assert_eq!(b, Some(true));
     }
 
     // ─── ValueGetExt receiver-shape widening — Map impl pins ─────────

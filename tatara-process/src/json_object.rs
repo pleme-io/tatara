@@ -134,7 +134,7 @@ impl ValueObjectExt for Value {
 /// a string-typed key" write shape that every consumer downstream of
 /// the guard uses to populate the returned `&mut Map`.
 ///
-/// Pre-lift the shape was hand-authored at THIRTEEN production emit
+/// Pre-lift the shape was hand-authored at SEVENTEEN production emit
 /// sites across `tatara-reconciler` past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication threshold:
 ///
@@ -153,8 +153,23 @@ impl ValueObjectExt for Value {
 ///   (`ROLE`, `EXPORT_INDEX`) each restating the same insert shape.
 /// * `edges::IngressEdge::render` × 1 — the cert-manager
 ///   `cluster-issuer` annotation, restating the same insert shape.
+/// * `edges::routing_edge_labels` × 2 — the routing-edge `metadata.
+///   labels` map's non-ownership slots (`APP`, `ROUTING_FORM`), each
+///   restating the same `labels.insert(<annotation-const>.to_string(),
+///   Value::String(<val>.into()))` shape past the ★★ PRIME-DIRECTIVE
+///   ≥ 2 duplication threshold — one of TWO adjacent bypass sites the
+///   substrate owner reaches through this lift.
+/// * `render::mark_resources_as_adopting` × 2 — the `encapsulation-
+///   mode` + `adopted-release` annotation stamps on adoption-mode
+///   render, each restating the same `anns_obj.insert("<key>".into(),
+///   Value::String(<val>.into()))` shape past the ★★ PRIME-DIRECTIVE
+///   ≥ 2 duplication threshold. The adopted-release value slot also
+///   routes its `<ns>/<release>` join through the sibling
+///   [`crate::qualified_process_ref`] substrate composer, closing a
+///   bare `format!("{ns}/{name}")` bypass on the `<ns>/<name>` join
+///   axis at this same callsite.
 ///
-/// All THIRTEEN pre-lift sites restated the SAME 2-line shape verbatim,
+/// All SEVENTEEN pre-lift sites restated the SAME 2-line shape verbatim,
 /// differing only in the `&'static str` / `String` key + the `&str` /
 /// `String` value at each callsite. A copy-paste that dropped the
 /// `Value::String(...)` wrap (a caller who reached for
@@ -195,7 +210,7 @@ impl ValueObjectExt for Value {
 ///
 /// Theory anchor: THEORY.md §VI.1 (generation over composition — the
 /// `.insert(<k>.into(), Value::String(<v>.into()))` shape recurred at
-/// THIRTEEN hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// SEVENTEEN hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication trigger, and is lifted to ONE substrate owner here).
 /// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
 /// regression that drifts the string-slot write shape at ONE consumer

@@ -480,17 +480,34 @@ fn mark_resources_as_adopting(resources: Vec<Value>, process: &Process) -> Vec<V
                         .entry("annotations")
                         .or_insert_with(|| Value::Object(serde_json::Map::new()));
                     if let Some(anns_obj) = anns.as_object_mut() {
-                        anns_obj.insert(
-                            "tatara.pleme.io/encapsulation-mode".into(),
-                            Value::String("Adopt".into()),
-                        );
+                        // Both annotation-slot writes route through the
+                        // workspace-wide substrate owner
+                        // [`JsonMapStrExt::insert_str`] — pre-lift each
+                        // site hand-authored the `.insert(<k>.into(),
+                        // Value::String(<v>.into()))` shape verbatim,
+                        // bypassing the substrate owner. Post-lift a
+                        // future normalization step at `insert_str` (a
+                        // per-fleet key canonicalization, a zero-alloc
+                        // `Cow<'static, str>` value variant, a debug-
+                        // build assertion, a tracing hook) reaches this
+                        // encapsulation-mode / adopted-release annotation
+                        // pair mechanically alongside every other JSON-
+                        // mutating helper.
+                        anns_obj.insert_str("tatara.pleme.io/encapsulation-mode", "Adopt");
                         if let Some(adopt) = adoption_ref {
-                            anns_obj.insert(
-                                "tatara.pleme.io/adopted-release".into(),
-                                Value::String(format!(
-                                    "{}/{}",
-                                    adopt.namespace, adopt.release_name
-                                )),
+                            // The `<ns>/<release>` join rides through the
+                            // workspace-wide substrate composer
+                            // [`tatara_process::qualified_process_ref`]
+                            // — the ONE owner of the `<ns>/<name>` shape
+                            // every K8s-coordinate pair in the workspace
+                            // renders through, matching the same-shape
+                            // routing at the SSA-time ownership seed.
+                            anns_obj.insert_str(
+                                "tatara.pleme.io/adopted-release",
+                                tatara_process::qualified_process_ref(
+                                    &adopt.namespace,
+                                    &adopt.release_name,
+                                ),
                             );
                         }
                     }
@@ -1700,5 +1717,163 @@ mod routing_tests {
         let middle: Vec<_> = host.split('.').collect();
         assert_eq!(middle[1].len(), 8); // BLAKE3:8 hex
         assert!(middle[1].chars().all(|c| c.is_ascii_hexdigit()));
+    }
+}
+
+#[cfg(test)]
+mod mark_resources_as_adopting_tests {
+    //! Substrate-routing pins for [`mark_resources_as_adopting`]'s two
+    //! annotation-slot writes (`tatara.pleme.io/encapsulation-mode` +
+    //! `tatara.pleme.io/adopted-release`). Pre-lift each site hand-
+    //! authored the `anns_obj.insert(<k>.into(), Value::String(<v>.
+    //! into()))` shape verbatim, bypassing the workspace-wide substrate
+    //! owner [`JsonMapStrExt::insert_str`]. Post-lift both slots ride
+    //! through `insert_str` and the `<ns>/<release>` join at the
+    //! adopted-release value slot rides through the sibling
+    //! [`tatara_process::qualified_process_ref`] substrate composer.
+    //!
+    //! No pre-lift test module existed for this function — every
+    //! pin below is a fresh fail-before-pass-after fixture that binds
+    //! the substrate-routed output at fail-loud granularity, so a
+    //! regression that inlined the pre-lift `.insert(<k>.into(),
+    //! Value::String(<v>.into()))` shape at either callsite fails
+    //! HERE at the substrate-routed hand-authored composition pin
+    //! rather than as silent per-annotation skew across the two slots.
+    use super::*;
+    use tatara_process::crd::ProcessSpec;
+    use tatara_process::encapsulates::{
+        EncapsulatesSpec, EncapsulationKind, EncapsulationMode, ExistingHelmRelease,
+    };
+    use tatara_process::json_object::JsonMapStrExt;
+
+    fn adopt_process(rel_ns: &str, rel_hr_name: &str, rel_release: &str) -> Process {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.encapsulates = Some(EncapsulatesSpec {
+            kind: EncapsulationKind {
+                existing_helm_release: Some(ExistingHelmRelease {
+                    namespace: rel_ns.into(),
+                    name: rel_hr_name.into(),
+                    release_name: rel_release.into(),
+                }),
+                existing_kustomization: None,
+                bare_workload: None,
+            },
+            mode: EncapsulationMode::Adopt,
+        });
+        Process::new("r1", spec)
+    }
+
+    fn seed_resource() -> Value {
+        json!({
+            "apiVersion": "helm.toolkit.fluxcd.io/v2",
+            "kind": "HelmRelease",
+            "metadata": { "name": "demo-hr", "namespace": "demo-ns" },
+        })
+    }
+
+    #[test]
+    fn stamps_encapsulation_mode_slot_via_insert_str_substrate() {
+        // Substrate-routing pin: the `encapsulation-mode` annotation
+        // slot writes the fixed `"Adopt"` value through
+        // `JsonMapStrExt::insert_str`. A regression that inlined the
+        // pre-lift `.insert("tatara.pleme.io/encapsulation-mode".into(),
+        // Value::String("Adopt".into()))` shape would still produce
+        // byte-identical output today but silently skip any future
+        // normalization step at the substrate primitive.
+        let p = adopt_process("demo-ns", "demo-hr", "demo-release");
+        let out = mark_resources_as_adopting(vec![seed_resource()], &p);
+        assert_eq!(out.len(), 1);
+        assert_eq!(
+            out[0]["metadata"]["annotations"]["tatara.pleme.io/encapsulation-mode"],
+            "Adopt",
+        );
+    }
+
+    #[test]
+    fn stamps_adopted_release_slot_through_qualified_process_ref_substrate() {
+        // Substrate-routing pin: the `adopted-release` annotation
+        // slot's `<ns>/<release>` join rides through
+        // `tatara_process::qualified_process_ref` — the ONE workspace-
+        // wide owner of the `<ns>/<name>` shape. Pre-lift the site
+        // hand-authored `format!("{}/{}", adopt.namespace,
+        // adopt.release_name)` inline, bypassing the composer. Post-
+        // lift a future normalization of the qualified-ref shape
+        // (case-fold, unicode collation, `<cluster>/<ns>/<name>`
+        // cross-cluster form) reaches this adoption-mode diagnostic
+        // annotation mechanically alongside every other `<ns>/<name>`
+        // consumer across the workspace.
+        let p = adopt_process("demo-ns", "demo-hr", "demo-release");
+        let out = mark_resources_as_adopting(vec![seed_resource()], &p);
+        let via_substrate = tatara_process::qualified_process_ref("demo-ns", "demo-release");
+        assert_eq!(
+            out[0]["metadata"]["annotations"]["tatara.pleme.io/adopted-release"],
+            Value::String(via_substrate),
+        );
+    }
+
+    #[test]
+    fn adopted_release_slot_matches_pre_lift_byte_shape() {
+        // Byte-shape parity pin: the substrate-routed
+        // `qualified_process_ref` output byte-matches the pre-lift
+        // hand-authored `format!("{}/{}", adopt.namespace,
+        // adopt.release_name)` join at every existing operator-facing
+        // grep site. A regression that shifted the separator, dropped
+        // an axis, or reordered them fails HERE rather than at every
+        // downstream dashboard.
+        let p = adopt_process("ns-x", "hr-x", "rel-x");
+        let out = mark_resources_as_adopting(vec![seed_resource()], &p);
+        assert_eq!(
+            out[0]["metadata"]["annotations"]["tatara.pleme.io/adopted-release"],
+            "ns-x/rel-x",
+        );
+    }
+
+    #[test]
+    fn substrate_routed_annotation_map_matches_pre_lift_hand_authored_bytewise() {
+        // End-to-end byte-shape parity pin: the composer's annotation
+        // block (via `insert_str` + `qualified_process_ref`) byte-
+        // matches a hand-authored annotation block seeded via the
+        // same two substrate primitives. Pins BOTH slots at once so a
+        // regression that added, dropped, or reshaped one slot
+        // surfaces HERE, alongside the two per-slot pins above.
+        let p = adopt_process("demo-ns", "demo-hr", "demo-release");
+        let out = mark_resources_as_adopting(vec![seed_resource()], &p);
+
+        let mut via_substrate = serde_json::Map::new();
+        via_substrate.insert_str("tatara.pleme.io/encapsulation-mode", "Adopt");
+        via_substrate.insert_str(
+            "tatara.pleme.io/adopted-release",
+            tatara_process::qualified_process_ref("demo-ns", "demo-release"),
+        );
+
+        let got = out[0]["metadata"]["annotations"].as_object().unwrap();
+        assert_eq!(
+            got, &via_substrate,
+            "mark_resources_as_adopting must route both slots through JsonMapStrExt::insert_str + \
+             the <ns>/<release> join through qualified_process_ref",
+        );
+    }
+
+    #[test]
+    fn without_encapsulation_stamps_only_encapsulation_mode_slot() {
+        // The `adopted-release` slot is conditional on the Process's
+        // `encapsulates.kind.existing_helm_release` being populated.
+        // A greenfield Process (no `encapsulates` block) still gets
+        // the fixed `encapsulation-mode = Adopt` slot but not the
+        // adopted-release back-reference. Pins the conditional so a
+        // regression that flipped the branch (stamping a stale slot
+        // or dropping the mode slot) surfaces HERE.
+        let p = Process::new("r1", ProcessSpec::gate_compute_defaults());
+        let out = mark_resources_as_adopting(vec![seed_resource()], &p);
+        assert_eq!(
+            out[0]["metadata"]["annotations"]["tatara.pleme.io/encapsulation-mode"],
+            "Adopt",
+        );
+        assert!(
+            out[0]["metadata"]["annotations"]
+                .get("tatara.pleme.io/adopted-release")
+                .is_none(),
+            "adopted-release must be omitted when no ExistingHelmRelease is declared",
+        );
     }
 }

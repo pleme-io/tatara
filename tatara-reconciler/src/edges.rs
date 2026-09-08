@@ -173,14 +173,18 @@ pub trait Edge {
 /// at every downstream edge kind).
 pub(crate) fn routing_edge_labels(ctx: &EdgeContext<'_>) -> serde_json::Map<String, Value> {
     let mut labels = crate::ssapply::ownership_labels(ctx.process_ref);
-    labels.insert(
-        annotations::APP.to_string(),
-        Value::String(ctx.hostname.app.clone()),
-    );
-    labels.insert(
-        annotations::ROUTING_FORM.to_string(),
-        Value::String(ctx.routing_form().as_str().to_string()),
-    );
+    // Both non-ownership slot writes route through the workspace-wide
+    // substrate owner [`JsonMapStrExt::insert_str`] for the
+    // `.insert(<k>.to_string(), Value::String(<v>.into()))` shape.
+    // Pre-lift the two slots hand-authored the 3-slot chain verbatim,
+    // bypassing the substrate owner and opening a workspace-wide drift
+    // corner where a future normalization step at `insert_str` (a per-
+    // fleet key canonicalization, a zero-alloc `Cow<'static, str>` value
+    // variant, a debug-build assertion, a tracing hook) would silently
+    // skip the routing-edge labels axis while every other JSON-mutating
+    // helper in the workspace inherited the upgrade mechanically.
+    labels.insert_str(annotations::APP, ctx.hostname.app.clone());
+    labels.insert_str(annotations::ROUTING_FORM, ctx.routing_form().as_str());
     labels
 }
 
@@ -996,6 +1000,44 @@ mod tests {
             );
 
             assert_eq!(via_composer, hand_authored);
+        }
+    }
+
+    #[test]
+    fn routing_edge_labels_routes_app_and_routing_form_slots_through_insert_str_substrate() {
+        // Substrate-routing pin: the two non-ownership label slots
+        // (APP + ROUTING_FORM) ride through
+        // [`JsonMapStrExt::insert_str`] — the ONE workspace-wide
+        // substrate owner of the `.insert(<k>.into(), Value::String
+        // (<v>.into()))` string-slot write shape. Pre-lift each of the
+        // two slots hand-authored the 3-slot chain verbatim, bypassing
+        // the substrate. A regression that inlined the pre-lift shape
+        // back at either callsite (a `.insert(<annotation-const>.
+        // to_string(), Value::String(<val>.into()))` restatement) would
+        // still produce byte-identical output today, but a future
+        // normalization at the substrate primitive (a key trim, a
+        // value canonicalization, a tracing hook) would silently skip
+        // the routing-edge labels axis. Post-lift the composer's
+        // byte-shape output equals the substrate-routed hand-authored
+        // composition, and any future upgrade at `insert_str` reaches
+        // both slots mechanically alongside every other consumer.
+        let h = api_hostname();
+        let b = api_backend();
+        for is_stable in [true, false] {
+            let c = ctx(&h, &b, "host", "demo-prod", is_stable);
+            let via_composer = routing_edge_labels(&c);
+
+            // Substrate-routed hand-authored composition — the shape
+            // the post-lift composer must byte-match. Uses `insert_str`
+            // directly at both non-ownership slots.
+            let mut via_substrate = crate::ssapply::ownership_labels(c.process_ref);
+            via_substrate.insert_str(annotations::APP, c.hostname.app.clone());
+            via_substrate.insert_str(annotations::ROUTING_FORM, c.routing_form().as_str());
+
+            assert_eq!(
+                via_composer, via_substrate,
+                "routing_edge_labels must route non-ownership slots through JsonMapStrExt::insert_str",
+            );
         }
     }
 

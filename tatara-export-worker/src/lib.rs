@@ -42,7 +42,7 @@ use tatara_process::export::{
     RunMarkerSource,
 };
 use tatara_process::json_object::JsonMapStrExt;
-use tatara_process::receipt::ReceiptEnvelope;
+use tatara_process::receipt::{ReceiptEnvelope, ReceiptKind};
 use tatara_process::string_map::BTreeMapStrExt;
 
 // ─── Run id resolution ─────────────────────────────────────────────
@@ -277,10 +277,11 @@ impl ExportOutcome {
 /// - **artifact_hash** ← the shipped event bytes (post-`prepare_event_payload`)
 /// - **control_hash**  ← canonical JSON of the `ExportOutcome`
 ///
-/// Returned envelope has `kind = "tatara.export"`, `process_ref`
-/// stamped as `{namespace}/{name}`, and structured `evidence`
-/// carrying the run id, outcome kind, and any error string. The
-/// composed root + version + generated_at are set by `build()`.
+/// Returned envelope has `kind = ReceiptKind::Export.as_str()`
+/// (wire-form `"tatara.export"`), `process_ref` stamped as
+/// `{namespace}/{name}`, and structured `evidence` carrying the run
+/// id, outcome kind, and any error string. The composed root +
+/// version + generated_at are set by `build()`.
 ///
 /// tatara-reconciler's `JobAttested` evaluator reads this envelope
 /// from the worker's ConfigMap and verifies the root before
@@ -314,8 +315,24 @@ pub fn compose_export_receipt(
     let artifact_hash = hex_blake3(shipped_event_bytes);
     let control_hash = hex_blake3(&canonical_bytes(outcome)?);
 
+    // The `kind` slot routes through the typed
+    // `tatara_process::receipt::ReceiptKind::Export` variant — pre-lift
+    // this was a bare `"tatara.export"` `&'static str` argument passed
+    // to `ReceiptEnvelope::build`, one hand-authored production
+    // restatement of a wire-form literal `ReceiptKind::ClosedLoopAuth`
+    // and every other substrate-emitted kind (`DbMigration`,
+    // `TestSuite`, `NixBuild`) already route through the typed variant
+    // at their author sites. Post-lift the export worker joins the same
+    // typed dispatch shape every peer receipt author uses — a rename of
+    // the wire form (`"tatara.export"` → `"export"`, or a normalization
+    // pass to kebab-case) lands at the ONE `ReceiptKind::as_str` arm in
+    // `tatara-process::receipt` and this callsite inherits the upgrade
+    // mechanically, and every downstream consumer that iterates
+    // `ReceiptKind::ALL` (a future kind-keyed verifier registry, a
+    // dashboard completion list, `tatara-check`'s receipt-kind
+    // enumeration) sees the Export variant without a grep.
     let mut env = ReceiptEnvelope::build(
-        "tatara.export",
+        ReceiptKind::Export,
         intent_hash,
         artifact_hash,
         control_hash,
@@ -654,6 +671,15 @@ mod tests {
         )
         .expect("receipt");
         assert_eq!(r.version, RECEIPT_VERSION);
+        // Kind wire-form routes through the ONE typed
+        // `tatara_process::receipt::ReceiptKind::Export` arm — a
+        // regression that reinlined `"tatara.export"` here or drifted
+        // the wire form on the substrate side (a `"export"` rename, a
+        // kebab-case normalization) would surface HERE at this pin
+        // rather than as silent operator-visible skew between the
+        // envelope this test asserts and the envelope
+        // `compose_export_receipt` actually builds.
+        assert_eq!(r.kind, ReceiptKind::Export.as_str());
         assert_eq!(r.kind, "tatara.export");
         // Each pillar is a 64-char BLAKE3 hex digest.
         assert_eq!(r.intent_hash.len(), 64);
@@ -667,6 +693,57 @@ mod tests {
         // verify_root() agrees the composed_root was built correctly
         // — same guarantee tatara-reconciler's evaluator checks.
         assert!(r.verify_root(None));
+    }
+
+    #[test]
+    fn export_receipt_kind_slot_routes_through_typed_receipt_kind_export_arm() {
+        // Fail-before-pass-after routing pin: the receipt-`kind` field
+        // this crate stamps at every `compose_export_receipt` call
+        // MUST route through the ONE typed
+        // `tatara_process::receipt::ReceiptKind::Export` variant, not
+        // a bare `"tatara.export"` `&'static str` literal (which was
+        // the pre-lift shape).
+        //
+        // A regression that reinlined the wire literal at the
+        // `ReceiptEnvelope::build(...)` kind slot — silently reopening
+        // the bypass this commit closed — would fail HERE at the
+        // routing pin rather than as post-`ReceiptKind::Export::as_str`-
+        // rename operator-facing skew between the wire form the
+        // reconciler `JobAttested` verifier gates on and the wire form
+        // the export worker actually writes into its receipt CM.
+        //
+        // Also binds the shape of the typed dispatch: because
+        // `From<ReceiptKind> for String` composes `as_str().to_owned()`,
+        // an export-worker-built envelope's `kind` field is byte-
+        // identical to `ReceiptKind::Export.as_str()`. A future rename
+        // (`"tatara.export"` → `"export"`, a kebab-case normalization)
+        // lands at the ONE `as_str` arm in the substrate; both the
+        // wire form THIS crate stamps and every peer receipt author's
+        // wire form advance in lockstep.
+        let s = http_spec("test-report");
+        let r = compose_export_receipt(&s, b"x", &ExportOutcome::Shipped, None, "r", None)
+            .expect("receipt");
+        assert_eq!(
+            r.kind,
+            ReceiptKind::Export.as_str(),
+            "kind slot must route through the ReceiptKind::Export typed variant",
+        );
+        assert_eq!(
+            ReceiptKind::Export.as_str(),
+            "tatara.export",
+            "wire-form pin — a bump on the substrate side surfaces here at the export worker",
+        );
+        // Cross-check via the substrate's own decoder: the built
+        // envelope's kind decodes back through `known_kind()` to
+        // `Some(ReceiptKind::Export)`. Pre-lift the export kind was
+        // an OPEN wire literal (`"tatara.export"`) that
+        // `known_kind()` returned `None` for — every peer receipt
+        // author (`ClosedLoopAuth`, `DbMigration`, `TestSuite`,
+        // `NixBuild`) already round-tripped through this decoder, and
+        // the export worker was the ONE substrate-emitted kind that
+        // did not. Post-lift the closed-set view is complete for
+        // every substrate-emitted receipt.
+        assert_eq!(r.known_kind(), Some(ReceiptKind::Export));
     }
 
     #[test]

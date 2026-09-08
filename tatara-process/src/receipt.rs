@@ -471,6 +471,25 @@ pub enum ReceiptKind {
     /// chain so a derivation's output is provable on its owning
     /// Process.
     NixBuild,
+    /// Export-worker shipments. Emitted by `tatara-export-worker` when
+    /// a declared [`crate::export::ExportSpec`] finishes shipping its
+    /// artifact to the chosen [`crate::export::VectorChannel`]; the
+    /// three pillars are the canonical `ExportSpec` (intent), the
+    /// shipped event bytes (artifact), and the canonical
+    /// `ExportOutcome` (control). Sibling to [`Self::ClosedLoopAuth`]
+    /// on the "typed receipt kind emitted by a bundled Job" axis —
+    /// both variants share the same [`ReceiptEnvelope`] wire shape,
+    /// the same [`crate::three_pillar`] compose contract, and the same
+    /// `tatara-reconciler::boundary::JobAttested` reader-side verifier
+    /// (which advances the Process out of `Releasing` iff the
+    /// composed_root matches).
+    ///
+    /// Wire form `"tatara.export"` (dot-separated rather than
+    /// kebab-case; predates the closed-set lift). The typed
+    /// projection binds the wire literal at ONE [`Self::as_str`] arm
+    /// so a future rename lands at that arm alone rather than at
+    /// every author site + docstring restatement.
+    Export,
 }
 
 impl ReceiptKind {
@@ -478,9 +497,9 @@ impl ReceiptKind {
     /// source of truth that drives the [`Self::from_str`] decode sweep
     /// AND any future enumeration consumer (kind-keyed verifier
     /// registry, dashboard completion list, `tatara-check` receipt-kind
-    /// enumeration). Adding a fifth variant (e.g. `Provenance` →
+    /// enumeration). Adding a sixth variant (e.g. `Provenance` →
     /// `"provenance-attest"`) lands at one `ALL` entry + one `as_str`
-    /// arm — exhaustively checked by the compiler (the `[Self; 4]`
+    /// arm — exhaustively checked by the compiler (the `[Self; 5]`
     /// array literal forces the arity) AND by the per-variant
     /// truth-table tests below.
     ///
@@ -489,11 +508,12 @@ impl ReceiptKind {
     /// [`crate::phase::ProcessPhase::ALL`],
     /// [`crate::boundary::ConditionKind::ALL`],
     /// [`crate::intent::IntentKind::ALL`].
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::ClosedLoopAuth,
         Self::DbMigration,
         Self::TestSuite,
         Self::NixBuild,
+        Self::Export,
     ];
 
     /// Canonical kebab-case wire-format kind — the literal that lands
@@ -516,6 +536,7 @@ impl ReceiptKind {
             Self::DbMigration => "db-migration",
             Self::TestSuite => "test-suite",
             Self::NixBuild => "nix-build",
+            Self::Export => "tatara.export",
         }
     }
 }
@@ -1600,6 +1621,16 @@ generated_at:  2026-05-19T12:00:00Z
         assert_eq!(ReceiptKind::DbMigration.as_str(), "db-migration");
         assert_eq!(ReceiptKind::TestSuite.as_str(), "test-suite");
         assert_eq!(ReceiptKind::NixBuild.as_str(), "nix-build");
+        // The Export variant preserves the dot-separated wire form
+        // `"tatara.export"` the tatara-export-worker binary published
+        // pre-lift (four kebab-case peers on the same closed set, one
+        // dot-separated latecomer — the shape is a wire-format
+        // historical artifact, not a substrate style opinion). A
+        // regression that "normalized" the spelling to `"export"` or
+        // `"tatara-export"` would silently break every deployed
+        // reconciler `JobAttested` verifier that reads the export
+        // worker's receipt ConfigMap.
+        assert_eq!(ReceiptKind::Export.as_str(), "tatara.export");
     }
 
     #[test]

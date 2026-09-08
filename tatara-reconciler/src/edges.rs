@@ -260,13 +260,28 @@ pub(crate) fn routing_edge_metadata(
 /// edge (Ingress + DNSEndpoint) stamps on the resource it emits.
 ///
 /// The `<form>` segment routes through the same `is_stable` axis every
-/// other routing-edge composer keys on: `"stable"` when
-/// `ctx.is_stable`, `ctx.ephemeral_id` otherwise. The per-form dispatch
-/// rides through ONE composer so a regression that swapped the branch
-/// — e.g. emitted the ephemeral-id segment for the stable form —
-/// surfaces at this ONE primitive's tests, not as apply-time name
-/// collisions where two edge kinds pick different names for the same
-/// `(Process, hostname)` pair.
+/// other routing-edge composer keys on: the stable-form byte-shape
+/// composes through the workspace-wide substrate wire-form owner
+/// [`RoutingForm::Stable::as_str`][RoutingForm::as_str] when
+/// `ctx.is_stable`, `ctx.ephemeral_id` otherwise. Pre-lift the stable
+/// branch was a bare `"stable"` string literal at this callsite,
+/// silently duplicating the [`RoutingForm::Stable`] wire form the peer
+/// [`routing_edge_labels`] composer already stamps at
+/// [`annotations::ROUTING_FORM`] through the substrate owner. Post-
+/// lift a rename of the wire form (a readability shift from `"stable"`
+/// to `"pinned"` under a future migration, a per-fleet override, a
+/// version-tagged wrap `stable.v2`) lands at ONE substrate arm in
+/// [`crate`][crate]-external `tatara_process::routing::RoutingForm::as_str`
+/// and both the [`annotations::ROUTING_FORM`] annotation value AND
+/// this composer's stable-form resource-name segment co-vary in
+/// lockstep by CONSTRUCTION — no partial-rename skew where the
+/// annotation value shifts but the resource name still reads the old
+/// wire form (or vice-versa). The per-form dispatch rides through ONE
+/// composer so a regression that swapped the branch — e.g. emitted
+/// the ephemeral-id segment for the stable form — surfaces at this
+/// ONE primitive's tests, not as apply-time name collisions where two
+/// edge kinds pick different names for the same `(Process, hostname)`
+/// pair.
 ///
 /// The `<suffix>` segment disambiguates edges that share a
 /// `(process, app, form)` tuple (e.g. DNSEndpoint's `-dns` tail vs
@@ -307,8 +322,15 @@ pub(crate) fn routing_edge_metadata(
 /// byte-identically, and the cross-edge lockstep pin binds both
 /// edge kinds' names to the same shared stem).
 pub(crate) fn routing_edge_resource_name(ctx: &EdgeContext<'_>, suffix: &str) -> String {
+    // Route the stable-form byte-shape through the workspace-wide
+    // wire-form owner [`RoutingForm::Stable::as_str`] so a future
+    // rename co-varies with the sibling [`annotations::ROUTING_FORM`]
+    // annotation-value stamp (which already routes through
+    // [`EdgeContext::routing_form`] + [`RoutingForm::as_str`]) by
+    // construction. Pre-lift this branch open-coded the bare
+    // `"stable"` literal, silently duplicating the wire form.
     let form = if ctx.is_stable {
-        "stable"
+        RoutingForm::Stable.as_str()
     } else {
         ctx.ephemeral_id
     };
@@ -1145,6 +1167,88 @@ mod tests {
             };
             assert_eq!(routing_edge_resource_name(&c, "dns"), dns_pre_lift);
         }
+    }
+
+    #[test]
+    fn routing_edge_resource_name_stable_form_segment_routes_through_routing_form_substrate() {
+        // Substrate-discipline pin: the stable-form segment in the
+        // emitted resource name MUST be byte-identical to what
+        // [`tatara_process::routing::RoutingForm::Stable::as_str`]
+        // produces, so a future rename of the wire form (a shift to
+        // `"pinned"` for readability, a per-fleet override, a
+        // version-tagged wrap `stable.v2`) co-varies between the
+        // resource-name segment and the sibling
+        // [`annotations::ROUTING_FORM`] annotation value the peer
+        // [`routing_edge_labels`] composer already stamps through the
+        // same substrate primitive. Pre-lift the callsite open-coded
+        // the bare `"stable"` literal, silently duplicating the wire
+        // form the substrate primitive already owns. A regression
+        // that re-forked the callsite to a hand-authored `"stable"`
+        // (or a partial-rename that shifted only the substrate arm)
+        // surfaces HERE rather than as annotation-value-vs-resource-
+        // name skew at the operator-visible wire.
+        let h = api_hostname();
+        let b = api_backend();
+        let c = ctx(&h, &b, "host", "demo-prod", true);
+        let name = routing_edge_resource_name(&c, "");
+        let expected_suffix = format!("-{}", RoutingForm::Stable.as_str());
+        assert!(
+            name.ends_with(&expected_suffix),
+            "stable-form resource name {name:?} must end with {expected_suffix:?} — \
+             the segment routing through `RoutingForm::Stable::as_str` must be preserved"
+        );
+
+        // And with a per-edge suffix: the stable-form segment lands
+        // BEFORE the suffix, so the resource name ends in
+        // `<stable_wire>-<suffix>` — pin that the substrate-owned wire
+        // form (not a hand-authored literal) lands at the segment slot.
+        let dns_name = routing_edge_resource_name(&c, "dns");
+        let expected_suffix_dns = format!("-{}-dns", RoutingForm::Stable.as_str());
+        assert!(
+            dns_name.ends_with(&expected_suffix_dns),
+            "stable-form + `dns` suffix resource name {dns_name:?} must end with \
+             {expected_suffix_dns:?} — the substrate-routed stable segment must land \
+             immediately before the suffix"
+        );
+    }
+
+    #[test]
+    fn routing_edge_resource_name_stable_form_covaries_with_routing_form_annotation_value() {
+        // Cross-composer coherence pin: the segment the resource-name
+        // composer emits for the stable form and the annotation value
+        // the labels/annotations composer stamps for the same edge MUST
+        // be byte-identical wire forms. Both flow from the same
+        // [`RoutingForm::Stable`] substrate arm — pre-lift the
+        // resource-name composer duplicated the `"stable"` literal by
+        // hand, opening a workspace-wide drift corner where a rename
+        // at the substrate would shift ONLY the annotation value while
+        // the resource name kept the old wire form. Post-lift both
+        // composers route through ONE substrate arm and co-vary by
+        // CONSTRUCTION. A regression that re-forked either composer
+        // surfaces at THIS cross-composer pin.
+        let h = api_hostname();
+        let b = api_backend();
+        let c = ctx(&h, &b, "host", "demo-prod", true);
+
+        // The annotations composer's ROUTING_FORM value (already
+        // routed through the substrate at
+        // [`EdgeContext::routing_form`] + [`RoutingForm::as_str`]).
+        let annotation_value = c.routing_form().as_str();
+
+        // The resource-name composer's stable-form segment — after
+        // this lift, it MUST equal the annotation value byte-shape.
+        let resource_name = routing_edge_resource_name(&c, "");
+        let last_segment = resource_name
+            .rsplit('-')
+            .next()
+            .expect("resource name has at least one segment");
+        assert_eq!(
+            last_segment, annotation_value,
+            "stable-form resource-name segment ({last_segment:?}) must be byte-identical \
+             to the ROUTING_FORM annotation value ({annotation_value:?}) — both flow from \
+             `RoutingForm::Stable::as_str`, so a rename of the wire form MUST co-vary at \
+             both composers by construction (not by two open-coded copies staying in sync)"
+        );
     }
 
     #[test]

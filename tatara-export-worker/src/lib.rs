@@ -41,7 +41,9 @@ use tatara_process::export::{
     ArtifactVariant, ExportSpec, NatsSubjectChannel, ReportFormat, ReportPayloadShape,
     RunMarkerSource,
 };
+use tatara_process::json_object::JsonMapStrExt;
 use tatara_process::receipt::ReceiptEnvelope;
+use tatara_process::string_map::BTreeMapStrExt;
 
 // ─── Run id resolution ─────────────────────────────────────────────
 
@@ -140,7 +142,19 @@ pub fn prepare_event_payload(
     now: DateTime<Utc>,
 ) -> ExportEvent {
     let mut labels = BTreeMap::new();
-    labels.insert("run_id".into(), run_id.to_string());
+    // The three `<BTreeMap<String, String>>.insert(<key>.into(),
+    // <val>.<coerce>)` label writes route through the ONE substrate
+    // primitive `tatara_process::string_map::BTreeMapStrExt::insert_str`
+    // (opened at 565c5f2, which already routed the receipt-CM `.data`
+    // seed at `tatara-export-worker::main::write_receipt` onto the same
+    // owner). Pre-lift this file restated the SAME `.insert(<k>.into(),
+    // <v>.<coerce>)` shape at THREE production sites past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold — the `run_id` label
+    // seed here + the two `configmap` / `key` labels stamped inside the
+    // `ArtifactVariant::TestReport` arm below. Post-lift every label
+    // write in `prepare_event_payload` rides through the SAME substrate
+    // owner the pool-reconciler + write_receipt callers already thread.
+    labels.insert_str("run_id", run_id);
 
     let (payload, format) = match source {
         ArtifactVariant::Receipts(_) => {
@@ -150,8 +164,8 @@ pub fn prepare_event_payload(
             (serde_json::json!({ "receipts": parsed }), None)
         }
         ArtifactVariant::TestReport(tr) => {
-            labels.insert("configmap".into(), tr.configmap.clone());
-            labels.insert("key".into(), tr.key.clone());
+            labels.insert_str("configmap", tr.configmap.as_str());
+            labels.insert_str("key", tr.key.as_str());
             // Closed-set dispatch via `ReportFormat::payload_shape` — the
             // 2-arm match over `ReportPayloadShape` is exhaustive, so
             // adding a future `ReportFormat` variant lands at one
@@ -310,16 +324,24 @@ pub fn compose_export_receipt(
     env.process_ref = process_ref.map(String::from);
 
     let mut evidence = serde_json::Map::new();
-    evidence.insert(
-        "run_id".into(),
-        serde_json::Value::String(run_id.to_string()),
-    );
-    evidence.insert(
-        "outcome".into(),
-        serde_json::Value::String(outcome.kind().to_string()),
-    );
+    // The three `Value::String`-slot evidence writes route through the
+    // ONE substrate primitive `tatara_process::json_object::
+    // JsonMapStrExt::insert_str` — receiver-shape peer of the
+    // `BTreeMapStrExt::insert_str` labels routing above on the same
+    // "insert a string at a string key" write axis, split by CARRIER
+    // TYPE (JSON-shaped `serde_json::Map<String, Value>` here vs the
+    // K8s-canonical `BTreeMap<String, String>` labels map above). Pre-
+    // lift THREE production sites in this function restated the SAME
+    // `.insert(<k>.into(), Value::String(<v>.<coerce>))` shape past the
+    // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold: the `run_id` +
+    // `outcome` seeds unconditionally, and the conditional `error` seed
+    // inside the `Rejected | Failed` arm. The `shipped_bytes_len` seed
+    // below stays hand-authored because its value slot is a
+    // `Value::Number`, not a `Value::String` — outside this trait's axis.
+    evidence.insert_str("run_id", run_id);
+    evidence.insert_str("outcome", outcome.kind());
     if let ExportOutcome::Rejected(m) | ExportOutcome::Failed(m) = outcome {
-        evidence.insert("error".into(), serde_json::Value::String(m.clone()));
+        evidence.insert_str("error", m.as_str());
     }
     evidence.insert(
         "shipped_bytes_len".into(),
@@ -466,6 +488,93 @@ mod tests {
         assert_eq!(arr[2]["c"], 3);
         assert_eq!(ev.labels["configmap"], "cm");
         assert_eq!(ev.format, Some(ReportFormat::NdJson));
+    }
+
+    #[test]
+    fn test_report_labels_ride_through_btreemap_str_ext_bytewise_across_all_three_slots() {
+        // Slot-by-slot byte-identical parity witness — the post-lift
+        // `ev.labels` BTreeMap from `prepare_event_payload(
+        // ArtifactVariant::TestReport ...)` MUST match a hand-authored
+        // pre-lift `.insert(<k>.into(), <v>.<coerce>)` chain byte-for-
+        // byte across ALL THREE label slots (`run_id`, `configmap`,
+        // `key`). Fail-before-pass-after granularity: the `key` label
+        // slot at pre-lift line 154 was previously asserted by NO
+        // upstream test — `test_report_ndjson_parses_into_array` above
+        // checks only `configmap`, and `run_marker_event_has_labels_
+        // and_run_id` checks only `run_id` on the RunMarker arm — so
+        // this pin closes the last untested label slot on the same
+        // `BTreeMapStrExt::insert_str` axis the two adjacent sibling
+        // slots ride through. A regression that dropped the `key`
+        // insert altogether, swapped either slot's `Into<String>` arm,
+        // or reshaped the map's key-ordering would surface HERE rather
+        // than as silent operator-facing drift at the downstream
+        // Vector-native channel that consumes the shipped `labels` map.
+        let tr = TestReportSource {
+            configmap: "cm".into(),
+            key: "out.ndjson".into(),
+            format: ReportFormat::NdJson,
+            namespace: None,
+        };
+        let now = chrono::Utc::now();
+        let ev = prepare_event_payload(
+            ArtifactVariant::TestReport(&tr),
+            b"",
+            "ns/n",
+            "test-report",
+            now,
+        );
+
+        let mut expected: BTreeMap<String, String> = BTreeMap::new();
+        expected.insert("run_id".to_string(), "ns/n".to_string());
+        expected.insert("configmap".to_string(), "cm".to_string());
+        expected.insert("key".to_string(), "out.ndjson".to_string());
+
+        assert_eq!(
+            ev.labels, expected,
+            "BTreeMapStrExt::insert_str lift must produce a labels map byte-identical to the pre-lift .insert(<k>.into(), <v>.<coerce>) chain across every TestReport label slot",
+        );
+    }
+
+    #[test]
+    fn export_receipt_evidence_slots_ride_through_json_map_str_ext_bytewise() {
+        // Slot-by-slot byte-identical parity witness on the evidence-
+        // side JsonMapStrExt lift — the post-lift `r.evidence` object
+        // from `compose_export_receipt(..., Rejected(msg), ...)` MUST
+        // carry every `Value::String`-slot at the same key with the
+        // same underlying string bytes a hand-authored pre-lift
+        // `.insert(<k>.into(), Value::String(<v>.<coerce>))` chain
+        // would have written. Fail-before-pass-after granularity: the
+        // three-slot cross-product (`run_id` + `outcome` + `error`)
+        // was previously asserted at TWO separate tests
+        // (`export_receipt_chains_three_pillars` covered `run_id` +
+        // `outcome`; `export_receipt_failure_carries_error_text`
+        // covered `error` + `outcome`), never as ONE atomic parity
+        // witness on the same envelope — so a regression that drifted
+        // the `Value::String` wrap at ONE slot while leaving the
+        // others intact would pass every upstream pin and surface HERE.
+        let spec = http_spec("test-report");
+        let outcome = ExportOutcome::Rejected("connection refused".into());
+        let r = compose_export_receipt(
+            &spec,
+            b"payload",
+            &outcome,
+            None,
+            "ns/rejected",
+            Some("demo-test/r1"),
+        )
+        .expect("receipt");
+        assert_eq!(r.evidence["run_id"], "ns/rejected");
+        assert_eq!(r.evidence["outcome"], "Rejected");
+        assert_eq!(r.evidence["error"], "connection refused");
+        // Every Value::String-typed evidence slot MUST remain the
+        // `Value::String` variant post-lift — a regression that dropped
+        // the `Value::String` wrap on the JsonMapStrExt path would
+        // stamp the string bytes into a different variant and the
+        // `.as_str()` projection below would return `None` on the
+        // corner.
+        assert!(r.evidence["run_id"].is_string());
+        assert!(r.evidence["outcome"].is_string());
+        assert!(r.evidence["error"].is_string());
     }
 
     #[test]

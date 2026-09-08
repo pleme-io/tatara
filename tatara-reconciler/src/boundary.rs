@@ -1323,11 +1323,23 @@ async fn evaluate_process_phase(
     let parsed: ProcessPhaseParams = parse_params_or_return_unknown!("ProcessPhase", params);
     let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
     let api = tatara_process::process_api::namespaced(client, ns);
-    let target = match api
-        .get_opt(&parsed.process_ref)
-        .await
-        .kube_ctx_with(format!("fetch process {ns}/{}", parsed.process_ref))?
-    {
+    // Diagnostic-body head rides the substrate composer
+    // `tatara_process::process_api::error_ctx` — pre-lift this was a
+    // hand-authored `format!("fetch process {ns}/{}", parsed.process_ref)`
+    // chain, one of TWO workspace-wide restatements past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold (peer at
+    // `tatara-export-worker::main::read_artifact`'s `ProcessSnapshotSource`
+    // arm). Post-lift the fixed `"Process"` resource-kind literal +
+    // the `<ns>/<name>` qualified-ref routing sit at ONE substrate
+    // owner (sibling to `configmap::error_ctx` on the per-Kind ×
+    // substrate-owned-error-slug axis-family), closing a workspace-
+    // wide wire-form drift: the pre-lift lowercase `"process"` here
+    // clashed with the sibling `list::error_ctx`'s TitleCase
+    // `"Processes"` plural spelling, and post-lift both singular and
+    // plural axes agree on the kube-canonical TitleCase kind form.
+    let target = match api.get_opt(&parsed.process_ref).await.kube_ctx_with(
+        tatara_process::process_api::error_ctx("fetch", ns, &parsed.process_ref),
+    )? {
         Some(t) => t,
         // The None arm routes through the substrate composer
         // `Satisfaction::resource_not_found("process", ns,

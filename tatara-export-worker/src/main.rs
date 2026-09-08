@@ -220,10 +220,26 @@ async fn read_artifact(spec: &ExportSpec, kube: &Client, ns: &str, name: &str) -
             // boundary::{evaluate_process_phase, check_depends_on}`
             // pre-lift.
             let api = tatara_process::process_api::namespaced(kube.clone(), ns);
+            // Diagnostic-body head rides the substrate composer
+            // `tatara_process::process_api::error_ctx` — pre-lift this
+            // was a hand-authored `format!("get process {ns}/{name}")`
+            // chain, one of TWO workspace-wide restatements past the
+            // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold (peer at
+            // `tatara-reconciler::boundary::evaluate_process_phase`'s
+            // `.get_opt` fetch wrap). Post-lift the fixed `"Process"`
+            // resource-kind literal + the `<ns>/<name>` qualified-ref
+            // routing sit at ONE substrate owner (sibling to
+            // `configmap::error_ctx` on the per-Kind × substrate-owned-
+            // error-slug axis-family), closing a workspace-wide wire-
+            // form drift: the pre-lift lowercase `"process"` here
+            // clashed with the sibling `list::error_ctx`'s TitleCase
+            // `"Processes"` plural spelling, and post-lift both
+            // singular and plural axes agree on the kube-canonical
+            // TitleCase kind form.
             let p = api
                 .get(name)
                 .await
-                .with_context(|| format!("get process {ns}/{name}"))?;
+                .with_context(|| tatara_process::process_api::error_ctx("get", ns, name))?;
             Ok(serde_json::to_vec(&p).context("serialize process")?)
         }
         ArtifactVariant::Receipts(_) => {

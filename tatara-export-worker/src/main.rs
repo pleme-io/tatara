@@ -32,6 +32,7 @@ use tatara_export_worker::{
 };
 use tatara_process::export::{ArtifactVariant, ChannelVariant, ExportSpec};
 use tatara_process::prelude::{Annotated, ErrCtxExt};
+use tatara_process::string_map::BTreeMapStrExt;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -392,8 +393,19 @@ async fn write_receipt(
     // `tatara_process::configmap::namespaced` — see the peer
     // `read_artifact` sites above for the FOUR-site lift narrative.
     let api = tatara_process::configmap::namespaced(kube.clone(), namespace);
+    // Receipt-CM `.data` seed rides the substrate composer
+    // [`tatara_process::string_map::BTreeMapStrExt::insert_str`] —
+    // receiver-shape peer of
+    // [`tatara_process::json_object::JsonMapStrExt::insert_str`] on
+    // the K8s-canonical `BTreeMap<String, String>` carrier every
+    // ConfigMap `.data` writer stamps. Pre-lift this was one of
+    // THREE workspace-wide restatements of the `<map>.insert
+    // (<k>.to_string(), <v>.to_string())` shape past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold (peer at
+    // `tatara-pool-reconciler::controller_pool::build_member_process`
+    // on the pool-membership annotations map).
     let mut data = BTreeMap::new();
-    data.insert(key.to_string(), payload.to_string());
+    data.insert_str(key, payload);
     // Wire-shape 5-link `ConfigMap { metadata: ObjectMeta { name,
     // namespace, ..Default }, data: Some(<data>), ..Default }`
     // composition rides the substrate primitive

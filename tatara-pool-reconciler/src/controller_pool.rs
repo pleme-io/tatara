@@ -21,6 +21,7 @@ use tatara_process::kube_error::KubeResultExt;
 use tatara_process::lifetime::Lifetime;
 use tatara_process::pool::{EphemeralPool, MemberState, PoolMember, PoolStatus};
 use tatara_process::prelude::{NamespacedApiCoordinates, Process, ProcessSpec};
+use tatara_process::string_map::BTreeMapStrExt;
 
 use crate::context::PoolContext;
 use crate::desired::{decide_pool_convergence, ConvergenceAction, PoolMemberSnapshot};
@@ -705,9 +706,22 @@ fn build_member_process(
     // key; the local binding stays shadowed as `metadata_annotations`
     // so the outer `annotations` module name in scope keeps
     // resolving to the substrate.
+    //
+    // The paired `<map>.insert(<k>.to_string(), <v>.to_string())`
+    // write shape rides through the ONE substrate owner
+    // [`tatara_process::string_map::BTreeMapStrExt::insert_str`] —
+    // receiver-shape peer of
+    // [`tatara_process::json_object::JsonMapStrExt::insert_str`]
+    // (which owns the JSON-side `Map<String, Value>` write shape) on
+    // the K8s-canonical `BTreeMap<String, String>` carrier every
+    // ObjectMeta annotations / labels writer stamps. Pre-lift this
+    // was one of THREE workspace-wide restatements past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold (third peer at
+    // `tatara-export-worker::write_receipt` on the ConfigMap `.data`
+    // slot).
     let mut metadata_annotations = std::collections::BTreeMap::new();
-    metadata_annotations.insert(annotations::POOL.to_string(), pool_name.to_string());
-    metadata_annotations.insert(annotations::POOL_SLOT.to_string(), slot.to_string());
+    metadata_annotations.insert_str(annotations::POOL, pool_name);
+    metadata_annotations.insert_str(annotations::POOL_SLOT, slot.to_string());
     proc.metadata.annotations = Some(metadata_annotations);
 
     // Owner reference so K8s cascade-deletes members on Pool deletion.

@@ -50,6 +50,7 @@ pub mod serde_defaults;
 pub mod signal;
 pub mod spec;
 pub mod status;
+pub mod string_map;
 pub mod table;
 pub mod tagged_union;
 pub mod three_pillar;

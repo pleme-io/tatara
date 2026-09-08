@@ -953,53 +953,69 @@ pub async fn fetch_by_identity(
 /// so the label + fetch pair collapse into ONE mention of the
 /// variant.
 ///
-/// The `<ns>/<name>` half of the label rides through the already-
-/// opened [`qualified_process_ref`] substrate primitive — sibling to
-/// the seven other consumers ([`crate::render::render_flux`],
+/// The full 4-slot shape (`<verb> <Kind> <ns>/<name>` with
+/// `<verb> = "fetch"`) rides through the workspace-wide substrate
+/// composer [`tatara_process::prelude::qualified_error_ctx`] — the
+/// ONE owner of the `"<verb> <Kind> <ns>/<name>"` diagnostic head
+/// every per-Kind [`tatara_process::configmap::error_ctx`] /
+/// [`tatara_process::process_api::error_ctx`] peer already routes
+/// through. The `<ns>/<name>` join at the tail rides transitively
+/// through the sibling [`qualified_process_ref`] substrate the
+/// composer already delegates to — sibling to the seven other
+/// consumers ([`crate::render::render_flux`],
 /// [`crate::render::render_aplicacao`] × 2,
 /// [`crate::render::render_export_jobs`], [`inject_annotations`],
 /// [`crate::phase_machine::process_holds_any_claim`],
 /// [`crate::phase_machine::handle_releasing`]) so a future
 /// normalization (case-fold, unicode-safe collation, a
-/// `<cluster>/<ns>/<name>` cross-cluster form) reaches BOTH the
+/// `<cluster>/<ns>/<name>` cross-cluster form, an operator-supplied
+/// cluster prefix stamped at the head slot) reaches BOTH the
 /// annotation seed shape AND the diagnostic label shape through
 /// ONE owner.
 ///
 /// Peer to [`flux_ref_fetch_error_context`] on the diagnostic-wording
 /// axis; the two composers partition the fetch-error wording space
 /// by whether the caller reaches the raw fetch through a closed-set
-/// variant (identity-gated) or a persisted status slice
-/// ([`FluxResourceRef`]-gated). A future rename of either wording
+/// variant (identity-gated, 4-slot `<verb> <Kind> <ns>/<name>` shape)
+/// or a persisted status slice ([`FluxResourceRef`]-gated, 3-slot
+/// `<verb> <kind>/<name>` shape without the namespace token — its
+/// producer's status projection carries the resolved `(kind, name)`
+/// tuple without namespace). A future rename of either wording
 /// (a switch to `"fetch <apiVersion> <kind> <ns>/<name>"` for
 /// group-tagged observability, a case-fold on the kind slot, a
 /// truncation for long-name refs) lands at ONE substrate function
-/// per axis.
+/// per axis — the identity-gated axis's future normalization now
+/// lands at the workspace-wide `qualified_error_ctx` owner rather
+/// than at this module-private helper's private `format!` chain.
 ///
 /// Private to the module (module-scope `fn`): no external consumer
 /// names the diagnostic wording directly — the wording is consumed
 /// EXCLUSIVELY through the [`fetch_by_identity`] composer's error
 /// path, and the pins at
 /// [`tests::fetch_by_identity_error_context_names_kind_and_ns_slash_name`]
-/// bind the "`fetch <kind> <ns>/<name>`" wording invariant so a
-/// regression that drifted the wording surfaces at fail-before-pass-
+/// alongside
+/// [`tests::fetch_by_identity_error_context_routes_through_qualified_error_ctx_substrate`]
+/// bind the "`fetch <kind> <ns>/<name>`" wording invariant AND its
+/// routing through the shared substrate — so a regression that
+/// either drifted the wording OR reinlined the 4-slot `format!`
+/// (bypassing the substrate composer) surfaces at fail-before-pass-
 /// after granularity rather than as operator-visible log skew across
 /// the three downstream consumers.
 ///
 /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
 /// proofs — the label's `kind` half + the `<ns>/<name>` half bind
-/// structurally through `identity.kind` + `qualified_process_ref`, so
-/// a regression that reworded either surfaces at the sibling pins
+/// structurally through `identity.kind` + `qualified_error_ctx`
+/// (which itself delegates to `qualified_process_ref`), so a
+/// regression that reworded either surfaces at the sibling pins
 /// rather than as silent operator-facing log skew at every downstream
 /// fetch consumer). THEORY.md §VI.1 (generation over composition —
 /// the `.map_err(|e| anyhow!(...))?` incantation recurred at three
 /// hand-authored sites past the PRIME-DIRECTIVE ≥ 2 duplication
-/// trigger, and is lifted to ONE composer here).
+/// trigger, and is lifted to ONE composer here — which now routes
+/// through the workspace-wide `qualified_error_ctx` substrate owner
+/// alongside the two per-Kind peers already routed through it).
 fn fetch_by_identity_error_context(identity: K8sWireIdentity, ns: &str, name: &str) -> String {
-    format!(
-        "fetch {} {}",
-        identity.kind,
-        qualified_process_ref(ns, name)
-    )
+    tatara_process::qualified_error_ctx("fetch", identity.kind, ns, name)
 }
 
 /// Standardized diagnostic label prefix for every
@@ -3157,6 +3173,69 @@ mod tests {
                 format!("fetch {} {ns}/{name}", identity.kind),
                 "post-lift wording must equal pre-lift `format!(\"fetch {{kind}} {{ns}}/{{name}}\")` \
                  at every callsite shape"
+            );
+        }
+    }
+
+    #[test]
+    fn fetch_by_identity_error_context_routes_through_qualified_error_ctx_substrate() {
+        // Cross-substrate coherence pin: the composed diagnostic head
+        // must ride through the workspace-wide 4-slot substrate
+        // owner `tatara_process::qualified_error_ctx` — the SAME
+        // composer already owning the two per-Kind peers
+        // (`tatara_process::configmap::error_ctx`,
+        // `tatara_process::process_api::error_ctx`) on the
+        // sibling axes. Post-lift a future normalization of the
+        // 4-slot shape (a `tracing`-annotated span, a per-Kind
+        // canonicalization, an operator-supplied cluster prefix,
+        // a case-fold on the kind slot) lands at THAT owner rather
+        // than at this reconciler-side helper's private `format!`
+        // chain — and every downstream fetch consumer inherits the
+        // upgrade alongside the two per-Kind peers already routed.
+        //
+        // Sweeps identity-gated (K8sBuiltinResource + FluxResource)
+        // axes so a regression that special-cased ONE axis (an
+        // inlined `format!` on the K8sBuiltinResource branch, a
+        // stale kind literal on the FluxResource branch) would
+        // surface here rather than as silent operator-facing skew
+        // between this composer and the two per-Kind peers on the
+        // same axis-family.
+        use tatara_process::flux_resource::FluxResource;
+        use tatara_process::k8s_builtin_resource::K8sBuiltinResource;
+        let cases: &[(K8sWireIdentity, &str, &str)] = &[
+            (K8sBuiltinResource::Job.wire_identity(), "default", "my-job"),
+            (
+                K8sBuiltinResource::ConfigMap.wire_identity(),
+                "monitoring",
+                "receipt-cm",
+            ),
+            (
+                FluxResource::Kustomization.wire_identity(),
+                "flux-system",
+                "observability-stack",
+            ),
+            (
+                FluxResource::HelmRelease.wire_identity(),
+                "monitoring",
+                "prometheus-op",
+            ),
+            (
+                FluxResource::OCIRepository.wire_identity(),
+                "flux-system",
+                "chart-source",
+            ),
+        ];
+        for (identity, ns, name) in cases {
+            let via_composer = fetch_by_identity_error_context(*identity, ns, name);
+            let via_substrate =
+                tatara_process::qualified_error_ctx("fetch", identity.kind, ns, name);
+            assert_eq!(
+                via_composer, via_substrate,
+                "fetch_by_identity_error_context must delegate the 4-slot `<verb> <Kind> <ns>/<name>` \
+                 head through the workspace-wide `qualified_error_ctx` substrate owner rather than \
+                 through a private `format!` chain — bypass surfaces here rather than as silent \
+                 operator-facing skew between this composer and the two per-Kind peers already \
+                 routed through the same substrate"
             );
         }
     }

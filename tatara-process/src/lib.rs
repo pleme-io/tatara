@@ -126,7 +126,6 @@ pub mod prelude {
         PoolSelector, PoolSpec, PoolStatus, ReplacementPolicy, ReturnPolicy, UnknownMemberState,
         UnknownPoolPhase, UnknownReplacementPolicy,
     };
-    pub use crate::qualified_process_ref;
     pub use crate::receipt::{
         default_receipt_config_map_name, extract_receipt_payload_json,
         resolve_receipt_config_map_name, ReceiptEnvelope, ReceiptError, ReceiptKind,
@@ -148,6 +147,7 @@ pub mod prelude {
         ClaimRecord, ProcessEntry, ProcessTable, ProcessTableSpec, ProcessTableStatus,
     };
     pub use crate::time::{elapsed_since, seconds_ago, tombstone_at, tombstone_now};
+    pub use crate::{qualified_error_ctx, qualified_process_ref};
     pub use crate::{Annotated, DeletionTombstoned, NamespacedApiCoordinates, PlacedInNamespace};
 }
 

@@ -122,7 +122,21 @@ pub const ALL: &[&str] = &[PROCESS, ALLOCATION, POOL];
 /// (a shift to `v2/` under a migration, a per-fleet override) lands
 /// at ONE substrate const here + the paired CRD derive slots rather
 /// than at three independent finalizer wire forms.
-pub const GROUP_PREFIX: &str = "tatara.pleme.io/";
+///
+/// Compile-time alias of the crate-wide substrate owner
+/// [`crate::GROUP_PREFIX`] — the ONE `pub const &'static str` that
+/// owns the `<GROUP>/` byte-shape every tatara wire-form key uses as
+/// its reverse-DNS prefix. Pre-lift this const restated the literal
+/// `"tatara.pleme.io/"` inline as a byte-parity peer of the sibling
+/// [`crate::annotations::GROUP_PREFIX`] (pinned equal by
+/// [`crate::annotations_family_tests::group_prefix_matches_finalizers_group_prefix`]);
+/// post-lift both peer consts route through [`crate::GROUP_PREFIX`]
+/// so byte equality holds by construction (the same `&'static str`
+/// address), and a future rename of the reverse-DNS root lands at
+/// the ONE crate-root const with every peer wire-form consumer
+/// inheriting the shift mechanically rather than at three independent
+/// per-module string literals.
+pub const GROUP_PREFIX: &str = crate::GROUP_PREFIX;
 
 /// Shared owner-suffix every finalizer key in the [`ALL`] family
 /// carries — the convention `<owner>-finalizer` distinguishes a

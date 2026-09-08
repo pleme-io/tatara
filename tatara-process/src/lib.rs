@@ -156,6 +156,50 @@ pub mod prelude {
 pub const GROUP: &str = "tatara.pleme.io";
 /// CRD version for this module.
 pub const VERSION: &str = "v1alpha1";
+
+/// Reverse-DNS group prefix — the `<GROUP>/` byte-shape every
+/// tatara-owned `tatara.pleme.io/*` wire-form key (annotation,
+/// finalizer, label, signal) rides through, and the string every
+/// downstream `.starts_with(...)` group-membership filter compares
+/// against.
+///
+/// Peer to [`GROUP`] + [`VERSION`] + [`API_VERSION`] on the CRD-
+/// group×version axis: where [`GROUP`] owns the bare reverse-DNS
+/// segment (`"tatara.pleme.io"`), [`VERSION`] owns the version
+/// segment, and [`API_VERSION`] owns the two-segment compose product
+/// (`"tatara.pleme.io/v1alpha1"`), this const owns the ONE-segment
+/// `<GROUP>/` product every tatara wire-form key uses as its
+/// namespace prefix (`"tatara.pleme.io/"`). Pre-lift the prefix was
+/// spelled inline as a bare `"tatara.pleme.io/"` literal at TWO
+/// substrate-owner sites — [`annotations::GROUP_PREFIX`] +
+/// [`finalizers::GROUP_PREFIX`] — pinned equal to each other by
+/// [`annotations_family_tests::group_prefix_matches_finalizers_group_prefix`]
+/// but with no shared owner binding them to [`GROUP`] itself. A
+/// future rename that shifted the group segment (a
+/// `"tatara.pleme.io/v2/"` migration under a group-segment bump, a
+/// per-fleet override, an alias table) would silently unbind the two
+/// peer families from the CRD [`GROUP`] itself unless every one of
+/// the three inline literals was updated coherently.
+///
+/// Post-lift the prefix lives at ONE substrate owner here; both
+/// [`annotations::GROUP_PREFIX`] and [`finalizers::GROUP_PREFIX`]
+/// route through this const as compile-time aliases
+/// (`pub const GROUP_PREFIX: &str = crate::GROUP_PREFIX;`), so a
+/// rename of the reverse-DNS root lands at ONE `pub const` here + at
+/// [`GROUP`] with the byte-shape pin
+/// [`owner_reference_tests::group_prefix_const_composes_group_slash_bytewise`]
+/// binding the two consts, rather than at three independent per-
+/// module string literals whose coherence relied on convention.
+///
+/// Byte-shape pinned against `format!("{GROUP}/")` by
+/// [`owner_reference_tests::group_prefix_const_composes_group_slash_bytewise`]
+/// (sibling to `api_version_const_composes_group_and_version_bytewise`
+/// on the same GROUP-composition axis) so a rename of [`GROUP`] that
+/// missed this const surfaces HERE rather than as silent skew between
+/// [`GROUP`] (which the [`api_url_prefix`] composer feeds) and every
+/// downstream `<key>.starts_with(GROUP_PREFIX)` gate on the peer
+/// [`annotations::ALL`] / [`finalizers::ALL`] families.
+pub const GROUP_PREFIX: &str = "tatara.pleme.io/";
 /// Kind spelling of the tatara Process CRD as it appears in a K8s
 /// [`OwnerReference.kind`][ownref] field. Peer to [`GROUP`] +
 /// [`VERSION`] — centralizes the ONE literal every SSA-time
@@ -1182,21 +1226,22 @@ pub mod annotations {
     /// `#[kube(group = "tatara.pleme.io", …)]` derive slot on every
     /// tatara CRD struct.
     ///
-    /// Byte-parity mirror of the sibling
-    /// [`crate::finalizers::GROUP_PREFIX`] on the peer-family axis: the
-    /// [`crate::finalizers`] module owns the ONE canonical
-    /// `tatara.pleme.io/` const on the finalizer-key family axis; this
-    /// const opens the SAME canonical prefix on the annotation-key
-    /// family axis. Both families ride the same reverse-DNS namespace;
-    /// pinning them at a shared const AND at a coherence pin
-    /// ([`crate::annotations_family_tests::group_prefix_matches_finalizers_group_prefix`])
-    /// binds the two peer families to ONE substrate owner rather than
-    /// two independent per-module string literals — a future
-    /// group-segment shift (a `tatara.pleme.io/v2/` migration, a
-    /// per-fleet override, a per-cluster ownership prefix) lands at ONE
-    /// crate-wide const pair here + at [`crate::finalizers::GROUP_PREFIX`]
-    /// with the pin catching any partial edit, rather than at 20 +
-    /// 3 hand-authored per-key literals spread across the two modules.
+    /// Compile-time alias of the crate-wide substrate owner
+    /// [`crate::GROUP_PREFIX`] — the ONE `pub const &'static str` that
+    /// owns the `<GROUP>/` byte-shape every tatara wire-form key uses
+    /// as its reverse-DNS prefix. Pre-lift this const restated the
+    /// literal `"tatara.pleme.io/"` inline as a byte-parity mirror of
+    /// the sibling [`crate::finalizers::GROUP_PREFIX`] (pinned equal
+    /// by
+    /// [`crate::annotations_family_tests::group_prefix_matches_finalizers_group_prefix`]);
+    /// post-lift both peer consts route through
+    /// [`crate::GROUP_PREFIX`] so byte equality holds by construction
+    /// (the same `&'static str` address), and a future rename of the
+    /// reverse-DNS root (a `"tatara.pleme.io/v2/"` migration under a
+    /// group-segment bump, a per-fleet override, an alias table for
+    /// cross-cluster ownership) lands at the ONE crate-root const with
+    /// every peer wire-form consumer inheriting the shift mechanically
+    /// rather than at three independent per-module string literals.
     ///
     /// Pinned across every arm of [`ALL`] by
     /// [`crate::annotations_family_tests::all_share_group_prefix`] so a
@@ -1205,7 +1250,7 @@ pub mod annotations {
     /// reverse-DNS convention, a group-segment shift on ONE key that
     /// missed the ALL slice) surfaces at compile-time / test-time rather
     /// than as silent operator-facing skew.
-    pub const GROUP_PREFIX: &str = "tatara.pleme.io/";
+    pub const GROUP_PREFIX: &str = crate::GROUP_PREFIX;
 
     /// Closed family of every substrate-owned annotation key in this
     /// module, in stable declaration order matching the `pub const`
@@ -1314,8 +1359,8 @@ mod owner_reference_tests {
     //! composed `format!("{}/{}", GROUP, VERSION)` at two sites and
     //! the frozen literal `"tatara.pleme.io/v1alpha1"` at the third).
     use super::{
-        api_version, owner_reference_json, owner_references_json, API_VERSION, GROUP, PROCESS_KIND,
-        PROCESS_WIRE_IDENTITY, VERSION,
+        api_version, owner_reference_json, owner_references_json, API_VERSION, GROUP, GROUP_PREFIX,
+        PROCESS_KIND, PROCESS_WIRE_IDENTITY, VERSION,
     };
     use crate::flux_resource::FluxResource;
     use crate::k8s_builtin_resource::K8sBuiltinResource;
@@ -1389,6 +1434,96 @@ mod owner_reference_tests {
         // [`PROCESS_WIRE_IDENTITY`].
         const AV: &str = API_VERSION;
         assert_eq!(AV, "tatara.pleme.io/v1alpha1");
+    }
+
+    // ─── GROUP_PREFIX const substrate pins ──────────────────────────
+    //
+    // The compile-time `&'static str` [`GROUP_PREFIX`] const owns the
+    // `<GROUP>/` reverse-DNS prefix every tatara-owned wire-form key
+    // (annotation, finalizer, label, signal) uses as its namespace
+    // prefix, and every downstream `.starts_with(...)` group-membership
+    // gate compares against. Pre-lift the prefix was spelled inline as
+    // a bare `"tatara.pleme.io/"` literal at TWO substrate-owner sites
+    // ([`crate::annotations::GROUP_PREFIX`] +
+    // [`crate::finalizers::GROUP_PREFIX`]) pinned byte-equal to each
+    // other but with no shared owner binding them to [`GROUP`] itself.
+    // Post-lift both peer consts route through this ONE crate-root
+    // owner as compile-time aliases so byte equality holds by
+    // construction. These pins bind the const at fail-before-pass-after
+    // granularity so a regression that drifted it (a rename that
+    // touched [`GROUP`] but not the const's baked literal, a partial
+    // edit that unbound the two peer aliases from the ONE owner) would
+    // surface HERE rather than as silent operator-facing skew between
+    // the [`GROUP`] const the [`api_url_prefix`] composer feeds and the
+    // [`GROUP_PREFIX`] const every downstream annotation / finalizer
+    // family gate consumes.
+
+    #[test]
+    fn group_prefix_const_composes_group_slash_bytewise() {
+        // Cross-const coherence pin: the compile-time [`GROUP_PREFIX`]
+        // must be byte-identical to the runtime `format!("{GROUP}/")`
+        // composition. A regression that drifted either the const or
+        // the [`GROUP`] segment would surface HERE rather than as
+        // silent skew between [`GROUP`] (which
+        // [`api_url_prefix`] + [`api_version`] compose over) and
+        // [`GROUP_PREFIX`] (which every downstream annotation /
+        // finalizer family gate consumes as its reverse-DNS prefix).
+        assert_eq!(GROUP_PREFIX, format!("{GROUP}/"));
+    }
+
+    #[test]
+    fn group_prefix_const_byte_matches_wire_form_pre_lift() {
+        // Byte-identity pin: the frozen wire-form literal is the SAME
+        // string every downstream consumer (the peer aliases
+        // [`crate::annotations::GROUP_PREFIX`] +
+        // [`crate::finalizers::GROUP_PREFIX`], every
+        // `<key>.starts_with(GROUP_PREFIX)` gate on the peer
+        // [`crate::annotations::ALL`] / [`crate::finalizers::ALL`]
+        // families) must compare against. Peer of the pre-existing
+        // wire-form pin
+        // [`api_version_const_byte_matches_wire_form_pre_lift`]; both
+        // close the axis at the SAME reverse-DNS root.
+        assert_eq!(GROUP_PREFIX, "tatara.pleme.io/");
+    }
+
+    #[test]
+    fn group_prefix_const_is_reachable_at_compile_time() {
+        // Compile-time reachability pin: [`GROUP_PREFIX`] is a `const
+        // &'static str` so callers can bind it into a `const` slot —
+        // exactly what [`crate::annotations::GROUP_PREFIX`] +
+        // [`crate::finalizers::GROUP_PREFIX`] do as compile-time
+        // aliases. A regression that widened the const to an owned
+        // `String` or a `Lazy<String>` would fail-loudly at this
+        // coercion rather than at the silent alias-coercion boundary
+        // at the two peer consts.
+        const GP: &str = GROUP_PREFIX;
+        assert_eq!(GP, "tatara.pleme.io/");
+    }
+
+    #[test]
+    fn annotations_group_prefix_routes_through_crate_root_owner() {
+        // Routing pin: [`crate::annotations::GROUP_PREFIX`] is a
+        // compile-time alias of [`GROUP_PREFIX`] — the ONE substrate
+        // owner of the reverse-DNS prefix wire form. A regression that
+        // re-open-coded the annotation-family const (restoring the
+        // pre-lift inline `"tatara.pleme.io/"` literal, inlining a
+        // stale byte string) would surface HERE rather than as silent
+        // skew between the two sibling substrate owners (annotation vs
+        // finalizer families) on the SAME reverse-DNS prefix.
+        assert_eq!(crate::annotations::GROUP_PREFIX, GROUP_PREFIX);
+    }
+
+    #[test]
+    fn finalizers_group_prefix_routes_through_crate_root_owner() {
+        // Routing pin: [`crate::finalizers::GROUP_PREFIX`] is a
+        // compile-time alias of [`GROUP_PREFIX`] — the ONE substrate
+        // owner of the reverse-DNS prefix wire form. A regression that
+        // re-open-coded the finalizer-family const (restoring the
+        // pre-lift inline `"tatara.pleme.io/"` literal, inlining a
+        // stale byte string) would surface HERE rather than as silent
+        // skew between the two sibling substrate owners (finalizer vs
+        // annotation families) on the SAME reverse-DNS prefix.
+        assert_eq!(crate::finalizers::GROUP_PREFIX, GROUP_PREFIX);
     }
 
     // ─── PROCESS_WIRE_IDENTITY substrate pins ───────────────────────

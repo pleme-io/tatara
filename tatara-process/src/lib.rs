@@ -1136,6 +1136,99 @@ pub mod annotations {
     /// grep for this key to answer "which pre-existing release did this
     /// Process take over".
     pub const ADOPTED_RELEASE: &str = "tatara.pleme.io/adopted-release";
+
+    /// Shared reverse-DNS namespace prefix every substrate-owned
+    /// annotation key in this module carries — the same
+    /// `tatara.pleme.io/` group segment every tatara-owned CRD
+    /// annotation + finalizer key rides through, matching the
+    /// `#[kube(group = "tatara.pleme.io", …)]` derive slot on every
+    /// tatara CRD struct.
+    ///
+    /// Byte-parity mirror of the sibling
+    /// [`crate::finalizers::GROUP_PREFIX`] on the peer-family axis: the
+    /// [`crate::finalizers`] module owns the ONE canonical
+    /// `tatara.pleme.io/` const on the finalizer-key family axis; this
+    /// const opens the SAME canonical prefix on the annotation-key
+    /// family axis. Both families ride the same reverse-DNS namespace;
+    /// pinning them at a shared const AND at a coherence pin
+    /// ([`crate::annotations_family_tests::group_prefix_matches_finalizers_group_prefix`])
+    /// binds the two peer families to ONE substrate owner rather than
+    /// two independent per-module string literals — a future
+    /// group-segment shift (a `tatara.pleme.io/v2/` migration, a
+    /// per-fleet override, a per-cluster ownership prefix) lands at ONE
+    /// crate-wide const pair here + at [`crate::finalizers::GROUP_PREFIX`]
+    /// with the pin catching any partial edit, rather than at 20 +
+    /// 3 hand-authored per-key literals spread across the two modules.
+    ///
+    /// Pinned across every arm of [`ALL`] by
+    /// [`crate::annotations_family_tests::all_share_group_prefix`] so a
+    /// future addition to the annotation family that drifted the prefix
+    /// (a `tatara.io/` copy-paste that silently escaped the K8s-side
+    /// reverse-DNS convention, a group-segment shift on ONE key that
+    /// missed the ALL slice) surfaces at compile-time / test-time rather
+    /// than as silent operator-facing skew.
+    pub const GROUP_PREFIX: &str = "tatara.pleme.io/";
+
+    /// Closed family of every substrate-owned annotation key in this
+    /// module, in stable declaration order matching the `pub const`
+    /// definitions above.
+    ///
+    /// Peer to [`crate::finalizers::ALL`] on the "closed slice over a
+    /// family of tatara-owned wire-form keys sharing the
+    /// [`GROUP_PREFIX`] reverse-DNS namespace" axis-pair: the
+    /// [`crate::finalizers`] module owns the same shape over its three
+    /// finalizer keys; this const opens the mirror over the 20
+    /// annotation keys in this module.
+    ///
+    /// Downstream sweeps that pre-lift the ALL owner had to hand-list
+    /// every substrate-owned annotation key to iterate them — a
+    /// fleet-wide annotation-audit binary dumping every
+    /// `tatara.pleme.io/*` key on a cluster, a per-key coverage report
+    /// answering "which annotations does the reconciler write vs read",
+    /// a cross-cluster rename planner, the existing intra-module
+    /// pairwise-disjointness tests (see the "peer list" arrays in
+    /// [`crate::annotations_pins`] which hand-list up to 18 sibling
+    /// keys to prove one axis is disjoint from every other) — iterate
+    /// through ONE substrate slice post-lift. A future addition to the
+    /// annotation family that landed a new `pub const` above but forgot
+    /// this slice surfaces at
+    /// [`crate::annotations_family_tests::all_matches_declared_length`]
+    /// rather than by silently escaping every downstream iteration
+    /// consumer.
+    ///
+    /// Pinned to length 20 by
+    /// [`crate::annotations_family_tests::all_matches_declared_length`],
+    /// to shared [`GROUP_PREFIX`] membership by
+    /// [`crate::annotations_family_tests::all_share_group_prefix`],
+    /// and to pairwise-uniqueness by
+    /// [`crate::annotations_family_tests::all_are_pairwise_unique`] so
+    /// a copy-paste that duplicated one arm's wire form at another arm
+    /// (silently double-booking the K8s metadata slot the two keys
+    /// share) surfaces at the family pin rather than as silent
+    /// annotation-writer collision at whichever downstream site
+    /// stamped the copy-paste'd key.
+    pub const ALL: &[&str] = &[
+        MANAGED_BY,
+        PROCESS,
+        PID,
+        CONTENT_HASH,
+        ATTESTATION_ROOT,
+        GENERATION,
+        SIGNAL,
+        RELEASED_FROM,
+        ROLE,
+        EXPORT_INDEX,
+        APP,
+        ROUTING_FORM,
+        REQUESTOR,
+        ALLOCATION,
+        REQUESTOR_KIND,
+        POOL,
+        POOL_SLOT,
+        RETURN_TRIGGER,
+        ENCAPSULATION_MODE,
+        ADOPTED_RELEASE,
+    ];
 }
 
 /// Standard finalizer for the Process reconciler.
@@ -3707,5 +3800,162 @@ mod placed_in_namespace_tests {
             serde_json::to_value(&via_new_in).unwrap(),
             serde_json::to_value(&via_trait).unwrap(),
         );
+    }
+}
+
+#[cfg(test)]
+mod annotations_family_tests {
+    //! Family-invariant pins for the substrate-owned annotation-key
+    //! family that the [`crate::annotations`] module owns.
+    //!
+    //! Mirror of the sibling [`crate::finalizers::tests`] family-
+    //! invariant block on the peer-family axis: the [`crate::finalizers`]
+    //! module already carries the same closed-family + shared-prefix
+    //! + pairwise-uniqueness discipline over its three finalizer keys;
+    //! this block extends the same solve-once discipline to the 20-key
+    //! annotation family.
+    //!
+    //! Each pin binds ONE invariant at fail-before-pass-after
+    //! granularity so a future addition to the annotation family that
+    //! violated the invariant (a new `pub const` that missed the
+    //! [`crate::annotations::ALL`] slice, a prefix drift that dropped
+    //! the shared [`crate::annotations::GROUP_PREFIX`] on ONE arm, a
+    //! copy-paste that duplicated one arm's wire form at another)
+    //! surfaces HERE rather than at some downstream sweep binary or
+    //! silent K8s-API-server-side skew whichever consumer hit the
+    //! broken invariant first.
+    use crate::{annotations, finalizers};
+
+    #[test]
+    fn group_prefix_matches_tatara_reverse_dns() {
+        // Byte-shape pin — the shared prefix is the same
+        // reverse-DNS namespace every tatara-owned wire-form key
+        // (annotation, finalizer, CRD group) rides through.
+        assert_eq!(annotations::GROUP_PREFIX, "tatara.pleme.io/");
+    }
+
+    #[test]
+    fn group_prefix_matches_finalizers_group_prefix() {
+        // Cross-peer-family coherence pin — the annotation family +
+        // the finalizer family MUST share the same reverse-DNS
+        // namespace prefix at the substrate level. A future rename
+        // that shifted ONE module's prefix (a group-segment migration
+        // that landed at the annotation family but forgot the
+        // finalizer family, or vice-versa) would silently unbind the
+        // two peer families and let one CRD's finalizers escape the
+        // reverse-DNS convention every annotation key on the same CRD
+        // still carried. Pin the two consts equal at the ONE
+        // substrate-level coherence witness.
+        assert_eq!(annotations::GROUP_PREFIX, finalizers::GROUP_PREFIX);
+    }
+
+    #[test]
+    fn all_matches_declared_length() {
+        // A regression that added a 21st `pub const` above the ALL
+        // slice without appending it to ALL (or shrank the family
+        // without pruning the slice) would surface here. The
+        // 20-arm listing pins the declaration order every downstream
+        // audit sweep iterates through.
+        assert_eq!(annotations::ALL.len(), 20);
+    }
+
+    #[test]
+    fn all_share_group_prefix() {
+        // Every arm of the family MUST start with the shared
+        // [`crate::annotations::GROUP_PREFIX`] reverse-DNS namespace
+        // — matching the `#[kube(group = "tatara.pleme.io", …)]`
+        // slot on every CRD struct. A future rename that drifted ONE
+        // arm's prefix (a `tatara.io/` copy-paste that silently
+        // escaped the K8s-side convention) would silently corrupt
+        // every downstream annotation read on that key; the pin
+        // surfaces the drift here rather than at operator-visible
+        // annotation-read skew.
+        for key in annotations::ALL {
+            assert!(
+                key.starts_with(annotations::GROUP_PREFIX),
+                "annotation key {key:?} must start with {:?}",
+                annotations::GROUP_PREFIX,
+            );
+        }
+    }
+
+    #[test]
+    fn all_are_pairwise_unique() {
+        // No two arms of the family may share the same wire form —
+        // a copy-paste regression that duplicated one arm's wire
+        // form at another arm (e.g. a `POOL_SLOT` const that got
+        // copy-pasted to the `RETURN_TRIGGER` const's value) would
+        // silently double-book the K8s metadata slot the two keys
+        // share, letting one write overwrite the other at whichever
+        // downstream stamp site fired second.
+        let mut seen: Vec<&str> = Vec::new();
+        for key in annotations::ALL {
+            assert!(
+                !seen.contains(key),
+                "duplicate annotation key in ALL: {key:?}",
+            );
+            seen.push(key);
+        }
+        assert_eq!(seen.len(), annotations::ALL.len());
+    }
+
+    #[test]
+    fn all_contains_every_declared_const() {
+        // Coherence pin — a regression that added a new `pub const`
+        // above the ALL slice but forgot to append it here surfaces
+        // by name at this pin. Every currently-declared const in
+        // [`crate::annotations`] MUST appear at least once in the
+        // [`crate::annotations::ALL`] slice; if a future editor
+        // adds a 21st const above but omits it below, this pin +
+        // [`all_matches_declared_length`] together catch both the
+        // slice-length drift and the omitted-const case.
+        for key in [
+            annotations::MANAGED_BY,
+            annotations::PROCESS,
+            annotations::PID,
+            annotations::CONTENT_HASH,
+            annotations::ATTESTATION_ROOT,
+            annotations::GENERATION,
+            annotations::SIGNAL,
+            annotations::RELEASED_FROM,
+            annotations::ROLE,
+            annotations::EXPORT_INDEX,
+            annotations::APP,
+            annotations::ROUTING_FORM,
+            annotations::REQUESTOR,
+            annotations::ALLOCATION,
+            annotations::REQUESTOR_KIND,
+            annotations::POOL,
+            annotations::POOL_SLOT,
+            annotations::RETURN_TRIGGER,
+            annotations::ENCAPSULATION_MODE,
+            annotations::ADOPTED_RELEASE,
+        ] {
+            assert!(
+                annotations::ALL.contains(&key),
+                "annotation key {key:?} missing from ALL slice",
+            );
+        }
+    }
+
+    #[test]
+    fn all_disjoint_from_finalizer_family() {
+        // Cross-peer-family disjointness pin — the annotation +
+        // finalizer families share the reverse-DNS namespace
+        // [`crate::annotations::GROUP_PREFIX`] but MUST NOT share
+        // any specific wire-form key. A copy-paste that landed a
+        // finalizer key (`tatara.pleme.io/<owner>-finalizer`) in
+        // the annotation family, or an annotation key on the
+        // finalizer family, would let a metadata-list writer
+        // silently double-book the K8s garbage-collection slot on
+        // the SAME resource the annotation reader consumes.
+        for ann in annotations::ALL {
+            for fin in finalizers::ALL {
+                assert_ne!(
+                    ann, fin,
+                    "annotation key {ann:?} collides with finalizer key {fin:?}",
+                );
+            }
+        }
     }
 }

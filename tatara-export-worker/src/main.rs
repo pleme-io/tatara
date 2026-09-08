@@ -261,7 +261,9 @@ async fn read_artifact(spec: &ExportSpec, kube: &Client, ns: &str, name: &str) -
             for cm in cms.items {
                 // Annotation lookup rides through the ONE substrate
                 // primitive `Annotated::annotation` (blanket impl over
-                // every `kube::Resource<DynamicType = ()>`) — pre-lift
+                // every `kube::Resource<DynamicType = ()>`) with the
+                // KEY slot routed through the substrate-owner const
+                // [`tatara_process::annotations::PROCESS`] — pre-lift
                 // this was a hand-authored 3-line
                 // `.metadata.annotations.as_ref().and_then(|m|
                 // m.get("tatara.pleme.io/process")).map(|p| p == &want)
@@ -273,12 +275,24 @@ async fn read_artifact(spec: &ExportSpec, kube: &Client, ns: &str, name: &str) -
                 // inherent (`signals::ingest`,
                 // `phase_machine::released_from_annotation`,
                 // `controller_pool::process_belongs_to_pool`). Post-
-                // lift the four surfaces share ONE substrate owner;
-                // any future annotation-lookup consumer (a new tatara
-                // CRD, another K8s built-in) inherits the primitive
-                // through the trait's blanket impl with zero per-
-                // callsite lift work.
-                if cm.annotation("tatara.pleme.io/process") != Some(want.as_str()) {
+                // lift the four surfaces share ONE substrate owner for
+                // the trait routing AND ONE substrate owner for the
+                // KEY byte-shape (`annotations::PROCESS`); pre-lift
+                // this READ-side callsite was the LAST workspace
+                // surface still passing the bare `"tatara.pleme.io/
+                // process"` literal to the trait method — every peer
+                // WRITE-side (`ssapply::m.insert_str(annotations::
+                // PROCESS, …)`, `render.rs::json!({ annotations::
+                // PROCESS: … })`) and READ-side (`edges.rs`,
+                // `render.rs::labels[annotations::PROCESS]`,
+                // `phase_machine.rs`) already routed. A future rename
+                // of the key (a `tatara.pleme.io/v2/process` migration,
+                // a per-fleet override, a collapse into a compound
+                // `tatara.pleme.io/owner` key) lands at ONE `pub const`
+                // in the substrate and every downstream consumer
+                // (READ + WRITE alike) picks up the shift mechanically
+                // without touching this callsite.
+                if cm.annotation(tatara_process::annotations::PROCESS) != Some(want.as_str()) {
                     continue;
                 }
                 if let Some(d) = &cm.data {
@@ -439,4 +453,69 @@ async fn write_receipt(
         .map(|_| ())
         .with_context(|| format!("apply configmap {namespace}/{configmap}"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod annotation_key_routing_pins {
+    //! Byte-shape + routing pins for the ONE Receipts-arm READ site
+    //! at `read_artifact::ArtifactVariant::Receipts` that filters
+    //! ConfigMaps by the owning-Process annotation. Pre-lift the KEY
+    //! slot passed to [`tatara_process::prelude::Annotated::annotation`]
+    //! was a bare `"tatara.pleme.io/process"` string literal — the
+    //! LAST workspace surface still spelling the annotation KEY inline
+    //! after every peer WRITE-side + READ-side already routed through
+    //! [`tatara_process::annotations::PROCESS`]. These pins bind the
+    //! substrate owner at fail-before-pass-after granularity so a
+    //! regression that re-inlined the literal at this callsite
+    //! (breaking the covariance loop with every peer consumer) surfaces
+    //! HERE rather than as silent operator-facing skew between the
+    //! export-worker Receipts-collection filter and the ssapply /
+    //! render / phase_machine consumers that stamp / read the SAME
+    //! annotation on the SAME ConfigMap.
+    use tatara_process::annotations;
+
+    #[test]
+    fn process_annotation_key_matches_pre_lift_wire_string() {
+        // Byte-identity pin: the substrate-owner const is the SAME
+        // string the pre-lift `cm.annotation("tatara.pleme.io/process")`
+        // callsite spelled inline. A regression that drifted either
+        // the const or the pre-lift wire form would surface HERE
+        // rather than as silent skew between the export-worker
+        // Receipts-collection filter and every peer consumer stamping
+        // or reading the SAME K8s annotation slot.
+        assert_eq!(annotations::PROCESS, "tatara.pleme.io/process");
+    }
+
+    #[test]
+    fn process_annotation_key_inhabits_tatara_group_prefix() {
+        // Family-membership pin: [`annotations::PROCESS`] rides in the
+        // shared reverse-DNS namespace every substrate-owned annotation
+        // key carries, matching the `#[kube(group = "tatara.pleme.io",
+        // …)]` derive slot on every tatara CRD struct. A regression
+        // that dropped or drifted the prefix at the const owner
+        // surfaces HERE at this consumer-site pin (rather than only
+        // at the family sweep in `tatara-process::annotations_family_
+        // tests::all_share_group_prefix`), so the ONE workspace surface
+        // that keys READ-side dispatch on this specific annotation
+        // (the export-worker Receipts-collection filter) carries its
+        // own local coherence guard against a group-segment shift
+        // stranding it.
+        assert!(annotations::PROCESS.starts_with(annotations::GROUP_PREFIX));
+    }
+
+    #[test]
+    fn process_annotation_key_is_distinct_from_receipt_label_key() {
+        // Cross-family disjointness pin: the export-worker Receipts-
+        // collection filter READS through [`annotations::PROCESS`]
+        // (owner-Process qualified ref); the closed-loop-probe
+        // receipt-CM writer STAMPS [`annotations::RECEIPT`] (the CM's
+        // receipt-envelope version marker) — two distinct annotation
+        // slots on the SAME K8s ConfigMap carrier. A copy-paste that
+        // collapsed either arm onto the other would silently double-
+        // book the same K8s metadata slot for two orthogonal concerns
+        // (owner correlation vs. envelope version enumeration); this
+        // pin surfaces such a regression HERE at the ONE consumer that
+        // could confuse the two.
+        assert_ne!(annotations::PROCESS, annotations::RECEIPT);
+    }
 }

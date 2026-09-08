@@ -394,15 +394,22 @@ impl RenderedResourceCoords {
         // at the primitive body and every downstream consumer of the
         // canonical `"rendered resource missing X"` wire form inherits
         // it mechanically. The optional `metadata.namespace` slot
-        // continues to route through the pre-existing `get_str` READ
-        // primitive since its absent-arm is `None`, not an error.
+        // routes directly through the ONE substrate primitive
+        // `crate::json_object::ValueGetExt::get_str` on the
+        // `Option<&Value>` receiver arm — the outer-optionality
+        // widening added alongside the `Value` + `Map<String, Value>`
+        // impls. Pre-lift this callsite hand-authored the outer-
+        // optionality closure `metadata.and_then(|m| m.get_str
+        // ("namespace"))` past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+        // threshold (this site + `Self::required_str`'s body); post-
+        // lift the closure disappears and the axis-family method-call
+        // surface stays identical to the `Value` / `Map` receiver
+        // callers.
         let api_version = Self::required_str(Some(res), "apiVersion", "apiVersion")?;
         let kind = Self::required_str(Some(res), "kind", "kind")?;
         let metadata = res.get("metadata");
         let name = Self::required_str(metadata, "name", "metadata.name")?;
-        let namespace = metadata
-            .and_then(|m| m.get_str("namespace"))
-            .map(str::to_string);
+        let namespace = metadata.get_str("namespace").map(str::to_string);
         Ok(Self {
             api_version,
             kind,
@@ -492,15 +499,25 @@ impl RenderedResourceCoords {
         key: &'static str,
         error_slot: &'static str,
     ) -> anyhow::Result<String> {
-        v.and_then(|x| x.get_str(key))
-            .map(str::to_string)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "{prefix} {slot}",
-                    prefix = Self::MISSING_MESSAGE_PREFIX,
-                    slot = error_slot,
-                )
-            })
+        // The `Option<&Value>` outer-optionality unwrap-then-project
+        // step rides through the substrate primitive
+        // `crate::json_object::ValueGetExt::get_str` on the
+        // `Option<&Value>` receiver arm — the outer-optionality
+        // widening sibling of the `Value` / `Map<String, Value>`
+        // impls. Pre-lift this body hand-authored the outer-
+        // optionality closure `v.and_then(|x| x.get_str(key))` past
+        // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold (this
+        // helper's body + the sibling `metadata.namespace` walk in
+        // `Self::from_json`); post-lift the closure disappears and
+        // the axis-family method-call surface stays identical to the
+        // `Value` / `Map` receiver callers.
+        v.get_str(key).map(str::to_string).ok_or_else(|| {
+            anyhow::anyhow!(
+                "{prefix} {slot}",
+                prefix = Self::MISSING_MESSAGE_PREFIX,
+                slot = error_slot,
+            )
+        })
     }
 
     /// `metadata.namespace` slice with the K8s canonical `"default"`

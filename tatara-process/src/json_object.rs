@@ -852,6 +852,114 @@ impl ValueGetExt for Map<String, Value> {
     }
 }
 
+/// Receiver-shape widening of the READ-projection axis-family — the
+/// same four methods extended from `Value` / `Map<String, Value>` to
+/// `Option<&Value>`, closing the outer-optionality gap so a caller who
+/// has already threaded an inherent `Value::get(<key>) → Option<&Value>`
+/// walk into a nested slot (or otherwise holds an `Option<&Value>` from
+/// a prior projection) reaches the SAME `get_i64` / `get_str` /
+/// `get_array` / `get_bool` methods through the SAME trait handle
+/// without an intermediate `.and_then(|v| v.get_<T>(<key>))` closure.
+///
+/// Pre-lift the `<opt>.and_then(|v| v.get_<T>(<key>))` outer-
+/// optionality closure was hand-authored at THREE production callsites
+/// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold:
+///
+/// * `tatara-process::status::RenderedResourceCoords::from_json` — the
+///   `metadata.and_then(|m| m.get_str("namespace"))` walk that projects
+///   the optional `metadata.namespace` slot off a rendered manifest's
+///   `metadata` handle (`metadata: Option<&Value>`, since a K8s
+///   manifest MAY omit the `metadata` slot altogether — a cluster-
+///   scoped resource, a template-authored intermediate spec).
+/// * `tatara-process::status::RenderedResourceCoords::required_str` —
+///   the private required-extract helper's `v.and_then(|x|
+///   x.get_str(key))` walk (`v: Option<&Value>`), the sink every
+///   `apiVersion` / `kind` / `metadata.name` required extract fans
+///   through.
+/// * `tatara-reconciler::ssapply::ready_condition_value` — the
+///   `data.get("status").and_then(|s| s.get_array("conditions"))` walk
+///   that opens the K8s Condition classifier every DynamicObject
+///   readiness probe rides through; the outer `Option<&Value>` comes
+///   from the inherent `Value::get("status")` step.
+///
+/// All three sites walked the SAME `.and_then(|<v>| <v>.get_<T>
+/// (<key>))` closure shape, differing only in the axis (`get_str` at
+/// two sites, `get_array` at the third), the slot name, and the
+/// closure-argument binding. Post-lift each callsite reads `<opt>
+/// .get_<T>(<key>)` and the outer-optionality unwrap-then-project
+/// lives at ONE substrate owner here — the closure disappears, the
+/// method-call surface stays identical to the two pre-existing
+/// receiver-shape impls.
+///
+/// ### Composability
+///
+/// * Chains directly off an inherent `Value::get(<key>)` step —
+///   `data.get("status").get_array("conditions")` reads as one
+///   left-to-right walk, no nested closure.
+/// * Composes bytewise with the pre-lift `.and_then(|v| v.get_<T>
+///   (<key>))` chain — the impl body IS `(*self).and_then(|v|
+///   v.get_<T>(key))`, so the returned `Option` is bit-for-bit what
+///   the pre-lift closure produced.
+/// * `Option<&Value>` is `Copy` (every `&T` is `Copy`, so
+///   `Option<&Value>: Copy`), so the `(*self)` deref inside the impl
+///   is a bare bitwise copy — no clone, no additional allocation.
+///
+/// ### Return lifetime
+///
+/// The returned `Option<&str>` / `Option<&Vec<Value>>` borrows through
+/// the underlying `&Value` handle that lived inside the outer `Option`;
+/// the lifetime is bounded by `&self` (elided per the trait method
+/// signatures), matching the two pre-existing receiver impls. A caller
+/// that consumes the borrow before the outer `Option<&Value>` handle
+/// expires sees no observable difference in borrow scope from the
+/// pre-lift `.and_then(|v| v.get_<T>(<key>))` chain.
+///
+/// ### Axis-family invariant
+///
+/// The axis-family invariant carries verbatim from the two pre-existing
+/// impls: a single `use tatara_process::json_object::ValueGetExt;`
+/// unlocks every axis (`get_i64` / `get_str` / `get_array` / `get_bool`)
+/// on all three receiver shapes (`Value`, `Map<String, Value>`,
+/// `Option<&Value>`). A future new axis (`get_object` for
+/// `Value::Object` slots, `get_f64` for `Value::Number` truncated to
+/// `f64`) adds ONE method on the trait and inherits all three impls;
+/// there is no separate `OptGetExt` peer to keep in sync. Pinned at
+/// [`tests::option_ref_value_axis_family_reaches_all_four_axes_through_one_trait_import`].
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// outer-optionality `.and_then(|v| v.get_<T>(<key>))` closure recurred
+/// at three production sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication trigger, and is lifted to ONE substrate owner here).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// receiver-shape widening carries the axis-family invariant across
+/// without splitting it into two traits; a regression that specialised
+/// one axis at ONE receiver but not the other would silently split the
+/// three receiver shapes' behaviour and break the "widening preserves
+/// semantics" invariant at
+/// [`tests::option_ref_value_get_str_matches_value_arm_bytewise_when_some`]
+/// and its per-axis peers).
+impl ValueGetExt for Option<&Value> {
+    #[inline]
+    fn get_i64(&self, key: &str) -> Option<i64> {
+        (*self).and_then(|v| v.get_i64(key))
+    }
+
+    #[inline]
+    fn get_str(&self, key: &str) -> Option<&str> {
+        (*self).and_then(|v| v.get_str(key))
+    }
+
+    #[inline]
+    fn get_array(&self, key: &str) -> Option<&Vec<Value>> {
+        (*self).and_then(|v| v.get_array(key))
+    }
+
+    #[inline]
+    fn get_bool(&self, key: &str) -> Option<bool> {
+        (*self).and_then(|v| v.get_bool(key))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2322,5 +2430,294 @@ mod tests {
         assert_eq!(n, Some(7));
         assert_eq!(s, Some("hello"));
         assert_eq!(a.map(Vec::len), Some(3));
+    }
+
+    // ─── ValueGetExt receiver-shape widening — Option<&Value> impl pins ─
+    //
+    // Fail-before-pass-after granularity: `impl ValueGetExt for
+    // Option<&Value>` did not exist before this commit, so each test
+    // below fails to compile pre-lift (a bare `Option<&Value>` receiver
+    // has no `.get_str(<key>)` inherent method — only the upstream
+    // `<opt>.and_then(|v| v.get_str(<key>))` closure chain). Post-lift
+    // they collectively pin the outer-optionality widening at ONE
+    // substrate owner — a regression that dropped the Option arm and
+    // re-forced every `Option<&Value>` caller into an
+    // `.and_then(|v| v.get_<T>(<key>))` closure would surface HERE
+    // rather than as silent per-emit skew across the three pre-lift
+    // consumers (`RenderedResourceCoords::from_json` walking
+    // `metadata.namespace`, `RenderedResourceCoords::required_str`
+    // walking each required slot, `ssapply::ready_condition_value`
+    // walking `status.conditions`).
+    //
+    // The impl body is `(*self).and_then(|v| v.get_<T>(key))` for each
+    // axis, matching the pre-lift chain byte-for-byte on every corner
+    // reachable by an `Option<&Value>` receiver. The tests below sweep
+    // the (Some(non-object), Some(object with slot), Some(object w/o
+    // slot), Some(object with wrong-variant slot), None) axis-family
+    // corner cube on each of the four typed axes and pin the byte-
+    // parity invariant.
+
+    #[test]
+    fn option_ref_value_get_str_present_string_slot_returns_the_slice() {
+        // Ok-arm invariant: a `Some(&Value)` handle whose interior
+        // carries a JSON object with a `Value::String` at `<key>`
+        // projects to `Some(<slice>)` — matching the pre-lift
+        // `<opt>.and_then(|v| v.get_str(<key>))` chain byte-for-byte.
+        // Pins the "unwrap outer optionality → project through the
+        // Value arm's get_str" composition.
+        let v: Value = json!({ "namespace": "kube-system" });
+        let opt: Option<&Value> = Some(&v);
+        assert_eq!(opt.get_str("namespace"), Some("kube-system"));
+    }
+
+    #[test]
+    fn option_ref_value_get_str_none_receiver_returns_none() {
+        // None-arm invariant: a `None` outer optionality short-circuits
+        // to `None` on every axis without touching the inner projection.
+        // Matches the pre-lift `<none>.and_then(_)` chain byte-for-byte
+        // (`Option::and_then` on `None` returns `None` verbatim).
+        let opt: Option<&Value> = None;
+        assert!(opt.get_str("any-key").is_none());
+        assert!(opt.get_i64("any-key").is_none());
+        assert!(opt.get_array("any-key").is_none());
+        assert!(opt.get_bool("any-key").is_none());
+    }
+
+    #[test]
+    fn option_ref_value_get_str_matches_pre_lift_and_then_chain_bytewise() {
+        // Byte-shape parity pin on the string axis: `<opt>.get_str
+        // (<key>)` on an `Option<&Value>` MUST return the SAME
+        // `Option<&str>` the pre-lift `<opt>.and_then(|v| v.get_str
+        // (<key>))` chain produced. Sweeps every reachable outer-arm
+        // (`None`, `Some(&<obj>)`) crossed with every inner-arm
+        // corner (present string, wrong-variant, absent) so a
+        // regression at the Option impl that broke byte identity at
+        // ONE cross-product cell surfaces here rather than as silent
+        // drift at any of the three pre-lift consumers.
+        let v: Value = json!({
+            "namespace": "kube-system",
+            "numeric": 7,
+            "null_valued": null,
+        });
+        let some: Option<&Value> = Some(&v);
+        let none: Option<&Value> = None;
+        for key in ["namespace", "numeric", "null_valued", "missing"] {
+            let via_primitive = some.get_str(key);
+            let via_pre_lift = some.and_then(|v| v.get_str(key));
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "Some(&Value) corner `{key}` must round-trip through both shapes",
+            );
+        }
+        assert_eq!(
+            none.get_str("namespace"),
+            None.and_then(|v: &Value| v.get_str("namespace"))
+        );
+    }
+
+    #[test]
+    fn option_ref_value_get_i64_matches_pre_lift_and_then_chain_bytewise() {
+        // Byte-shape parity pin on the integer axis — sibling to the
+        // `get_str` pin above. Sweeps the same (outer × inner) cross-
+        // product so a regression at the Option impl's `get_i64` arm
+        // surfaces here rather than as silent drift at any future
+        // consumer that walks an `Option<&Value>` into an integer
+        // counter slot (a wrapped Job-status projection, an HPA
+        // desired-count read).
+        let v: Value = json!({
+            "succeeded": 3,
+            "failed": 0,
+            "stringy": "1",
+            "null_valued": null,
+        });
+        let some: Option<&Value> = Some(&v);
+        let none: Option<&Value> = None;
+        for key in ["succeeded", "failed", "stringy", "null_valued", "missing"] {
+            let via_primitive = some.get_i64(key);
+            let via_pre_lift = some.and_then(|v| v.get_i64(key));
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "Some(&Value) corner `{key}` on integer axis must round-trip through both shapes",
+            );
+        }
+        assert_eq!(
+            none.get_i64("succeeded"),
+            None.and_then(|v: &Value| v.get_i64("succeeded"))
+        );
+    }
+
+    #[test]
+    fn option_ref_value_get_array_matches_pre_lift_and_then_chain_bytewise() {
+        // Byte-shape parity pin on the array axis — the axis the
+        // `ssapply::ready_condition_value` pre-lift consumer walks
+        // (`data.get("status").and_then(|s| s.get_array("conditions"))`
+        // → `data.get("status").get_array("conditions")`). Sweeps the
+        // same (outer × inner) cross-product; a regression at the
+        // Option impl's `get_array` arm surfaces here rather than as
+        // silent drift at the K8s Condition classifier.
+        let v: Value = json!({
+            "conditions": [
+                { "type": "Ready", "status": "True" },
+                { "type": "Available", "status": "False" },
+            ],
+            "finalizers": [],
+            "stringy": "not-array",
+        });
+        let some: Option<&Value> = Some(&v);
+        let none: Option<&Value> = None;
+        for key in ["conditions", "finalizers", "stringy", "missing"] {
+            let via_primitive = some.get_array(key);
+            let via_pre_lift = some.and_then(|v| v.get_array(key));
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "Some(&Value) corner `{key}` on array axis must round-trip through both shapes",
+            );
+        }
+        assert_eq!(
+            none.get_array("conditions"),
+            None.and_then(|v: &Value| v.get_array("conditions"))
+        );
+    }
+
+    #[test]
+    fn option_ref_value_get_bool_matches_pre_lift_and_then_chain_bytewise() {
+        // Byte-shape parity pin on the boolean axis — closes the
+        // fourth axis of the family on the Option receiver. Sweeps the
+        // same (outer × inner) cross-product; a regression at the
+        // Option impl's `get_bool` arm surfaces here rather than as
+        // silent drift at any future consumer that walks an
+        // `Option<&Value>` into a boolean flag slot (an OwnerReference
+        // `controller` / `blockOwnerDeletion` projection, an
+        // `identity.name_override` gate).
+        let v: Value = json!({
+            "on": true,
+            "off": false,
+            "stringy": "true",
+            "null_valued": null,
+        });
+        let some: Option<&Value> = Some(&v);
+        let none: Option<&Value> = None;
+        for key in ["on", "off", "stringy", "null_valued", "missing"] {
+            let via_primitive = some.get_bool(key);
+            let via_pre_lift = some.and_then(|v| v.get_bool(key));
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "Some(&Value) corner `{key}` on boolean axis must round-trip through both shapes",
+            );
+        }
+        assert_eq!(
+            none.get_bool("on"),
+            None.and_then(|v: &Value| v.get_bool("on"))
+        );
+    }
+
+    #[test]
+    fn option_ref_value_get_str_matches_value_arm_bytewise_when_some() {
+        // Cross-receiver coherence pin on the string axis: `Some(&v)
+        // .get_str(<key>)` MUST project identically to the underlying
+        // `<v> as &Value`'s own `get_str(<key>)` — the widening MUST
+        // add no per-axis specialisation on the Option arm. Sibling to
+        // `map_receiver_get_str_matches_value_object_arm_bytewise` on
+        // the Map receiver; both close the "widening preserves
+        // semantics" invariant across all three receiver shapes.
+        let v: Value = json!({
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "phase": "Running",
+        });
+        let opt: Option<&Value> = Some(&v);
+        for key in ["apiVersion", "kind", "phase", "missing"] {
+            assert_eq!(
+                <Option<&Value> as ValueGetExt>::get_str(&opt, key),
+                <Value as ValueGetExt>::get_str(&v, key),
+                "receiver-shape parity: `{key}` on Option<&Value> must project identically to &Value",
+            );
+        }
+    }
+
+    #[test]
+    fn option_ref_value_axis_family_reaches_all_four_axes_through_one_trait_import() {
+        // Axis-family + receiver-shape pin combined: a generic
+        // `T: ValueGetExt` bound reaches ALL FOUR axes on the
+        // `Option<&Value>` receiver — the SAME structural invariant
+        // the pre-existing `map_receiver_axis_family_reaches_...` and
+        // `get_bool_axis_family_reaches_i64_str_array_and_bool...`
+        // siblings pin for the `Map` and `Value` receivers. Walks the
+        // SAME `probe`-style generic through the Option arm so a
+        // regression that split the trait into per-axis peers would
+        // break the invariant on all three receiver shapes
+        // simultaneously.
+        fn probe<T: ValueGetExt>(
+            t: &T,
+        ) -> (Option<i64>, Option<&str>, Option<&Vec<Value>>, Option<bool>) {
+            (
+                t.get_i64("n"),
+                t.get_str("s"),
+                t.get_array("a"),
+                t.get_bool("b"),
+            )
+        }
+        let v: Value = json!({ "n": 7, "s": "hello", "a": [1, 2, 3], "b": true });
+        let opt: Option<&Value> = Some(&v);
+        let (n, s, a, b) = probe(&opt);
+        assert_eq!(n, Some(7));
+        assert_eq!(s, Some("hello"));
+        assert_eq!(a.map(Vec::len), Some(3));
+        assert_eq!(b, Some(true));
+    }
+
+    #[test]
+    fn option_ref_value_projects_through_stored_intermediate_left_to_right() {
+        // Ergonomic pin — a caller who binds an inherent
+        // `Value::get(<key>)` step to a `let` (the shape the two
+        // pre-lift `RenderedResourceCoords` consumers already walk,
+        // and the shape a rewritten `ssapply::ready_condition_value`
+        // adopts) reaches the axis-family method on the stored
+        // `Option<&Value>` handle bytewise-identically to the
+        // pre-lift `<opt>.and_then(|s| s.get_<T>(<key>))` closure.
+        // Sweeps the string / array / boolean axes on the same
+        // `Option<&Value>` intermediate so a regression at the impl
+        // that broke composition through a stored optionality handle
+        // (a shadow on `Option::get_*` from a future std addition, a
+        // lifetime-bound tightening that rejected the borrow through
+        // the intermediate `&Value`) surfaces here rather than as a
+        // per-callsite recompile failure across every downstream
+        // reader.
+        //
+        // Note: a temporary `Option<&Value>` (as in `data.get("status")
+        // .get_array("conditions")` on ONE line) cannot outlive the
+        // enclosing statement because the trait method's return
+        // lifetime is elided to `&self`; consumers that want to chain
+        // directly must bind the intermediate to a `let` first, as
+        // this test does — the substrate widening trades the closure
+        // syntax for a stored-intermediate discipline, matching how
+        // the two `RenderedResourceCoords` consumers already spelled
+        // the walk.
+        let data = json!({
+            "status": {
+                "conditions": [
+                    { "type": "Ready", "status": "True" },
+                ],
+                "phase": "Running",
+            },
+            "spec": { "suspended": false },
+        });
+        let status = data.get("status");
+        let spec = data.get("spec");
+
+        let via_primitive = status.get_array("conditions");
+        let via_pre_lift = status.and_then(|s| s.get_array("conditions"));
+        assert_eq!(via_primitive, via_pre_lift);
+        assert_eq!(via_primitive.map(Vec::len), Some(1));
+
+        let via_primitive_str = status.get_str("phase");
+        let via_pre_lift_str = status.and_then(|s| s.get_str("phase"));
+        assert_eq!(via_primitive_str, via_pre_lift_str);
+        assert_eq!(via_primitive_str, Some("Running"));
+
+        let via_primitive_bool = spec.get_bool("suspended");
+        let via_pre_lift_bool = spec.and_then(|s| s.get_bool("suspended"));
+        assert_eq!(via_primitive_bool, via_pre_lift_bool);
+        assert_eq!(via_primitive_bool, Some(false));
     }
 }

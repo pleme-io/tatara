@@ -1136,6 +1136,44 @@ pub mod annotations {
     /// grep for this key to answer "which pre-existing release did this
     /// Process take over".
     pub const ADOPTED_RELEASE: &str = "tatara.pleme.io/adopted-release";
+    /// Label key stamped on every receipt [`ConfigMap`] that carries a
+    /// typed [`crate::receipt::ReceiptEnvelope`] payload, so operators
+    /// can `kubectl get cm -l tatara.pleme.io/receipt=tatara-receipt/v1`
+    /// to enumerate every receipt of a given version on a cluster
+    /// without pre-parsing each CM's embedded JSON/YAML.
+    ///
+    /// Value is [`crate::receipt::RECEIPT_VERSION`] — the wire-format
+    /// version string every parser gates on. A future bump to
+    /// `tatara-receipt/v2` lands at ONE const declaration on
+    /// [`crate::receipt::RECEIPT_VERSION`] and every consumer that
+    /// stamps this label picks up the upgrade mechanically.
+    ///
+    /// Load-bearing at TWO production write-sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold:
+    /// - `tatara-closed-loop-probe::write_receipt_cm`'s
+    ///   `BTreeMap::from([...])` label seed — the closed-loop auth
+    ///   probe's receipt-CM label writer.
+    /// - `tatara_process::configmap::with_data`'s byte-shape parity
+    ///   witness test that mirrors the closed-loop-probe callsite.
+    ///
+    /// The `tatara-export-worker` receipt-CM writer intentionally
+    /// stamps NO labels (its consumer keys on the CM name the
+    /// ExportSpec channel already carries), so it is not a consumer of
+    /// this const; the two production label-stamp sites above are the
+    /// complete workspace consumer set today.
+    ///
+    /// Peer to [`ROLE`] + [`EXPORT_INDEX`] on the "annotation / label
+    /// key stamped on a receipt-emitting resource other than the
+    /// Process itself" axis-family: those two keys ride on the
+    /// export-worker Job the reconciler emits (Job-side), this key
+    /// rides on the receipt ConfigMap the probe binary writes
+    /// (ConfigMap-side); all three share the [`GROUP_PREFIX`]
+    /// reverse-DNS namespace. A future rename of this key (a
+    /// `tatara.pleme.io/v2/receipt` migration, a per-fleet override, a
+    /// collapse into a compound `tatara.pleme.io/receipt-envelope`
+    /// key) lands at ONE `pub const` in the substrate and every
+    /// downstream consumer inherits the upgrade mechanically.
+    pub const RECEIPT: &str = "tatara.pleme.io/receipt";
 
     /// Shared reverse-DNS namespace prefix every substrate-owned
     /// annotation key in this module carries — the same
@@ -1196,7 +1234,7 @@ pub mod annotations {
     /// rather than by silently escaping every downstream iteration
     /// consumer.
     ///
-    /// Pinned to length 20 by
+    /// Pinned to length 21 by
     /// [`crate::annotations_family_tests::all_matches_declared_length`],
     /// to shared [`GROUP_PREFIX`] membership by
     /// [`crate::annotations_family_tests::all_share_group_prefix`],
@@ -1228,6 +1266,7 @@ pub mod annotations {
         RETURN_TRIGGER,
         ENCAPSULATION_MODE,
         ADOPTED_RELEASE,
+        RECEIPT,
     ];
 }
 
@@ -3421,6 +3460,116 @@ mod annotations_pins {
         }
     }
 
+    // ── Receipt-CM-label axis pins ──────────────────────────────────
+    //
+    // Pins the newly-lifted receipt-CM label KEY
+    // ([`crate::annotations::RECEIPT`]) at its canonical wire-form
+    // byte-value. Pre-lift the key was a bare
+    // `"tatara.pleme.io/receipt"` string literal inline at
+    // `tatara-closed-loop-probe::write_receipt_cm`'s
+    // `BTreeMap::from([...])` label seed AND at the byte-shape parity
+    // witness in `tatara_process::configmap::with_data`'s
+    // `with_data_preserves_passed_labels_map_verbatim_when_some` test —
+    // TWO restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold. Post-lift both callsites route through the substrate
+    // constant; these pins bind the constant's byte-shape +
+    // tatara-namespace membership + partition-distinctness against
+    // every peer key so a future edit that drifted the constant (a
+    // typo'd suffix, an incoming rename that collapsed RECEIPT onto a
+    // peer key, a `tatara.pleme.io/v2/receipt` migration landing at
+    // only the writer, a collapse into a compound
+    // `tatara.pleme.io/receipt-envelope` payload key) surfaces HERE
+    // rather than as silent operator-facing kubectl-selector skew
+    // between the probe's receipt-CM writer and every downstream
+    // consumer (a receipt-collection walker, an admission-webhook gate
+    // on receipt version, an audit-trail scraper enumerating every
+    // `tatara-receipt/v1` payload on a cluster).
+
+    #[test]
+    fn receipt_matches_pre_lift_wire_string() {
+        assert_eq!(annotations::RECEIPT, "tatara.pleme.io/receipt");
+    }
+
+    #[test]
+    fn receipt_inhabits_tatara_namespace() {
+        // Same reverse-DNS namespace invariant every sibling key on
+        // the workspace enforces above — a rename that dropped the
+        // prefix on RECEIPT would collide with an arbitrary
+        // third-party operator's labels on the same ConfigMap and
+        // silently corrupt every downstream kubectl-selector that
+        // enumerates receipt CMs of a given version on a cluster.
+        assert!(
+            annotations::RECEIPT.starts_with(annotations::GROUP_PREFIX),
+            "annotation key {:?} must inhabit {:?} namespace",
+            annotations::RECEIPT,
+            annotations::GROUP_PREFIX,
+        );
+    }
+
+    #[test]
+    fn receipt_is_distinct_from_every_peer_annotation_key() {
+        // Cross-family distinctness pin — RECEIPT rides on the
+        // receipt ConfigMap the probe binary writes (a peer resource
+        // of the Process itself), whereas every peer annotation key on
+        // the workspace is stamped on the PROCESS (SIGNAL,
+        // RELEASED_FROM, POOL, POOL_SLOT, REQUESTOR, ALLOCATION,
+        // REQUESTOR_KIND, RETURN_TRIGGER) OR on emitted routing edges
+        // (APP, ROUTING_FORM) OR on export-worker Jobs (ROLE,
+        // EXPORT_INDEX) OR on encapsulation-diagnostic side-resources
+        // (ENCAPSULATION_MODE, ADOPTED_RELEASE). A copy-paste that
+        // collapsed RECEIPT onto any peer would let one write silently
+        // overwrite the other. Pin the key against every sibling
+        // substrate-owned annotation key on the workspace.
+        for peer in [
+            annotations::MANAGED_BY,
+            annotations::PROCESS,
+            annotations::PID,
+            annotations::CONTENT_HASH,
+            annotations::ATTESTATION_ROOT,
+            annotations::GENERATION,
+            annotations::SIGNAL,
+            annotations::RELEASED_FROM,
+            annotations::ROLE,
+            annotations::EXPORT_INDEX,
+            annotations::APP,
+            annotations::ROUTING_FORM,
+            annotations::REQUESTOR,
+            annotations::ALLOCATION,
+            annotations::REQUESTOR_KIND,
+            annotations::POOL,
+            annotations::POOL_SLOT,
+            annotations::RETURN_TRIGGER,
+            annotations::ENCAPSULATION_MODE,
+            annotations::ADOPTED_RELEASE,
+        ] {
+            assert_ne!(
+                annotations::RECEIPT,
+                peer,
+                "RECEIPT key {:?} collides with peer annotation key {peer:?}",
+                annotations::RECEIPT,
+            );
+        }
+    }
+
+    #[test]
+    fn receipt_value_slot_routes_through_receipt_version_const() {
+        // Value-side coherence pin — the SUBSTRATE convention is that
+        // every ConfigMap labeled `RECEIPT` carries a payload whose
+        // envelope `version` slot equals [`crate::receipt::RECEIPT_VERSION`],
+        // so a kubectl `-l tatara.pleme.io/receipt=tatara-receipt/v1`
+        // selector matches exactly the CMs whose payloads pass the
+        // `RECEIPT_VERSION` gate. Pin that the label VALUE the probe
+        // stamps IS `RECEIPT_VERSION` (routed through the const, not a
+        // parallel `"tatara-receipt/v1"` literal): a future bump to
+        // `tatara-receipt/v2` at the version const propagates
+        // MECHANICALLY to the label value without touching any writer.
+        assert_eq!(
+            crate::receipt::RECEIPT_VERSION,
+            "tatara-receipt/v1",
+            "RECEIPT_VERSION wire-form pin — a bump surfaces here",
+        );
+    }
+
     #[test]
     fn encapsulation_mode_value_slot_routes_through_encapsulation_mode_closed_set() {
         // Value-side pin — the render emitter's `ENCAPSULATION_MODE`
@@ -3812,7 +3961,7 @@ mod annotations_family_tests {
     //! invariant block on the peer-family axis: the [`crate::finalizers`]
     //! module already carries the same closed-family + shared-prefix
     //! + pairwise-uniqueness discipline over its three finalizer keys;
-    //! this block extends the same solve-once discipline to the 20-key
+    //! this block extends the same solve-once discipline to the 21-key
     //! annotation family.
     //!
     //! Each pin binds ONE invariant at fail-before-pass-after
@@ -3851,12 +4000,12 @@ mod annotations_family_tests {
 
     #[test]
     fn all_matches_declared_length() {
-        // A regression that added a 21st `pub const` above the ALL
+        // A regression that added a 22nd `pub const` above the ALL
         // slice without appending it to ALL (or shrank the family
         // without pruning the slice) would surface here. The
-        // 20-arm listing pins the declaration order every downstream
+        // 21-arm listing pins the declaration order every downstream
         // audit sweep iterates through.
-        assert_eq!(annotations::ALL.len(), 20);
+        assert_eq!(annotations::ALL.len(), 21);
     }
 
     #[test]
@@ -3906,7 +4055,7 @@ mod annotations_family_tests {
         // by name at this pin. Every currently-declared const in
         // [`crate::annotations`] MUST appear at least once in the
         // [`crate::annotations::ALL`] slice; if a future editor
-        // adds a 21st const above but omits it below, this pin +
+        // adds a 22nd const above but omits it below, this pin +
         // [`all_matches_declared_length`] together catch both the
         // slice-length drift and the omitted-const case.
         for key in [
@@ -3930,6 +4079,7 @@ mod annotations_family_tests {
             annotations::RETURN_TRIGGER,
             annotations::ENCAPSULATION_MODE,
             annotations::ADOPTED_RELEASE,
+            annotations::RECEIPT,
         ] {
             assert!(
                 annotations::ALL.contains(&key),

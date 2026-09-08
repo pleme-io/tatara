@@ -538,9 +538,20 @@ mod tests {
         // value coercion, no default injection of unrelated labels).
         let mut data = BTreeMap::new();
         data.insert("receipt.json".to_string(), "{}".to_string());
+        // KEY routes through the ONE substrate owner
+        // `crate::annotations::RECEIPT` — pre-lift this was a bare
+        // `"tatara.pleme.io/receipt".to_string()` string literal, one
+        // of TWO workspace-wide restatements past the ★★
+        // PRIME-DIRECTIVE ≥ 2 duplication threshold (peer at
+        // `tatara-closed-loop-probe::write_receipt_cm`'s
+        // `BTreeMap::from([...])` label seed). Post-lift both
+        // callsites route through the substrate constant.
+        // VALUE routes through the ONE substrate owner
+        // `crate::receipt::RECEIPT_VERSION` — same shape the peer
+        // consumer already carries.
         let labels = BTreeMap::from([(
-            "tatara.pleme.io/receipt".to_string(),
-            "tatara-receipt/v1".to_string(),
+            crate::annotations::RECEIPT.to_string(),
+            crate::receipt::RECEIPT_VERSION.to_string(),
         )]);
 
         let cm = with_data(

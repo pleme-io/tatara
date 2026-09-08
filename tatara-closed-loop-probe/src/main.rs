@@ -238,12 +238,28 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
     // probe stamps, the reader-side gate string in the reconciler,
     // and every serialized envelope's `version` slot advance
     // coherently in a single edit.
+    //
+    // Receipt-CM label KEY `tatara.pleme.io/receipt` rides through
+    // the ONE substrate owner `tatara_process::annotations::RECEIPT`
+    // — pre-lift this was a bare `"tatara.pleme.io/receipt".into()`
+    // string literal, one of TWO workspace-wide production
+    // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold (peer at
+    // `tatara-process::configmap::tests::with_data_preserves_passed_labels_map_verbatim_when_some`'s
+    // byte-shape witness). Post-lift a rename of the key (a
+    // `tatara.pleme.io/v2/receipt` migration, a per-fleet override, a
+    // collapse into a compound `tatara.pleme.io/receipt-envelope`
+    // payload key) lands at ONE `pub const` in the substrate and
+    // every downstream consumer (this writer + every future
+    // receipt-collection walker + every fleet audit binary
+    // enumerating receipt CMs by label) inherits the upgrade
+    // mechanically.
     let cm = tatara_process::configmap::with_data(
         cm_name,
         ns,
         data,
         Some(BTreeMap::from([(
-            "tatara.pleme.io/receipt".into(),
+            tatara_process::annotations::RECEIPT.into(),
             RECEIPT_VERSION.into(),
         )])),
     );
@@ -337,31 +353,41 @@ mod tests {
     use tatara_process::receipt::{ReceiptKind, RECEIPT_VERSION};
 
     #[test]
-    fn receipt_cm_label_value_routes_through_receipt_version_const() {
+    fn receipt_cm_label_pair_routes_through_substrate_owners() {
         // Fail-before-pass-after substrate pin: the receipt-CM label
-        // VALUE this binary stamps at `write_receipt` MUST route
-        // through the ONE canonical const
-        // `tatara_process::receipt::RECEIPT_VERSION`, not a bare
-        // `"tatara-receipt/v1"` string literal. A regression that
-        // reinlined the literal at the `BTreeMap::from([...])` label
-        // seed — silently reopening the bypass this commit closed —
-        // would fail HERE at the routing pin rather than as post-
-        // `RECEIPT_VERSION`-bump operator-facing skew between the
-        // label value on new receipt CMs (`"tatara-receipt/v1"` stale)
-        // and the actual envelope `version` slot (`"tatara-receipt/v2"`
-        // post-bump).
+        // PAIR this binary stamps at `write_receipt` MUST route both
+        // slots through the ONE canonical substrate owner per slot —
+        // KEY through `tatara_process::annotations::RECEIPT`, VALUE
+        // through `tatara_process::receipt::RECEIPT_VERSION` — not
+        // bare `"tatara.pleme.io/receipt"` / `"tatara-receipt/v1"`
+        // string literals. A regression that reinlined either literal
+        // at the `BTreeMap::from([...])` label seed — silently
+        // reopening the bypass this commit closed — would fail HERE
+        // at the routing pin rather than as post-rename operator-
+        // facing skew: a KEY bump (a `tatara.pleme.io/v2/receipt`
+        // migration) would silently strand the probe writer stamping
+        // the stale key while operators kubectl-select the new one; a
+        // VALUE bump (a `tatara-receipt/v2` payload version) would
+        // silently strand the probe writer stamping the stale label
+        // value while the actual envelope `version` slot advanced.
         //
         // Byte-shape parity with the pre-lift hand-authored pair is
-        // preserved by construction: `RECEIPT_VERSION` IS
+        // preserved by construction: `annotations::RECEIPT` IS
+        // `"tatara.pleme.io/receipt"` and `RECEIPT_VERSION` IS
         // `"tatara-receipt/v1"` today, so a receipt CM written pre-
         // and post-lift is byte-identical. This pin binds that
-        // parity + binds the routing so a future rewrite can't
+        // parity + binds both routings so a future rewrite can't
         // silently drift the two apart.
         let pre_lift: (&str, &str) = ("tatara.pleme.io/receipt", "tatara-receipt/v1");
-        let post_lift: (&str, &str) = ("tatara.pleme.io/receipt", RECEIPT_VERSION);
+        let post_lift: (&str, &str) = (tatara_process::annotations::RECEIPT, RECEIPT_VERSION);
         assert_eq!(
             pre_lift, post_lift,
             "post-lift receipt-CM label pair must byte-match the pre-lift hand-authored pair"
+        );
+        assert_eq!(
+            tatara_process::annotations::RECEIPT,
+            "tatara.pleme.io/receipt",
+            "annotations::RECEIPT wire-form pin — a rename surfaces here at the probe consumer",
         );
         assert_eq!(
             RECEIPT_VERSION, "tatara-receipt/v1",

@@ -85,116 +85,61 @@
 //! trigger, and is lifted to ONE substrate owner here).
 
 use serde::Serialize;
-use std::fmt::Display;
 
-/// The canonical `"blake3:"` scheme prefix every three-pillar-style
-/// wire-form BLAKE3 hash string in the workspace opens with — a typed
-/// substrate owner of the scheme literal on the READ (predicate) AND
-/// WRITE (compose) axes.
+/// The canonical `"blake3:"` scheme prefix — a thin `pub use`
+/// re-export delegate onto [`tatara_lisp::hash::BLAKE3_SCHEME_PREFIX`],
+/// the workspace-wide ONE substrate owner of the scheme literal on
+/// the READ (predicate) AND WRITE (compose) axes.
 ///
-/// Pre-lift the SAME `"blake3:"` bare literal was hand-authored across
-/// two axes of consumer sites in this crate:
+/// ## Why the substrate lives at `tatara-lisp`, not here
 ///
-/// * WRITE — [`crate::render::Renderer::artifact`] +
-///   [`crate::render::Renderer::summary`]: each composed the same
-///   `format!("blake3:{<hash>}")` wire-form wrap on top of a
-///   `ShortHash: Display` receiver to paint the `◇ blake3:<hash>` slot
-///   next to every artifact + summary line, past the ★★
-///   PRIME-DIRECTIVE ≥ 2 duplication threshold.
-/// * READ — [`tests::hex_blake3_of_json_is_64_lowercase_hex_chars`]'s
-///   `!h.starts_with("blake3:")` negative-form pin (the scheme-prefix-
-///   absence invariant every consumer of the bare
-///   [`hex_blake3_of_json`] projector inherits) already reads the same
-///   bare literal on the predicate side.
+/// The scheme-prefix surface was opened LOCAL to this crate in an
+/// earlier round (commit `e9baa2b`), owning the two `Renderer`
+/// WRITE-side callsites and the negative-form READ pin at
+/// [`tests::hex_blake3_of_json_is_64_lowercase_hex_chars`]. That
+/// resolved the two `tatara-ui` write sites but left the scheme
+/// literal owned at the CLI-UX-crate layer, forcing every
+/// `tatara-lisp`-depending crate downstream of the identity-projection
+/// axis (`tatara-nix::store::StoreHash` producers, `tatara-terreiro`
+/// snapshot-identity emitters, any future `#[derive(TataraDomain)]`
+/// consumer that wraps a bare BLAKE3 hex into the canonical
+/// three-pillar wire form) that reached for the same scheme-prefixed
+/// wrap to either re-author `format!("blake3:{X}", …)` OR take a new
+/// dep on `tatara-ui`.
 ///
-/// Post-lift the two WRITE sites route through [`blake3_scheme_display`]
-/// and the READ pin references this constant, so a future scheme change
-/// (a length tag, a version discriminator, a per-fleet suffix, a
-/// `b3:` shorthand) lands at ONE substrate owner rather than at the
-/// two consumers-that-remembered-to-spell-it-right.
+/// The lift now places the constant at the ONE crate every current +
+/// future consumer of the identity-projection axis already depends on
+/// — [`hex_blake3_of_json`] (the bare-hex sibling) already lives at
+/// `tatara_lisp::hash` for the exact same reason, and this constant
+/// now lives alongside it. `tatara-ui`'s existing spelling
+/// (`crate::hash::BLAKE3_SCHEME_PREFIX`) is preserved via this
+/// `pub use` re-export so no in-crate consumer has to change its
+/// import path.
 ///
-/// Sibling owner to the `"blake3:"` scheme literal
-/// [`tatara-engine::domain::attestation::pillar_hash`] carries on the
-/// COMPUTE-and-WRAP axis (`&[u8] → "blake3:{hex}"`): that primitive
-/// composes the scheme prefix with a freshly-computed BLAKE3 digest;
-/// [`blake3_scheme_display`] composes the scheme prefix with an
-/// ALREADY-computed hex handle. The two owners partition the
-/// scheme-prefix surface at the (compute-and-wrap, wrap-only) axis.
-///
-/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
-/// proofs — the wire-form scheme literal at ONE substrate owner means
-/// the render path and its assertion pins agree bytewise by
-/// construction). THEORY.md §V.3 (three-pillar attestation — the
-/// canonical pillar-hash shape is `"blake3:{hex}"`; this constant pins
-/// the scheme prefix half of that shape at the UI-side wire).
-pub const BLAKE3_SCHEME_PREFIX: &str = "blake3:";
+/// See the substrate owner's docstring at
+/// [`tatara_lisp::hash::BLAKE3_SCHEME_PREFIX`] for the full
+/// `tatara-engine::pillar_hash` (compute-and-wrap) axis-partition
+/// discussion.
+pub use tatara_lisp::hash::BLAKE3_SCHEME_PREFIX;
 
 /// The [`BLAKE3_SCHEME_PREFIX`]-prefixed wire form of an already-
-/// computed BLAKE3 hex handle — the ONE substrate owner of the
-/// `format!("blake3:{<hex>}")` one-line wrap chain the render surface
-/// restated at TWO WRITE sites pre-lift.
+/// computed BLAKE3 hex handle — a thin `pub use` re-export delegate
+/// onto [`tatara_lisp::hash::blake3_scheme_display`], the
+/// workspace-wide ONE substrate owner of the `format!("blake3:{<hex>}")`
+/// one-line wrap chain the render surface restated at TWO WRITE sites
+/// pre-lift ([`crate::render::Renderer::artifact`] +
+/// [`crate::render::Renderer::summary`]).
 ///
-/// Pre-lift the SAME chain was hand-authored at TWO workspace-visible
-/// WRITE sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger,
-/// each composing a `ShortHash`'s dim-styled render slot:
-///
-/// * [`crate::render::Renderer::artifact`] — the per-artifact line's
-///   `◇ blake3:<hash>` slot, paired with the dim-styled artifact name +
-///   state chunk. The `ShortHash: Display` receiver stamped a 7-char
-///   BLAKE3 prefix onto the line, wrapped verbatim in the scheme
-///   prefix via `format!("blake3:{hash}")`.
-/// * [`crate::render::Renderer::summary`] — the summary banner's
-///   content-root slot, paired with the totals line. The same
-///   `ShortHash: Display` receiver stamped the root-hash prefix onto
-///   the banner, wrapped verbatim in the scheme prefix via
-///   `format!("blake3:{root_hash}")`.
-///
-/// Both sites walked the SAME one-link chain — take a `Display`-
-/// projectable BLAKE3 hex handle and prepend the substrate's canonical
-/// [`BLAKE3_SCHEME_PREFIX`] — differing only in the receiver's slot
-/// name (`hash` vs `root_hash`, both `&ShortHash`). Post-lift each
-/// callsite reads `blake3_scheme_display(<receiver>)` and the wrap
-/// step lives at ONE substrate owner sharing the scheme literal with
-/// its READ-side sibling pin.
-///
-/// # `H: Display`
-///
-/// The receiver bound is `H: Display` so the primitive accepts BOTH
-/// the pre-lift receivers ([`crate::event::ShortHash`], which
-/// implements `Display` writing its own 7-char BLAKE3 prefix) AND
-/// future consumers that produce a raw `String` / `&str` / `blake3::
-/// Hash` hex handle. The `format!("{}{hex}", BLAKE3_SCHEME_PREFIX)`
-/// composition is polymorphic on the `Display` axis so every current
-/// caller compiles verbatim through the substrate primitive.
-///
-/// # `#[must_use]`
-///
-/// Every consumer either stamps the returned scheme-prefixed string
-/// into a `Renderer::text(...)` slot (both current callers) or feeds
-/// it directly onto a wire — dropping the return means the wrap was
-/// performed for no observable reason.
-///
-/// Byte-shape parity with the pre-lift hand-authored one-line chain is
-/// pinned at
-/// [`tests::blake3_scheme_display_matches_pre_lift_format_scheme_chain_bytewise`]
-/// so a regression that reshaped the scheme literal (a `b3:` shorthand,
-/// an uppercase `BLAKE3:` variant), swapped the format positional
-/// (`format!("{hex}{}", "blake3:")` — hex before scheme), or added a
-/// separator (`"blake3: "` with a stray space) surfaces HERE rather
-/// than as silent operator-facing drift at the render slot.
-///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
-/// one-line `format!("blake3:{<hex>}")` chain recurred at TWO
-/// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-/// trigger, and is lifted to ONE substrate owner here). THEORY.md §V.3
-/// (three-pillar attestation — the canonical pillar-hash shape is
-/// `"blake3:{hex}"`; this primitive owns the wrap-only half of that
-/// shape at the UI-side wire, sibling to the compute-and-wrap owner
-/// `pillar_hash` in tatara-engine).
-#[must_use]
-pub fn blake3_scheme_display<H: Display>(hex: H) -> String {
-    format!("{BLAKE3_SCHEME_PREFIX}{hex}")
-}
+/// The re-export keeps in-crate spellings
+/// (`crate::hash::blake3_scheme_display(<hash>)`) stable while the
+/// canonical owner sits at the same layer as the bare-hex sibling
+/// [`hex_blake3_of_json`] that every downstream identity-projection
+/// consumer already reaches through. See the substrate owner's
+/// docstring at [`tatara_lisp::hash::blake3_scheme_display`] for the
+/// pre-lift consumer inventory, the `H: Display` polymorphism
+/// rationale, and the `tatara-engine::pillar_hash` (compute-and-wrap)
+/// axis-partition.
+pub use tatara_lisp::hash::blake3_scheme_display;
 
 /// The lowercase-64-hex BLAKE3 digest of `v`'s canonical JSON
 /// serialization — a thin delegate onto

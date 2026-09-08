@@ -2720,4 +2720,97 @@ mod tests {
         assert_eq!(via_primitive_bool, via_pre_lift_bool);
         assert_eq!(via_primitive_bool, Some(false));
     }
+
+    #[test]
+    fn option_ref_value_reconciler_status_conditions_walk_sweeps_absent_shapes() {
+        // Substrate pin on the EXACT walk shape
+        // `tatara_reconciler::ssapply::ready_condition_value` consumes
+        // post-lift: `data.get("status").get_array("conditions")` via
+        // the stored `status: Option<&Value>` intermediate the substrate
+        // documents as the sole ergonomic constraint of the widening.
+        // The sibling pin at
+        // `option_ref_value_projects_through_stored_intermediate_left_
+        // to_right` sweeps ONE fully-populated fixture across three
+        // axes; this pin sweeps the OTHER cross-product edge — the FIVE
+        // absent / degenerate `status`-slot shapes a live DynamicObject
+        // handle can carry — along the single array axis the reconciler
+        // consumer walks. A regression at the widened impl's `None` arm
+        // (or at the inner `.as_array()` guard on a non-object `status`
+        // slot) surfaces HERE rather than as a silent ReadyState skew
+        // at every downstream K8s-Condition classifier that shares the
+        // same walk (Deployment `Available`, HPA `AbleToScale`,
+        // StatefulSet `Ready`, HelmRelease `Released`).
+        //
+        // Cases swept, each pinned via byte-parity against the pre-lift
+        // `<opt>.and_then(|s| s.get_array("conditions"))` closure the
+        // reconciler consumer hand-authored before the outer-optionality
+        // widening (4b8683b) closed the receiver-shape triangle:
+        //
+        //   1. status present, conditions present + non-empty
+        //   2. status absent entirely (no `status` key on `data`)
+        //   3. status present, conditions absent (empty status object)
+        //   4. status present, but null (JSON null in the slot)
+        //   5. status present, but a non-object variant (string here)
+        //   6. status present, conditions present but wrong-typed
+        //      (a stringified list rather than a JSON array)
+        //
+        // Each parity assertion carries a message naming the fixture so
+        // a regression pinpoints WHICH edge of the (Option outer × axis
+        // inner) cross-product drifted rather than a generic mismatch.
+        let fixtures: &[(&str, Value)] = &[
+            (
+                "status-present-with-conditions",
+                json!({
+                    "metadata": { "name": "x" },
+                    "status": { "conditions": [
+                        { "type": "Ready", "status": "True" }
+                    ]}
+                }),
+            ),
+            ("status-absent", json!({ "metadata": { "name": "x" } })),
+            (
+                "status-object-no-conditions",
+                json!({ "metadata": { "name": "x" }, "status": {} }),
+            ),
+            (
+                "status-null",
+                json!({ "metadata": { "name": "x" }, "status": null }),
+            ),
+            (
+                "status-non-object",
+                json!({ "metadata": { "name": "x" }, "status": "not-an-object" }),
+            ),
+            (
+                "status-object-conditions-wrong-type",
+                json!({
+                    "metadata": { "name": "x" },
+                    "status": { "conditions": "not-an-array" }
+                }),
+            ),
+        ];
+        for (label, data) in fixtures {
+            let status = data.get("status");
+            let via_primitive = status.get_array("conditions");
+            let via_pre_lift = status.and_then(|s| s.get_array("conditions"));
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "reconciler walk parity: fixture `{label}` must round-trip \
+                 through the widened `Option<&Value>::get_array` arm \
+                 bytewise-identically to the pre-lift `<opt>.and_then(|s| \
+                 s.get_array(\"conditions\"))` closure",
+            );
+        }
+        // Only fixture #1 yields Some; every other fixture yields None
+        // through both projection shapes. Pin the discriminant so a
+        // regression that flipped Some/None on any absent-status edge
+        // (a mistaken `unwrap_or_default` on the empty-object slot, a
+        // `Some(&[])` fabrication on the missing-conditions slot)
+        // surfaces here rather than as a phase-classifier flip.
+        let mut some_labels: Vec<&str> = fixtures
+            .iter()
+            .filter_map(|(label, data)| data.get("status").get_array("conditions").map(|_| *label))
+            .collect();
+        some_labels.sort_unstable();
+        assert_eq!(some_labels, vec!["status-present-with-conditions"]);
+    }
 }

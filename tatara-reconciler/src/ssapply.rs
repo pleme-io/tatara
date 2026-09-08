@@ -1136,20 +1136,25 @@ pub fn ready_condition(obj: &DynamicObject) -> ReadyState {
 
 /// Same extraction but operating on raw JSON — testable without a cluster.
 pub fn ready_condition_value(data: &Value) -> ReadyState {
-    // The trailing `.get("conditions").and_then(|c| c.as_array())`
-    // paired READ chain now routes through the ONE substrate primitive
-    // `tatara_process::json_object::ValueGetExt::get_array` — the
-    // array-axis sibling of `get_str` + `get_i64` on the same
-    // `.get(<key>).and_then(|v| v.as_<T>())` READ-chain axis-family.
-    // Pre-lift the array-axis half hand-wrote the paired chain; post-
-    // lift the projection lives at ONE typed owner and every K8s-status
-    // list walker (Deployment `conditions`, HPA `conditions`,
-    // StatefulSet `conditions`) inherits normalizations at the
-    // substrate. The outer `status` walk stays hand-authored because
-    // the intermediate handle is `&Value` (not a walked-in string) and
-    // the axis-family owns the trailing typed-projection step, not the
-    // nested-object walk.
-    let conditions = data.get("status").and_then(|s| s.get_array("conditions"));
+    // The outer optionality walk (`data.get("status")` → `Option<&Value>`)
+    // AND the trailing typed-projection (`.get("conditions").and_then(
+    // |c| c.as_array())`) now BOTH route through the ONE substrate
+    // primitive `tatara_process::json_object::ValueGetExt` — the axis-
+    // family whose `impl` on the `Option<&Value>` receiver arm (opened
+    // at 4b8683b) closes the third receiver shape peer of `Value` and
+    // `Map<String, Value>`. Pre-lift the outer walk hand-wrote the
+    // `.and_then(|s| s.get_array("conditions"))` closure because the
+    // Option receiver had no `get_array` axis-family member; post-lift
+    // the composed walk reads as ONE left-to-right chain through the
+    // stored `status: Option<&Value>` intermediate the axis-family
+    // documents as the sole ergonomic constraint (see the substrate
+    // test `option_ref_value_projects_through_stored_intermediate_
+    // left_to_right`). Both edges of the walk (outer-optionality on
+    // absent `status`, inner typed-projection on absent or wrong-type
+    // `conditions`) now share ONE typed owner and every K8s-status
+    // list walker inherits normalizations at the substrate.
+    let status = data.get("status");
+    let conditions = status.get_array("conditions");
     let Some(conditions) = conditions else {
         return ReadyState::Unknown;
     };

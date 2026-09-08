@@ -252,7 +252,17 @@ pub fn namespaced(client: Client, ns: &str) -> Api<Process> {
 /// sites).
 #[must_use]
 pub fn error_ctx(verb: &str, ns: &str, name: &str) -> String {
-    format!("{verb} Process {}", crate::qualified_process_ref(ns, name))
+    // Delegates through the workspace-wide substrate owner
+    // [`crate::qualified_error_ctx`] — the ONE composer of the
+    // `<verb> <Kind> <ns>/<name>` shape shared with
+    // [`crate::configmap::error_ctx`] on the peer K8s-built-in
+    // ConfigMap axis. Post-lift a future normalization of the
+    // 4-slot shape (a `tracing`-annotated span, a per-Kind
+    // canonicalization, an operator-supplied cluster prefix) lands
+    // at THAT owner rather than at this fixed-Kind peer — which
+    // now carries the `Kind = "Process"` guarantee exclusively,
+    // not the 4-slot shape it used to co-own.
+    crate::qualified_error_ctx(verb, "Process", ns, name)
 }
 
 #[cfg(test)]

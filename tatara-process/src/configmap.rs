@@ -298,10 +298,17 @@ pub fn with_data(
 /// facing skew across the two consumer sites).
 #[must_use]
 pub fn error_ctx(verb: &str, ns: &str, name: &str) -> String {
-    format!(
-        "{verb} ConfigMap {}",
-        crate::qualified_process_ref(ns, name)
-    )
+    // Delegates through the workspace-wide substrate owner
+    // [`crate::qualified_error_ctx`] — the ONE composer of the
+    // `<verb> <Kind> <ns>/<name>` shape shared with
+    // [`crate::process_api::error_ctx`] on the peer tatara-CRD
+    // Process axis. Post-lift a future normalization of the
+    // 4-slot shape (a `tracing`-annotated span, a per-Kind
+    // canonicalization, an operator-supplied cluster prefix) lands
+    // at THAT owner rather than at this fixed-Kind peer — which
+    // now carries the `Kind = "ConfigMap"` guarantee exclusively,
+    // not the 4-slot shape it used to co-own.
+    crate::qualified_error_ctx(verb, "ConfigMap", ns, name)
 }
 
 #[cfg(test)]

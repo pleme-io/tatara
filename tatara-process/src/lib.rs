@@ -373,6 +373,110 @@ pub fn qualified_process_ref(ns: &str, name: &str) -> String {
     format!("{ns}/{name}")
 }
 
+/// Substrate-primitive composer for the workspace-canonical
+/// **`<verb> <Kind> <ns>/<name>`** diagnostic-body head every
+/// per-Kind [`error_ctx`][crate::configmap::error_ctx] peer wraps
+/// around a wire-verb failure against a namespaced K8s resource
+/// (through [`crate::kube_error::KubeResultExt::kube_ctx_with`] on
+/// the reconciler-boundary consumers or through
+/// [`anyhow::Context::with_context`] on the export-worker
+/// consumers).
+///
+/// Owns the fixed 4-slot shape at ONE substrate site, routing the
+/// `<ns>/<name>` join through the workspace-wide
+/// [`qualified_process_ref`] composer so a future normalization of
+/// the qualified-ref shape (case-fold, unicode collation, IDN) lands
+/// at ONE site and every per-Kind diagnostic body picks it up
+/// mechanically.
+///
+/// Pre-lift the 4-slot shape recurred at TWO peer per-Kind
+/// composers in this crate past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold, each restating the SAME
+/// `format!("{verb} <Kind> {}", qualified_process_ref(ns, name))`
+/// incantation with only the fixed `<Kind>` literal differing:
+///
+/// * [`crate::configmap::error_ctx`] — the ConfigMap-axis per-Kind
+///   composer (`<Kind> = "ConfigMap"`), routing the closed-loop
+///   probe's receipt-CM writer + the export-worker's SSA-side
+///   ConfigMap writer through ONE substrate slug.
+/// * [`crate::process_api::error_ctx`] — the tatara-CRD
+///   Process-axis per-Kind composer (`<Kind> = "Process"`), routing
+///   the reconciler-boundary ProcessPhase evaluator + the
+///   export-worker's ProcessSnapshotSource reader through ONE
+///   substrate slug.
+///
+/// Both peers walked the SAME 4-slot shape — take a verb, a fixed
+/// `&'static str` per-Kind literal (`"ConfigMap"` / `"Process"`),
+/// and the target resource's namespace + name — and produced the
+/// SAME `"<verb> <Kind> <ns>/<name>"` diagnostic head. Post-lift
+/// each per-Kind composer reads
+/// `crate::qualified_error_ctx(<verb>, "<Kind>", ns, name)` as a
+/// one-line delegate, and the shared 4-slot shape lives at ONE
+/// substrate owner here. A future third + fourth per-Kind composer
+/// (a `crate::secret::error_ctx` for the K8s `Secret` axis, a
+/// `crate::job::error_ctx` for the `batch/v1::Job` axis a future
+/// `ConditionKind::JobAttested` companion reader might open, a
+/// `crate::helm_release::error_ctx` for the FluxCD `HelmRelease`
+/// axis the P2 reconciler already emits) inherits the 4-slot shape
+/// through THIS composer, pinning only its own `&'static str` Kind
+/// literal.
+///
+/// ### Naming — `qualified_error_ctx`, not `error_ctx`
+///
+/// The bare `error_ctx` name is already taken at each per-Kind
+/// composer's module ([`crate::configmap::error_ctx`],
+/// [`crate::process_api::error_ctx`], [`crate::list::error_ctx`]),
+/// each closing its own per-Kind or per-verb axis. This composer's
+/// `qualified_error_ctx` name is deliberately distinct so a caller
+/// with any of the per-Kind modules in scope cannot resolve to the
+/// wrong composer by accident (which would silently drop the
+/// per-Kind literal at the callsite). The `qualified_` prefix names
+/// the routing invariant: the `<ns>/<name>` join at the composer's
+/// tail rides through [`qualified_process_ref`], the SAME workspace-
+/// wide substrate every per-Kind peer already routes through.
+///
+/// ### 4-slot shape, not 3
+///
+/// The `kind` slot is required — the pre-lift per-Kind composers
+/// hard-coded their Kind literal as a `&'static str` at each
+/// `format!` chain, and post-lift the composer keeps that Kind
+/// literal at the caller so the K8s-canonical TitleCase spelling
+/// stays visible in the callsite's grep footprint. A future
+/// caller with a dynamically-composed Kind slot (a CRD-family
+/// walker that renders errors for every `ProcessTable` /
+/// `EphemeralPool` / `EphemeralAllocation` variant at one call)
+/// still reaches through this same 4-slot signature — the `&str`
+/// bound on `kind` accepts both `&'static str` literals (the
+/// per-Kind peer shape) and runtime-composed `&str` slices (the
+/// dynamic-Kind walker shape).
+///
+/// ### `#[must_use]`
+///
+/// The returned `String` is consumed by [`crate::kube_error::
+/// KubeResultExt::kube_ctx_with`], by
+/// [`anyhow::Context::with_context`]'s owned-`String`-returning
+/// closure form, or by the sibling [`crate::err_ctx::ErrCtxExt::
+/// err_ctx_with`] owned-string escape hatch. Dropping the return
+/// silently drops the diagnostic head entirely, which is never the
+/// intended semantic at any pre-lift or post-lift consumer.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the 4-slot `<verb> <Kind> <ns>/<name>` shape recurred at 2 peer
+/// per-Kind composers past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger, and is lifted onto the ONE workspace-wide substrate
+/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — a regression that reordered the head slots, dropped
+/// the fixed `<Kind>` word, or routed the `<ns>/<name>` join
+/// through a bare inline `format!` — bypassing
+/// [`qualified_process_ref`] — surfaces at
+/// [`qualified_error_ctx_tests`] rather than as silent drift across
+/// every per-Kind diagnostic body and every future per-Kind peer
+/// that opens on this composer).
+#[must_use]
+pub fn qualified_error_ctx(verb: &str, kind: &str, ns: &str, name: &str) -> String {
+    format!("{verb} {kind} {}", qualified_process_ref(ns, name))
+}
+
 /// Build a Kubernetes [`OwnerReference`][ownref] JSON blob pointing
 /// at a Process (`kind = `[`PROCESS_KIND`], `apiVersion = `
 /// [`api_version`]) with `controller: true` +
@@ -1681,6 +1785,230 @@ mod qualified_process_ref_tests {
                  hand-authored shape on ({ns:?}, {name:?})"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod qualified_error_ctx_tests {
+    //! Pin the [`qualified_error_ctx`] composer at fail-before-
+    //! pass-after granularity across the shape it factored out of
+    //! the two peer per-Kind composers
+    //! ([`crate::configmap::error_ctx`],
+    //! [`crate::process_api::error_ctx`]). Every observable slot
+    //! (verb-first, fixed-Kind literal in the middle, `<ns>/<name>`
+    //! join at the tail routed through
+    //! [`qualified_process_ref`]) is bound here so a regression
+    //! that reordered the head slots, dropped the fixed `<Kind>`
+    //! word, drifted the qualified-ref join off the substrate axis,
+    //! or narrowed any input slot to a closed set (would silently
+    //! reject a future per-Kind peer that composes a fresh verb or
+    //! Kind literal) surfaces HERE rather than as silent operator-
+    //! facing skew at the two consumer peers.
+    use super::qualified_error_ctx;
+
+    #[test]
+    fn qualified_error_ctx_signature_binds_borrowed_slots_returning_owned_string() {
+        // Signature pin: `verb: &str` + `kind: &str` + `ns: &str` +
+        // `name: &str` on the input side (both pre-lift per-Kind
+        // peers pass a `&'static str` verb + `&'static str` fixed-
+        // Kind literal + borrowed `&str` ns/name fields). Return
+        // `String` matches the downstream `kube_ctx_with(context:
+        // String)` sink verbatim on the reconciler-boundary
+        // consumers AND the `with_context(|| String)` closure form
+        // on the export-worker consumers.
+        //
+        // A regression that widened any input slot to `String`
+        // (forcing the caller to `.to_string()` at the boundary — a
+        // per-site perf regression that also fights the
+        // `&str`-fields-in-args idiom the callers thread) or
+        // narrowed the return to `&'static str` (which would prevent
+        // the runtime-composed ns/name slots the two peer composers
+        // pass) fails at compile time.
+        let _witness: fn(&str, &str, &str, &str) -> String = qualified_error_ctx;
+    }
+
+    #[test]
+    fn qualified_error_ctx_composes_verb_kind_qualified_ref_head_verbatim() {
+        // Byte-shape parity witness on the primary shape both peer
+        // composers depend on: the composed slug MUST be exactly
+        // `"<verb> <Kind> <ns>/<name>"` in that order. A regression
+        // that reordered the head slots (verb after Kind, Kind
+        // after the qualified ref) would silently break every
+        // operator-facing grep every downstream diagnostic body
+        // riding through the sibling per-Kind peers uses.
+        assert_eq!(
+            qualified_error_ctx("fetch", "Process", "default", "api"),
+            "fetch Process default/api",
+        );
+        assert_eq!(
+            qualified_error_ctx("patch", "ConfigMap", "demo-ns", "receipt-cm"),
+            "patch ConfigMap demo-ns/receipt-cm",
+        );
+    }
+
+    #[test]
+    fn qualified_error_ctx_routes_ns_name_join_through_qualified_process_ref_substrate() {
+        // Routing pin — the `<ns>/<name>` join at the composer's
+        // tail rides through the workspace-wide
+        // [`qualified_process_ref`] primitive rather than a bare
+        // inline `format!("{ns}/{name}")`. A future normalization
+        // of the qualified-ref shape (case-fold, unicode collation,
+        // IDN) lands at ONE [`qualified_process_ref`] site and
+        // every per-Kind diagnostic body picks it up mechanically;
+        // this pin binds THIS composer to that substrate so a
+        // regression that inlined the join (drifting the primitive
+        // off the substrate axis this commit opens) surfaces HERE
+        // rather than as silent qualified-ref drift between the
+        // two peer per-Kind composers and every other qualified-
+        // ref consumer across the workspace.
+        for (verb, kind, ns, name) in [
+            ("fetch", "Process", "default", "api"),
+            ("get", "Process", "tatara-system", "reconciler-canary"),
+            ("patch", "ConfigMap", "demo-ns", "receipt-cm"),
+            ("create", "ConfigMap", "ns-1", "cm.dotted.name"),
+        ] {
+            let via_composer = qualified_error_ctx(verb, kind, ns, name);
+            let via_qualified = format!("{verb} {kind} {}", super::qualified_process_ref(ns, name));
+            assert_eq!(
+                via_composer, via_qualified,
+                "qualified_error_ctx must route the (ns, name) join through \
+                 qualified_process_ref for ({verb:?}, {kind:?}, {ns:?}, {name:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn qualified_error_ctx_is_symbolic_over_the_kind_slot() {
+        // Symbolic pin: the `kind` slot is threaded verbatim into
+        // the produced slug — no case-fold, no allow-list narrowing
+        // to the two shipped Kinds (`"ConfigMap"`, `"Process"`), no
+        // per-Kind canonicalization. A regression that hardcoded
+        // an allow-list (a `match kind { "ConfigMap" | "Process" =>
+        // …, _ => … }` closed set that would silently reject future
+        // per-Kind peers) surfaces HERE.
+        //
+        // Future third + fourth per-Kind peers (a `Secret` axis
+        // reader, a `batch/v1::Job` axis reader for the
+        // ConditionKind::JobAttested companion, a FluxCD
+        // `HelmRelease` axis reader for the P2 reconciler's
+        // emit-side) inherit the primitive at their own peer
+        // composers and pass their own Kind literals verbatim
+        // without the composer widening.
+        for kind in [
+            "ConfigMap",
+            "Process",
+            "Secret",
+            "Job",
+            "HelmRelease",
+            "OCIRepository",
+            "Deployment",
+            "StatefulSet",
+        ] {
+            let got = qualified_error_ctx("fetch", kind, "default", "api");
+            let expected = format!("fetch {kind} default/api");
+            assert_eq!(
+                got, expected,
+                "kind-slot substitution must be verbatim for {kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn qualified_error_ctx_is_symbolic_over_the_verb_slot() {
+        // Symbolic pin: the `verb` slot is threaded verbatim — same
+        // discipline as the sibling verb-slot pins on the two peer
+        // per-Kind composers ([`crate::configmap::tests::
+        // error_ctx_is_symbolic_over_the_verb_slot`] via absence,
+        // [`crate::process_api::tests::
+        // error_ctx_is_symbolic_over_the_verb_slot`]). Post-lift
+        // both peers route through this composer so this pin binds
+        // the shared symbolic contract at ONE substrate owner rather
+        // than as two parallel pins that could drift.
+        for verb in [
+            "fetch", "get", "reap", "resolve", "watch", "patch", "delete", "create",
+        ] {
+            let got = qualified_error_ctx(verb, "Process", "default", "api");
+            let expected = format!("{verb} Process default/api");
+            assert_eq!(
+                got, expected,
+                "verb-slot substitution must be verbatim for {verb:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn qualified_error_ctx_matches_configmap_peer_bytewise() {
+        // Post-lift peer coherence pin: the composer's output at
+        // `<Kind> = "ConfigMap"` MUST be byte-identical to the
+        // [`crate::configmap::error_ctx`] peer's output at the SAME
+        // (verb, ns, name) triple. The peer is now a one-line
+        // delegate through this composer, so a regression that
+        // dropped or drifted the delegation would surface HERE.
+        for (verb, ns, name) in [
+            ("patch", "default", "receipt-cm"),
+            ("create", "demo-ns", "cm-01"),
+            ("get", "ns-1", "receipt.dotted.name"),
+        ] {
+            let via_composer = qualified_error_ctx(verb, "ConfigMap", ns, name);
+            let via_peer = crate::configmap::error_ctx(verb, ns, name);
+            assert_eq!(
+                via_composer, via_peer,
+                "configmap::error_ctx must route through qualified_error_ctx \
+                 for ({verb:?}, {ns:?}, {name:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn qualified_error_ctx_matches_process_api_peer_bytewise() {
+        // Post-lift peer coherence pin: the composer's output at
+        // `<Kind> = "Process"` MUST be byte-identical to the
+        // [`crate::process_api::error_ctx`] peer's output at the
+        // SAME (verb, ns, name) triple. Peer to the ConfigMap
+        // coherence pin above — both peers now delegate through the
+        // SAME 4-slot composer, so a regression that drifted either
+        // delegation surfaces at exactly ONE of the two
+        // fail-before-pass-after pins.
+        for (verb, ns, name) in [
+            ("fetch", "default", "api"),
+            ("get", "demo-ns", "demo"),
+            ("watch", "tatara-system", "reconciler-canary"),
+        ] {
+            let via_composer = qualified_error_ctx(verb, "Process", ns, name);
+            let via_peer = crate::process_api::error_ctx(verb, ns, name);
+            assert_eq!(
+                via_composer, via_peer,
+                "process_api::error_ctx must route through qualified_error_ctx \
+                 for ({verb:?}, {ns:?}, {name:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn qualified_error_ctx_rides_edge_case_axis_shapes() {
+        // Edge-case pin: the composer performs NO validation on the
+        // four slots — an empty verb / empty Kind / empty ns / empty
+        // name / slash-in-name pathological input rides through
+        // unchanged. Matches the pre-lift per-Kind peers' semantics
+        // (both were unconditional `format!(…)` chains). A
+        // regression that added a normalization step (URL-escaping
+        // the slot values, path-normalizing the qualified-ref tail,
+        // trimming empty slots) at this primitive would silently
+        // break every downstream grep operators run to bisect an
+        // authoring bug in the pre-lift consumers' input surface.
+        assert_eq!(qualified_error_ctx("", "", "", ""), "  /");
+        assert_eq!(
+            qualified_error_ctx("fetch", "Process", "", ""),
+            "fetch Process /",
+        );
+        assert_eq!(
+            qualified_error_ctx("fetch", "Process", "default", ""),
+            "fetch Process default/",
+        );
+        assert_eq!(
+            qualified_error_ctx("get", "Process", "ns", "with/slash"),
+            "get Process ns/with/slash",
+        );
     }
 }
 

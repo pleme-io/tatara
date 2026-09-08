@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 
 use tatara_process::annotations;
 use tatara_process::anyhow_flatten::FlattenCtxExt;
+use tatara_process::condition_type::ProcessConditionType;
 use tatara_process::flux_resource::FluxResource;
 use tatara_process::json_object::{
     JsonMapObjectEntryExt, JsonMapStrExt, ValueGetExt, ValueObjectExt,
@@ -1151,7 +1152,31 @@ pub fn ready_condition_value(data: &Value) -> ReadyState {
         let Some(typ) = c.get_str("type") else {
             continue;
         };
-        if typ != "Ready" {
+        // The `metav1.Condition.type` wire-form literal now routes
+        // through the ONE substrate primitive
+        // `tatara_process::condition_type::ProcessConditionType::from_wire_str`
+        // — sibling on the same K8s-Condition wire-form axis-family
+        // to `K8sConditionStatus::from_wire_str` below, which owns
+        // the `status`-slot closed set here. Pre-lift this arm hand-
+        // authored the ProcessCondition type closed set as a bare
+        // `!= "Ready"` string comparison against a `&'static str`
+        // literal — SIBLING of the same wire-form the writer side in
+        // `tatara_process::status::ProcessCondition::{ready,
+        // not_ready, attested}` restated inline as `type_: "Ready"
+        // .into()` / `type_: "Attested".into()`. The four sites (3
+        // writers + 1 reader) restated the SAME exact-case ASCII
+        // literal set on opposite sides of the `status.conditions[]`
+        // wire, silently coupled by byte-agreement. Post-lift both
+        // sides compose through `ProcessConditionType` and a case-
+        // drift at either end (`"ready"`, `"READY"`, an accidental
+        // `.trim`) becomes unrepresentable at the closed-set level.
+        // Any input outside the ProcessCondition type alphabet
+        // (case-drift, whitespace, sibling-axis ConditionStatus
+        // literals, `Attested`-typed rows) parses to `None` /
+        // `Some(Attested)` and does not match `Ready` — byte-
+        // identical to the pre-lift `!= "Ready" { continue }` filter
+        // arm.
+        if ProcessConditionType::from_wire_str(typ) != Some(ProcessConditionType::Ready) {
             continue;
         }
         // The `metav1.Condition.status` wire-form literal now routes

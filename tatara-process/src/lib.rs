@@ -11,6 +11,7 @@ pub mod attestation;
 pub mod boundary;
 pub mod classification;
 pub mod compliance;
+pub mod condition_type;
 pub mod configmap;
 pub mod crd;
 pub mod create;

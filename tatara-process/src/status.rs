@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::boundary::Condition;
+use crate::condition_type::ProcessConditionType;
 use crate::crd::Process;
 use crate::json_object::ValueGetExt;
 use crate::k8s_condition::K8sConditionStatus;
@@ -27,7 +28,7 @@ pub struct ProcessCondition {
 impl ProcessCondition {
     pub fn ready(reason: impl Into<String>, message: Option<String>) -> Self {
         Self {
-            type_: "Ready".into(),
+            type_: ProcessConditionType::Ready.as_wire_str().into(),
             status: K8sConditionStatus::True.as_wire_str().into(),
             last_transition_time: Utc::now(),
             reason: Some(reason.into()),
@@ -37,7 +38,7 @@ impl ProcessCondition {
 
     pub fn not_ready(reason: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
-            type_: "Ready".into(),
+            type_: ProcessConditionType::Ready.as_wire_str().into(),
             status: K8sConditionStatus::False.as_wire_str().into(),
             last_transition_time: Utc::now(),
             reason: Some(reason.into()),
@@ -47,7 +48,7 @@ impl ProcessCondition {
 
     pub fn attested(root: &str) -> Self {
         Self {
-            type_: "Attested".into(),
+            type_: ProcessConditionType::Attested.as_wire_str().into(),
             status: K8sConditionStatus::True.as_wire_str().into(),
             last_transition_time: Utc::now(),
             reason: Some("AttestationWritten".into()),

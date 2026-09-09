@@ -181,9 +181,7 @@ pub fn fmt_fqdn(
 ) -> Result<String, HostnameError> {
     validate_app(app)?;
     validate_label("ephemeral_id", ephemeral_id)?;
-    validate_label("cluster", cluster)?;
-    validate_label("location", location)?;
-    validate_domain("domain", domain)?;
+    validate_fqdn_suffix(cluster, location, domain)?;
     Ok(format!(
         "{app}.{ephemeral_id}.{cluster}.{location}.{domain}"
     ))
@@ -203,9 +201,7 @@ pub fn fmt_fqdn_stable(
     domain: &str,
 ) -> Result<String, HostnameError> {
     validate_app(app)?;
-    validate_label("cluster", cluster)?;
-    validate_label("location", location)?;
-    validate_domain("domain", domain)?;
+    validate_fqdn_suffix(cluster, location, domain)?;
     Ok(format!("{app}.{cluster}.{location}.{domain}"))
 }
 
@@ -360,6 +356,82 @@ fn validate_domain(segment: &'static str, domain: &str) -> Result<(), HostnameEr
     for piece in domain.split('.') {
         validate_label(segment, piece)?;
     }
+    Ok(())
+}
+
+/// Validate the shared 3-segment `${cluster}.${location}.${domain}` FQDN
+/// suffix — the ONE substrate primitive owning the ordered
+/// `validate_label("cluster", …) → validate_label("location", …) →
+/// validate_domain("domain", …)` prelude every fleet-hostname composer
+/// runs on the trailing suffix common to BOTH forms
+/// (`${app}.${ephemeral_id}.<suffix>` per-instance and `${app}.<suffix>`
+/// stable) BEFORE stamping it into an emitted FQDN.
+///
+/// Pre-lift the 3-line ordered check was hand-authored at TWO adjacent
+/// public FQDN composers in this module past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication threshold:
+///
+/// * [`fmt_fqdn`] — the per-instance form; the 3-line suffix prelude
+///   followed the sibling `validate_app(app)?` +
+///   `validate_label("ephemeral_id", …)?` head checks and preceded the
+///   `format!("{app}.{ephemeral_id}.{cluster}.{location}.{domain}")`
+///   emission.
+/// * [`fmt_fqdn_stable`] — the unprefixed stable-claim form; the same
+///   3-line suffix prelude followed the sibling `validate_app(app)?`
+///   check with no `ephemeral_id` slot in between and preceded the
+///   `format!("{app}.{cluster}.{location}.{domain}")` emission.
+///
+/// Both restated the SAME 3-line prelude verbatim: (1)
+/// `validate_label("cluster", cluster)?` to enforce the RFC 1123 shape
+/// on the cluster segment, then (2)
+/// `validate_label("location", location)?` for the location segment,
+/// then (3) `validate_domain("domain", domain)?` to enforce the
+/// multi-label domain shape (non-empty AND every dot-split piece a
+/// valid RFC 1123 label).
+///
+/// Post-lift each callsite reads `validate_fqdn_suffix(cluster,
+/// location, domain)?` and the ordered 3-step suffix check lives at
+/// ONE substrate owner. The step ORDER is load-bearing on the typed-
+/// variant surface: `cluster` is checked first so a bad-cluster-and-
+/// bad-location input surfaces as `InvalidLabel { segment: "cluster", .. }`
+/// (matching the pre-lift order both composers hand-authored) rather
+/// than `InvalidLabel { segment: "location", .. }` — callers pattern-
+/// matching on the `segment` slot to render targeted operator messages
+/// branch differently, so a swap of the two steps would silently
+/// re-classify every such input.
+///
+/// Peer to [`validate_app`] on the "ordered validation prelude" axis —
+/// `validate_app` owns the 2-step head check for the `app` segment,
+/// `validate_fqdn_suffix` owns the 3-step trailing suffix check for the
+/// `cluster` / `location` / `domain` segments; together they cover the
+/// full validation surface both FQDN composers walk BEFORE the terminal
+/// `format!(...)` emission.
+///
+/// A future extension to the suffix check (a per-cluster reserved-name
+/// gate mirroring [`RESERVED_APP_LABELS`], a stricter per-location DNS
+/// label check, a per-domain TLD allowlist gate, a per-fleet
+/// normalization of the cluster segment) lands at THIS ONE substrate
+/// primitive and both [`fmt_fqdn`] + [`fmt_fqdn_stable`] inherit the
+/// upgrade mechanically — no per-composer edit at either callsite, no
+/// drift risk for a third future FQDN-shape composer (a per-region
+/// gateway form, a wildcard-cert-issuer probe form) that plugs into the
+/// same suffix policy.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 3-line three-step check recurred at two hand-authored composer
+/// preludes past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and
+/// lifts to ONE substrate owner here, matching the discipline
+/// [`validate_app`] already carries on the peer head-check axis).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// pin block below binds the primitive at fail-before-pass-after
+/// granularity so a regression that reorders the three steps, drops
+/// one, or drifts the typed `segment` slot surfaces at THESE pins
+/// rather than as silent fleet-hostname skew across every downstream
+/// FQDN emit).
+fn validate_fqdn_suffix(cluster: &str, location: &str, domain: &str) -> Result<(), HostnameError> {
+    validate_label("cluster", cluster)?;
+    validate_label("location", location)?;
+    validate_domain("domain", domain)?;
     Ok(())
 }
 
@@ -803,6 +875,316 @@ mod tests {
                 matches!(validate_app(reserved), Err(HostnameError::ReservedApp(ref s)) if s == reserved),
                 "RESERVED_APP_LABELS entry {reserved:?} must surface as ReservedApp at the substrate"
             );
+        }
+    }
+
+    // ─── validate_fqdn_suffix substrate pins ─────────────────────
+    //
+    // Fail-before-pass-after granularity: the `validate_fqdn_suffix`
+    // helper did not exist pre-lift — both [`fmt_fqdn`] and
+    // [`fmt_fqdn_stable`] hand-authored the three-step (`validate_label
+    // ("cluster") → validate_label("location") → validate_domain
+    // ("domain")`) suffix check inline. Post-lift the two composers
+    // thread the same primitive, so the pins below pin the primitive's
+    // SHAPE + STEP ORDER + typed-`segment` slot at the substrate — a
+    // regression that (a) reorders the three steps (silently re-
+    // classifying every multi-slot rejection into the wrong `segment`
+    // arm), (b) drops one of the three checks, or (c) swaps the
+    // `validate_domain` primitive for a `validate_label` on the domain
+    // slot (silently accepting a single-label `example` in place of
+    // the multi-label `example.com` shape) surfaces HERE rather than
+    // as silent skew at every downstream FQDN emit.
+
+    #[test]
+    fn validate_fqdn_suffix_accepts_valid_three_segment_suffix() {
+        // Happy-path pin: a valid `cluster.location.domain` triple
+        // passes the three-step check with `Ok(())`. A regression that
+        // inverted the return arm (rejected everything) surfaces HERE
+        // rather than as every FQDN emit refusing every input.
+        validate_fqdn_suffix("pleme-dev", "use1", "quero.lol").unwrap();
+        validate_fqdn_suffix("prod", "eu-west-1", "example.com").unwrap();
+        validate_fqdn_suffix("a", "b", "c.d.e").unwrap();
+    }
+
+    #[test]
+    fn validate_fqdn_suffix_rejects_empty_cluster_with_cluster_segment_slot() {
+        // Step-1 delegation pin: an empty `cluster` MUST surface as
+        // `HostnameError::InvalidLabel { segment: "cluster", .. }`
+        // from the underlying `validate_label("cluster", cluster)?`
+        // call — NOT as `segment: "location"` or `segment: "domain"`
+        // (which would silently re-classify the shape defect into a
+        // trailing-slot rejection and route callers who pattern-match
+        // on the `segment` slot to render targeted operator messages
+        // to the wrong branch).
+        assert!(matches!(
+            validate_fqdn_suffix("", "use1", "quero.lol"),
+            Err(HostnameError::InvalidLabel {
+                segment: "cluster",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn validate_fqdn_suffix_rejects_empty_location_with_location_segment_slot() {
+        // Step-2 delegation pin — sibling to the cluster-slot pin. A
+        // valid cluster + empty location MUST surface as `segment:
+        // "location"` (step 2 fired), NOT as `segment: "domain"`
+        // (which would mean step 3 short-circuited past step 2).
+        assert!(matches!(
+            validate_fqdn_suffix("pleme-dev", "", "quero.lol"),
+            Err(HostnameError::InvalidLabel {
+                segment: "location",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn validate_fqdn_suffix_rejects_empty_domain_with_domain_segment_slot() {
+        // Step-3 delegation pin — the terminal step. A valid cluster
+        // + valid location + empty domain MUST surface as `segment:
+        // "domain"` (from `validate_domain`'s empty-domain gate). A
+        // regression that swapped `validate_domain` for
+        // `validate_label` on the domain slot would silently accept
+        // an empty string with a DIFFERENT `reason` slot or reject a
+        // multi-label domain (`example.com`) that `validate_label`
+        // alone forbids (dots).
+        assert!(matches!(
+            validate_fqdn_suffix("pleme-dev", "use1", ""),
+            Err(HostnameError::InvalidLabel {
+                segment: "domain",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn validate_fqdn_suffix_rejects_multilabel_cluster_with_invalid_label_variant() {
+        // Cluster-shape pin: `cluster` reaches through `validate_label`
+        // (single-label check), NOT `validate_domain` (multi-label
+        // check). A dot-containing cluster MUST reject at the RFC 1123
+        // gate. A regression that widened the cluster gate to
+        // `validate_domain` would silently accept a multi-label
+        // cluster like `pleme.dev` (folding two segments into one
+        // slot at emit time and drifting every downstream Ingress /
+        // DNSEndpoint dispatcher).
+        assert!(matches!(
+            validate_fqdn_suffix("pleme.dev", "use1", "quero.lol"),
+            Err(HostnameError::InvalidLabel {
+                segment: "cluster",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn validate_fqdn_suffix_accepts_multilabel_domain_via_validate_domain_split() {
+        // Domain-shape pin: `domain` reaches through `validate_domain`
+        // (multi-label check via `domain.split('.')`), NOT
+        // `validate_label` (single-label check that would reject any
+        // dot). A regression that narrowed the domain gate to
+        // `validate_label` would surface HERE — every real-world
+        // domain (`quero.lol`, `example.com`, `internal.example.com`)
+        // contains at least one dot and would fail at the RFC 1123
+        // single-label check.
+        validate_fqdn_suffix("pleme-dev", "use1", "internal.example.com").unwrap();
+        validate_fqdn_suffix("pleme-dev", "use1", "a.b.c.d.e.f").unwrap();
+    }
+
+    #[test]
+    fn validate_fqdn_suffix_step_order_puts_cluster_before_location_before_domain() {
+        // Load-bearing order pin: the three steps fire in the SAME
+        // order the pre-lift composer preludes hand-authored (cluster
+        // → location → domain), so an input that violates MULTIPLE
+        // slots surfaces at the FIRST violated slot on the ordered
+        // walk. Callers who pattern-match on the `segment` slot to
+        // render targeted operator messages branch differently, so a
+        // swap of the three steps would silently re-classify every
+        // multi-slot-invalid input.
+        //
+        // All three slots invalid → surfaces at `cluster` (step 1).
+        assert!(matches!(
+            validate_fqdn_suffix("", "", ""),
+            Err(HostnameError::InvalidLabel {
+                segment: "cluster",
+                ..
+            })
+        ));
+        // Valid cluster + invalid location + invalid domain → surfaces
+        // at `location` (step 2), NOT `domain` (step 3).
+        assert!(matches!(
+            validate_fqdn_suffix("pleme-dev", "", ""),
+            Err(HostnameError::InvalidLabel {
+                segment: "location",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn validate_fqdn_suffix_matches_pre_lift_three_step_chain_bytewise_across_every_variant_shape()
+    {
+        // Byte-shape parity pin: the substrate primitive's return
+        // MUST equal the pre-lift 3-line hand-authored chain for
+        // every representative input shape. A regression that
+        // drifted the primitive's semantics away from the pre-lift
+        // composer preludes surfaces HERE rather than as silent skew
+        // at either `fmt_fqdn` / `fmt_fqdn_stable` consumer.
+        fn pre_lift(cluster: &str, location: &str, domain: &str) -> Result<(), HostnameError> {
+            validate_label("cluster", cluster)?;
+            validate_label("location", location)?;
+            validate_domain("domain", domain)?;
+            Ok(())
+        }
+        for (cluster, location, domain) in [
+            // Happy path — every corner both composers walk in
+            // production.
+            ("pleme-dev", "use1", "quero.lol"),
+            ("prod", "eu-west-1", "example.com"),
+            ("a", "b", "c.d.e"),
+            ("cluster-1", "loc-2", "internal.example.com"),
+            // Step-1 rejections — cluster slot fails.
+            ("", "use1", "quero.lol"),
+            ("BAD", "use1", "quero.lol"),
+            ("-lead", "use1", "quero.lol"),
+            ("with_underscore", "use1", "quero.lol"),
+            ("pleme.dev", "use1", "quero.lol"),
+            // Step-2 rejections — cluster ok, location fails.
+            ("pleme-dev", "", "quero.lol"),
+            ("pleme-dev", "USE1", "quero.lol"),
+            ("pleme-dev", "loc_1", "quero.lol"),
+            // Step-3 rejections — cluster + location ok, domain fails.
+            ("pleme-dev", "use1", ""),
+            ("pleme-dev", "use1", "-bad.com"),
+            ("pleme-dev", "use1", "BAD.com"),
+            // Multi-slot rejection — step 1 wins over 2 and 3.
+            ("", "", ""),
+            ("BAD", "USE1", ""),
+        ] {
+            let via_primitive = validate_fqdn_suffix(cluster, location, domain);
+            let via_pre_lift = pre_lift(cluster, location, domain);
+            match (via_primitive, via_pre_lift) {
+                (Ok(()), Ok(())) => {}
+                (Err(a), Err(b)) => assert_eq!(
+                    a, b,
+                    "variant mismatch for ({cluster:?}, {location:?}, {domain:?})"
+                ),
+                (a, b) => panic!(
+                    "arm mismatch for ({cluster:?}, {location:?}, {domain:?}): primitive={a:?} pre_lift={b:?}"
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn fmt_fqdn_routes_suffix_slots_through_validate_fqdn_suffix_primitive() {
+        // Delegation pin: the per-instance composer routes its
+        // trailing suffix check through `validate_fqdn_suffix`, NOT
+        // through a re-open-coded restatement of the three-step
+        // chain. A regression that re-inlined the pre-lift check at
+        // the composer prelude would reintroduce the duplication the
+        // lift removed; this pin catches it by asserting the composer
+        // surfaces the SAME typed `segment` slot the primitive would
+        // for a representative rejection in each of the three suffix
+        // slots (cluster, location, domain).
+        assert!(matches!(
+            fmt_fqdn("api", "x", "BAD", "use1", "quero.lol"),
+            Err(HostnameError::InvalidLabel {
+                segment: "cluster",
+                ..
+            })
+        ));
+        assert!(matches!(
+            fmt_fqdn("api", "x", "pleme-dev", "", "quero.lol"),
+            Err(HostnameError::InvalidLabel {
+                segment: "location",
+                ..
+            })
+        ));
+        assert!(matches!(
+            fmt_fqdn("api", "x", "pleme-dev", "use1", ""),
+            Err(HostnameError::InvalidLabel {
+                segment: "domain",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn fmt_fqdn_stable_routes_suffix_slots_through_validate_fqdn_suffix_primitive() {
+        // Sibling delegation pin — same shape as the per-instance pin
+        // above but for the stable-claim composer. Both composers now
+        // share the primitive; a regression that re-inlined the chain
+        // at either site surfaces at ONE of the two pins rather than
+        // at every downstream FQDN emit.
+        assert!(matches!(
+            fmt_fqdn_stable("api", "BAD", "use1", "quero.lol"),
+            Err(HostnameError::InvalidLabel {
+                segment: "cluster",
+                ..
+            })
+        ));
+        assert!(matches!(
+            fmt_fqdn_stable("api", "pleme-dev", "", "quero.lol"),
+            Err(HostnameError::InvalidLabel {
+                segment: "location",
+                ..
+            })
+        ));
+        assert!(matches!(
+            fmt_fqdn_stable("api", "pleme-dev", "use1", ""),
+            Err(HostnameError::InvalidLabel {
+                segment: "domain",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn fmt_fqdn_and_fmt_fqdn_stable_agree_on_suffix_rejection_bytewise() {
+        // Cross-composer coherence pin: post-lift both composers route
+        // their suffix check through the ONE substrate primitive, so
+        // the SAME suffix-slot violation surfaces byte-identically at
+        // BOTH composers (differing only in the `ephemeral_id` arg
+        // presence). A regression that re-inlined the chain at one
+        // composer but not the other would silently drift the two
+        // consumers' typed-`segment` slot; this pin binds them to the
+        // ONE substrate primitive so any such drift surfaces HERE.
+        for (cluster, location, domain, expected_segment) in [
+            ("BAD", "use1", "quero.lol", "cluster"),
+            ("pleme-dev", "", "quero.lol", "location"),
+            ("pleme-dev", "use1", "", "domain"),
+            ("pleme.dev", "use1", "quero.lol", "cluster"),
+        ] {
+            let via_per_instance = fmt_fqdn("api", "x", cluster, location, domain);
+            let via_stable = fmt_fqdn_stable("api", cluster, location, domain);
+            assert!(
+                matches!(
+                    &via_per_instance,
+                    Err(HostnameError::InvalidLabel { segment, .. }) if *segment == expected_segment
+                ),
+                "fmt_fqdn must surface segment={expected_segment:?} for ({cluster:?}, {location:?}, {domain:?}); got {via_per_instance:?}"
+            );
+            assert!(
+                matches!(
+                    &via_stable,
+                    Err(HostnameError::InvalidLabel { segment, .. }) if *segment == expected_segment
+                ),
+                "fmt_fqdn_stable must surface segment={expected_segment:?} for ({cluster:?}, {location:?}, {domain:?}); got {via_stable:?}"
+            );
+            // And the two composers' error variants agree bytewise on
+            // the suffix rejection — they should, since both route
+            // through the SAME primitive.
+            match (via_per_instance, via_stable) {
+                (Err(a), Err(b)) => assert_eq!(
+                    a, b,
+                    "fmt_fqdn and fmt_fqdn_stable must agree on suffix rejection for ({cluster:?}, {location:?}, {domain:?})"
+                ),
+                pair => panic!(
+                    "expected both composers to reject ({cluster:?}, {location:?}, {domain:?}) with the SAME variant; got {pair:?}"
+                ),
+            }
         }
     }
 

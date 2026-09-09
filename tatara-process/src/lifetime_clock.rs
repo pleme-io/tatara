@@ -508,7 +508,6 @@ mod tests {
     use crate::crd::ProcessSpec;
     use crate::intent::{AplicacaoIntent, Intent};
     use crate::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
-    use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 
     fn ephemeral_process(ttl: &str, teardown: TeardownPolicy, age_secs: i64) -> Process {
         // Struct-update through the ONE substrate composer
@@ -537,7 +536,14 @@ mod tests {
         // seconds_ago` — one of 21 pre-lift exact-match sites past the
         // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
         let creation = crate::time::seconds_ago(age_secs);
-        p.metadata.creation_timestamp = Some(Time(creation));
+        // Routes through the ONE substrate primitive
+        // `crate::time::creation_stamp_at` — the anchor-explicit peer of
+        // `crate::time::tombstone_at` on the (creation, deletion) axis
+        // of the `ObjectMeta` metadata-Time slots. Pre-lift this site
+        // restated the 5-token `Some(Time(creation))` wire wrap by
+        // hand; post-lift the K8s Time wrap + Option wrap sinks live at
+        // ONE substrate owner alongside the deletion-slot peer.
+        p.metadata.creation_timestamp = crate::time::creation_stamp_at(creation);
         p
     }
 

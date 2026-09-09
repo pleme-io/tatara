@@ -5588,8 +5588,16 @@ mod tests {
     fn creation_stamped_process(t: DateTime<Utc>) -> Process {
         let mut p = Process::new("age-anchor", empty_spec());
         p.metadata.namespace = Some("prod".into());
-        p.metadata.creation_timestamp =
-            Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(t));
+        // Routes through the ONE substrate primitive
+        // `crate::time::creation_stamp_at` — the anchor-explicit peer of
+        // `crate::time::tombstone_at` on the (creation, deletion) axis
+        // of the `ObjectMeta` metadata-Time slots. Pre-lift this site
+        // restated the fully-qualified 5-token
+        // `Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(t))`
+        // wire wrap by hand; post-lift the K8s Time wrap + Option wrap
+        // sinks live at ONE substrate owner alongside the deletion-slot
+        // peer.
+        p.metadata.creation_timestamp = crate::time::creation_stamp_at(t);
         p
     }
 

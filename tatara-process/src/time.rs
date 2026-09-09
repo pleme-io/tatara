@@ -259,6 +259,106 @@ pub fn tombstone_at(when: DateTime<Utc>) -> Option<Time> {
     Some(Time(when))
 }
 
+/// A creation stamp for a K8s [`metadata.creationTimestamp`][kcreat]
+/// slot at the operator-supplied `when` anchor — the anchor-explicit
+/// composer for the `metadata.creation_timestamp: Option<Time>` slot
+/// every age-anchored `Process` / `EphemeralPool` fixture seeds so
+/// its downstream TTL-expiry / staleness-gate / `created_at`
+/// projection has a deterministic anchor to compare against.
+///
+/// Peer of [`tombstone_at`] on the (creation, deletion) axis of the
+/// `ObjectMeta` metadata-Time slots — both walk the SAME 5-token
+/// `Some(Time(<anchor>))` wire wrap but partition by SEMANTIC slot:
+///
+/// * [`tombstone_at`] — stamps `metadata.deletion_timestamp` with a
+///   caller-supplied anchor, semantically "this object is being
+///   deleted at `when`". Every fixture that seeds a
+///   deletion-in-progress corner (7 tombstone-forwarder pins on
+///   `Process`, 1 on `EphemeralPool`, 4 on `PoolMember` /
+///   `Allocation`) reaches through it.
+/// * [`creation_stamp_at`] (this composer) — stamps
+///   `metadata.creation_timestamp` with a caller-supplied anchor,
+///   semantically "this object was created at `when`". Every fixture
+///   that seeds a creation-timestamp-present corner for a
+///   TTL-expiry / staleness-gate / `created_at`-projection pin (the
+///   9-case `creation_stamped_process` helper family at
+///   [`crate::crd`], the `ephemeral_process(age_secs, ttl, teardown)`
+///   helper at [`crate::lifetime_clock`]) reaches through it.
+///
+/// Pre-lift the SAME `Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(<anchor>))`
+/// / `Some(Time(<anchor>))` 5-token wire shape was hand-authored at
+/// TWO fixture-helper sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold, each stamping the creation-timestamp slot
+/// on a fresh [`crate::crd::Process`] fixture to seed a deterministic
+/// age anchor for a downstream timed-decision pin family:
+///
+/// * [`crate::crd`] `crd::tests::creation_stamped_process` — the
+///   shared `Process` fixture the 9-case `Process::created_at`
+///   inherent-forwarder pin family destructures for its
+///   creation-anchor corner. Fully-qualified pre-lift
+///   (`Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(t))`)
+///   because the `crd::tests` module inherits imports only via
+///   `use super::*` and does not name the k8s-openapi `Time` type
+///   locally.
+/// * [`crate::lifetime_clock`] `lifetime_clock::tests::ephemeral_process`
+///   — the shared `Process` fixture the ephemeral-lifetime evaluate /
+///   requeue-with-ttl pin families destructure for their
+///   creation-anchor corner. Locally imported pre-lift
+///   (`Some(Time(creation))`) because `lifetime_clock::tests`
+///   already brings `k8s_openapi::apimachinery::pkg::apis::meta::v1::Time`
+///   into scope for its own fixture composition.
+///
+/// Both callsites walked the SAME 5-token chain — take the operator-
+/// supplied `DateTime<Utc>` anchor, wrap it in the K8s Time newtype,
+/// wrap that in `Some` — and wanted the `Option<Time>` form for
+/// direct assignment to the `metadata.creation_timestamp` slot.
+/// Post-lift each callsite reads `crate::time::creation_stamp_at(<anchor>)`
+/// and the K8s Time wrap + Option wrap sinks live at ONE substrate
+/// owner alongside [`tombstone_at`]'s deletion-slot peer.
+///
+/// Return-form axis: `Option<Time>` — the exact type
+/// `ObjectMeta::creation_timestamp` carries. Matches the pre-lift
+/// shape both callsites walked verbatim and composes directly with
+/// the `Copy`-projection primitive `Process::created_at` (which
+/// reads `.metadata.creation_timestamp.as_ref().map(|t| t.0)`) so
+/// the round-trip `p.metadata.creation_timestamp = creation_stamp_at
+/// (anchor); p.created_at() == Some(anchor)` is byte-identical to
+/// the pre-lift hand-authored round-trip pinned at
+/// [`crate::crd`]'s `created_at_returns_creation_anchor_when_stamped`
+/// family.
+///
+/// Anchor-source axis: `DateTime<Utc>` — the operator supplies the
+/// anchor, encoding "the caller has already chosen when" at the type
+/// level. Composes directly with [`seconds_ago`] for the "created N
+/// seconds ago" ephemeral-age fixture (the shape the
+/// [`crate::lifetime_clock`] callsite walks) and with
+/// [`at_epoch_second`] for the deterministic-epoch anchor fixture
+/// (the shape a future `creation_stamped_process(at_epoch_second(N))`
+/// caller would walk).
+///
+/// A future normalization at the wire form (see the doc-comment on
+/// [`tombstone_now`] for the full rationale) lands at THIS primitive
+/// alongside [`tombstone_at`] so both K8s metadata-Time slot shapes
+/// inherit the upgrade mechanically at the same substrate site.
+/// Concrete near-term compounding step: a private substrate
+/// primitive `wire_time_some(when) -> Option<Time>` that owns the
+/// pure 5-token wire wrap `Some(Time(<anchor>))` and both
+/// [`tombstone_at`] and [`creation_stamp_at`] delegate through —
+/// mirroring the recent `ProcessCondition::new_at` /
+/// `ProcessCondition::new_at_now` peer-pair with a shared 5-slot
+/// substrate backbone; today the two composers live side-by-side
+/// with independent bodies, and the cross-composer coherence pin
+/// [`tests::creation_stamp_at_and_tombstone_at_agree_at_the_current_instant_on_wire_shape`]
+/// binds their wire-shape agreement at a deterministic anchor so a
+/// future consolidation onto the shared backbone lands with all
+/// downstream fixture consumers already routed onto the shape.
+///
+/// [kcreat]: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.30/#objectmeta-v1-meta
+#[must_use]
+pub fn creation_stamp_at(when: DateTime<Utc>) -> Option<Time> {
+    Some(Time(when))
+}
+
 /// Parse an `Option<&str>` as an RFC-3339 wall-clock stamp, discarding
 /// the `ParseError` arm on the parseable-input axis. The one-line
 /// `<opt>.and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())`
@@ -1000,5 +1100,176 @@ mod tests {
         );
         assert_eq!(stamp.0.timestamp(), 1_700_000_000);
         assert_eq!(stamp.0.timestamp_subsec_nanos(), 0);
+    }
+
+    // ─── creation_stamp_at substrate pins ─────────────────────────────
+    //
+    // Bind [`creation_stamp_at`] at fail-before-pass-after granularity
+    // so a regression that dropped the `Some` wrap (yielding
+    // `Option<Time>` = `None`, which would silently un-stamp every age-
+    // anchored fixture and short-circuit every downstream TTL-expiry
+    // / staleness-gate / `created_at`-projection pin), swapped the
+    // `Time` newtype for a raw `DateTime<Utc>` (breaking the
+    // `metadata.creation_timestamp: Option<Time>` slot's shape), or
+    // silently re-read the wall clock instead of preserving `when`
+    // (collapsing the anchor-explicit composer onto a wall-clock-
+    // reading peer, defeating every deterministic-fixture pin that
+    // relies on the anchor being replayable) surfaces HERE rather than
+    // as silent operator-invisible drift at the two downstream
+    // fixture-helper callsites.
+    //
+    // Each pin is fail-before-pass-after: the primitive did not exist
+    // pre-lift, so any test that invokes it fails to compile pre-lift
+    // and passes post-lift; the byte-identity pins below then bind the
+    // specific shape choice.
+
+    #[test]
+    fn creation_stamp_at_returns_some_time_preserving_the_operator_anchor() {
+        // Primary shape asserted end-to-end: the returned option is
+        // `Some(Time(when))` and the anchor is exactly the `when`
+        // argument — no wall-clock read, no normalization, no clamp.
+        // Mirrors the peer pin
+        // [`tombstone_at_returns_some_time_preserving_the_operator_anchor`]
+        // on the (creation, deletion) axis of the ObjectMeta
+        // metadata-Time slots. A regression that fell through to the
+        // current instant (`creation_stamp_at` ignoring `when` and
+        // re-reading the wall clock) would fail the identity check
+        // HERE rather than as silent age-drift at every fixture that
+        // stamps a deterministic creation anchor for its downstream
+        // TTL / staleness pin.
+        let epoch = at_epoch_second(1_700_000_000);
+        let stamp = creation_stamp_at(epoch).expect("creation_stamp_at returns Some");
+        assert_eq!(stamp.0, epoch, "anchor must be preserved verbatim");
+    }
+
+    #[test]
+    fn creation_stamp_at_matches_hand_authored_pre_lift_chain_shape() {
+        // Byte-identical parity with the pre-lift
+        // `Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(<anchor>))`
+        // / `Some(Time(<anchor>))` block that both hand-authored
+        // fixture-helper sites restated verbatim (differing only in
+        // the fully-qualified vs locally-imported `Time` spelling —
+        // the crd-tests site is fully-qualified, the lifetime-clock-
+        // tests site is locally-imported, both walk the SAME 5-token
+        // wire wrap). Sweeps the two representative anchor shapes
+        // both pre-lift consumers walked: a deterministic epoch anchor
+        // (the crd-tests site's `at_epoch_second`-composed anchor) and
+        // a past-relative anchor (the lifetime-clock-tests site's
+        // `seconds_ago`-composed anchor). Both blocks must project the
+        // SAME `Option<Time>` on every corner so the collapse is
+        // observationally invisible.
+        for anchor in [
+            at_epoch_second(0),
+            at_epoch_second(1_700_000_000),
+            at_epoch_second(2_000_000_000),
+            seconds_ago(3_600),
+        ] {
+            let composed = creation_stamp_at(anchor);
+            let hand_authored = Some(Time(anchor));
+            assert_eq!(
+                composed, hand_authored,
+                "corner `anchor={anchor}` must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn creation_stamp_at_composes_with_at_epoch_second_at_deterministic_fixture_shape() {
+        // The canonical downstream composition at the crd-tests site:
+        // a fixture that needs a deterministic creation stamp at a
+        // fixed epoch offset composes
+        // `creation_stamp_at(at_epoch_second(N))` and expects the
+        // returned anchor to be exactly `N` seconds past the Unix
+        // epoch. A regression that reshaped either primitive so the
+        // two no longer round-trip would surface HERE rather than as
+        // silent age-drift at the 9-case `Process::created_at`
+        // inherent-forwarder pin family (which reads back
+        // `.metadata.creation_timestamp.as_ref().map(|t| t.0)` and
+        // compares it to the exact anchor the fixture stamped).
+        let anchor = at_epoch_second(1_700_000_000);
+        let stamp = creation_stamp_at(anchor).expect("creation_stamp_at returns Some");
+        assert_eq!(
+            stamp.0, anchor,
+            "creation_stamp_at must preserve the at_epoch_second-produced anchor verbatim",
+        );
+        assert_eq!(stamp.0.timestamp(), 1_700_000_000);
+        assert_eq!(stamp.0.timestamp_subsec_nanos(), 0);
+    }
+
+    #[test]
+    fn creation_stamp_at_composes_with_seconds_ago_at_ephemeral_age_fixture_shape() {
+        // The canonical downstream composition at the lifetime-clock-
+        // tests site: a fixture that needs a "created N seconds ago"
+        // ephemeral-age creation stamp composes
+        // `creation_stamp_at(seconds_ago(N))` and expects the returned
+        // anchor's elapsed-since-now to be ~N seconds. Matches the
+        // pre-lift shape at `ephemeral_process(age_secs, ttl, teardown)`
+        // which stamps `Some(Time(seconds_ago(age_secs)))` on the
+        // fresh Process fixture. A regression that reshaped either
+        // primitive so the two no longer round-trip would surface HERE
+        // rather than as silent skew at every ephemeral-lifetime
+        // TTL-expiry / requeue-with-ttl pin whose age-anchored fixture
+        // rides the composition.
+        let secs = 3_600_i64;
+        let anchor = seconds_ago(secs);
+        let stamp = creation_stamp_at(anchor).expect("creation_stamp_at returns Some");
+        assert_eq!(
+            stamp.0, anchor,
+            "creation_stamp_at must preserve the seconds_ago-produced anchor verbatim",
+        );
+        // And the anchor is ~N seconds in the past — this is the
+        // downstream property every ephemeral-lifetime fixture using
+        // the composition relies on.
+        let elapsed = elapsed_since(Utc::now(), stamp.0).expect("elapsed is Some for past anchor");
+        assert!(
+            elapsed >= Duration::from_secs(secs as u64),
+            "elapsed {elapsed:?} must be ≥ {secs}s — the anchor was stamped {secs}s ago",
+        );
+    }
+
+    #[test]
+    fn creation_stamp_at_and_tombstone_at_agree_at_the_current_instant_on_wire_shape() {
+        // Cross-composer coherence pin on the shared 5-token wire wrap:
+        // `creation_stamp_at(anchor)` and `tombstone_at(anchor)` produce
+        // the SAME shape (`Some(Time(anchor))`) for the SAME
+        // deterministic anchor — the two composers partition the
+        // ObjectMeta metadata-Time surface at the (creation, deletion)
+        // axis but ride the SAME 5-token wire wrap. A future
+        // consolidation onto a shared private substrate
+        // `wire_time_some(when)` primitive (see the doc-comment
+        // rationale on [`creation_stamp_at`]) cannot land any wire-
+        // shape drift between the two semantic slots because this pin
+        // binds them at a deterministic anchor where both bodies
+        // converge to the SAME `Option<Time>`. Sweeps the
+        // representative deterministic anchors both peer composers
+        // routinely receive (epoch, mid-past, mid-future) so a wire-
+        // shape drift at any corner surfaces HERE rather than as
+        // silent per-slot skew at the downstream fixture consumers.
+        for anchor in [
+            at_epoch_second(0),
+            at_epoch_second(1_700_000_000),
+            at_epoch_second(2_000_000_000),
+        ] {
+            assert_eq!(
+                creation_stamp_at(anchor),
+                tombstone_at(anchor),
+                "creation_stamp_at and tombstone_at must produce the SAME wire wrap for anchor={anchor}",
+            );
+        }
+    }
+
+    #[test]
+    fn creation_stamp_at_preserves_a_future_anchor_without_clamping() {
+        // Corner: `creation_stamp_at` accepts a future anchor verbatim
+        // — mirrors the peer pin
+        // [`tombstone_at_preserves_a_future_anchor_without_clamping`]
+        // on the (creation, deletion) axis. A future normalization that
+        // clamps the anchor into the past (a "no creation can be in
+        // the future" policy) has to explicitly move this pin rather
+        // than silently trampling a fixture that stamps a future
+        // creation anchor to test a per-fleet-skew tolerance downstream.
+        let future = Utc::now() + chrono::Duration::seconds(3_600);
+        let stamp = creation_stamp_at(future).expect("creation_stamp_at returns Some");
+        assert_eq!(stamp.0, future);
     }
 }

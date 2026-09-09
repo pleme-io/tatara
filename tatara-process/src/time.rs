@@ -139,6 +139,65 @@ pub fn seconds_ago(secs: i64) -> DateTime<Utc> {
     Utc::now() - chrono::Duration::seconds(secs)
 }
 
+/// The pure 5-token `Some(Time(<anchor>))` wire wrap the K8s
+/// metadata-Time slots (`ObjectMeta::creation_timestamp`,
+/// `ObjectMeta::deletion_timestamp`, and every peer `Option<Time>`
+/// metadata slot the tatara-owned CRDs stamp) carry — lifted to ONE
+/// private substrate owner past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold, so the K8s Time newtype wrap + Option wrap
+/// sinks live at a SINGLE composer body every wire-shape peer in this
+/// module delegates through.
+///
+/// Pre-lift the SAME 5-token chain was hand-authored at THREE
+/// intra-module composer bodies — each restating `Some(Time(<anchor>))`
+/// verbatim to project a `DateTime<Utc>` anchor onto the
+/// `Option<Time>` metadata slot:
+///
+/// * [`tombstone_now`] — the wall-clock-reading deletion-timestamp
+///   composer. Pre-lift body: `Some(Time(Utc::now()))`.
+/// * [`tombstone_at`] — the anchor-explicit deletion-timestamp
+///   composer. Pre-lift body: `Some(Time(when))`.
+/// * [`creation_stamp_at`] — the anchor-explicit creation-timestamp
+///   composer. Pre-lift body: `Some(Time(when))`.
+///
+/// All three composer bodies walked the SAME 5-token chain — take a
+/// `DateTime<Utc>` anchor, wrap it in the K8s Time newtype, wrap that
+/// in `Some` — and wanted the `Option<Time>` form for direct
+/// assignment to a metadata-Time slot. Post-lift each composer reads
+/// `wire_time_some(<anchor>)` and the K8s Time wrap + `Some` wrap
+/// sinks live at ONE substrate owner. The cross-composer coherence
+/// pin
+/// [`tests::creation_stamp_at_and_tombstone_at_agree_at_the_current_instant_on_wire_shape`]
+/// already bound the two anchor-explicit composers at a deterministic
+/// anchor pre-lift so this consolidation lands without moving any
+/// downstream fixture consumer.
+///
+/// Mirrors the recent [`crate::status::ProcessCondition::new_at`] /
+/// `new_at_now` peer-pair on the (clock-injectable, wall-clock-anchored)
+/// axis: `wire_time_some` owns the pure struct-composition body,
+/// [`tombstone_now`] supplies `Utc::now()` and delegates,
+/// [`tombstone_at`] / [`creation_stamp_at`] supply the operator anchor
+/// and delegate. Every future normalization at the K8s Time wire form
+/// (a per-fleet millisecond-precision truncation, a widening of the
+/// K8s Time newtype under a future k8s-openapi crate bump, a
+/// debug-build assertion that the anchor is inside a permitted skew
+/// window) lands at THIS ONE substrate primitive and every metadata-
+/// Time composer downstream inherits the upgrade mechanically — no
+/// per-composer edit at [`tombstone_now`] / [`tombstone_at`] /
+/// [`creation_stamp_at`], and no edit at any future
+/// `<peer>_stamp_at` sibling that inherits the substrate.
+///
+/// Visibility: `pub(crate)` — the primitive is an intra-crate
+/// substrate that every metadata-Time composer in this module (and
+/// its future intra-crate peers) delegates through, but is not part
+/// of the public composer surface (callers reach through the semantic
+/// peers [`tombstone_now`] / [`tombstone_at`] / [`creation_stamp_at`]
+/// so the composer's semantic slot stays visible at the callsite).
+#[must_use]
+pub(crate) fn wire_time_some(when: DateTime<Utc>) -> Option<Time> {
+    Some(Time(when))
+}
+
 /// A tombstone stamp for a K8s [`metadata.deletionTimestamp`][kdel]
 /// slot at the current wall-clock instant — the wire shape K8s
 /// stamps once the API server has received a DELETE request but the
@@ -147,6 +206,17 @@ pub fn seconds_ago(secs: i64) -> DateTime<Utc> {
 /// (`ObjectMeta::deletion_timestamp: Option<Time>`) so the tombstone
 /// composes directly into the metadata without a per-caller `Some(...)`
 /// wrap or a per-caller `Time(...)` wrap of the `Utc::now()` read.
+///
+/// # Delegation to [`wire_time_some`]
+///
+/// The 5-token `Some(Time(<anchor>))` wire wrap lives at the shared
+/// substrate primitive [`wire_time_some`]; this composer supplies
+/// `Utc::now()` as the anchor and delegates. The wall-clock read at
+/// ONE substrate site (this composer body's `Utc::now()` call), the
+/// K8s Time newtype wrap + `Some` wrap at the SHARED substrate site
+/// (`wire_time_some`'s body). A future normalization at the wire form
+/// (see [`wire_time_some`]'s doc-comment) lands at that primitive and
+/// this composer inherits the upgrade mechanically.
 ///
 /// Pre-lift the SAME
 /// `Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(Utc::now()))`
@@ -218,7 +288,7 @@ pub fn seconds_ago(secs: i64) -> DateTime<Utc> {
 /// [kdel]: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.30/#objectmeta-v1-meta
 #[must_use]
 pub fn tombstone_now() -> Option<Time> {
-    Some(Time(Utc::now()))
+    wire_time_some(Utc::now())
 }
 
 /// A tombstone stamp for a K8s [`metadata.deletionTimestamp`][kdel]
@@ -256,7 +326,7 @@ pub fn tombstone_now() -> Option<Time> {
 /// [kdel]: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.30/#objectmeta-v1-meta
 #[must_use]
 pub fn tombstone_at(when: DateTime<Utc>) -> Option<Time> {
-    Some(Time(when))
+    wire_time_some(when)
 }
 
 /// A creation stamp for a K8s [`metadata.creationTimestamp`][kcreat]
@@ -337,26 +407,20 @@ pub fn tombstone_at(when: DateTime<Utc>) -> Option<Time> {
 /// caller would walk).
 ///
 /// A future normalization at the wire form (see the doc-comment on
-/// [`tombstone_now`] for the full rationale) lands at THIS primitive
-/// alongside [`tombstone_at`] so both K8s metadata-Time slot shapes
-/// inherit the upgrade mechanically at the same substrate site.
-/// Concrete near-term compounding step: a private substrate
-/// primitive `wire_time_some(when) -> Option<Time>` that owns the
-/// pure 5-token wire wrap `Some(Time(<anchor>))` and both
-/// [`tombstone_at`] and [`creation_stamp_at`] delegate through —
-/// mirroring the recent `ProcessCondition::new_at` /
-/// `ProcessCondition::new_at_now` peer-pair with a shared 5-slot
-/// substrate backbone; today the two composers live side-by-side
-/// with independent bodies, and the cross-composer coherence pin
+/// [`wire_time_some`] for the full rationale) lands at THAT shared
+/// substrate primitive alongside [`tombstone_at`] / [`tombstone_now`]
+/// so all THREE K8s metadata-Time slot composers inherit the upgrade
+/// mechanically at the same substrate site. The prior "concrete
+/// near-term compounding step" this doc-comment named — routing the
+/// three composer bodies onto the shared `wire_time_some` primitive —
+/// has landed; the cross-composer coherence pin
 /// [`tests::creation_stamp_at_and_tombstone_at_agree_at_the_current_instant_on_wire_shape`]
-/// binds their wire-shape agreement at a deterministic anchor so a
-/// future consolidation onto the shared backbone lands with all
-/// downstream fixture consumers already routed onto the shape.
+/// stays in place as the post-consolidation wire-shape invariant.
 ///
 /// [kcreat]: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.30/#objectmeta-v1-meta
 #[must_use]
 pub fn creation_stamp_at(when: DateTime<Utc>) -> Option<Time> {
-    Some(Time(when))
+    wire_time_some(when)
 }
 
 /// Parse an `Option<&str>` as an RFC-3339 wall-clock stamp, discarding
@@ -1271,5 +1335,179 @@ mod tests {
         let future = Utc::now() + chrono::Duration::seconds(3_600);
         let stamp = creation_stamp_at(future).expect("creation_stamp_at returns Some");
         assert_eq!(stamp.0, future);
+    }
+
+    // ─── wire_time_some substrate pins ────────────────────────────────
+    //
+    // Bind the shared 5-token `Some(Time(<anchor>))` substrate primitive
+    // [`wire_time_some`] at fail-before-pass-after granularity so a
+    // regression that dropped the `Some` wrap (yielding
+    // `Option<Time>` = `None`, which would silently un-stamp every
+    // metadata-Time slot every downstream composer feeds), swapped the
+    // `Time` newtype for a raw `DateTime<Utc>` (breaking the
+    // `metadata.*_timestamp: Option<Time>` slot shape), or silently
+    // re-read the wall clock instead of preserving `when` (collapsing
+    // the shared-substrate primitive onto a wall-clock-reading peer,
+    // defeating every deterministic-fixture pin the three downstream
+    // composers rely on) surfaces HERE rather than as silent operator-
+    // invisible drift at every metadata-Time composer in this module.
+    //
+    // Each pin is fail-before-pass-after: the primitive did not exist
+    // pre-lift, so any test that invokes it fails to compile pre-lift
+    // and passes post-lift; the byte-identity pins below then bind
+    // the specific shape choice.
+
+    #[test]
+    fn wire_time_some_returns_some_time_preserving_the_operator_anchor() {
+        // Primary shape asserted end-to-end: the returned option is
+        // `Some(Time(when))` and the anchor is exactly the `when`
+        // argument — no wall-clock read, no normalization, no clamp.
+        // The shared-substrate peer of the two anchor-explicit
+        // composer pins
+        // [`tombstone_at_returns_some_time_preserving_the_operator_anchor`]
+        // + [`creation_stamp_at_returns_some_time_preserving_the_operator_anchor`]
+        // on the composer-body-level projection.
+        let epoch = at_epoch_second(1_700_000_000);
+        let stamp = wire_time_some(epoch).expect("wire_time_some returns Some");
+        assert_eq!(stamp.0, epoch, "anchor must be preserved verbatim");
+    }
+
+    #[test]
+    fn wire_time_some_matches_hand_authored_pre_lift_chain_shape() {
+        // Byte-identical parity with the pre-lift `Some(Time(<anchor>))`
+        // block that all THREE downstream composer bodies
+        // ([`tombstone_now`] via `Utc::now()`, [`tombstone_at`] +
+        // [`creation_stamp_at`] via the operator anchor) restated
+        // verbatim, swept across the representative anchor shapes the
+        // downstream composers routinely receive: the Unix epoch, a
+        // mid-past deterministic anchor, a mid-future deterministic
+        // anchor, and a `seconds_ago`-composed past-relative anchor.
+        // Both blocks must project the SAME `Option<Time>` on every
+        // corner so the collapse is observationally invisible.
+        for anchor in [
+            at_epoch_second(0),
+            at_epoch_second(1_700_000_000),
+            at_epoch_second(2_000_000_000),
+            seconds_ago(3_600),
+        ] {
+            let composed = wire_time_some(anchor);
+            let hand_authored = Some(Time(anchor));
+            assert_eq!(
+                composed, hand_authored,
+                "corner `anchor={anchor}` must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn wire_time_some_is_deterministic_across_repeated_calls() {
+        // Determinism pin: `wire_time_some` does NOT read the wall
+        // clock — every call with the SAME `when` produces byte-
+        // identical `Option<Time>`, in contrast to the wall-clock-
+        // reading [`tombstone_now`] peer that reads `Utc::now()` at
+        // its OWN body before delegating. A regression that started
+        // stamping the substrate's own `Utc::now()` (a fallback
+        // default, a per-call skew Δ, a mis-consolidation of
+        // `tombstone_now`'s clock read onto the shared substrate)
+        // would silently defeat every fixture / composition /
+        // preservation pin the three downstream composers rely on
+        // for anchor replay.
+        let anchor = at_epoch_second(1_700_000_000);
+        let first = wire_time_some(anchor);
+        let second = wire_time_some(anchor);
+        assert_eq!(
+            first, second,
+            "wire_time_some must be deterministic — no wall-clock read",
+        );
+    }
+
+    #[test]
+    fn wire_time_some_preserves_a_future_anchor_without_clamping() {
+        // Corner: `wire_time_some` accepts a future anchor verbatim —
+        // matches the peer pins
+        // [`tombstone_at_preserves_a_future_anchor_without_clamping`]
+        // + [`creation_stamp_at_preserves_a_future_anchor_without_clamping`]
+        // on the composer-body-level projection. A future normalization
+        // that clamps the anchor into the past (a "no metadata-Time
+        // stamp can be in the future" policy) has to explicitly move
+        // this pin at the shared substrate rather than silently
+        // trampling every fixture that stamps a future anchor to test
+        // a per-fleet-skew tolerance downstream.
+        let future = Utc::now() + chrono::Duration::seconds(3_600);
+        let stamp = wire_time_some(future).expect("wire_time_some returns Some");
+        assert_eq!(stamp.0, future);
+    }
+
+    #[test]
+    fn tombstone_at_delegates_through_wire_time_some_bytewise() {
+        // Delegation coherence pin: [`tombstone_at`] projects `when`
+        // through the shared `wire_time_some` substrate — a regression
+        // that re-inlined the 5-token `Some(Time(when))` literal at
+        // [`tombstone_at`]'s body (bypassing the shared substrate,
+        // defeating every future normalization that lands at
+        // `wire_time_some` and expects the composer to inherit the
+        // upgrade mechanically) surfaces HERE rather than as silent
+        // wire-shape drift between the two composers. Sweeps the
+        // representative deterministic anchors both composers
+        // routinely receive.
+        for anchor in [
+            at_epoch_second(0),
+            at_epoch_second(1_700_000_000),
+            at_epoch_second(2_000_000_000),
+        ] {
+            assert_eq!(
+                tombstone_at(anchor),
+                wire_time_some(anchor),
+                "tombstone_at must delegate through wire_time_some for anchor={anchor}",
+            );
+        }
+    }
+
+    #[test]
+    fn creation_stamp_at_delegates_through_wire_time_some_bytewise() {
+        // Delegation coherence pin: [`creation_stamp_at`] projects
+        // `when` through the shared `wire_time_some` substrate — the
+        // peer of [`tombstone_at_delegates_through_wire_time_some_bytewise`]
+        // on the (creation, deletion) axis of the ObjectMeta
+        // metadata-Time slots. Both composers ride the SAME shared
+        // substrate; the two delegation pins together bind the
+        // consolidation invariant so a future normalization at
+        // `wire_time_some` cannot land any per-slot skew.
+        for anchor in [
+            at_epoch_second(0),
+            at_epoch_second(1_700_000_000),
+            at_epoch_second(2_000_000_000),
+        ] {
+            assert_eq!(
+                creation_stamp_at(anchor),
+                wire_time_some(anchor),
+                "creation_stamp_at must delegate through wire_time_some for anchor={anchor}",
+            );
+        }
+    }
+
+    #[test]
+    fn tombstone_now_delegates_through_wire_time_some_with_utc_now_stamp() {
+        // Delegation coherence pin on the wall-clock-reading axis:
+        // [`tombstone_now`] reads `Utc::now()` and projects the
+        // resulting anchor through the shared `wire_time_some`
+        // substrate — a regression that re-inlined the 5-token
+        // `Some(Time(Utc::now()))` literal at [`tombstone_now`]'s
+        // body (bypassing the shared substrate) surfaces HERE. Both
+        // blocks read the wall clock at DIFFERENT instants so the two
+        // anchors CAN differ by scheduler jitter — bound the
+        // divergence at 100ms, matching the peer wall-clock-parity
+        // pins' tolerance
+        // ([`tombstone_now_matches_hand_authored_pre_lift_chain_shape`],
+        // [`seconds_ago_matches_hand_authored_pre_lift_chain_shape`]).
+        let composed = tombstone_now().expect("tombstone_now returns Some");
+        let via_substrate = wire_time_some(Utc::now()).expect("wire_time_some returns Some");
+        let delta = (via_substrate.0 - composed.0).abs();
+        assert!(
+            delta <= chrono::Duration::milliseconds(100),
+            "tombstone_now anchor {} and wire_time_some(Utc::now()) anchor {} must agree within 100ms scheduler jitter",
+            composed.0,
+            via_substrate.0,
+        );
     }
 }

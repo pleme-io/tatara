@@ -39,29 +39,30 @@ fn main() -> ExitCode {
     tatara_process::register_all();
     tatara_domains::register_all();
 
+    // Startup-side `eprintln!("tatara-check: <detail>"); return
+    // ExitCode::from(2);` two-step bail ride the ONE substrate primitive
+    // `startup_bail` — pre-lift the SAME shape was hand-authored at 4
+    // sites (workspace-root miss, checks.lisp read fail, checks.lisp
+    // parse fail, macroexpand fail) past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold. Post-lift the (`"tatara-check:"` prefix
+    // sink, `ExitCode::from(2)` config-failure exit) pair lives at ONE
+    // substrate owner.
     let root = match workspace_root() {
         Some(r) => r,
         None => {
-            eprintln!(
-                "tatara-check: could not locate workspace root (looked for Cargo.toml + checks.lisp)"
-            );
-            return ExitCode::from(2);
+            return startup_bail(
+                "could not locate workspace root (looked for Cargo.toml + checks.lisp)",
+            )
         }
     };
     let checks_path = root.join("checks.lisp");
     let src = match fs::read_to_string(&checks_path) {
         Ok(s) => s,
-        Err(e) => {
-            eprintln!("tatara-check: read {}: {e}", checks_path.display());
-            return ExitCode::from(2);
-        }
+        Err(e) => return startup_bail(format_args!("read {}: {e}", checks_path.display())),
     };
     let raw = match read(&src) {
         Ok(f) => f,
-        Err(e) => {
-            eprintln!("tatara-check: parse {}: {e}", checks_path.display());
-            return ExitCode::from(2);
-        }
+        Err(e) => return startup_bail(format_args!("parse {}: {e}", checks_path.display())),
     };
 
     // Tier 1: checks.lisp may contain (defcheck …) macros + macro calls.
@@ -70,10 +71,7 @@ fn main() -> ExitCode {
     let mut expander = Expander::new();
     let forms = match expander.expand_program(raw) {
         Ok(f) => f,
-        Err(e) => {
-            eprintln!("tatara-check: macroexpand: {e}");
-            return ExitCode::from(2);
-        }
+        Err(e) => return startup_bail(format_args!("macroexpand: {e}")),
     };
 
     let mut report = Report::default();
@@ -1263,6 +1261,156 @@ fn read_or_fail(path: &Path, label: &str, report: &mut Report) -> Option<String>
     }
 }
 
+/// The pure `"tatara-check: {detail}"` startup-diagnostic prefix — the
+/// ONE substrate owner of the exact stderr-facing prose every
+/// [`main`]-side startup bail writes, split off from [`startup_bail`]
+/// so the byte shape can be pinned without capturing stderr in tests.
+///
+/// # Prefix
+///
+/// `"tatara-check: "` — the binary's name, colon, single space. Every
+/// pre-lift `eprintln!("tatara-check: <detail>")` chain in [`main`]
+/// used this exact prefix, and every downstream check-log grep keys
+/// on it as the "startup-side, not per-check" sentinel (per-check
+/// failures reach stderr through [`Report`]'s `"✗ <label>: <detail>"`
+/// shape instead). Byte-preserving through the sibling
+/// [`startup_bail`]'s `eprintln!("{}", startup_diagnostic(...))`
+/// composition means a future prefix shift (a
+/// `"tatara-check[<version>]:"` build-stamped prefix, a swap to
+/// `"[tatara-check] "` for structured-log parity) lands at THIS ONE
+/// substrate owner and every startup-side bail inherits it by
+/// construction.
+///
+/// # Detail forwarding
+///
+/// The `impl std::fmt::Display` bound accepts every carrier the four
+/// pre-lift callsites walked:
+///
+/// * A bare `&'static str` literal (workspace-root miss:
+///   `"could not locate workspace root (looked for Cargo.toml + checks.lisp)"`).
+/// * A `format_args!(...)` inline composition (checks.lisp read /
+///   parse / macroexpand fails: `format_args!("read {}: {e}",
+///   checks_path.display())` etc.). `std::fmt::Arguments` implements
+///   `Display` and can be passed through `impl Display` at the call
+///   boundary without allocating an intermediate `String`.
+/// * An owned `String` composed by the caller (a future startup gate
+///   that pre-computes its detail before the bail decision).
+///
+/// The primitive owns exactly the (prefix, separator) sink; each caller
+/// composes its detail's own shape through its own `format_args!` /
+/// `format!` at the callsite. That keeps the primitive domain-agnostic
+/// — it doesn't know about `checks_path.display()`, `chrono::Duration`,
+/// or any other detail-side type — while still collapsing the shared
+/// prefix + colon + space sink onto ONE owner.
+///
+/// # Sibling to [`Report::fail`]
+///
+/// [`Report::fail`] owns the per-check `"<label>: <detail>"` shape for
+/// executor-side failures (`"crd-in-sync Process: <detail>"`,
+/// `"YAML parses as Process: <detail>"`, etc.) that reach the workspace
+/// report and print through the `"✗ <line>"` iteration in [`main`].
+/// [`startup_diagnostic`] owns the peer `"tatara-check: <detail>"`
+/// shape for the startup-side failures that must reach stderr BEFORE
+/// the [`Report`] exists (workspace-root discovery, checks.lisp read /
+/// parse, macroexpand) — the two shapes partition the stderr surface
+/// at the (before-Report, after-Report) split. A per-check failure and
+/// a startup-side failure remain distinguishable by prefix alone at
+/// the reader.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// `"tatara-check: "` prefix + colon separator recurred at 4 hand-
+/// authored `eprintln!` sites in [`main`] past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication trigger and is lifted onto ONE substrate owner
+/// here). THEORY.md §II.1 invariant 5 (composition preserves proofs —
+/// the pins bind the byte shape at fail-before-pass-after granularity
+/// so a regression that drifted the prefix, dropped the colon-space
+/// separator, or dropped the detail forwarding surfaces HERE rather
+/// than as silent operator-visible drift across every downstream
+/// startup-log grep).
+#[must_use]
+fn startup_diagnostic(detail: impl std::fmt::Display) -> String {
+    format!("tatara-check: {detail}")
+}
+
+/// The startup-side bail primitive — write a `"tatara-check: {detail}"`
+/// diagnostic to stderr and return the [`ExitCode::from(2)`]
+/// configuration-failure exit code the shell reads as "the binary
+/// could not even reach the per-check dispatcher, treat this as an
+/// operator-side setup fault distinct from a `1` per-check-failure
+/// exit". The ONE substrate owner of the two-step
+/// `eprintln!("tatara-check: <detail>"); return ExitCode::from(2);`
+/// chain [`main`] hand-authored at 4 sites pre-lift past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold:
+///
+/// * `workspace_root()` returned `None` — no `Cargo.toml + checks.lisp`
+///   pair on the ancestor path from CWD.
+/// * `fs::read_to_string(&checks_path)` failed — the discovered
+///   `checks.lisp` file could not be read as UTF-8.
+/// * `read(&src)` failed — the read `checks.lisp` source did not parse
+///   as a stream of S-expressions.
+/// * `expander.expand_program(raw)` failed — the parsed forms did not
+///   macroexpand (a `(defcheck …)` shape violation, an unbound
+///   macro-tail keyword, a `&rest` shape mismatch).
+///
+/// All 4 sites walked the SAME two-step chain — write a
+/// `"tatara-check: <detail>"` line to stderr, then return
+/// `ExitCode::from(2)` — differing only in the detail's own shape
+/// (`&'static str` for the workspace-root miss; `format_args!` inline
+/// composition for the three per-error-arm cases). Post-lift each
+/// callsite reads `return startup_bail(<detail>);` and the (prefix,
+/// separator, exit-code) triad lives at ONE substrate owner.
+///
+/// # Delegation to [`startup_diagnostic`]
+///
+/// The `"tatara-check: {detail}"` byte shape lives at the pure formatter
+/// [`startup_diagnostic`]; this primitive supplies the stderr write +
+/// the config-failure exit code and delegates. The delegation split
+/// makes the byte shape fully testable at [`startup_diagnostic`]
+/// without needing to capture stderr; this primitive's own body reduces
+/// to a two-line `eprintln!` + `ExitCode::from(2)` shape that is
+/// inspection-checkable.
+///
+/// # Exit code
+///
+/// `ExitCode::from(2)` — the configuration-failure code. Distinct from
+/// [`ExitCode::SUCCESS`] (all checks passed) and [`ExitCode::FAILURE`]
+/// (at least one check failed but the dispatcher itself ran). A wrapper
+/// script grepping the exit code (`if [ $? -eq 2 ]; then ...`) can
+/// distinguish "the binary bailed before running any checks — fix your
+/// checks.lisp / workspace layout" from "some checks failed — read the
+/// `✗` lines and fix the failing checks".
+///
+/// # Compounding
+///
+/// A future startup-side gate (a `Cargo.toml` `[workspace]` header
+/// probe, a `checks.lisp` schema-version gate, a
+/// `tatara_process::register_all()` fault detector, a future
+/// `--dry-run` argument that requires early-exit before the dispatcher
+/// runs) reads `return startup_bail(<detail>);` at ONE line and
+/// inherits the prefix + exit-code discipline by construction — no
+/// per-gate restatement of the pre-lift `eprintln!` + `return
+/// ExitCode::from(2)` two-step chain. A future normalization (a
+/// `tracing`-annotated stderr write instead of a bare `eprintln!`, a
+/// version-stamped prefix, a distinct config-failure exit code for a
+/// specific gate) lands at THIS ONE substrate primitive and every
+/// current + future startup-side bail inherits the upgrade
+/// mechanically.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// two-step `eprintln!("tatara-check: <detail>"); return
+/// ExitCode::from(2);` chain recurred at 4 hand-authored sites in
+/// [`main`] past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and
+/// is lifted onto ONE substrate owner here). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — every startup-side
+/// bail routing through the SAME substrate primitive means a future
+/// diagnostic shape or exit-code shift lands at ONE site and every
+/// downstream bail consumer inherits the shift by construction).
+#[must_use]
+fn startup_bail(detail: impl std::fmt::Display) -> ExitCode {
+    eprintln!("{}", startup_diagnostic(detail));
+    ExitCode::from(2)
+}
+
 fn normalize(s: &str) -> String {
     s.lines()
         .map(str::trim_end)
@@ -1277,8 +1425,8 @@ mod tests {
         evaluate_ephemeral_require_tag, evaluate_point_require_tag, find_kw, find_kw_string_list,
         head_symbol_or_missing, known_require_tag_domain_names, min_defs_shortfall_msg,
         parse_kwargs, positional_string, read_or_fail, require_tag_domain_by_name,
-        required_positional_string, Report, UnknownRequireTag, ALL_REQUIRE_TAG_DOMAINS,
-        MISSING_ARG_SLUG,
+        required_positional_string, startup_diagnostic, Report, UnknownRequireTag,
+        ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
@@ -2721,6 +2869,156 @@ mod tests {
             failure.starts_with("missing label: read: "),
             "miss-path failure prose must start with `<label>: read: ` — pin the label prefix + the `read: ` sentinel prose downstream check-log grep keys on; got {failure:?}"
         );
+    }
+
+    // ─── startup_diagnostic substrate pins ─────────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `startup_diagnostic` free
+    // function did not exist on the pre-lift binary — the tests below
+    // do not compile before the lift. Post-lift they bind the exact
+    // `"tatara-check: {detail}"` byte shape at ONE substrate owner so
+    // a regression that drifted the `"tatara-check: "` prefix, dropped
+    // the colon-space separator, or dropped the detail forwarding
+    // surfaces HERE rather than as silent operator-visible drift
+    // across every downstream startup-log grep at each of the four
+    // pre-lift `eprintln!` sites in `main` (workspace-root miss,
+    // checks.lisp read fail, checks.lisp parse fail, macroexpand fail).
+
+    #[test]
+    fn startup_diagnostic_prefixes_the_pipeline_name_verbatim() {
+        // Primary shape: the returned string starts with the exact
+        // `"tatara-check: "` prefix — binary name, colon, single space.
+        // Every downstream startup-log grep keys on this sentinel to
+        // distinguish startup-side diagnostics from per-check `"✗ "`
+        // lines. A regression that swapped the prefix (a `[tatara-check]`
+        // structured-log style, a versioned `tatara-check[0.2]:`, a
+        // stripped colon) would fail here at ONE substrate site rather
+        // than as silent drift across every `main`-side bail.
+        let out = startup_diagnostic("anything");
+        assert!(
+            out.starts_with("tatara-check: "),
+            "startup diagnostic must start with the `tatara-check: ` prefix (binary-name, colon, single space); got {out:?}"
+        );
+    }
+
+    #[test]
+    fn startup_diagnostic_forwards_a_static_string_literal_verbatim_after_the_prefix() {
+        // Byte-identical parity with the pre-lift `eprintln!("tatara-
+        // check: could not locate workspace root (looked for Cargo.toml
+        // + checks.lisp)")` site. The primitive owns exactly the prefix
+        // + colon + space sink; the caller's detail forwards verbatim.
+        // A regression that transformed the detail (a `.to_uppercase()`,
+        // an implicit `.trim()`, a re-wrapped format) would fail here.
+        assert_eq!(
+            startup_diagnostic(
+                "could not locate workspace root (looked for Cargo.toml + checks.lisp)"
+            ),
+            "tatara-check: could not locate workspace root (looked for Cargo.toml + checks.lisp)",
+        );
+    }
+
+    #[test]
+    fn startup_diagnostic_forwards_a_format_args_composition_verbatim_after_the_prefix() {
+        // Byte-identical parity with the pre-lift `eprintln!("tatara-
+        // check: read {}: {e}", checks_path.display())` shape three of
+        // the four `main`-side sites walked (`read`, `parse`,
+        // `macroexpand`). The `format_args!` composition materializes
+        // at the `impl Display` call boundary without allocating an
+        // intermediate `String` — this pin proves the substrate accepts
+        // the same shape the pre-lift callsites used, so the migration
+        // is byte-identical AND allocation-parity-preserving on the
+        // detail forwarding side.
+        let e = "No such file or directory (os error 2)";
+        let path = std::path::PathBuf::from("/tmp/checks.lisp");
+        assert_eq!(
+            startup_diagnostic(format_args!("read {}: {e}", path.display())),
+            format!("tatara-check: read {}: {e}", path.display()),
+        );
+    }
+
+    #[test]
+    fn startup_diagnostic_forwards_an_owned_string_detail_verbatim_after_the_prefix() {
+        // Ergonomic contract pin: a caller that pre-composes its detail
+        // as an owned `String` (a future startup gate whose detail
+        // depends on state assembled before the bail decision) can
+        // still hand the value through the `impl Display` slot. Pre-lift
+        // this shape did not exist in `main` — the four current sites
+        // all used `&'static str` or `format_args!` — but the primitive
+        // accepts it by construction because `String: Display`.
+        // Post-lift the same primitive covers every future startup gate
+        // regardless of how the detail was assembled.
+        let owned: String = format!("macroexpand: {}", "unbound tail keyword");
+        assert_eq!(
+            startup_diagnostic(&owned),
+            "tatara-check: macroexpand: unbound tail keyword",
+        );
+    }
+
+    #[test]
+    fn startup_diagnostic_matches_pre_lift_chain_bytewise_across_every_main_side_site() {
+        // Sweep the four pre-lift `main`-side detail shapes and assert
+        // the substrate's output is byte-identical to the pre-lift
+        // hand-authored `format!("tatara-check: <detail>")` composition
+        // every `eprintln!` site walked at its own callsite. Together
+        // with the `starts_with` prefix pin above, this closes the
+        // (prefix, separator, detail) triad at fail-before-pass-after
+        // granularity — a regression at any one of the three sinks
+        // fires HERE at ONE substrate site rather than as silent
+        // operator-visible drift at the four downstream `main` sites.
+        //
+        // The sites and their exact pre-lift detail shapes:
+        //
+        // * workspace-root miss: bare literal.
+        // * checks.lisp read fail: `format!("read {}: {e}", <path>)`.
+        // * checks.lisp parse fail: `format!("parse {}: {e}", <path>)`.
+        // * macroexpand fail: `format!("macroexpand: {e}")`.
+        let path = std::path::PathBuf::from("/tmp/checks.lisp");
+        let io_err = "No such file or directory (os error 2)";
+        let parse_err = "unexpected EOF in list";
+        let macro_err = "unbound macro tail keyword `:missing`";
+
+        let pre_lift_workspace_root =
+            "tatara-check: could not locate workspace root (looked for Cargo.toml + checks.lisp)"
+                .to_string();
+        let pre_lift_read = format!("tatara-check: read {}: {io_err}", path.display());
+        let pre_lift_parse = format!("tatara-check: parse {}: {parse_err}", path.display());
+        let pre_lift_macroexpand = format!("tatara-check: macroexpand: {macro_err}");
+
+        assert_eq!(
+            startup_diagnostic(
+                "could not locate workspace root (looked for Cargo.toml + checks.lisp)"
+            ),
+            pre_lift_workspace_root,
+            "workspace-root-miss detail must match the pre-lift `eprintln!` byte shape verbatim",
+        );
+        assert_eq!(
+            startup_diagnostic(format_args!("read {}: {io_err}", path.display())),
+            pre_lift_read,
+            "checks.lisp-read detail must match the pre-lift `eprintln!` byte shape verbatim",
+        );
+        assert_eq!(
+            startup_diagnostic(format_args!("parse {}: {parse_err}", path.display())),
+            pre_lift_parse,
+            "checks.lisp-parse detail must match the pre-lift `eprintln!` byte shape verbatim",
+        );
+        assert_eq!(
+            startup_diagnostic(format_args!("macroexpand: {macro_err}")),
+            pre_lift_macroexpand,
+            "macroexpand detail must match the pre-lift `eprintln!` byte shape verbatim",
+        );
+    }
+
+    #[test]
+    fn startup_diagnostic_preserves_an_empty_detail_at_the_boundary() {
+        // Boundary corner: an empty detail yields exactly the prefix
+        // with nothing after the trailing space. Pin the shape so a
+        // future normalization that trimmed trailing whitespace,
+        // rejected empty details, or emitted a "no detail" sentinel
+        // has to explicitly move THIS pin rather than silently changing
+        // the byte shape for the corner. No pre-lift `main` site walks
+        // this corner today, but the primitive's contract must accept
+        // it (an `impl Display` slot with a zero-width value).
+        assert_eq!(startup_diagnostic(""), "tatara-check: ");
     }
 
     #[test]

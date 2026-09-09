@@ -5280,7 +5280,7 @@ mod tests {
         assert!(p.observed_phase_since().is_none());
         let composed = p.observed_phase_since().unwrap_or_else(Utc::now);
         assert!(composed >= before);
-        assert!(composed <= Utc::now() + chrono::Duration::seconds(1));
+        assert!(composed <= crate::time::seconds_from_now(1));
     }
 
     // ─── Process::observed_phase_since_or substrate pins ────────────────
@@ -5347,7 +5347,7 @@ mod tests {
         // populated corner.
         let anchor = crate::time::seconds_ago(300);
         let p = process_with_phase_since(Some(anchor));
-        let unrelated_fallback = Utc::now() + chrono::Duration::seconds(9_999);
+        let unrelated_fallback = crate::time::seconds_from_now(9_999);
         assert_eq!(p.observed_phase_since_or(unrelated_fallback), anchor);
     }
 
@@ -5739,7 +5739,7 @@ mod tests {
         // populated corner.
         let anchor = crate::time::seconds_ago(300);
         let p = creation_stamped_process(anchor);
-        let unrelated_fallback = Utc::now() + chrono::Duration::seconds(9_999);
+        let unrelated_fallback = crate::time::seconds_from_now(9_999);
         assert_eq!(p.created_at_or(unrelated_fallback), anchor);
     }
 

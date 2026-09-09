@@ -139,6 +139,82 @@ pub fn seconds_ago(secs: i64) -> DateTime<Utc> {
     Utc::now() - chrono::Duration::seconds(secs)
 }
 
+/// A wall-clock anchor `secs` seconds AFTER the current instant — the
+/// one-line `Utc::now() + chrono::Duration::seconds(secs)` chain lifted
+/// to ONE typed owner past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold, and the (past, future) mirror of [`seconds_ago`] on the
+/// same wall-clock-anchored `→ DateTime<Utc>` axis. Composition partner
+/// of every wall-clock-jitter bracket assertion (upper edge of a `≤ now
+/// plus Δ` window) and every "seed a far-future fallback" test fixture
+/// that needs a `DateTime<Utc>` deterministically after the current
+/// instant.
+///
+/// Pre-lift the SAME chain was hand-authored at 6 workspace-wide
+/// consumer sites across 2 files, each restating `Utc::now() +
+/// chrono::Duration::seconds(<N>)` verbatim to seed a `DateTime<Utc>`
+/// `N` seconds in the future:
+///
+/// * `tatara-process::time` × 3 — the future-anchor preservation pins
+///   for [`tombstone_at`], [`creation_stamp_at`], and [`wire_time_some`]
+///   (each stamps `let future = Utc::now() + chrono::Duration::seconds
+///   (3_600);` to prove the composer accepts a future anchor without
+///   clamping).
+/// * `tatara-process::crd` × 3 — the upper-bracket wall-clock jitter
+///   check on `observed_phase_since` (`assert!(composed <= Utc::now() +
+///   chrono::Duration::seconds(1))`, +1s tolerance) and the two
+///   "unrelated fallback" seeds for `observed_phase_since_or` /
+///   `created_at_or`'s populated-corner pins (`let unrelated_fallback =
+///   Utc::now() + chrono::Duration::seconds(9_999);`, +9_999s far-
+///   future guard proving the composer ignores the fallback when the
+///   observed slot is populated).
+///
+/// All 6 sites walked the SAME two-link chain — read the wall clock,
+/// then add a whole-second `chrono::Duration` — differing only in the
+/// second-count `N` (`1`, `3_600`, `9_999`). Post-lift each callsite
+/// reads `seconds_from_now(N)` and the wall-clock read + addition sink
+/// lives at ONE substrate owner.
+///
+/// Return-form axis: `DateTime<Utc>` — the copy-form anchor every
+/// consumer's downstream `<=` / `>=` bracket comparator or fallback-slot
+/// stamp takes as its second operand, matching the pre-lift shape
+/// verbatim. The `i64` `secs` parameter matches
+/// `chrono::Duration::seconds`'s own signature so a negative value
+/// yields a past anchor, mirroring the pre-lift signed semantics.
+///
+/// Sibling to [`seconds_ago`] on the same wall-clock-anchored
+/// `→ DateTime<Utc>` axis, split by TIME DIRECTION:
+/// `seconds_ago(N)` returns `Utc::now() - Duration::seconds(N)`
+/// (past anchor); `seconds_from_now(N)` returns `Utc::now() +
+/// Duration::seconds(N)` (future anchor). The two composers partition
+/// the (past, future) axis at the sign and cover it end-to-end at the
+/// substrate — a caller with a compile-time-known DIRECTION picks the
+/// semantically-matching primitive rather than negating an argument
+/// (`seconds_ago(-N)` produces the same `DateTime<Utc>` as
+/// `seconds_from_now(N)` — see the pre-lift note in [`seconds_ago`]'s
+/// `seconds_ago_negative_returns_anchor_in_the_future` corner pin —
+/// but obscures the caller's intent at the readsite; the peer opens
+/// the semantic slot). Peer to [`at_epoch_second`] on the sibling
+/// (wall-clock, deterministic) split — the two-axis partition
+/// (`seconds_ago` / `seconds_from_now` on the wall-clock axis,
+/// `at_epoch_second` on the deterministic axis) covers every anchor-
+/// producing shape in this module.
+///
+/// A future normalization (a monotonic-clock cross-check, an injectable
+/// `time_source: impl Fn() -> DateTime<Utc>` for deterministic tests,
+/// a per-fleet skew Δ that clamps the wall-clock read past a known-bad
+/// range) lands at THIS ONE substrate primitive and every downstream
+/// consumer (production callers, test helpers, future timed-decision
+/// gates) inherits the upgrade mechanically — no per-site edit at any
+/// of the 6 listed callers or at future consumers (a stable-name
+/// claim-arbiter's future-anchor jitter tolerance, an allocation-TTL
+/// far-future fallback fixture, a probe-receipt `expires_at`-slot far-
+/// future seed). The parallel normalization at [`seconds_ago`] lands at
+/// this primitive's peer, sharing the wall-clock-read discipline.
+#[must_use]
+pub fn seconds_from_now(secs: i64) -> DateTime<Utc> {
+    Utc::now() + chrono::Duration::seconds(secs)
+}
+
 /// The pure 5-token `Some(Time(<anchor>))` wire wrap the K8s
 /// metadata-Time slots (`ObjectMeta::creation_timestamp`,
 /// `ObjectMeta::deletion_timestamp`, and every peer `Option<Time>`
@@ -785,6 +861,138 @@ mod tests {
         );
     }
 
+    // ─── seconds_from_now substrate pins ──────────────────────────────
+    //
+    // Bind [`seconds_from_now`] at fail-before-pass-after granularity
+    // so a regression that flipped the sign to `-` (collapsing the
+    // primitive onto its [`seconds_ago`] peer, silently landing every
+    // future-anchor fixture in the past and defeating the six
+    // pre-lift `Utc::now() + chrono::Duration::seconds(N)` callsites
+    // this primitive owns), swapped the unit (a `chrono::Duration::
+    // minutes` typo, a `Duration::from_secs` unit-mismatch), or
+    // dropped the wall-clock read (yielding `chrono::DateTime::<Utc>::
+    // MIN_UTC + Duration::seconds(N)` = epoch-ish instead of a
+    // wall-clock-anchored future) surfaces HERE rather than as silent
+    // drift at every downstream future-anchor / wall-clock-jitter
+    // bracket consumer.
+    //
+    // Each pin is fail-before-pass-after: the primitive did not exist
+    // pre-lift, so any test that invokes it fails to compile pre-lift
+    // and passes post-lift; the byte-identity pins below then bind
+    // the specific shape choice.
+
+    #[test]
+    fn seconds_from_now_returns_anchor_at_seconds_offset_into_the_future() {
+        // Primary shape asserted end-to-end: the returned anchor is
+        // exactly `secs` seconds after a wall-clock instant bracketed
+        // by two `Utc::now()` samples (a `before` sample taken just
+        // before the substrate call and an `after` sample taken just
+        // after). Sub-second scheduler jitter (a slow test runner, a
+        // Kubelet clock skew) can push the two brackets apart by tens
+        // of milliseconds — bound the tolerance at 50ms per side so
+        // the pin stays green under CI load. A regression that flipped
+        // the sign to `-` would land the anchor in the past and this
+        // window check would fail; a regression that swapped the unit
+        // (minutes / hours) would land the anchor far outside the
+        // sub-second window.
+        let secs = 42_i64;
+        let before = Utc::now();
+        let anchor = seconds_from_now(secs);
+        let after = Utc::now();
+        assert!(
+            anchor >= before + chrono::Duration::seconds(secs) - chrono::Duration::milliseconds(50),
+            "anchor {anchor} must be ≥ before + {secs}s (within 50ms scheduler jitter)"
+        );
+        assert!(
+            anchor <= after + chrono::Duration::seconds(secs) + chrono::Duration::milliseconds(50),
+            "anchor {anchor} must be ≤ after + {secs}s (within 50ms scheduler jitter)"
+        );
+    }
+
+    #[test]
+    fn seconds_from_now_matches_hand_authored_pre_lift_chain_shape() {
+        // Byte-identical parity with the pre-lift `Utc::now() +
+        // chrono::Duration::seconds(N)` block that all 6 hand-authored
+        // callsites restated verbatim, swept across the three
+        // representative second-counts every pre-lift consumer used
+        // (small: 1s upper-bracket jitter tolerance, hour-scale:
+        // 3_600s future anchor, far-future: 9_999s unrelated fallback).
+        // Both blocks read the wall clock at DIFFERENT instants so the
+        // two anchors CAN differ by the wall-clock delta between calls
+        // — bound the divergence at 100ms scheduler jitter, matching
+        // the [`seconds_ago`] peer pin's discipline.
+        for secs in [1_i64, 3_600, 9_999] {
+            let composed = seconds_from_now(secs);
+            let hand_authored = Utc::now() + chrono::Duration::seconds(secs);
+            let delta = (hand_authored - composed).abs();
+            assert!(
+                delta <= chrono::Duration::milliseconds(100),
+                "composed {composed} and hand-authored {hand_authored} must agree within 100ms scheduler jitter for secs={secs}"
+            );
+        }
+    }
+
+    #[test]
+    fn seconds_from_now_zero_returns_anchor_at_current_instant() {
+        // Boundary corner: `secs = 0` yields the current wall-clock
+        // instant — the "just-created" moment. Mirrors
+        // [`seconds_ago_zero_returns_anchor_at_current_instant`] on the
+        // (past, future) axis: the two composers agree at the sign
+        // boundary. A regression that synthesized a small offset
+        // (`Duration::from_secs(1)` for clock skew, a per-fleet Δ)
+        // would land the anchor 1 second in the future and every
+        // zero-offset test seed would be off by that offset.
+        let before = Utc::now();
+        let anchor = seconds_from_now(0);
+        let after = Utc::now();
+        assert!(anchor >= before && anchor <= after);
+    }
+
+    #[test]
+    fn seconds_from_now_negative_returns_anchor_in_the_past() {
+        // Corner: a negative `secs` yields a past anchor. Matches
+        // `chrono::Duration::seconds`'s own signed semantics — the
+        // (past, future) mirror of
+        // [`seconds_ago_negative_returns_anchor_in_the_future`]. A
+        // regression that clamped the negative arm to `Utc::now()`
+        // (or panicked) would silently break callers relying on the
+        // signed semantics.
+        let anchor = seconds_from_now(-10);
+        let now = Utc::now();
+        assert!(
+            anchor <= now,
+            "negative secs must yield a past anchor: anchor {anchor} vs now {now}"
+        );
+        assert!(
+            anchor >= now - chrono::Duration::seconds(11),
+            "anchor {anchor} must be within (10s + jitter) before now {now}"
+        );
+    }
+
+    #[test]
+    fn seconds_from_now_is_signed_symmetric_with_seconds_ago() {
+        // Composition pin: `seconds_from_now(N)` and `seconds_ago(-N)`
+        // produce byte-equivalent `DateTime<Utc>` values within
+        // scheduler jitter — the two composers cover the same
+        // `Utc::now() ± Duration::seconds(N)` axis at the (past,
+        // future) split. Bounds the semantic-slot claim in
+        // `seconds_from_now`'s doc-comment: a caller with a signed
+        // direction picks the semantically-matching primitive, and
+        // both branches project onto the SAME underlying anchor axis
+        // when the sign is inverted. Sweeps the three representative
+        // second-counts the pre-lift callsites used.
+        for secs in [1_i64, 3_600, 9_999] {
+            let plus = seconds_from_now(secs);
+            let minus = seconds_ago(-secs);
+            let delta = (plus - minus).abs();
+            assert!(
+                delta <= chrono::Duration::milliseconds(100),
+                "seconds_from_now({secs}) and seconds_ago({}) must agree within 100ms scheduler jitter (plus={plus} minus={minus})",
+                -secs,
+            );
+        }
+    }
+
     // ─── tombstone_now + tombstone_at substrate pins ──────────────────
     //
     // Bind the two K8s-wire tombstone composers at fail-before-pass-
@@ -1043,7 +1251,12 @@ mod tests {
         // into the past (a "no tombstone can be in the future" policy)
         // has to explicitly move this pin rather than silently
         // trampling future callers.
-        let future = Utc::now() + chrono::Duration::seconds(3_600);
+        //
+        // Future-anchor seed rides through the ONE substrate owner
+        // `seconds_from_now` (peer of `seconds_ago`) so a future
+        // normalization at the wall-clock-read + duration-add sink
+        // lands at that substrate and this pin inherits mechanically.
+        let future = seconds_from_now(3_600);
         let stamp = tombstone_at(future).expect("tombstone_at returns Some");
         assert_eq!(stamp.0, future);
     }
@@ -1332,7 +1545,11 @@ mod tests {
         // the future" policy) has to explicitly move this pin rather
         // than silently trampling a fixture that stamps a future
         // creation anchor to test a per-fleet-skew tolerance downstream.
-        let future = Utc::now() + chrono::Duration::seconds(3_600);
+        //
+        // Future-anchor seed rides through the ONE substrate owner
+        // `seconds_from_now` (peer of `seconds_ago`) — same discipline
+        // as the [`tombstone_at`] peer pin.
+        let future = seconds_from_now(3_600);
         let stamp = creation_stamp_at(future).expect("creation_stamp_at returns Some");
         assert_eq!(stamp.0, future);
     }
@@ -1433,7 +1650,11 @@ mod tests {
         // this pin at the shared substrate rather than silently
         // trampling every fixture that stamps a future anchor to test
         // a per-fleet-skew tolerance downstream.
-        let future = Utc::now() + chrono::Duration::seconds(3_600);
+        //
+        // Future-anchor seed rides through the ONE substrate owner
+        // `seconds_from_now` — same discipline as the two composer
+        // peer pins above.
+        let future = seconds_from_now(3_600);
         let stamp = wire_time_some(future).expect("wire_time_some returns Some");
         assert_eq!(stamp.0, future);
     }

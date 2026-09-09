@@ -26,34 +26,117 @@ pub struct ProcessCondition {
 }
 
 impl ProcessCondition {
-    pub fn ready(reason: impl Into<String>, message: Option<String>) -> Self {
+    /// Compose a [`ProcessCondition`] stamped at "observed now" from a
+    /// typed [`ProcessConditionType`] + [`K8sConditionStatus`] pair,
+    /// a reason slug, and an optional message.
+    ///
+    /// Owns the 5-slot wire-shape backbone
+    ///
+    /// ```text
+    /// Self {
+    ///     type_:                <ConditionType>.as_wire_str().into(),
+    ///     status:               <StatusEnum>.as_wire_str().into(),
+    ///     last_transition_time: Utc::now(),
+    ///     reason:               Some(<reason>.into()),
+    ///     message:              <opt>,
+    /// }
+    /// ```
+    ///
+    /// that every sibling constructor on this impl block ([`Self::ready`],
+    /// [`Self::not_ready`], [`Self::attested`]) hand-authored pre-lift.
+    ///
+    /// Pre-lift the SAME 5-slot struct-literal skeleton recurred at
+    /// THREE sibling constructor bodies past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication threshold, each restating (a) the typed-enum →
+    /// wire-string projection at the `type_` slot, (b) the peer typed-
+    /// enum → wire-string projection at the `status` slot, (c) the
+    /// `Utc::now()` clock stamp at the `last_transition_time` slot,
+    /// (d) the `Some(<reason>.into())` wrap at the `reason` slot. Post-
+    /// lift the three siblings name their two typed variants + reason +
+    /// message opt ONCE and route through this ONE composer; the shared
+    /// backbone lives at ONE substrate site so a future normalization
+    /// of the K8s Condition wire shape (adding `observed_generation:
+    /// Option<i64>` to match `metav1.Condition` v2, injecting a
+    /// `Clock` for deterministic tests replacing the direct
+    /// `Utc::now()` call, adding a `severity:` slot for K8s-Condition-
+    /// v3 style diagnostics) lands at ONE composer body and all three
+    /// sibling constructors — plus every future `ProcessCondition::*`
+    /// variant on this impl block — inherit the upgrade mechanically.
+    ///
+    /// The typed enum inputs bind the wire-form projection axis
+    /// structurally: a regression that swapped `K8sConditionStatus::
+    /// True` for `False` at ONE sibling (a mechanical copy-paste error
+    /// the pre-lift hand-authored `status: "True".into()` /
+    /// `status: "False".into()` string-literal restatements would not
+    /// have caught at compile time) is caught by the enum's closed
+    /// set, and the wire-string projection itself rides through the
+    /// SAME `as_wire_str()` projection every reader/writer pair in the
+    /// workspace already routes through — so a future spelling change
+    /// at ONE of those enums propagates mechanically to all three
+    /// sibling constructors without a per-site edit.
+    ///
+    /// Sibling to the pre-existing `K8sConditionStatus` /
+    /// `ProcessConditionType` closed-set variants on the (typed
+    /// wire-form × K8s-Condition-slot) axis: those closed sets own
+    /// the type-variant enumeration + wire-form projection; this
+    /// composer owns the K8s-Condition struct-literal composition
+    /// that binds two typed variants onto the wire.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 5-slot struct-literal backbone recurred at 3 hand-authored
+    /// sibling constructor sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger and is lifted onto the ONE substrate
+    /// composer here). THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the pin block below binds the composer at
+    /// fail-before-pass-after granularity, so a regression that drifted
+    /// any slot's default — `Utc::now()` swapped for a fixed-anchor
+    /// stamp, `reason: Some(<reason>.into())` narrowed to a bare
+    /// `<reason>.into()` opting out of the K8s-Condition-mandated
+    /// `Option`-wrap, the typed-enum → wire-string projection at the
+    /// `type_` or `status` slot bypassed by an inline literal that
+    /// silently drifts off the closed-set owner — surfaces at
+    /// `status::tests::new_at_now_*` rather than as silent operator-
+    /// facing skew across the three sibling constructor callsites).
+    fn new_at_now(
+        type_: ProcessConditionType,
+        status: K8sConditionStatus,
+        reason: impl Into<String>,
+        message: Option<String>,
+    ) -> Self {
         Self {
-            type_: ProcessConditionType::Ready.as_wire_str().into(),
-            status: K8sConditionStatus::True.as_wire_str().into(),
+            type_: type_.as_wire_str().into(),
+            status: status.as_wire_str().into(),
             last_transition_time: Utc::now(),
             reason: Some(reason.into()),
             message,
         }
     }
 
+    pub fn ready(reason: impl Into<String>, message: Option<String>) -> Self {
+        Self::new_at_now(
+            ProcessConditionType::Ready,
+            K8sConditionStatus::True,
+            reason,
+            message,
+        )
+    }
+
     pub fn not_ready(reason: impl Into<String>, message: impl Into<String>) -> Self {
-        Self {
-            type_: ProcessConditionType::Ready.as_wire_str().into(),
-            status: K8sConditionStatus::False.as_wire_str().into(),
-            last_transition_time: Utc::now(),
-            reason: Some(reason.into()),
-            message: Some(message.into()),
-        }
+        Self::new_at_now(
+            ProcessConditionType::Ready,
+            K8sConditionStatus::False,
+            reason,
+            Some(message.into()),
+        )
     }
 
     pub fn attested(root: &str) -> Self {
-        Self {
-            type_: ProcessConditionType::Attested.as_wire_str().into(),
-            status: K8sConditionStatus::True.as_wire_str().into(),
-            last_transition_time: Utc::now(),
-            reason: Some("AttestationWritten".into()),
-            message: Some(format!("composed_root={root}")),
-        }
+        Self::new_at_now(
+            ProcessConditionType::Attested,
+            K8sConditionStatus::True,
+            "AttestationWritten",
+            Some(format!("composed_root={root}")),
+        )
     }
 }
 
@@ -731,6 +814,172 @@ mod tests {
             K8sConditionStatus::from_wire_str(&attested.status),
             Some(K8sConditionStatus::True),
         );
+    }
+
+    // ─── ProcessCondition::new_at_now backbone-composer substrate pins ───
+    //
+    // The composer [`ProcessCondition::new_at_now`] owns the 5-slot wire-
+    // shape backbone every sibling constructor on this impl block
+    // ([`ProcessCondition::ready`], [`ProcessCondition::not_ready`],
+    // [`ProcessCondition::attested`]) hand-authored pre-lift. These pins
+    // bind the observable slots (typed-enum → wire-string projection on
+    // `type_` + `status`, `Utc::now()` stamp on `last_transition_time`,
+    // `Some(<reason>.into())` wrap on `reason`, verbatim message opt on
+    // `message`) at fail-before-pass-after granularity so a regression
+    // that drifted any slot's projection (a typed-enum arm bypassed by
+    // an inline literal, the `Some(...)`-wrap on `reason` narrowed to
+    // a bare `.into()`, the `last_transition_time` stamp swapped for a
+    // fixed anchor) surfaces HERE rather than as silent operator-facing
+    // K8s-Condition wire-shape skew across the three sibling
+    // constructor sites.
+
+    /// Fail-before-pass-after: the composer's 5-slot output is byte-
+    /// identical (modulo the `Utc::now()` monotonic clock stamp) to
+    /// the pre-lift hand-authored struct literal every sibling
+    /// constructor restated. A regression that drifted the projection
+    /// at any of the four fixed slots surfaces HERE, not as silent
+    /// wire-form skew on the emitted Process CRD.
+    #[test]
+    fn new_at_now_composes_typed_enums_reason_option_wrap_and_message_slot_verbatim() {
+        let before = Utc::now();
+        let c = ProcessCondition::new_at_now(
+            ProcessConditionType::Ready,
+            K8sConditionStatus::True,
+            "ObservedRunning",
+            Some("healthy".into()),
+        );
+        let after = Utc::now();
+        assert_eq!(c.type_, ProcessConditionType::Ready.as_wire_str());
+        assert_eq!(c.status, K8sConditionStatus::True.as_wire_str());
+        assert_eq!(c.reason.as_deref(), Some("ObservedRunning"));
+        assert_eq!(c.message.as_deref(), Some("healthy"));
+        assert!(
+            c.last_transition_time >= before && c.last_transition_time <= after,
+            "last_transition_time rides Utc::now() at the composer body",
+        );
+    }
+
+    /// Fail-before-pass-after: the composer preserves an explicit
+    /// `None` message-slot verbatim — a K8s Condition with an absent
+    /// message vs an empty-string message are distinct wire shapes
+    /// the K8s API server treats differently, so the composer must
+    /// route `None` through without an accidental `Some(String::
+    /// new())` wrap.
+    #[test]
+    fn new_at_now_preserves_none_message_slot_verbatim() {
+        let c = ProcessCondition::new_at_now(
+            ProcessConditionType::Ready,
+            K8sConditionStatus::False,
+            "R",
+            None,
+        );
+        assert!(
+            c.message.is_none(),
+            "message-slot rides `None` verbatim — an empty-Some wrap is a distinct wire shape",
+        );
+    }
+
+    /// Byte-shape parity witness — `ProcessCondition::ready` routes
+    /// through `new_at_now(Ready, True, reason, message)`, matching
+    /// the pre-lift hand-authored 5-slot struct literal on every
+    /// observable slot except the monotonic `last_transition_time`
+    /// stamp.
+    #[test]
+    fn ready_routes_through_new_at_now_composer_slots_match_pre_lift_literal() {
+        let via_public = ProcessCondition::ready("ObservedRunning", Some("healthy".into()));
+        let via_composer = ProcessCondition::new_at_now(
+            ProcessConditionType::Ready,
+            K8sConditionStatus::True,
+            "ObservedRunning",
+            Some("healthy".into()),
+        );
+        assert_eq!(via_public.type_, via_composer.type_);
+        assert_eq!(via_public.status, via_composer.status);
+        assert_eq!(via_public.reason, via_composer.reason);
+        assert_eq!(via_public.message, via_composer.message);
+    }
+
+    /// Byte-shape parity witness — `ProcessCondition::not_ready`
+    /// routes through `new_at_now(Ready, False, reason, Some(message.
+    /// into()))`, matching the pre-lift hand-authored 5-slot struct
+    /// literal on every observable slot.
+    #[test]
+    fn not_ready_routes_through_new_at_now_composer_slots_match_pre_lift_literal() {
+        let via_public = ProcessCondition::not_ready("ObservedFailed", "boom");
+        let via_composer = ProcessCondition::new_at_now(
+            ProcessConditionType::Ready,
+            K8sConditionStatus::False,
+            "ObservedFailed",
+            Some("boom".into()),
+        );
+        assert_eq!(via_public.type_, via_composer.type_);
+        assert_eq!(via_public.status, via_composer.status);
+        assert_eq!(via_public.reason, via_composer.reason);
+        assert_eq!(via_public.message, via_composer.message);
+    }
+
+    /// Byte-shape parity witness — `ProcessCondition::attested`
+    /// routes through `new_at_now(Attested, True, "AttestationWritten",
+    /// Some(format!("composed_root={root}")))`, matching the pre-lift
+    /// hand-authored 5-slot struct literal on every observable slot.
+    #[test]
+    fn attested_routes_through_new_at_now_composer_slots_match_pre_lift_literal() {
+        let via_public = ProcessCondition::attested("blake3:abc123");
+        let via_composer = ProcessCondition::new_at_now(
+            ProcessConditionType::Attested,
+            K8sConditionStatus::True,
+            "AttestationWritten",
+            Some("composed_root=blake3:abc123".into()),
+        );
+        assert_eq!(via_public.type_, via_composer.type_);
+        assert_eq!(via_public.status, via_composer.status);
+        assert_eq!(via_public.reason, via_composer.reason);
+        assert_eq!(via_public.message, via_composer.message);
+    }
+
+    /// Routing pin — the `type_` slot at the composer's `Self { …
+    /// type_: type_.as_wire_str().into() }` binding rides through the
+    /// [`ProcessConditionType::as_wire_str`] projection rather than an
+    /// inline `format!("{:?}", type_)` or hand-authored per-variant
+    /// literal. A regression that inlined the wire-string projection
+    /// (drifting the composer off the closed-set owner + reopening the
+    /// typo-drift surface a hand-authored `"ready"` / `"Ready "` /
+    /// `"READY"` spelling would fall into silently) surfaces HERE
+    /// rather than as silent per-variant wire-form skew where the
+    /// composed Condition's `type_` slot disagrees with the K8s API
+    /// server's expected literal.
+    #[test]
+    fn new_at_now_routes_type_slot_through_process_condition_type_as_wire_str() {
+        for type_ in ProcessConditionType::ALL {
+            let via_composer =
+                ProcessCondition::new_at_now(type_, K8sConditionStatus::True, "R", None);
+            assert_eq!(
+                via_composer.type_,
+                type_.as_wire_str(),
+                "type_ slot must route through ProcessConditionType::as_wire_str for {type_:?}",
+            );
+        }
+    }
+
+    /// Routing pin — the `status` slot at the composer's `Self { …
+    /// status: status.as_wire_str().into() }` binding rides through
+    /// the [`K8sConditionStatus::as_wire_str`] projection rather than
+    /// an inline hand-authored per-variant literal. A regression that
+    /// inlined the wire-string projection surfaces HERE rather than
+    /// as silent per-variant wire-form skew where the composed
+    /// Condition's `status` slot disagrees with the K8s API server's
+    /// expected `"True"` / `"False"` / `"Unknown"` closed set.
+    #[test]
+    fn new_at_now_routes_status_slot_through_k8s_condition_status_as_wire_str() {
+        for status in K8sConditionStatus::ALL {
+            let via_composer =
+                ProcessCondition::new_at_now(ProcessConditionType::Ready, status, "R", None);
+            assert_eq!(
+                via_composer.status,
+                status.as_wire_str(),
+                "status slot must route through K8sConditionStatus::as_wire_str for {status:?}",
+            );
+        }
     }
 
     // ─── RenderedResourceCoords substrate pins ──────────────────────

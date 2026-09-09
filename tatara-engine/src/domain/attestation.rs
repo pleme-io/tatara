@@ -85,7 +85,93 @@ use serde::{Deserialize, Serialize};
 /// forgery-adjacent skew across every downstream consumer).
 #[must_use]
 pub(crate) fn pillar_hash(bytes: &[u8]) -> String {
-    format!("blake3:{}", blake3::hash(bytes))
+    scheme_display_hash(blake3::hash(bytes))
+}
+
+/// The `"blake3:"`-prefixed wire form of an already-computed
+/// [`blake3::Hash`] handle — the intra-module ONE substrate owner of
+/// the `format!("blake3:{}", <blake3::Hash>)` one-link `Display` wrap
+/// [`pillar_hash`] (the one-shot `blake3::hash(bytes)` path) and
+/// [`compose_root`] (the incremental `blake3::Hasher::new()` /
+/// `.finalize()` path) each restated verbatim past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold.
+///
+/// ## Pre-lift consumers
+///
+/// * [`pillar_hash`] — the byte-buffer → `"blake3:{hex}"` pillar
+///   projector (`format!("blake3:{}", blake3::hash(bytes))`).
+/// * [`compose_root`] — the four-pillar Merkle composer's write tail
+///   (`format!("blake3:{}", hasher.finalize())`), where the pillar
+///   cascade folds the four typed slots into ONE `blake3::Hash` and
+///   the wrap step attaches the canonical scheme prefix.
+///
+/// Both sites walked the SAME one-link chain — take a `blake3::Hash`
+/// (from either the one-shot `blake3::hash(&[u8])` constructor or the
+/// incremental `Hasher::finalize()` finisher) and prepend the module's
+/// canonical `"blake3:"` scheme literal via the hash's `Display` impl
+/// — differing only in the CALLING site's route to the hash value.
+/// Post-lift the wrap step lives at ONE substrate owner and each
+/// callsite passes its `blake3::Hash` receiver through by value; the
+/// `"blake3:"` scheme literal appears at ONE spelling here.
+///
+/// ## Sibling axis
+///
+/// Sibling on the (one-shot, incremental) `blake3::Hash` origin axis:
+/// [`pillar_hash`] owns the (bytes, `blake3::hash`) → wire-form arm,
+/// where the `blake3::hash` constructor is the one-shot digest of a
+/// byte buffer; [`compose_root`] owns the (Hasher, `.finalize()`) →
+/// wire-form arm, where the incremental `Hasher::update(..)` cascade
+/// feeds the digest across four typed slots before finishing. Both
+/// arms produce a `blake3::Hash` value and route through this ONE
+/// wrap primitive for the scheme-prefix write step — the (origin,
+/// wrap) partition mirrors [`hex_blake3_of_json`] (bare hex,
+/// `serde_json → BLAKE3` origin, no wrap) vs
+/// [`blake3_scheme_display`](../../../../tatara_lisp/hash/fn.blake3_scheme_display.html)
+/// (the workspace-wide wrap primitive on the `Display`-hex-string
+/// input axis in `tatara-lisp`). This owner is the intra-module peer
+/// on the `blake3::Hash` input axis; the workspace-wide peer stays
+/// out of reach because `tatara-engine` does not depend on
+/// `tatara-lisp` (an intentional dep-graph choice: the engine crate
+/// carries the seven-driver executor + Raft/gossip planes, and the
+/// Lisp reader has no place in that graph).
+///
+/// ## Byte-shape parity
+///
+/// `blake3::Hash: Display` encodes as exactly 64 lowercase ASCII hex
+/// chars ([`blake3::Hash`]'s documented `Display` impl); the `format!`
+/// composition thus produces `"blake3:" (7 chars) + 64 hex chars = 71
+/// chars`. Byte-shape parity with the pre-lift hand-authored one-link
+/// spelling is pinned at
+/// [`tests::scheme_display_hash_matches_pre_lift_format_scheme_chain_bytewise`]
+/// so a substrate-side canonicalization the pre-lift chain does NOT
+/// apply (a hex-case flip, a scheme rename, a length-tag insertion, a
+/// reversed prefix/hex order) surfaces at THIS pin rather than as
+/// silent produce/verify skew across every three-pillar consumer.
+///
+/// ## `#[must_use]`
+///
+/// Every consumer stores the returned wire form into an attestation
+/// pillar slot (`artifact_hash` / `control_hash` / `intent_hash`) or
+/// into a `composed_root` slot. Dropping the return means the wrap
+/// was performed for no observable reason; the attribute surfaces
+/// that as a warning at every call site.
+///
+/// Theory anchor: THEORY.md §V.3 (three-pillar attestation — the
+/// canonical pillar-hash shape is `"blake3:{hex}"`; this primitive
+/// owns the wrap-only half of that shape on the `blake3::Hash` input
+/// axis, sibling to [`pillar_hash`] on the byte-buffer input axis
+/// and to [`compose_root`] on the incremental-hasher input axis).
+/// THEORY.md §VI.1 (generation over composition — the one-link
+/// `format!("blake3:{}", <blake3::Hash>)` chain recurred at TWO
+/// production emit sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger, and is lifted to ONE substrate owner here). THEORY.md
+/// §II.1 invariant 5 (composition preserves proofs — routing both
+/// producer sites through the SAME wrap primitive means a future
+/// scheme change lands at ONE substrate site and every downstream
+/// pillar / composed-root emit inherits the shift by construction).
+#[must_use]
+fn scheme_display_hash(h: blake3::Hash) -> String {
+    format!("blake3:{h}")
 }
 
 /// A convergence attestation — the three-pillar CertificationArtifact
@@ -165,7 +251,7 @@ fn compose_root(
     if let Some(prev) = previous_root {
         hasher.update(prev.as_bytes());
     }
-    format!("blake3:{}", hasher.finalize())
+    scheme_display_hash(hasher.finalize())
 }
 
 impl ConvergenceAttestation {
@@ -570,6 +656,179 @@ mod tests {
             Some(pillar_hash(b"control-payload").as_str())
         );
         assert_eq!(att.intent_hash, pillar_hash(b"intent-payload"));
+    }
+
+    // ─── scheme_display_hash substrate pins ────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `scheme_display_hash`
+    // free function did not exist before this commit, so each test
+    // below fails to compile pre-lift. Post-lift they collectively
+    // pin the `blake3::Hash → "blake3:{hex}"` wrap-only shape at ONE
+    // intra-module substrate owner — the primitive `pillar_hash` (the
+    // one-shot `blake3::hash(bytes)` origin) AND `compose_root` (the
+    // incremental `Hasher::finalize()` origin) both route through.
+    // A regression that drifted the `"blake3:"` scheme prefix (a `b3:`
+    // shorthand, an uppercase `BLAKE3:` variant), reversed the prefix
+    // / hex order, swapped the `blake3::Hash: Display` receiver
+    // spelling (`.to_hex()` bytes, `hex::encode(<hash>.as_bytes())`),
+    // or dropped the wrap entirely surfaces HERE rather than as
+    // silent produce/verify skew across every three-pillar consumer.
+
+    #[test]
+    fn scheme_display_hash_matches_pre_lift_format_scheme_chain_bytewise() {
+        // Byte-identical parity with the pre-lift `format!("blake3:{}",
+        // <blake3::Hash>)` spelling both production callers walked.
+        // Sweeps representative `blake3::Hash` origins so the wrap
+        // composes byte-identically across BOTH the one-shot
+        // `blake3::hash(bytes)` corner (matches `pillar_hash`'s
+        // pre-lift shape) AND the incremental `Hasher::finalize()`
+        // corner (matches `compose_root`'s pre-lift shape). A
+        // regression at the wrap primitive that broke byte identity
+        // with the pre-lift shape at either corner surfaces HERE
+        // rather than as silent attestation-chain drift downstream.
+        for buf in [
+            b"" as &[u8],
+            b"x",
+            b"artifact-payload",
+            b"{\"kind\":\"tatara.export\"}",
+            &[0u8; 128],
+            &[0xFFu8; 256],
+        ] {
+            // (a) One-shot origin — matches `pillar_hash`'s pre-lift
+            // shape verbatim.
+            let one_shot = blake3::hash(buf);
+            assert_eq!(
+                scheme_display_hash(one_shot),
+                format!("blake3:{one_shot}"),
+                "scheme_display_hash drifted from pre-lift `format!(\"blake3:{{}}\", blake3::hash(_))` for buf.len()={}",
+                buf.len(),
+            );
+
+            // (b) Incremental origin — matches `compose_root`'s
+            // pre-lift shape verbatim.
+            let incremental = {
+                let mut hasher = blake3::Hasher::new();
+                hasher.update(buf);
+                hasher.finalize()
+            };
+            assert_eq!(
+                scheme_display_hash(incremental),
+                format!("blake3:{incremental}"),
+                "scheme_display_hash drifted from pre-lift `format!(\"blake3:{{}}\", hasher.finalize())` for buf.len()={}",
+                buf.len(),
+            );
+        }
+    }
+
+    #[test]
+    fn scheme_display_hash_output_carries_blake3_scheme_prefix() {
+        // Wire-format pin: every wrap output MUST begin with the
+        // `"blake3:"` scheme prefix. A regression that dropped the
+        // prefix (writing bare hex) or drifted the spelling (`b3:`,
+        // `BLAKE3:`, `blake3=`) would silently break downstream
+        // consumers whose regex or prefix-strip step expects the
+        // exact `"blake3:"` scheme.
+        assert!(
+            scheme_display_hash(blake3::hash(b"any")).starts_with("blake3:"),
+            "scheme_display_hash output must carry the `blake3:` scheme prefix",
+        );
+        assert!(
+            scheme_display_hash(blake3::hash(b"")).starts_with("blake3:"),
+            "scheme_display_hash output must carry the `blake3:` scheme prefix on the empty input too",
+        );
+    }
+
+    #[test]
+    fn scheme_display_hash_output_is_scheme_plus_64_lowercase_hex_chars() {
+        // Shape pin: the `blake3::Hash: Display` impl encodes as
+        // lowercase hex (64 chars for BLAKE3's 32-byte digest); the
+        // composed output is thus `"blake3:" (7 chars) + 64 hex chars
+        // = 71 chars`. Pin the invariant so a downstream reader's
+        // width assumption (a fixed-width slot, a regex `^blake3:
+        // [0-9a-f]{64}$`) surfaces here rather than as a parse
+        // failure downstream.
+        let out = scheme_display_hash(blake3::hash(b"pillar-input"));
+        assert_eq!(
+            out.len(),
+            7 + 64,
+            "scheme_display_hash length must be 7 + 64"
+        );
+        assert!(out.starts_with("blake3:"));
+        let hex_tail = &out[7..];
+        assert_eq!(hex_tail.len(), 64);
+        assert!(
+            hex_tail
+                .chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+            "scheme_display_hash hex tail must be lowercase [0-9a-f]: {hex_tail:?}",
+        );
+    }
+
+    #[test]
+    fn scheme_display_hash_deterministic_for_same_hash_receiver() {
+        // Same `blake3::Hash` → same wrapped output (the wrap is a
+        // pure `format!` composition). A regression that mixed
+        // nondeterminism in (a wall-clock read, a random seed, a
+        // per-fleet suffix on the wrap) would surface HERE rather
+        // than as flaky attestation output.
+        let h = blake3::hash(b"receiver");
+        assert_eq!(scheme_display_hash(h), scheme_display_hash(h));
+    }
+
+    #[test]
+    fn scheme_display_hash_partitions_by_hash_receiver_value() {
+        // Distinct `blake3::Hash` receivers → distinct wrapped
+        // outputs. The wrap primitive does not collapse or normalize
+        // the receiver — every distinct hash rides through the
+        // scheme prefix untouched. Pins the invariant the pre-lift
+        // `blake3::Hash: Display` cascade produced (no aliasing, no
+        // truncation, no hex-layer collision).
+        let a = blake3::hash(b"a");
+        let b = blake3::hash(b"b");
+        assert_ne!(scheme_display_hash(a), scheme_display_hash(b));
+    }
+
+    #[test]
+    fn pillar_hash_and_compose_root_route_through_scheme_display_hash_by_construction() {
+        // Cross-consumer coherence: BOTH production sites now share
+        // ONE wrap primitive on the `blake3::Hash` input axis. Pin
+        // the invariant by feeding the SAME byte payload through
+        // (a) `pillar_hash(bytes)` and (b) the substrate wrap applied
+        // directly to `blake3::hash(bytes)` — byte-identical output.
+        // Then pin the `compose_root` write-tail: feed the pillars
+        // through `compose_root` and re-derive the expected wire form
+        // by running the same 4-step cascade + `scheme_display_hash`
+        // on the result. Both must agree. A regression that
+        // specialized ONE consumer's wrap step (a per-pillar salt at
+        // `pillar_hash`, a per-cascade version discriminator at
+        // `compose_root`) surfaces HERE rather than as silent
+        // produce/verify drift across every three-pillar consumer.
+        let payload = b"pillar-payload";
+
+        // (a) pillar_hash routes through scheme_display_hash.
+        assert_eq!(
+            pillar_hash(payload),
+            scheme_display_hash(blake3::hash(payload)),
+            "pillar_hash must route through scheme_display_hash",
+        );
+
+        // (b) compose_root's write tail routes through
+        // scheme_display_hash — re-derive the expected wire form
+        // through the same cascade + wrap step and confirm byte-
+        // identical parity with what compose_root emitted.
+        let via_compose = compose_root("blake3:A", Some("blake3:C"), "blake3:B", Some("blake3:D"));
+        let via_re_derive = {
+            let mut hasher = blake3::Hasher::new();
+            hasher.update(b"blake3:A");
+            hasher.update(b"blake3:C");
+            hasher.update(b"blake3:B");
+            hasher.update(b"blake3:D");
+            scheme_display_hash(hasher.finalize())
+        };
+        assert_eq!(
+            via_compose, via_re_derive,
+            "compose_root's write tail must route through scheme_display_hash",
+        );
     }
 
     #[test]

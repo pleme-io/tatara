@@ -282,9 +282,99 @@ impl Lifetime {
         }
     }
 
+    /// Closed-set-driven presence probe — does this [`Lifetime`] carry a
+    /// populated slot addressed by the given [`LifetimeKind`]
+    /// discriminator? The inherent peer of
+    /// [`crate::tagged_union::TaggedUnion::has`] on the
+    /// closed-set-driven presence-probe axis.
+    ///
+    /// # Why an inherent method
+    ///
+    /// [`Lifetime`] deliberately does NOT impl [`crate::tagged_union::TaggedUnion`]
+    /// — its resolver returns `Ok(Permanent(&DEFAULT_PERMANENT))` on the
+    /// empty (no-slot-populated) input rather than the trait's
+    /// [`crate::tagged_union::TaggedUnionError::empty`] carrier, so the
+    /// trait's `<T: TaggedUnion>::has` default body is unreachable
+    /// through the trait boundary. This inherent method mirrors the
+    /// trait's default body verbatim (`kind.select(self).is_some()`) so
+    /// every closed-set-driven presence-probe dispatch table (a
+    /// `lifetime-<kind>` require-tag sweep in tatara-check parallel to
+    /// the `intent-<kind>` family, a future audit binary enumerating
+    /// Processes by lifetime kind, a fleet-side migration sweep that
+    /// picks up a new `LifetimeKind::Burst` variant automatically) binds
+    /// through the SAME shape both `Lifetime` and every `TaggedUnion`
+    /// implementor on `ProcessSpec` publish.
+    ///
+    /// # Semantics — POPULATED slot, not RESOLVED variant
+    ///
+    /// `has(kind)` returns `true` iff the field addressed by `kind` on
+    /// this [`Lifetime`] is `Some(_)`. This is byte-identical to the
+    /// pre-lift `self.<field>.is_some()` shape [`Self::is_ephemeral`]
+    /// walked, and matches [`crate::intent::Intent::has`]'s semantics
+    /// on `ProcessSpec`.
+    ///
+    /// A [`Lifetime`] with both slots [`None`] returns `false` for
+    /// EVERY [`LifetimeKind`] — even though [`Self::variant`] would
+    /// resolve it to `Ok(Permanent)` via the default fallback. The two
+    /// probes answer distinct questions: `has(Permanent)` asks "is the
+    /// permanent slot populated" (write-side spec detail);
+    /// `variant().ok().map(|v| v.kind()) == Some(Permanent)` asks "does
+    /// the resolver pick Permanent" (read-side operational answer). A
+    /// caller that wants the latter composes it through [`Self::variant`]
+    /// directly.
+    ///
+    /// # `LifetimeKind::select`
+    ///
+    /// Delegates through [`LifetimeKind::select`] so a new variant
+    /// added to the closed set (e.g. `Burst` for budget-capped non-TTL
+    /// lifetimes) reaches this probe through the SAME closed-set-driven
+    /// dispatch as every other consumer that walks
+    /// [`LifetimeKind::ALL`]. Rustc's exhaustiveness check on
+    /// [`LifetimeKind::select`]'s match forces the new arm at ONE site
+    /// and this probe picks up the new variant mechanically without
+    /// per-caller edit.
+    ///
+    /// # Sibling to [`crate::intent::Intent::has`]
+    ///
+    /// Same shape, same axis, same body on the sibling closed-set
+    /// discriminator [`crate::intent::IntentKind`]. `Intent::has` is
+    /// macro-emitted through [`crate::declare_tagged_union_impls!`] on
+    /// the trait-implementor path; this method is hand-authored on the
+    /// non-trait-implementor path with the byte-identical body. A future
+    /// unification (a trait for closed-set-driven presence probes that
+    /// admits BOTH the resolver-defaulting and error-carrier flavors)
+    /// lands as ONE peer trait alongside [`crate::tagged_union::TaggedUnion`]
+    /// with both sites picking up the trait default in lockstep.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the presence-probe body lives at ONE substrate site so
+    /// every downstream `<xxx>-<kind>` requires-tag surface, closed-set
+    /// audit dispatcher, and future variant addition binds through the
+    /// SAME shape). THEORY.md §VI.1 (generation over composition — a
+    /// third [`LifetimeKind`] variant lands at ONE `ALL` + ONE
+    /// [`LifetimeKind::select`] arm and the presence probe picks it
+    /// up mechanically without further per-consumer edits).
+    #[must_use]
+    pub fn has(&self, kind: LifetimeKind) -> bool {
+        kind.select(self).is_some()
+    }
+
     /// True iff `ephemeral` is set.
+    ///
+    /// Delegates through [`Self::has`] so the (POPULATED slot, closed-
+    /// set discriminator) shape lives at ONE substrate primitive on
+    /// [`Lifetime`]. Pre-lift the body was the direct `self.ephemeral
+    /// .is_some()` slot probe; post-lift the body composes the closed-
+    /// set-driven `has(LifetimeKind::Ephemeral)` primitive so a future
+    /// normalization at the presence-probe shape (a widened return
+    /// carrying the resolver's variant on the populated path, a
+    /// debug-build assertion that the caller hasn't stamped both slots,
+    /// a per-fleet warn on ambiguous lifetime specs) lands at ONE site
+    /// and this inherent forwarder + every other `has(kind)` consumer
+    /// picks up the shift mechanically.
+    #[must_use]
     pub fn is_ephemeral(&self) -> bool {
-        self.ephemeral.is_some()
+        self.has(LifetimeKind::Ephemeral)
     }
 
     /// Compound projection: `Some(&e)` iff [`Self::variant`] resolves
@@ -1074,6 +1164,149 @@ mod tests {
                 l.variant().expect("exactly-one variant").kind(),
                 kind,
                 "variant() resolver disagreed on {kind:?}"
+            );
+        }
+    }
+
+    // ─── Lifetime::has substrate pins ────────────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `Lifetime::has` inherent
+    // method did not exist before this commit, so each test below
+    // fails to compile pre-lift. Post-lift they collectively pin the
+    // (POPULATED slot × closed-set discriminator) presence-probe shape
+    // at ONE substrate primitive on `Lifetime` — a regression that
+    // drifted `has` from `kind.select(self).is_some()` (e.g. a swap to
+    // "resolver picks kind" semantics that would silently promote
+    // `Lifetime::default().has(Permanent)` from `false` to `true`)
+    // surfaces HERE rather than as caller-side skew across the
+    // `is_ephemeral` delegator + every future `lifetime-<kind>`
+    // requires-tag consumer.
+
+    /// POPULATED-slot semantics pin: `has(kind)` returns `true` iff
+    /// the slot addressed by `kind` is `Some(_)`. Sweeps every
+    /// [`LifetimeKind::ALL`] entry against a single-slot fixture on
+    /// the diagonal (populated slot AND matching kind → `true`) and
+    /// off the diagonal (populated slot BUT other kind → `false`).
+    /// Byte-shape parity with the pre-lift `self.<field>.is_some()`
+    /// probe [`Lifetime::is_ephemeral`] walked and with the sibling
+    /// [`crate::intent::Intent::has`] shape on `ProcessSpec`.
+    #[test]
+    fn lifetime_has_returns_true_on_diagonal_and_false_off_diagonal() {
+        for populated in LifetimeKind::ALL {
+            let l = single_slot_lifetime(populated);
+            for probed in LifetimeKind::ALL {
+                let expected = probed == populated;
+                assert_eq!(
+                    l.has(probed),
+                    expected,
+                    "Lifetime::has drift — populated={populated:?} probed={probed:?} expected={expected}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin: `has(kind)` matches
+    /// `kind.select(self).is_some()` byte-for-byte across every
+    /// [`LifetimeKind::ALL`] entry and every diagonal / off-diagonal
+    /// input. A regression that specialized `has` (a hand-rolled
+    /// per-variant match block that drifts from the closed-set-driven
+    /// `select` dispatcher, an early-return that short-circuits ambiguity
+    /// checks a future `Lifetime::variant`-resolver refinement would
+    /// need) surfaces HERE rather than as silent per-consumer drift.
+    #[test]
+    fn lifetime_has_matches_kind_select_is_some_bytewise() {
+        for populated in LifetimeKind::ALL {
+            let l = single_slot_lifetime(populated);
+            for probed in LifetimeKind::ALL {
+                assert_eq!(
+                    l.has(probed),
+                    probed.select(&l).is_some(),
+                    "Lifetime::has drifted from kind.select(self).is_some() for populated={populated:?} probed={probed:?}",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-lifetime pin: a [`Lifetime`] with both slots [`None`]
+    /// returns `false` for EVERY [`LifetimeKind`] — even though
+    /// [`Lifetime::variant`] would resolve it to `Ok(Permanent)` via
+    /// the default fallback. The two probes answer distinct questions
+    /// (POPULATED slot vs RESOLVED variant); the pin binds the
+    /// POPULATED semantic so a future consumer that reaches for
+    /// `has(Permanent)` on a default lifetime hits the operator-visible
+    /// "no permanent slot stamped" answer rather than the resolver's
+    /// "empty defaults to Permanent" answer.
+    #[test]
+    fn lifetime_has_returns_false_on_default_lifetime_for_every_kind() {
+        let l = Lifetime::default();
+        for kind in LifetimeKind::ALL {
+            assert!(
+                !l.has(kind),
+                "default Lifetime has no slot populated, yet has({kind:?}) returned true",
+            );
+        }
+        // Sanity: the resolver still picks Permanent on the empty
+        // input. If this changed, the semantics on the two probes
+        // would diverge and the pin above would need re-thinking.
+        assert_eq!(
+            l.variant().expect("default resolves").kind(),
+            LifetimeKind::Permanent,
+        );
+    }
+
+    /// AMBIGUOUS-lifetime pin: a [`Lifetime`] with BOTH slots
+    /// [`Some`] returns `true` for EVERY [`LifetimeKind`] — the
+    /// POPULATED probe answers per-slot independently and does NOT
+    /// short-circuit through the resolver's ambiguity error. The two
+    /// probes answer distinct questions (POPULATED slot vs RESOLVED
+    /// variant); [`Lifetime::variant`] on the same input errors with
+    /// [`LifetimeError::Ambiguous`], while `has` reports both slots
+    /// stamped. A future consumer that wants "did the operator stamp
+    /// this slot" (an audit binary flagging both-slot Processes for
+    /// migration) reaches through `has`; a consumer that wants "did
+    /// the resolver settle on this kind" composes through `variant`.
+    #[test]
+    fn lifetime_has_returns_true_on_ambiguous_lifetime_for_every_populated_kind() {
+        let l = Lifetime {
+            permanent: Some(PermanentLifetime {}),
+            ephemeral: Some(EphemeralLifetime::default()),
+        };
+        assert_eq!(l.variant().unwrap_err(), LifetimeError::Ambiguous);
+        for kind in LifetimeKind::ALL {
+            assert!(
+                l.has(kind),
+                "ambiguous Lifetime has both slots populated, yet has({kind:?}) returned false",
+            );
+        }
+    }
+
+    /// DELEGATION pin: [`Lifetime::is_ephemeral`] delegates through
+    /// [`Lifetime::has`]`(LifetimeKind::Ephemeral)` byte-for-byte across
+    /// every representative input (empty, permanent-only, ephemeral-
+    /// only, ambiguous). A regression that reintroduces the pre-lift
+    /// `self.ephemeral.is_some()` inline body (breaking the delegation
+    /// chain to the substrate primitive) would silently succeed
+    /// bytewise TODAY — but would strand [`Lifetime::is_ephemeral`]
+    /// out of every future normalization landing at [`Self::has`]
+    /// (a widened return, a debug-build assertion, a per-fleet warn).
+    /// This pin binds the delegation so the divergence surfaces HERE
+    /// rather than as silent drift downstream.
+    #[test]
+    fn is_ephemeral_delegates_through_has_ephemeral_bytewise() {
+        let inputs: [Lifetime; 4] = [
+            Lifetime::default(),
+            Lifetime::permanent(),
+            Lifetime::ephemeral(EphemeralLifetime::default()),
+            Lifetime {
+                permanent: Some(PermanentLifetime {}),
+                ephemeral: Some(EphemeralLifetime::default()),
+            },
+        ];
+        for l in &inputs {
+            assert_eq!(
+                l.is_ephemeral(),
+                l.has(LifetimeKind::Ephemeral),
+                "is_ephemeral() drifted from has(Ephemeral) for {l:?}",
             );
         }
     }

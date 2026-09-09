@@ -268,9 +268,16 @@ fn check_yaml_parses_as(args: &[Sexp], root: &Path, report: &mut Report) {
     };
     let path = root.join(rel);
     let label = format!("YAML parses as {kind}: {rel}");
-    let src = match fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(e) => return report.fail(label, format!("read: {e}")),
+    // Read-side dispatch rides the ONE substrate primitive
+    // `read_or_fail` — pre-lift this was a hand-authored 4-link
+    // `match fs::read_to_string(&path) { Ok(s) => s, Err(e) => return
+    // report.fail(label, format!("read: {e}")) }` chain, one of THREE
+    // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold (peers at `check_lisp_compiles` +
+    // `check_file_contains`). Post-lift the read + `"read: {e}"`
+    // failure-arm shape lives at ONE substrate owner.
+    let Some(src) = read_or_fail(&path, &label, report) else {
+        return;
     };
     // Kind-string → typed-CRD parse rides through the ONE substrate
     // primitive `tatara_reconciler::known_crd::KnownCrd::parse_yaml_as`
@@ -328,9 +335,16 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
         }
     };
 
-    let src = match fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(e) => return report.fail(label, format!("read: {e}")),
+    // Read-side dispatch rides the ONE substrate primitive
+    // `read_or_fail` — pre-lift this was a hand-authored 4-link
+    // `match fs::read_to_string(&path) { Ok(s) => s, Err(e) => return
+    // report.fail(label, format!("read: {e}")) }` chain, one of THREE
+    // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold (peers at `check_yaml_parses_as` +
+    // `check_file_contains`). Post-lift the read + `"read: {e}"`
+    // failure-arm shape lives at ONE substrate owner.
+    let Some(src) = read_or_fail(&path, &label, report) else {
+        return;
     };
 
     let compiled = match domain.compile(&src) {
@@ -375,9 +389,16 @@ fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
         return report.fail(label, ":strings (...) missing or empty");
     }
 
-    let src = match fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(e) => return report.fail(label, format!("read: {e}")),
+    // Read-side dispatch rides the ONE substrate primitive
+    // `read_or_fail` — pre-lift this was a hand-authored 4-link
+    // `match fs::read_to_string(&path) { Ok(s) => s, Err(e) => return
+    // report.fail(label, format!("read: {e}")) }` chain, one of THREE
+    // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold (peers at `check_yaml_parses_as` +
+    // `check_lisp_compiles`). Post-lift the read + `"read: {e}"`
+    // failure-arm shape lives at ONE substrate owner.
+    let Some(src) = read_or_fail(&path, &label, report) else {
+        return;
     };
     let missing: Vec<&String> = strings
         .iter()
@@ -999,6 +1020,99 @@ fn min_defs_shortfall_msg(defs_len: usize, min_defs: usize) -> Option<String> {
     (defs_len < min_defs).then(|| format!("expected ≥ {min_defs} definitions, got {defs_len}"))
 }
 
+/// Read `path` as UTF-8 text, or report a `<label>: read: {io_error}`
+/// failure on the `Err(io::Error)` arm and return [`None`] so the
+/// caller can early-return through the standard let-else idiom.
+///
+/// The ONE substrate owner of the 4-link chain
+/// `let src = match fs::read_to_string(&path) { Ok(s) => s, Err(e) =>
+/// return report.fail(label, format!("read: {e}")) }` every check
+/// executor that reads its input file walks. Pre-lift the SAME chain
+/// was hand-authored at THREE consumer sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold across the executor
+/// family:
+///
+/// * [`check_yaml_parses_as`] — the `(yaml-parses-as <Kind> "path")`
+///   executor. Reads the operator-supplied YAML file before handing
+///   the source to [`KnownCrd::parse_yaml_as`] for the typed-CRD parse.
+/// * [`check_lisp_compiles`] — the `(lisp-compiles "path" ...)`
+///   executor. Reads the operator-supplied Lisp source file before
+///   handing it to the [`RequireTagDomain::compile`] dispatch (either
+///   the `point` `ProcessSpec` arm or the `ephemeral` `EphemeralSpec`
+///   arm).
+/// * [`check_file_contains`] — the `(file-contains "path" :strings
+///   (...))` executor. Reads the target file before the substring-
+///   presence sweep across the operator-declared `:strings` list.
+///
+/// All THREE sites walked the SAME four-link chain — read the file
+/// as UTF-8, then match `Ok(s) => s` in the pass arm and `Err(e) =>
+/// return report.fail(<pre-composed label>, format!("read: {e}"))`
+/// in the fail arm — differing only in the `<path>` operand and in
+/// the caller's pre-computed `<label>` string. Post-lift each
+/// callsite reads
+/// `let Some(src) = read_or_fail(&path, &label, report) else {
+/// return; };` and the read + `"read: {e}"` failure-arm shape lives
+/// at ONE substrate owner.
+///
+/// Sibling of [`min_defs_shortfall_msg`] on the report-primitive
+/// axis: [`min_defs_shortfall_msg`] composes a numeric shortfall
+/// diagnostic without touching the [`Report`] itself (the caller
+/// hangs the `report.fail(label, msg)` off its `Some` arm); this
+/// primitive owns BOTH the read attempt AND the [`Report::fail`]
+/// side-effect on the `Err(io::Error)` arm, returning [`None`] as
+/// the control-flow signal the caller consumes through the let-else
+/// idiom to early-return. The two primitives partition the report-
+/// side helper axis at the (pure-diagnostic-composer, side-effecting-
+/// I/O-with-side-effecting-report) split — every future check
+/// executor that needs the "read source or report a `read: {e}`
+/// failure" shape composes through this primitive without restating
+/// the four-link chain, and every future numeric shortfall gate
+/// composes through the sibling.
+///
+/// A future normalization of the read-side chain (a per-fleet
+/// max-file-size guard that refuses inputs larger than a policy
+/// bound before parsing; a per-file mtime cache that skips
+/// re-reading unchanged sources across an incremental
+/// `tatara-check` pass; a swap to `fs::read` + `String::from_utf8`
+/// with a caller-visible "not UTF-8" diagnostic distinct from the
+/// current `io::Error`-wrapped path; a `tracing`-annotated span
+/// carrying the label + path for post-hoc audit) lands at THIS ONE
+/// substrate owner and every downstream check executor — the three
+/// current callsites plus every future `check_<name>` executor —
+/// inherits the upgrade mechanically. No per-site edit at any of
+/// the THREE listed callers or at future consumers (a
+/// `check_json_parses` executor for JSON coherence, a
+/// `check_nix_evaluates` executor for a Nix-side `nix-eval` gate,
+/// a `check_toml_parses` for a `Cargo.toml` schema drift probe).
+///
+/// The `label: &str` slot is `&str` matching the caller's pre-
+/// composed `String` labels (`format!("YAML parses as {kind}: {rel}")`
+/// / `format!("Lisp compiles: {rel}")` / `format!("File contains:
+/// {rel}")`) via deref-coercion so the caller can still consume its
+/// owned `String` label on the caller-side success path (the
+/// `report.pass(label)` / `report.fail(label, ...)` calls that
+/// follow the read).
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the four-link read + fail chain recurred at 3 hand-authored
+/// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and
+/// is lifted onto ONE substrate owner here). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — the pin block below
+/// binds the primitive at fail-before-pass-after granularity so a
+/// regression that drifted the `"read: {e}"` prefix, dropped the
+/// `report.fail` side-effect on the `Err` arm, or flipped the
+/// return polarity surfaces HERE rather than as silent operator-
+/// facing diagnostic skew at each of the three consumer sites).
+fn read_or_fail(path: &Path, label: &str, report: &mut Report) -> Option<String> {
+    match fs::read_to_string(path) {
+        Ok(s) => Some(s),
+        Err(e) => {
+            report.fail(label, format!("read: {e}"));
+            None
+        }
+    }
+}
+
 fn normalize(s: &str) -> String {
     s.lines()
         .map(str::trim_end)
@@ -1012,8 +1126,8 @@ mod tests {
     use super::{
         evaluate_ephemeral_require_tag, evaluate_point_require_tag, find_kw, find_kw_string_list,
         head_symbol_or_missing, known_require_tag_domain_names, min_defs_shortfall_msg,
-        parse_kwargs, positional_string, require_tag_domain_by_name, UnknownRequireTag,
-        ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
+        parse_kwargs, positional_string, read_or_fail, require_tag_domain_by_name, Report,
+        UnknownRequireTag, ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
@@ -2167,5 +2281,108 @@ mod tests {
             eph.unknown_tag_diagnostic("aplicaca"),
             "unknown :requires tag for ephemeral domain: aplicaca",
         );
+    }
+
+    // ─── read_or_fail substrate pins ───────────────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `read_or_fail` free
+    // function did not exist on the pre-lift binary — the tests below
+    // do not compile before the lift. Post-lift they bind the read +
+    // `"read: {e}"` failure-arm shape at ONE substrate owner so a
+    // regression that drifted the `"read: "` prefix, dropped the
+    // `report.fail` side-effect on the `Err` arm, or flipped the
+    // return polarity (`Some` on `Err` / `None` on `Ok`) surfaces
+    // HERE rather than as silent operator-facing diagnostic skew at
+    // each of the three consumer sites `check_yaml_parses_as` /
+    // `check_lisp_compiles` / `check_file_contains`.
+
+    fn scratch_path(tag: &str) -> std::path::PathBuf {
+        // A per-test-name scratch path under the OS temp dir, keyed
+        // on both the process id and the caller's `tag` so parallel
+        // tests never collide on the same inode.
+        std::env::temp_dir().join(format!(
+            "tatara-check-read-or-fail-{}-{tag}.tmp",
+            std::process::id(),
+        ))
+    }
+
+    #[test]
+    fn read_or_fail_returns_some_carrying_the_file_bytes_on_utf8_read() {
+        // Happy-path pin: an existing UTF-8 source file rides through
+        // and the callsite receives `Some(<contents>)` — the same
+        // shape all three pre-lift sites bound their `let src` slot to
+        // through the `Ok(s) => s` arm of the pre-lift match. A
+        // regression that widened the return to `Result<Option<...>,
+        // _>` or drifted the encoding (a `String::from_utf8_lossy`
+        // corner that would silently substitute replacement chars for
+        // non-UTF-8 bytes) surfaces HERE rather than as silent drift
+        // at each downstream check executor.
+        let path = scratch_path("happy");
+        std::fs::write(&path, "canonical source").expect("scratch write");
+        let mut report = Report::default();
+        let got = read_or_fail(&path, "sample label", &mut report);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(got.as_deref(), Some("canonical source"));
+        assert!(
+            report.is_ok(),
+            "happy-path read must not push a failure entry — a regression that reported EVEN on the OK arm would surface here"
+        );
+    }
+
+    #[test]
+    fn read_or_fail_reports_read_failure_and_returns_none_on_missing_file() {
+        // Miss-path pin: a nonexistent path yields `None` AND pushes a
+        // `<label>: read: <io error>` entry onto the Report — the two
+        // sinks the pre-lift chain composed simultaneously through the
+        // `Err(e) => return report.fail(label, format!("read: {e}"))`
+        // arm. A regression that dropped the side-effect (returning
+        // `None` silently, leaving the Report unaware of the read
+        // failure) or dropped the `"read: "` prefix (drifting the
+        // operator-facing diagnostic prose that every downstream
+        // check-log grep keys on) fires HERE.
+        let missing = scratch_path("missing");
+        // Belt-and-braces: ensure the path really does not exist.
+        let _ = std::fs::remove_file(&missing);
+        let mut report = Report::default();
+        let got = read_or_fail(&missing, "missing label", &mut report);
+        assert!(
+            got.is_none(),
+            "miss-path read must yield None so the caller's let-else early-returns",
+        );
+        assert!(
+            !report.is_ok(),
+            "miss-path read must push a failure entry so the check registers as failed at the workspace level",
+        );
+        let failure = report
+            .failures
+            .last()
+            .expect("miss-path read must push exactly one failure");
+        assert!(
+            failure.starts_with("missing label: read: "),
+            "miss-path failure prose must start with `<label>: read: ` — pin the label prefix + the `read: ` sentinel prose downstream check-log grep keys on; got {failure:?}"
+        );
+    }
+
+    #[test]
+    fn read_or_fail_borrows_label_without_consuming_the_caller_side_string() {
+        // Ergonomic contract pin: `read_or_fail(&path, &label, report)`
+        // takes the label by borrow so the caller can still consume
+        // its owned `String` label on the caller-side success path
+        // (`report.pass(label)` or a subsequent `report.fail(label,
+        // ...)` on a downstream error). A regression that moved the
+        // label into the primitive (e.g. `impl Into<String>` on the
+        // label slot) would surface HERE as a workspace-wide compile
+        // error at every downstream `report.pass(label)` after a
+        // successful read.
+        let path = scratch_path("borrow");
+        std::fs::write(&path, "x").expect("scratch write");
+        let mut report = Report::default();
+        let label: String = format!("borrow-test label: {}", path.display());
+        let _ = read_or_fail(&path, &label, &mut report);
+        let _ = std::fs::remove_file(&path);
+        // Caller still owns `label` — consume it here to prove the
+        // primitive did not move it.
+        report.pass(label);
+        assert_eq!(report.passes.len(), 1);
     }
 }

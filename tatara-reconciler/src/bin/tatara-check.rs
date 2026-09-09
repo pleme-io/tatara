@@ -11,6 +11,7 @@ use std::process::ExitCode;
 
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::intent::IntentKind;
+use tatara_process::lifetime::LifetimeKind;
 use tatara_reconciler::known_crd::KnownCrd;
 
 #[derive(Default)]
@@ -329,39 +330,10 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
             }
             let first = &defs[0];
             for req in &requires {
-                // `intent-<kind>` require-tags dispatch through the
-                // typed [`IntentKind`] closed set — the suffix is
-                // parsed via the autoderived `FromStr` (whose
-                // vocabulary is `IntentKind::as_str`, byte-identical
-                // to the serde `rename_all = "camelCase"` field names
-                // on `Intent`) and the presence probe fans out via
-                // the substrate primitive [`Intent::has`]. Pre-lift
-                // the dispatcher restated five hand-authored
-                // `first.spec.intent.<field>.is_some()` arms that
-                // drifted from `IntentKind::ALL` (the sixth variant
-                // `Guest` had no `intent-guest` arm at all); post-
-                // lift adding a seventh variant lands at ONE
-                // `IntentKind` `ALL` entry + ONE `select` arm and
-                // the check-tag surface picks up the new
-                // `intent-<kind>` tag for free.
-                let ok = if let Some(suffix) = req.strip_prefix("intent-") {
-                    match suffix.parse::<IntentKind>() {
-                        Ok(kind) => first.spec.intent.has(kind),
-                        Err(_) => {
-                            return report.fail(label, format!("unknown :requires tag: {req}"));
-                        }
-                    }
-                } else {
-                    match req.as_str() {
-                        "lifetime-ephemeral" => first.spec.lifetime.is_ephemeral(),
-                        "depends-on" => !first.spec.depends_on.is_empty(),
-                        "boundary-pre" => !first.spec.boundary.preconditions.is_empty(),
-                        "boundary-post" => !first.spec.boundary.postconditions.is_empty(),
-                        "compliance" => !first.spec.compliance.bindings.is_empty(),
-                        "signals" => first.spec.signals.sigterm_grace_seconds > 0,
-                        other => {
-                            return report.fail(label, format!("unknown :requires tag: {other}"));
-                        }
+                let ok = match evaluate_point_require_tag(&first.spec, req) {
+                    Ok(matched) => matched,
+                    Err(UnknownRequireTag) => {
+                        return report.fail(label, format!("unknown :requires tag: {req}"));
                     }
                 };
                 if !ok {
@@ -464,6 +436,86 @@ fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
 }
 
 // ── helpers ──────────────────────────────────────────────────────────
+
+/// Sentinel returned by [`evaluate_point_require_tag`] when the tag
+/// isn't one the point-domain require-tag surface understands. The
+/// caller composes the operator-facing diagnostic (which echoes the
+/// offending tag verbatim); the substrate owns only the classification.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct UnknownRequireTag;
+
+/// Classify one `:requires <tag>` entry against a compiled
+/// [`tatara_process::crd::ProcessSpec`] and return whether the spec
+/// satisfies it. `Ok(true)` — satisfied; `Ok(false)` — the spec
+/// compiled but a required slot is missing (caller's
+/// `definition missing required` diagnostic path); `Err(UnknownRequireTag)`
+/// — the tag isn't in the point-domain vocabulary (caller's
+/// `unknown :requires tag` diagnostic path).
+///
+/// # Vocabulary
+///
+/// Two closed-set-driven prefix families dispatch through the
+/// autoderived `FromStr` + the substrate presence probe on their
+/// respective parent:
+///
+/// - `intent-<kind>` — [`IntentKind`] closed set →
+///   [`tatara_process::intent::Intent::has`] (a tagged-union
+///   trait-default forwarder that pre-lift restated five hand-authored
+///   `first.spec.intent.<field>.is_some()` arms; the sixth variant
+///   `Guest` had no `intent-guest` arm at all before the lift).
+/// - `lifetime-<kind>` — [`LifetimeKind`] closed set →
+///   [`tatara_process::lifetime::Lifetime::has`] (an inherent peer that
+///   mirrors the trait default verbatim; `Lifetime` deliberately doesn't
+///   impl `TaggedUnion` because its resolver defaults empty to
+///   `Ok(Permanent)`, not to an error). The `lifetime-<kind>` family
+///   subsumes the pre-lift hand-authored `"lifetime-ephemeral" =>
+///   first.spec.lifetime.is_ephemeral()` arm AND publishes the
+///   `lifetime-permanent` tag for free — the symmetry gap against the
+///   intent side is closed.
+///
+/// Every other tag is a fixed match on a non-closed-set spec field —
+/// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
+/// `signals`. These stay as hand-authored arms until a matching
+/// closed-set surface opens for them (each addresses a slot whose
+/// carrier isn't a closed-set discriminator today).
+///
+/// A future third `IntentKind` or `LifetimeKind` variant lands at ONE
+/// `ALL` entry + ONE `select` arm on its parent's closed set — no per-
+/// caller edit here. A future new prefix family (e.g.
+/// `signal-<kind>` for [`tatara_process::signal::SignalKind`]) lands
+/// as ONE more `else if let Some(suffix) = req.strip_prefix("<prefix>-")`
+/// branch that reads the same three-step (strip_prefix + parse + has)
+/// shape both existing families publish.
+///
+/// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_lifetime_suffix`],
+/// and [`tests::evaluate_point_require_tag_returns_unknown_on_bare_lifetime_prefix`].
+fn evaluate_point_require_tag(
+    spec: &tatara_process::crd::ProcessSpec,
+    tag: &str,
+) -> Result<bool, UnknownRequireTag> {
+    if let Some(suffix) = tag.strip_prefix("intent-") {
+        return match suffix.parse::<IntentKind>() {
+            Ok(kind) => Ok(spec.intent.has(kind)),
+            Err(_) => Err(UnknownRequireTag),
+        };
+    }
+    if let Some(suffix) = tag.strip_prefix("lifetime-") {
+        return match suffix.parse::<LifetimeKind>() {
+            Ok(kind) => Ok(spec.lifetime.has(kind)),
+            Err(_) => Err(UnknownRequireTag),
+        };
+    }
+    match tag {
+        "depends-on" => Ok(!spec.depends_on.is_empty()),
+        "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
+        "boundary-post" => Ok(!spec.boundary.postconditions.is_empty()),
+        "compliance" => Ok(!spec.compliance.bindings.is_empty()),
+        "signals" => Ok(spec.signals.sigterm_grace_seconds > 0),
+        _ => Err(UnknownRequireTag),
+    }
+}
 
 fn parse_kwargs(rest: &[Sexp]) -> Vec<(String, Sexp)> {
     let mut out = Vec::with_capacity(rest.len() / 2);
@@ -755,10 +807,13 @@ fn normalize(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        find_kw, find_kw_string_list, head_symbol_or_missing, min_defs_shortfall_msg, parse_kwargs,
-        positional_string, MISSING_ARG_SLUG,
+        evaluate_point_require_tag, find_kw, find_kw_string_list, head_symbol_or_missing,
+        min_defs_shortfall_msg, parse_kwargs, positional_string, UnknownRequireTag,
+        MISSING_ARG_SLUG,
     };
     use tatara_lisp::{read, Sexp};
+    use tatara_process::crd::ProcessSpec;
+    use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind};
 
     // Re-parse a `(list …)` source through the reader and hand its
     // interior slice to `parse_kwargs`, so every test exercises the
@@ -1336,6 +1391,164 @@ mod tests {
             head_symbol_or_missing(&args),
             MISSING_ARG_SLUG,
             "primitive must not scan past position 0",
+        );
+    }
+
+    // ── evaluate_point_require_tag substrate pins ────────────────────
+    //
+    // Fail-before-pass-after granularity: `evaluate_point_require_tag`
+    // did not exist before this commit — the require-tag dispatch lived
+    // inline inside `check_lisp_compiles`. The extraction lifts the
+    // (prefix-family, closed-set, has) shape to ONE testable owner that
+    // both closed-set-driven prefix families (`intent-<kind>`,
+    // `lifetime-<kind>`) and every non-closed-set fixed match tag
+    // route through, so a regression that dropped a prefix branch,
+    // silently rewired a `has(kind)` presence probe, or misclassified
+    // an unknown suffix as "matched" fails HERE at ONE narrow
+    // substrate site rather than requiring an end-to-end
+    // `cargo run --bin tatara-check` sweep to catch.
+
+    /// POPULATED-slot pin — `lifetime-<kind>` dispatches through the
+    /// autoderived [`LifetimeKind`] `FromStr` + the substrate
+    /// [`Lifetime::has`] primitive, returning `true` only when the
+    /// slot addressed by the suffix is populated. Sweep the two-slot
+    /// cross (diagonal + off-diagonal) so a future refactor that
+    /// swapped the arm-to-slot mapping (e.g. `Ephemeral` reading the
+    /// `permanent` field) fails here before landing at the operator-
+    /// facing checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind() {
+        for populated in LifetimeKind::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.lifetime = match populated {
+                LifetimeKind::Permanent => Lifetime::permanent(),
+                LifetimeKind::Ephemeral => Lifetime::ephemeral(EphemeralLifetime::default()),
+            };
+            for query in LifetimeKind::ALL {
+                let tag = format!("lifetime-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "lifetime slot populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-slot pin — a default [`Lifetime`] (no slot populated,
+    /// resolver picks Permanent as fallback) returns `false` for
+    /// every `lifetime-<kind>` tag. Locks the write-side / read-side
+    /// semantic split ([`Lifetime::has`]'s doc-comment) at the
+    /// classifier boundary so an operator authoring
+    /// `:requires (lifetime-permanent)` against a Process with an
+    /// unset `:lifetime` slot gets the `definition missing required`
+    /// diagnostic, not a false-positive pass.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in LifetimeKind::ALL {
+            let tag = format!("lifetime-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "default lifetime (no slot populated) must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `lifetime-<garbage>` classifies as
+    /// [`UnknownRequireTag`] so the caller's operator-facing
+    /// `unknown :requires tag: <verbatim>` diagnostic path fires. A
+    /// regression that fell through to `Ok(false)` (matching the pre-
+    /// lift `match req.as_str() { ... other => report.fail(...) }`
+    /// arm) would silently reclassify an unknown suffix as
+    /// `definition missing required: <tag>`, which reads as "the
+    /// spec is wrong" rather than "your check is wrong". Pin the
+    /// distinction.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_lifetime_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "lifetime-burst"),
+            Err(UnknownRequireTag),
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "lifetime-typo"),
+            Err(UnknownRequireTag),
+        );
+    }
+
+    /// BOUNDARY pin — a bare `lifetime-` (no suffix) parses through
+    /// the same `strip_prefix + parse` chain and lands at the
+    /// [`LifetimeKind::from_str`] error arm (empty string ∉ the
+    /// closed-set vocabulary), yielding [`UnknownRequireTag`]. A
+    /// regression that special-cased the empty suffix (e.g. treating
+    /// it as "any populated") would fail here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_lifetime_prefix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "lifetime-"),
+            Err(UnknownRequireTag),
+        );
+    }
+
+    /// INTENT-side parity pin — the pre-existing `intent-<kind>`
+    /// prefix family behaves the same way through the same extracted
+    /// classifier. A default [`ProcessSpec`] has `Intent::default()`
+    /// (no slot populated), so every `intent-<kind>` tag returns
+    /// `Ok(false)`. Cross-check pin so a regression that lost the
+    /// intent-side branch in the extraction fails here alongside the
+    /// lifetime-side pins.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_default_intent_for_every_kind() {
+        use tatara_process::intent::IntentKind;
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in IntentKind::ALL {
+            let tag = format!("intent-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "default intent (no slot populated) must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// NON-CLOSED-SET fixed-match pin — the existing hand-authored
+    /// tags (`depends-on`, `boundary-pre`, `boundary-post`,
+    /// `compliance`) address empty-collection slots that read false on
+    /// a default [`ProcessSpec`]; `signals` addresses
+    /// `sigterm_grace_seconds > 0`, which the substrate default
+    /// (`tatara_process::serde_defaults::default_sigterm_grace_seconds`
+    /// → 480) reads as `true`. An unknown non-prefixed tag returns
+    /// [`UnknownRequireTag`]. Together with the closed-set pins this
+    /// closes the (prefix-family, fixed-match, unknown) matrix at the
+    /// classifier's return-shape boundary and pins the sibling-default
+    /// correspondence with the SignalPolicy substrate primitive so a
+    /// future default-signal-grace normalization surfaces here.
+    #[test]
+    fn evaluate_point_require_tag_routes_fixed_tags_and_unknown_tail() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for tag in ["depends-on", "boundary-pre", "boundary-post", "compliance"] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, tag),
+                Ok(false),
+                "default spec must return false for empty-collection fixed tag {tag:?}",
+            );
+        }
+        // `signals` reads the substrate default's positive grace,
+        // matching how an operator authoring `:requires (signals)`
+        // against a Process that left `signals:` at defaults still
+        // passes the gate.
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "signals"),
+            Ok(true),
+            "default spec's sigterm_grace_seconds > 0 must satisfy the `signals` tag",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "totally-unknown"),
+            Err(UnknownRequireTag),
         );
     }
 }

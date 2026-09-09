@@ -198,7 +198,7 @@ fn summarize_value(v: &serde_json::Value) -> String {
 
 fn check_crd_in_sync(args: &[Sexp], root: &Path, report: &mut Report) {
     let kind = head_symbol_or_missing(args);
-    let path = match args.get(1).and_then(Sexp::as_string) {
+    let path = match positional_string(args, 1) {
         Some(p) => root.join(p),
         None => return report.fail("crd-in-sync", "expected (crd-in-sync <Kind> \"path\")"),
     };
@@ -240,7 +240,7 @@ fn check_crd_in_sync(args: &[Sexp], root: &Path, report: &mut Report) {
 }
 
 fn check_yaml_parses(args: &[Sexp], root: &Path, report: &mut Report) {
-    let Some(rel) = args.first().and_then(Sexp::as_string) else {
+    let Some(rel) = positional_string(args, 0) else {
         return report.fail("yaml-parses", "expected (yaml-parses \"path\")");
     };
     let path = root.join(rel);
@@ -256,7 +256,7 @@ fn check_yaml_parses(args: &[Sexp], root: &Path, report: &mut Report) {
 
 fn check_yaml_parses_as(args: &[Sexp], root: &Path, report: &mut Report) {
     let kind = head_symbol_or_missing(args);
-    let rel = match args.get(1).and_then(Sexp::as_string) {
+    let rel = match positional_string(args, 1) {
         Some(s) => s,
         None => {
             return report.fail(
@@ -292,7 +292,7 @@ fn check_yaml_parses_as(args: &[Sexp], root: &Path, report: &mut Report) {
 }
 
 fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
-    let Some(rel) = args.first().and_then(Sexp::as_string) else {
+    let Some(rel) = positional_string(args, 0) else {
         return report.fail("lisp-compiles", "expected (lisp-compiles \"path\" ...)");
     };
     let path = root.join(rel);
@@ -422,7 +422,7 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
 }
 
 fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
-    let Some(rel) = args.first().and_then(Sexp::as_string) else {
+    let Some(rel) = positional_string(args, 0) else {
         return report.fail(
             "file-contains",
             "expected (file-contains \"path\" :strings (...))",
@@ -631,6 +631,72 @@ fn head_symbol_or_missing(args: &[Sexp]) -> &str {
         .unwrap_or(MISSING_ARG_SLUG)
 }
 
+/// Soft-borrow the string atom at positional `index` on an executor's
+/// `args` slice — the ONE substrate owner of the two-token
+/// `args.<get|first>(N).and_then(Sexp::as_string)` chain the five
+/// `check_*` executors ([`check_crd_in_sync`] pos 1, [`check_yaml_parses`]
+/// pos 0, [`check_yaml_parses_as`] pos 1, [`check_lisp_compiles`] pos 0,
+/// [`check_file_contains`] pos 0) hand-authored past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold to decode a `"path"` slot
+/// from a positional argument.
+///
+/// Semantics — byte-identical to the pre-lift chain:
+///
+/// * `index` out of bounds (`args.len() <= index`) → [`None`] (soft
+///   failure through `args.get(index)`).
+/// * `args[index]` present but NOT a [`Sexp::Str`] (a bare symbol, a
+///   nested list, an integer, a keyword) → [`None`] (soft failure
+///   through `and_then(Sexp::as_string)`).
+/// * `args[index]` is a string atom → borrowed `&str` payload with the
+///   input slice's lifetime.
+///
+/// The return-lifetime is the input slice's lifetime — every current
+/// caller's downstream `root.join(rel)` path composition, per-check
+/// `format!("<check>: {rel}", ...)` label building, and
+/// `report.fail(...)` diagnostic embedding consume the borrowed `&str`
+/// without an intervening allocation.
+///
+/// Positional-string peer of [`head_symbol_or_missing`] on the
+/// (positional × [`Sexp`] projection) family — where
+/// [`head_symbol_or_missing`] is the substrate primitive for
+/// "resolve position 0 to a `<Kind>` symbol with a sentinel fallback",
+/// THIS primitive is the peer on the STRING axis at arbitrary
+/// position, projecting to `Option<&str>` with soft failure so the
+/// caller composes its own per-check `report.fail(label, expected-form)`
+/// diagnostic. Closes the (symbol × head, string × any-position)
+/// corner of the positional-arg algebra so a future primitive on the
+/// third corner (a hypothetical `head_int_or_default` for an integer
+/// head-arg, a `positional_symbol` for a symbol at position N) lands
+/// as a peer at THIS module without further duplication on the
+/// `check_*` executor surface. Sibling of [`find_kw`] on the
+/// kwarg-slot axis: [`find_kw`] resolves a `:name` slot to
+/// `Option<&Sexp>`; THIS primitive resolves a positional slot to
+/// `Option<&str>`; the two together cover both positional AND
+/// keyword-slot decodes for every `check_*` executor.
+///
+/// A future normalization (a promotion of the return to a typed
+/// `Result<&str, PositionalDecodeError>` shape that forces every
+/// caller to path through a structured error, a switch to a projection
+/// param `proj: fn(&Sexp) -> Option<&str>` that would fold this
+/// primitive with [`head_symbol_or_missing`] on the shared
+/// (positional × projection) axis, a near-miss hint when the slot is
+/// present but the wrong shape) lands at THIS ONE substrate primitive
+/// and every current caller plus every future positional-string
+/// executor inherits the upgrade mechanically.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// two-token `args.<get|first>(N).and_then(Sexp::as_string)` chain
+/// recurred at FIVE executor bodies past the ≥2 PRIME-DIRECTIVE
+/// trigger, and is lifted to ONE substrate owner here.
+/// THEORY.md §II.1 invariant 5 — composition preserves proofs; all
+/// five callers routing through the SAME substrate primitive means a
+/// future projection or lifetime shift lands at ONE site and every
+/// downstream positional-string consumer inherits the shift by
+/// construction.
+fn positional_string(args: &[Sexp], index: usize) -> Option<&str> {
+    args.get(index).and_then(Sexp::as_string)
+}
+
 /// Render the [`check_lisp_compiles`] `:min-definitions` shortfall
 /// diagnostic when `defs_len < min_defs`, else `None` — the ONE
 /// substrate owner of the four-line
@@ -690,7 +756,7 @@ fn normalize(s: &str) -> String {
 mod tests {
     use super::{
         find_kw, find_kw_string_list, head_symbol_or_missing, min_defs_shortfall_msg, parse_kwargs,
-        MISSING_ARG_SLUG,
+        positional_string, MISSING_ARG_SLUG,
     };
     use tatara_lisp::{read, Sexp};
 
@@ -1131,6 +1197,128 @@ mod tests {
         // against a regression that promoted the comparator to `<=`
         // and started rejecting the "no floor" case.
         assert!(min_defs_shortfall_msg(0, 0).is_none());
+    }
+
+    // ── positional_string substrate pins ─────────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `positional_string` free
+    // function did not exist before this commit, so each test below
+    // fails to compile pre-lift. Post-lift they collectively pin the
+    // (positional index, string-projection, soft-failure return) shape
+    // at ONE substrate owner — a regression that dropped the
+    // `Sexp::as_string` projection (silently reaching into a bare
+    // symbol / list / integer / keyword payload and returning a
+    // non-None slug), swapped the soft-failure return for a panic
+    // (aborting the whole `tatara-check` run rather than reporting a
+    // soft per-check failure), or misread the index (returning
+    // `args[0]` regardless of the requested slot) surfaces HERE
+    // rather than as silent operator-facing drift at any of the five
+    // `check_*` executors that decode a `"path"` slot from a
+    // positional argument.
+
+    #[test]
+    fn positional_string_returns_the_borrowed_string_payload_at_the_requested_index() {
+        // Byte-identical parity with the pre-lift `check_yaml_parses`
+        // head-arg decode: `(yaml-parses "chart/foo.yaml")` yields the
+        // string payload `"chart/foo.yaml"` at position 0. Pin the
+        // happy-path shape at BOTH positional indices both current
+        // callers walk (position 0 for yaml-parses / lisp-compiles /
+        // file-contains; position 1 for crd-in-sync / yaml-parses-as).
+        let args0 = args_from(r#"(yaml-parses "chart/foo.yaml")"#);
+        assert_eq!(positional_string(&args0, 0), Some("chart/foo.yaml"));
+        let args1 = args_from(r#"(yaml-parses-as Process "chart/Process.yaml")"#);
+        assert_eq!(positional_string(&args1, 1), Some("chart/Process.yaml"));
+    }
+
+    #[test]
+    fn positional_string_returns_none_when_the_index_is_out_of_bounds() {
+        // Out-of-bounds pin: an executor called with fewer args than
+        // the requested index (`(yaml-parses)` decoded at position 0,
+        // `(crd-in-sync Process)` decoded at position 1) returns
+        // `None` — matches the pre-lift `.get(N).<chain>` soft-failure
+        // shape. Load-bearing: every current caller composes its own
+        // `report.fail` around the `None` return; a regression that
+        // panicked on the OOB index would abort the whole
+        // `tatara-check` run.
+        let empty: Vec<Sexp> = Vec::new();
+        assert!(positional_string(&empty, 0).is_none());
+        let one = args_from(r#"(crd-in-sync Process)"#);
+        assert!(positional_string(&one, 1).is_none());
+        // Way-out-of-bounds still soft-fails, not panics.
+        assert!(positional_string(&one, 42).is_none());
+    }
+
+    #[test]
+    fn positional_string_returns_none_on_non_string_shape_at_the_requested_index() {
+        // Non-string-shape pin: an operator typo that put a symbol /
+        // integer / nested list / keyword where a string was expected
+        // yields `None` — matches the pre-lift `.and_then(Sexp::as_string)`
+        // soft-failure shape. A regression that reached inside a
+        // symbol payload (silently promoting a bare `foo` into the
+        // returned `"foo"` slug) would either surface here as a
+        // wrong `Some(...)` or as a panic on the projection arm.
+        for src in [
+            r#"(yaml-parses bare-symbol)"#,
+            r#"(yaml-parses 42)"#,
+            r#"(yaml-parses (nested "list"))"#,
+            r#"(yaml-parses :keyword)"#,
+        ] {
+            let args = args_from(src);
+            assert!(
+                positional_string(&args, 0).is_none(),
+                "non-string slot must fall through to None on {src}",
+            );
+        }
+    }
+
+    #[test]
+    fn positional_string_matches_pre_lift_chain_bytewise() {
+        // Byte-identical parity pin with the pre-lift two-token chain
+        // all five callers hand-authored. Sweeps the five corners
+        // every pre-lift consumer visited: (a) present string at
+        // position 0, (b) present string at position 1 with a leading
+        // non-string head, (c) empty args, (d) non-string at the
+        // requested position, (e) present args but requested index
+        // past the end. A regression in the primitive that broke byte
+        // identity with the pre-lift shape at ANY corner surfaces
+        // HERE rather than as silent check-executor drift between the
+        // migrated callers and any future caller that reads the
+        // primitive's output.
+        for (src, index) in [
+            (r#"(check "just-one")"#, 0),
+            (r#"(check Process "path")"#, 1),
+            (r#"(check "leading" "trailing")"#, 1),
+            (r#"(check)"#, 0),
+            (r#"(check bare-sym)"#, 0),
+            (r#"(check "only-one")"#, 5),
+        ] {
+            let args = args_from(src);
+            let via_primitive: Option<&str> = positional_string(&args, index);
+            let via_pre_lift: Option<&str> = args.get(index).and_then(Sexp::as_string);
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "drift on ({src}, index={index})",
+            );
+        }
+    }
+
+    #[test]
+    fn positional_string_only_reads_the_requested_index() {
+        // Positional-scope pin: the primitive returns the payload at
+        // the exact requested index, ignoring every other position —
+        // a regression that scanned past the requested slot (e.g.
+        // walking `.iter().skip(index).find_map(Sexp::as_string)`,
+        // silently succeeding on a string at a later position when
+        // the requested slot is non-string) would fail HERE. Peers
+        // with the equivalent pin on [`head_symbol_or_missing`] at
+        // position 0.
+        let args = args_from(r#"(check bare-sym "hidden-string" "another")"#);
+        assert!(
+            positional_string(&args, 0).is_none(),
+            "primitive must not scan past requested index 0",
+        );
+        assert_eq!(positional_string(&args, 1), Some("hidden-string"));
+        assert_eq!(positional_string(&args, 2), Some("another"));
     }
 
     #[test]

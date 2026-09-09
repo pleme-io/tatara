@@ -97,16 +97,128 @@ impl ProcessCondition {
     /// silently drifts off the closed-set owner — surfaces at
     /// `status::tests::new_at_now_*` rather than as silent operator-
     /// facing skew across the three sibling constructor callsites).
+    ///
+    /// # Delegation to [`Self::new_at`]
+    ///
+    /// The 5-slot struct-literal body lives at the clock-injectable
+    /// substrate peer [`Self::new_at`]; this composer supplies
+    /// `Utc::now()` as the `at` slot and delegates. The wall-clock
+    /// projection lives at ONE substrate site, so a future clock swap
+    /// (a monotonic-clock cross-check, a per-fleet skew tolerance,
+    /// promotion to an injectable `Clock` trait) lands at the SINGLE
+    /// `Utc::now()` call on this delegation body rather than at every
+    /// hand-authored `last_transition_time: Utc::now()` stamp — no
+    /// per-sibling edit at [`Self::ready`], [`Self::not_ready`], or
+    /// [`Self::attested`], and no edit at any future
+    /// `ProcessCondition::*` sibling that inherits the composer.
     fn new_at_now(
         type_: ProcessConditionType,
         status: K8sConditionStatus,
         reason: impl Into<String>,
         message: Option<String>,
     ) -> Self {
+        Self::new_at(type_, status, reason, message, Utc::now())
+    }
+
+    /// Clock-injectable substrate peer of [`Self::new_at_now`] — the
+    /// ONE substrate owner of the 5-slot wire-shape backbone
+    ///
+    /// ```text
+    /// Self {
+    ///     type_:                <ConditionType>.as_wire_str().into(),
+    ///     status:               <StatusEnum>.as_wire_str().into(),
+    ///     last_transition_time: <at>,
+    ///     reason:               Some(<reason>.into()),
+    ///     message:              <opt>,
+    /// }
+    /// ```
+    ///
+    /// with the wall-clock stamp lifted out onto an explicit `at:
+    /// DateTime<Utc>` slot so a caller (typically a deterministic-
+    /// clock test on this module or a future controller-side callsite
+    /// that already carries a wall-clock anchor threaded through its
+    /// own decide-tick) supplies the anchor rather than reading it
+    /// from `Utc::now()` implicitly.
+    ///
+    /// # Why it exists
+    ///
+    /// [`Self::new_at_now`]'s pre-lift body read `Utc::now()` inline
+    /// at the composer body — a shape the module's own tests already
+    /// bracket with `let before = Utc::now(); ... let after = Utc::
+    /// now(); assert!(<c>.last_transition_time >= before && <c>.
+    /// last_transition_time <= after)` to pin the wall-clock projection
+    /// non-deterministically. That non-determinism is a proof shape
+    /// every peer clock-anchored composer family in this crate has
+    /// already collapsed onto a `_now` + `_at` peer pair — see
+    /// [`crate::pool::PoolStatus::observed`] (`at`-slot substrate) +
+    /// [`crate::pool::PoolStatus::observed_now`] (wall-clock-anchored
+    /// peer), [`crate::allocation::AllocationStatus::transition`] +
+    /// [`crate::allocation::AllocationStatus::transition_now`],
+    /// [`crate::lifetime_clock::evaluate`] +
+    /// [`crate::lifetime_clock::evaluate_now`] — all binding the
+    /// `Utc::now()` read at exactly ONE substrate site (the `_now`
+    /// peer's body) with the `_at` peer owning the pure struct-literal
+    /// composition. The docstring on [`Self::new_at_now`] itself
+    /// called out the trajectory (`"a promotion of the direct
+    /// Utc::now() call to an injectable Clock for deterministic tests"`)
+    /// as its next compounding step; this method opens exactly that
+    /// step for the `ProcessCondition` composer family, closing the
+    /// pattern uniformity across the four peer axes.
+    ///
+    /// # Invariants
+    ///
+    /// - **Same slots as [`Self::new_at_now`]:** the four non-clock
+    ///   slots (`type_`, `status`, `reason`, `message`) ride through
+    ///   the SAME projections — typed enum → wire string at `type_` +
+    ///   `status`, `Some(<reason>.into())` wrap at `reason`, verbatim
+    ///   `Option<String>` pass-through at `message`. The peer pair
+    ///   differs only at the `last_transition_time` slot's projection.
+    /// - **`at` slot verbatim:** the caller-supplied `DateTime<Utc>`
+    ///   binds `last_transition_time` bytewise, with no accidental
+    ///   `Utc::now()` clamp / `Duration::seconds(0)` rounding / offset
+    ///   normalization at the composer body. Pinned by
+    ///   [`tests::new_at_binds_at_slot_to_supplied_datetime_verbatim`].
+    /// - **Delegation invariant:** [`Self::new_at_now`] composes
+    ///   through this primitive with `Utc::now()` at the `at` slot —
+    ///   a regression that re-inlined the 5-slot literal at
+    ///   [`Self::new_at_now`] (bypassing this substrate) surfaces at
+    ///   [`tests::new_at_now_routes_through_new_at_with_utc_now_stamp_bytewise`]
+    ///   rather than as silent skew between the wall-clock-anchored
+    ///   peer and any future `new_at` consumer that pinned a fixed
+    ///   anchor.
+    ///
+    /// # `#[must_use]`
+    ///
+    /// Every consumer feeds the returned [`ProcessCondition`] into a
+    /// `ProcessStatus.conditions` slot or a peer status-patch call.
+    /// Dropping the return means the condition composed for no
+    /// observable reason — the attribute surfaces that as a warning
+    /// at every call site.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 5-slot struct-literal backbone that recurred at three
+    /// sibling constructors' pre-lift bodies is now the SINGLE
+    /// substrate site every clock-injected AND every wall-clock-
+    /// anchored composer routes through). THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — the pair `Self::new_at` +
+    /// `Self::new_at_now` mirrors the four peer clock-anchored
+    /// composer families across the crate, so the workspace's
+    /// `<K8sWireResource>Condition` / `<CRD>Status` composer family
+    /// stays uniform on the (clock-injectable, wall-clock-anchored)
+    /// peer axis; a future primitive on the same axis inherits the
+    /// convention structurally).
+    #[must_use]
+    fn new_at(
+        type_: ProcessConditionType,
+        status: K8sConditionStatus,
+        reason: impl Into<String>,
+        message: Option<String>,
+        at: DateTime<Utc>,
+    ) -> Self {
         Self {
             type_: type_.as_wire_str().into(),
             status: status.as_wire_str().into(),
-            last_transition_time: Utc::now(),
+            last_transition_time: at,
             reason: Some(reason.into()),
             message,
         }
@@ -980,6 +1092,164 @@ mod tests {
                 "status slot must route through K8sConditionStatus::as_wire_str for {status:?}",
             );
         }
+    }
+
+    // ─── ProcessCondition::new_at clock-injectable substrate pins ────
+    //
+    // The clock-injectable substrate peer [`ProcessCondition::new_at`]
+    // owns the 5-slot wire-shape backbone with `last_transition_time`
+    // sourced from a caller-supplied `DateTime<Utc>` slot instead of
+    // an inline `Utc::now()` read. [`ProcessCondition::new_at_now`]
+    // delegates through it with `Utc::now()`. These pins bind:
+    // (a) the `at` slot is stamped bytewise (no clamp/round/offset
+    //     drift at the composer body),
+    // (b) [`ProcessCondition::new_at_now`] composes through the
+    //     substrate with a wall-clock third arg (a regression that
+    //     re-inlined the 5-slot literal at `new_at_now` bypasses the
+    //     substrate and surfaces here rather than as silent skew
+    //     between `new_at`-anchored callers and `new_at_now`),
+    // (c) the four non-clock slots ride through the SAME projections
+    //     `new_at_now`'s existing pins already bind — closed-set
+    //     `as_wire_str` at type_/status, `Some(<r>.into())` wrap at
+    //     reason, verbatim `Option<String>` pass-through at message.
+
+    /// Fail-before-pass-after: the clock-injectable substrate peer
+    /// [`ProcessCondition::new_at`] stamps the caller-supplied
+    /// `DateTime<Utc>` at the `last_transition_time` slot bytewise —
+    /// a deterministic anchor rides through with no wall-clock read,
+    /// no clamp, no `Duration::seconds(0)` rounding, no offset
+    /// normalization. Peer of the `[before, after]` bracket pin on
+    /// [`ProcessCondition::new_at_now`]; this pin owns the
+    /// deterministic-anchor half of the (wall-clock, deterministic-
+    /// anchor) axis pair. A regression that inserted an implicit
+    /// `Utc::now()` fallback at the composer body (silently ignoring
+    /// the caller's anchor) surfaces HERE rather than as a hidden
+    /// non-determinism at every future
+    /// `ProcessCondition::new_at`-anchored test / controller-side
+    /// callsite that pinned a specific anchor.
+    #[test]
+    fn new_at_binds_at_slot_to_supplied_datetime_verbatim() {
+        let anchor: DateTime<Utc> = crate::time::at_epoch_second(1_700_000_000);
+        let c = ProcessCondition::new_at(
+            ProcessConditionType::Ready,
+            K8sConditionStatus::True,
+            "R",
+            Some("m".into()),
+            anchor,
+        );
+        assert_eq!(
+            c.last_transition_time, anchor,
+            "last_transition_time must ride the caller-supplied `at` slot bytewise — \
+             a regression that inserted an implicit `Utc::now()` fallback would surface here",
+        );
+        // Cross-anchor pin — a distant future anchor + the epoch also
+        // ride through bytewise, so the invariant holds at both
+        // extremes of the wall-clock axis rather than only at the
+        // 1.7-billion-second-past-epoch mid-range corner above. The
+        // upper bound stays inside `chrono`'s valid `DateTime<Utc>`
+        // range (year 2262 ceiling for nanosecond-precision anchors
+        // the substrate carries) so the epoch composer succeeds.
+        for anchor in [
+            crate::time::at_epoch_second(0),
+            crate::time::at_epoch_second(4_000_000_000),
+        ] {
+            let c = ProcessCondition::new_at(
+                ProcessConditionType::Attested,
+                K8sConditionStatus::True,
+                "R",
+                None,
+                anchor,
+            );
+            assert_eq!(c.last_transition_time, anchor);
+        }
+    }
+
+    /// Cross-primitive coherence pin — [`ProcessCondition::new_at_now`]
+    /// composes through [`ProcessCondition::new_at`] with `Utc::now()`
+    /// at the `at` slot. Every non-clock slot on the two composers'
+    /// outputs is byte-identical for the SAME (type_, status, reason,
+    /// message) input tuple; only the `last_transition_time` differs
+    /// (the wall-clock peer's slot falls in `[before, after]`, and the
+    /// deterministic peer's slot is exactly the caller's anchor). A
+    /// regression that re-inlined the 5-slot literal at
+    /// [`ProcessCondition::new_at_now`] (bypassing the substrate) or
+    /// swapped `Utc::now()` for a fixed anchor at the delegation body
+    /// surfaces HERE rather than as silent skew between the two peer
+    /// composers' consumers.
+    #[test]
+    fn new_at_now_routes_through_new_at_with_utc_now_stamp_bytewise() {
+        let before = Utc::now();
+        let via_wall = ProcessCondition::new_at_now(
+            ProcessConditionType::Ready,
+            K8sConditionStatus::False,
+            "ObservedFailed",
+            Some("boom".into()),
+        );
+        let after = Utc::now();
+        // Anchor a peer of `via_wall` at a fixed deterministic slot
+        // and pin non-clock parity; the two composers must agree on
+        // every slot except `last_transition_time`.
+        let via_at = ProcessCondition::new_at(
+            ProcessConditionType::Ready,
+            K8sConditionStatus::False,
+            "ObservedFailed",
+            Some("boom".into()),
+            crate::time::at_epoch_second(0),
+        );
+        assert_eq!(via_wall.type_, via_at.type_);
+        assert_eq!(via_wall.status, via_at.status);
+        assert_eq!(via_wall.reason, via_at.reason);
+        assert_eq!(via_wall.message, via_at.message);
+        assert!(
+            via_wall.last_transition_time >= before && via_wall.last_transition_time <= after,
+            "new_at_now must stamp Utc::now() at the delegation body — a regression that \
+             swapped it for a fixed anchor surfaces here",
+        );
+        // Delegation identity — for every closed-set (type_, status)
+        // pair, composing through `new_at` with an anchor threaded
+        // through `new_at_now`'s bracket yields identical non-clock
+        // slots on both peers. Sweep the two closed-set axes
+        // exhaustively so a future variant addition inherits the pin.
+        for type_ in ProcessConditionType::ALL {
+            for status in K8sConditionStatus::ALL {
+                let via_wall = ProcessCondition::new_at_now(type_, status, "R", None);
+                let via_at = ProcessCondition::new_at(
+                    type_,
+                    status,
+                    "R",
+                    None,
+                    via_wall.last_transition_time,
+                );
+                assert_eq!(via_wall.type_, via_at.type_);
+                assert_eq!(via_wall.status, via_at.status);
+                assert_eq!(via_wall.reason, via_at.reason);
+                assert_eq!(via_wall.message, via_at.message);
+                assert_eq!(via_wall.last_transition_time, via_at.last_transition_time);
+            }
+        }
+    }
+
+    /// Fail-before-pass-after: the clock-injectable substrate peer
+    /// preserves an explicit `None` message-slot verbatim — mirror of
+    /// the sibling pin on [`ProcessCondition::new_at_now`]. A K8s
+    /// Condition with an absent message vs an empty-string message
+    /// are distinct wire shapes the K8s API server treats
+    /// differently, so a regression at the substrate body that
+    /// wrapped `None` into `Some(String::new())` would surface HERE
+    /// as well as at the wall-clock peer's pin.
+    #[test]
+    fn new_at_preserves_none_message_slot_verbatim() {
+        let c = ProcessCondition::new_at(
+            ProcessConditionType::Ready,
+            K8sConditionStatus::False,
+            "R",
+            None,
+            crate::time::at_epoch_second(0),
+        );
+        assert!(
+            c.message.is_none(),
+            "message-slot rides `None` verbatim — an empty-Some wrap is a distinct wire shape",
+        );
     }
 
     // ─── RenderedResourceCoords substrate pins ──────────────────────

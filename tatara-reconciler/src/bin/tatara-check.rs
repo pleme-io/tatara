@@ -199,10 +199,22 @@ fn summarize_value(v: &serde_json::Value) -> String {
 
 fn check_crd_in_sync(args: &[Sexp], root: &Path, report: &mut Report) {
     let kind = head_symbol_or_missing(args);
-    let path = match positional_string(args, 1) {
-        Some(p) => root.join(p),
-        None => return report.fail("crd-in-sync", "expected (crd-in-sync <Kind> \"path\")"),
+    // Positional-`"path"` decode + `expected …` failure-arm shape rides
+    // the ONE substrate primitive `required_positional_string` — sibling
+    // to the identical decode at the four peer executors below (yaml-
+    // parses / yaml-parses-as / lisp-compiles / file-contains). Post-lift
+    // the (positional-string decode, report failure on absent slot,
+    // early-return control-flow) triad lives at ONE substrate owner.
+    let Some(rel) = required_positional_string(
+        args,
+        1,
+        "crd-in-sync",
+        "expected (crd-in-sync <Kind> \"path\")",
+        report,
+    ) else {
+        return;
     };
+    let path = root.join(rel);
     // Kind-string → typed CRD dispatch rides through the ONE substrate
     // primitive `tatara_reconciler::known_crd::KnownCrd` — sibling to
     // the identical dispatch in `check_yaml_parses_as` below AND in
@@ -241,8 +253,19 @@ fn check_crd_in_sync(args: &[Sexp], root: &Path, report: &mut Report) {
 }
 
 fn check_yaml_parses(args: &[Sexp], root: &Path, report: &mut Report) {
-    let Some(rel) = positional_string(args, 0) else {
-        return report.fail("yaml-parses", "expected (yaml-parses \"path\")");
+    // Positional-`"path"` decode + `expected …` failure-arm shape rides
+    // the ONE substrate primitive `required_positional_string` — one of
+    // five sibling `check_*` executors that share the (positional-string
+    // decode, report failure on absent slot, early-return control-flow)
+    // triad on the same substrate owner.
+    let Some(rel) = required_positional_string(
+        args,
+        0,
+        "yaml-parses",
+        "expected (yaml-parses \"path\")",
+        report,
+    ) else {
+        return;
     };
     let path = root.join(rel);
     let label = format!("YAML parses: {rel}");
@@ -257,14 +280,19 @@ fn check_yaml_parses(args: &[Sexp], root: &Path, report: &mut Report) {
 
 fn check_yaml_parses_as(args: &[Sexp], root: &Path, report: &mut Report) {
     let kind = head_symbol_or_missing(args);
-    let rel = match positional_string(args, 1) {
-        Some(s) => s,
-        None => {
-            return report.fail(
-                "yaml-parses-as",
-                "expected (yaml-parses-as <Kind> \"path\")",
-            )
-        }
+    // Positional-`"path"` decode + `expected …` failure-arm shape rides
+    // the ONE substrate primitive `required_positional_string` — one of
+    // five sibling `check_*` executors that share the (positional-string
+    // decode, report failure on absent slot, early-return control-flow)
+    // triad on the same substrate owner.
+    let Some(rel) = required_positional_string(
+        args,
+        1,
+        "yaml-parses-as",
+        "expected (yaml-parses-as <Kind> \"path\")",
+        report,
+    ) else {
+        return;
     };
     let path = root.join(rel);
     let label = format!("YAML parses as {kind}: {rel}");
@@ -300,8 +328,19 @@ fn check_yaml_parses_as(args: &[Sexp], root: &Path, report: &mut Report) {
 }
 
 fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
-    let Some(rel) = positional_string(args, 0) else {
-        return report.fail("lisp-compiles", "expected (lisp-compiles \"path\" ...)");
+    // Positional-`"path"` decode + `expected …` failure-arm shape rides
+    // the ONE substrate primitive `required_positional_string` — one of
+    // five sibling `check_*` executors that share the (positional-string
+    // decode, report failure on absent slot, early-return control-flow)
+    // triad on the same substrate owner.
+    let Some(rel) = required_positional_string(
+        args,
+        0,
+        "lisp-compiles",
+        "expected (lisp-compiles \"path\" ...)",
+        report,
+    ) else {
+        return;
     };
     let path = root.join(rel);
     let label = format!("Lisp compiles: {rel}");
@@ -374,11 +413,19 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
 }
 
 fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
-    let Some(rel) = positional_string(args, 0) else {
-        return report.fail(
-            "file-contains",
-            "expected (file-contains \"path\" :strings (...))",
-        );
+    // Positional-`"path"` decode + `expected …` failure-arm shape rides
+    // the ONE substrate primitive `required_positional_string` — one of
+    // five sibling `check_*` executors that share the (positional-string
+    // decode, report failure on absent slot, early-return control-flow)
+    // triad on the same substrate owner.
+    let Some(rel) = required_positional_string(
+        args,
+        0,
+        "file-contains",
+        "expected (file-contains \"path\" :strings (...))",
+        report,
+    ) else {
+        return;
     };
     let path = root.join(rel);
     let label = format!("File contains: {rel}");
@@ -973,6 +1020,109 @@ fn positional_string(args: &[Sexp], index: usize) -> Option<&str> {
     args.get(index).and_then(Sexp::as_string)
 }
 
+/// Decode the string atom at positional `index` on an executor's `args`
+/// slice AND report a `<label>: <expected>` failure through `report` when
+/// the slot is absent or non-string — the ONE substrate owner of the
+/// let-else + `report.fail(<label>, <expected-usage>)` three-line early-
+/// return shape all five `check_*` executors hand-authored past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold on top of the
+/// [`positional_string`] soft-borrow primitive:
+///
+/// * [`check_crd_in_sync`] pos 1 → label `"crd-in-sync"`, expected form
+///   `"expected (crd-in-sync <Kind> \"path\")"`.
+/// * [`check_yaml_parses`] pos 0 → label `"yaml-parses"`, expected form
+///   `"expected (yaml-parses \"path\")"`.
+/// * [`check_yaml_parses_as`] pos 1 → label `"yaml-parses-as"`, expected
+///   form `"expected (yaml-parses-as <Kind> \"path\")"`.
+/// * [`check_lisp_compiles`] pos 0 → label `"lisp-compiles"`, expected
+///   form `"expected (lisp-compiles \"path\" ...)"`.
+/// * [`check_file_contains`] pos 0 → label `"file-contains"`, expected
+///   form `"expected (file-contains \"path\" :strings (...))"`.
+///
+/// All FIVE sites walked the SAME three-link chain — call
+/// [`positional_string`] at the executor's positional slot, match `None`
+/// through `return report.fail(<per-check label>, <per-check expected
+/// form>)`, and forward the borrowed `&str` on the `Some` arm to the
+/// downstream `root.join(rel)` / `format!("<check>: {rel}")` label
+/// composition — differing only in the constant (label, expected-form)
+/// pair and the positional index each check reads. Post-lift each
+/// callsite reads
+/// `let Some(rel) = required_positional_string(args, N, LABEL, EXPECTED, report) else { return; };`
+/// and the (positional-string decode, report failure on absent slot,
+/// early-return control-flow) triad lives at ONE substrate owner.
+///
+/// Semantics — byte-identical to the pre-lift shape:
+///
+/// * [`positional_string`] returns [`Some`] → forward the borrowed `&str`
+///   verbatim; no `report` side-effect on the path.
+/// * [`positional_string`] returns [`None`] → hang `report.fail(label,
+///   expected)` off the failure arm (the pre-lift static-string label +
+///   static-string expected-usage message reach [`Report::fail`]'s
+///   `impl Display` slots byte-for-byte through `&str`'s [`Display`]
+///   impl) and return [`None`] as the control-flow signal every caller
+///   consumes through the let-else idiom to early-return.
+///
+/// Sibling of [`read_or_fail`] on the (side-effecting-decode + let-else
+/// early-return) axis: [`read_or_fail`] owns the read-side "read file
+/// or report a `read: {e}` failure" shape; THIS primitive owns the
+/// arg-decode-side "borrow a positional `\"path\"` slot or report an
+/// `expected …` failure" shape. Both pair a side-effecting soft-failure
+/// decode with a `Report::fail` side-effect and an [`Option`] return
+/// the caller unwraps through the same `let Some(...) else { return; };`
+/// idiom — the (side-effecting-decode, side-effecting-report,
+/// [`None`]-as-control-flow) triad becomes the load-bearing shape of the
+/// tatara-check executor family. Pure-diagnostic peers
+/// ([`min_defs_shortfall_msg`], [`head_symbol_or_missing`]) sit on the
+/// (compose-diagnostic-without-side-effect) side of the same axis.
+///
+/// A future refinement (a near-miss hint composed off the missing slot's
+/// actual [`Sexp`] shape — `"expected \"path\", got symbol"` when the
+/// operator quoted the wrong atom kind, a swap to a typed
+/// [`Result<&str, PositionalDecodeError>`] shape carrying both the
+/// per-check label AND the observed `Sexp` variant, a `tracing`-
+/// annotated span covering the decode attempt) lands at THIS ONE
+/// substrate primitive and every current caller plus every future
+/// positional-`"path"`-decoding executor (a `check_json_parses`, a
+/// `check_toml_parses`, a `check_nix_evaluates` reading a `.nix` source
+/// at a positional slot) inherits the upgrade mechanically. No per-
+/// site restatement of the `positional_string + report.fail + return`
+/// shape at any of the five current callers or at future consumers.
+///
+/// The `label` + `expected` slots are `&str` matching each caller's
+/// static-string constants (every one of the five migrated callers
+/// passes a `&'static str` literal today) via deref-coercion so a
+/// future caller composing a runtime label (e.g. an executor whose
+/// label carries the resolved path prefix) can still hand its owned
+/// [`String`] through the `&str` slot without an intervening
+/// allocation — the primitive doesn't need to own either slot.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// let-else + `report.fail(label, expected)` early-return chain
+/// recurred at 5 hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication trigger and is lifted onto ONE substrate owner here).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// pin block below binds the primitive at fail-before-pass-after
+/// granularity so a regression that drifted the `Report::fail`
+/// side-effect on the `None` arm, dropped the borrowed-lifetime
+/// forwarding on the `Some` arm, or flipped the return polarity
+/// surfaces HERE rather than as silent operator-facing diagnostic
+/// skew at each of the five consumer sites).
+fn required_positional_string<'a>(
+    args: &'a [Sexp],
+    index: usize,
+    label: &str,
+    expected: &str,
+    report: &mut Report,
+) -> Option<&'a str> {
+    match positional_string(args, index) {
+        Some(s) => Some(s),
+        None => {
+            report.fail(label, expected);
+            None
+        }
+    }
+}
+
 /// Render the [`check_lisp_compiles`] `:min-definitions` shortfall
 /// diagnostic when `defs_len < min_defs`, else `None` — the ONE
 /// substrate owner of the four-line
@@ -1126,8 +1276,9 @@ mod tests {
     use super::{
         evaluate_ephemeral_require_tag, evaluate_point_require_tag, find_kw, find_kw_string_list,
         head_symbol_or_missing, known_require_tag_domain_names, min_defs_shortfall_msg,
-        parse_kwargs, positional_string, read_or_fail, require_tag_domain_by_name, Report,
-        UnknownRequireTag, ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
+        parse_kwargs, positional_string, read_or_fail, require_tag_domain_by_name,
+        required_positional_string, Report, UnknownRequireTag, ALL_REQUIRE_TAG_DOMAINS,
+        MISSING_ARG_SLUG,
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
@@ -1713,6 +1864,215 @@ mod tests {
             MISSING_ARG_SLUG,
             "primitive must not scan past position 0",
         );
+    }
+
+    // ── required_positional_string substrate pins ────────────────────
+    //
+    // Fail-before-pass-after granularity: the `required_positional_string`
+    // free function did not exist before this commit, so each test below
+    // fails to compile pre-lift. Post-lift they collectively pin the
+    // (positional-string decode, report failure on absent slot, early-
+    // return control-flow) triad at ONE substrate owner — a regression
+    // that dropped the `report.fail(label, expected)` side-effect on the
+    // `None` arm (silently swallowing an absent `"path"` slot and
+    // returning `None` with no diagnostic), swapped the `Some` arm's
+    // borrowed-lifetime forwarding for an owned-`String` allocation
+    // (breaking the caller's downstream `root.join(rel)` zero-copy path),
+    // or flipped the return polarity (returning `Some` on the `None`
+    // arm so every caller's let-else early-return fell through into the
+    // pass path with a bogus decoded slot) surfaces HERE rather than as
+    // silent operator-facing drift at any of the five `check_*`
+    // executors that decode a `"path"` slot through the primitive.
+
+    #[test]
+    fn required_positional_string_returns_borrowed_slot_and_leaves_report_clean_on_present_slot() {
+        // Happy-path pin: a present string slot at the requested index
+        // returns `Some(<borrowed &str>)` byte-for-byte AND does not
+        // touch the `Report`. Load-bearing: every current caller's
+        // `Some` arm forwards the borrowed slice to `root.join(rel)`
+        // and to the `format!("<check>: {rel}")` label composition
+        // without an intervening allocation; a regression that
+        // side-effected the report on the pass path would leak a
+        // spurious failure through the `Report::is_ok` gate at
+        // executor exit.
+        let mut report = Report::default();
+        let args0 = args_from(r#"(check "chart/foo.yaml")"#);
+        assert_eq!(
+            required_positional_string(
+                &args0,
+                0,
+                "check",
+                "expected (check \"path\")",
+                &mut report
+            ),
+            Some("chart/foo.yaml"),
+        );
+        assert!(
+            report.is_ok(),
+            "present slot must not touch report; got failures = {:?}",
+            report.failures,
+        );
+        let args1 = args_from(r#"(check Process "chart/Process.yaml")"#);
+        assert_eq!(
+            required_positional_string(
+                &args1,
+                1,
+                "check",
+                "expected (check <Kind> \"path\")",
+                &mut report
+            ),
+            Some("chart/Process.yaml"),
+        );
+        assert!(
+            report.is_ok(),
+            "present slot at position 1 must not touch report; got failures = {:?}",
+            report.failures,
+        );
+    }
+
+    #[test]
+    fn required_positional_string_reports_expected_failure_and_returns_none_on_absent_slot() {
+        // OOB-slot pin: an absent slot (fewer args than the requested
+        // index) hangs `report.fail(label, expected)` off the failure
+        // arm — the pre-lift diagnostic prose reaches `Report::fail`'s
+        // `impl Display` slots byte-for-byte through `&str`'s
+        // `Display` impl — AND returns `None` as the control-flow
+        // signal the caller's let-else early-return consumes. A
+        // regression that returned `Some("")` or panicked on the OOB
+        // slot would abort the `tatara-check` run rather than
+        // reporting a soft per-check failure.
+        let mut report = Report::default();
+        let empty: Vec<Sexp> = Vec::new();
+        let ret = required_positional_string(
+            &empty,
+            0,
+            "yaml-parses",
+            "expected (yaml-parses \"path\")",
+            &mut report,
+        );
+        assert!(
+            ret.is_none(),
+            "absent slot must return None so caller's let-else early-returns",
+        );
+        assert_eq!(
+            report.failures,
+            vec!["yaml-parses: expected (yaml-parses \"path\")".to_string()],
+            "failure-arm must hang exactly one `<label>: <expected>` line",
+        );
+    }
+
+    #[test]
+    fn required_positional_string_reports_expected_failure_and_returns_none_on_non_string_slot() {
+        // Non-string-shape pin: an operator typo that put a symbol /
+        // integer / nested list / keyword where the primitive expected
+        // a string reports the SAME `<label>: <expected>` failure as
+        // the OOB corner (soft failure through
+        // `and_then(Sexp::as_string)` inside `positional_string`) —
+        // matches the pre-lift shape where every caller collapsed both
+        // corners onto the same `expected …` diagnostic. A regression
+        // that reported a per-shape diagnostic here without lifting
+        // the same discipline through every current caller would drift
+        // the (OOB, non-string) equivalence the pre-lift shape
+        // preserved.
+        for src in [
+            r#"(check bare-symbol)"#,
+            r#"(check 42)"#,
+            r#"(check (nested "list"))"#,
+            r#"(check :keyword)"#,
+        ] {
+            let mut report = Report::default();
+            let args = args_from(src);
+            let ret = required_positional_string(
+                &args,
+                0,
+                "check",
+                "expected (check \"path\")",
+                &mut report,
+            );
+            assert!(ret.is_none(), "non-string slot must return None on {src}",);
+            assert_eq!(
+                report.failures,
+                vec!["check: expected (check \"path\")".to_string()],
+                "non-string slot must hang the same failure as OOB on {src}",
+            );
+        }
+    }
+
+    #[test]
+    fn required_positional_string_matches_pre_lift_chain_bytewise() {
+        // Byte-identical parity pin with the pre-lift three-link chain
+        // all five callers hand-authored around `positional_string`.
+        // For each (args source, positional index, per-check label,
+        // per-check expected form) tuple that covers ALL five callsite
+        // shapes (crd-in-sync pos 1, yaml-parses pos 0, yaml-parses-as
+        // pos 1, lisp-compiles pos 0, file-contains pos 0), assert
+        // that the primitive's (return, report-state) pair matches the
+        // pre-lift `let Some(rel) = positional_string(&args, index)
+        // else { return report.fail(label, expected); };` shape
+        // byte-for-byte. A regression that broke byte identity at ANY
+        // corner surfaces HERE rather than as silent check-executor
+        // drift between the migrated callers.
+        let sites: &[(&str, usize, &str, &str)] = &[
+            (
+                "(crd-in-sync Process)",
+                1,
+                "crd-in-sync",
+                "expected (crd-in-sync <Kind> \"path\")",
+            ),
+            (
+                "(yaml-parses)",
+                0,
+                "yaml-parses",
+                "expected (yaml-parses \"path\")",
+            ),
+            (
+                "(yaml-parses-as Process)",
+                1,
+                "yaml-parses-as",
+                "expected (yaml-parses-as <Kind> \"path\")",
+            ),
+            (
+                "(lisp-compiles)",
+                0,
+                "lisp-compiles",
+                "expected (lisp-compiles \"path\" ...)",
+            ),
+            (
+                "(file-contains)",
+                0,
+                "file-contains",
+                "expected (file-contains \"path\" :strings (...))",
+            ),
+        ];
+        for (src, index, label, expected) in sites {
+            let args = args_from(src);
+            // Primitive path.
+            let mut prim_report = Report::default();
+            let via_primitive =
+                required_positional_string(&args, *index, label, expected, &mut prim_report);
+            // Pre-lift path — the three-link inline chain every caller
+            // walked before the lift.
+            let mut inline_report = Report::default();
+            let via_inline = match positional_string(&args, *index) {
+                Some(s) => Some(s),
+                None => {
+                    inline_report.fail(*label, *expected);
+                    None
+                }
+            };
+            assert_eq!(
+                via_primitive, via_inline,
+                "return drift on ({src}, index={index})",
+            );
+            assert_eq!(
+                prim_report.failures, inline_report.failures,
+                "failure drift on ({src}, index={index})",
+            );
+            assert!(
+                prim_report.passes.is_empty() && inline_report.passes.is_empty(),
+                "neither path touches passes on ({src}, index={index})",
+            );
+        }
     }
 
     // ── evaluate_point_require_tag substrate pins ────────────────────

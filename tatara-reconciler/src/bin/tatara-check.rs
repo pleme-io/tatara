@@ -324,11 +324,8 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
                     return report.fail(label, tatara_lisp::format_diagnostic(&src, &e, Some(rel)));
                 }
             };
-            if defs.len() < min_defs {
-                return report.fail(
-                    label,
-                    format!("expected ≥ {} definitions, got {}", min_defs, defs.len()),
-                );
+            if let Some(err) = min_defs_shortfall_msg(defs.len(), min_defs) {
+                return report.fail(label, err);
             }
             let first = &defs[0];
             for req in &requires {
@@ -380,11 +377,8 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
                     return report.fail(label, tatara_lisp::format_diagnostic(&src, &e, Some(rel)));
                 }
             };
-            if defs.len() < min_defs {
-                return report.fail(
-                    label,
-                    format!("expected ≥ {} definitions, got {}", min_defs, defs.len()),
-                );
+            if let Some(err) = min_defs_shortfall_msg(defs.len(), min_defs) {
+                return report.fail(label, err);
             }
             let first = &defs[0];
             for req in &requires {
@@ -637,6 +631,53 @@ fn head_symbol_or_missing(args: &[Sexp]) -> &str {
         .unwrap_or(MISSING_ARG_SLUG)
 }
 
+/// Render the [`check_lisp_compiles`] `:min-definitions` shortfall
+/// diagnostic when `defs_len < min_defs`, else `None` — the ONE
+/// substrate owner of the four-line
+/// `if defs.len() < min_defs { return report.fail(label, format!("expected ≥ {} definitions, got {}", min_defs, defs.len())); }`
+/// chain both the `point` (ProcessSpec) and `ephemeral` (EphemeralSpec)
+/// arms of [`check_lisp_compiles`] hand-authored past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold to enforce the
+/// operator-declared minimum on the compiled-definitions count.
+///
+/// Semantics — byte-identical to the pre-lift shape:
+///
+/// * `defs_len >= min_defs` → [`None`] (the caller falls through to
+///   the next verification rung; no `report.fail` on the path).
+/// * `defs_len < min_defs`  → [`Some`] carrying the exact pre-lift
+///   `format!("expected ≥ {} definitions, got {}", min_defs, defs_len)`
+///   diagnostic string. The caller composes its own `report.fail(label,
+///   ...)` around it so the per-arm label prose (`"Lisp compiles: {rel}"`
+///   built earlier in [`check_lisp_compiles`]) stays where it is.
+///
+/// Sibling of [`head_symbol_or_missing`] on the report-primitive axis:
+/// [`head_symbol_or_missing`] extracts a `<Kind>` slug for downstream
+/// error prose; THIS primitive composes a numeric shortfall diagnostic
+/// for a domain-agnostic gate. Both are byte-identical-parity lifts on
+/// hand-authored chains that were restated verbatim past the ≥ 2
+/// PRIME-DIRECTIVE trigger across sibling `check_*` executor arms.
+///
+/// A future refinement (a companion `:max-definitions` gate emitting
+/// `"expected ≤ N definitions, got M"`, an exact-count gate, a swap to
+/// a typed [`Result<usize, ShortfallReason>`] shape so each caller
+/// picks off the numeric axis, an operator-hint suffix like
+/// `"; add another (def<kind> …) form to <path>"`) lands at THIS ONE
+/// substrate owner and both current arms plus every future `:domain`
+/// arm added to [`check_lisp_compiles`] inherit the shift by
+/// construction — no per-arm restatement of the shortfall-format
+/// discipline.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// byte-identical four-line inline compositions collapse onto ONE
+/// substrate owner past the ≥ 2 PRIME-DIRECTIVE trigger. THEORY.md
+/// §II.1 invariant 5 — composition preserves proofs; both current
+/// arms routing through the SAME substrate primitive means a future
+/// diagnostic-shape shift lands at ONE site and every downstream
+/// definition-count consumer inherits it by construction.
+fn min_defs_shortfall_msg(defs_len: usize, min_defs: usize) -> Option<String> {
+    (defs_len < min_defs).then(|| format!("expected ≥ {min_defs} definitions, got {defs_len}"))
+}
+
 fn normalize(s: &str) -> String {
     s.lines()
         .map(str::trim_end)
@@ -648,7 +689,8 @@ fn normalize(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        find_kw, find_kw_string_list, head_symbol_or_missing, parse_kwargs, MISSING_ARG_SLUG,
+        find_kw, find_kw_string_list, head_symbol_or_missing, min_defs_shortfall_msg, parse_kwargs,
+        MISSING_ARG_SLUG,
     };
     use tatara_lisp::{read, Sexp};
 
@@ -995,6 +1037,100 @@ mod tests {
         // emitted. Surfaces at THIS pin rather than as silent
         // sentinel-string drift.
         assert_eq!(MISSING_ARG_SLUG, "<missing>");
+    }
+
+    // ── min_defs_shortfall_msg substrate pins ────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `min_defs_shortfall_msg`
+    // free function did not exist before this commit, so each test
+    // below fails to compile pre-lift. Post-lift they collectively
+    // pin the (numeric compare, per-shortfall format) shape at ONE
+    // substrate owner — a regression that swapped `<` for `<=`
+    // (a min-defs of N would then reject a defs-count of N, breaking
+    // every `checks.lisp` `:min-definitions N` slot whose source
+    // authored exactly N definitions), swapped the operator glyph
+    // (`>=` in the prose so the diagnostic reads inverted), or
+    // reordered the two numeric slots (rendering `"expected ≥
+    // {defs_len} definitions, got {min_defs}"` — a silent inversion
+    // that would confuse every operator looking at the failure
+    // report) surfaces HERE rather than as silent drift between the
+    // two `check_lisp_compiles` domain arms.
+    //
+    // Sibling shape to the `head_symbol_or_missing` pins above and
+    // the `find_kw_string_list` pins earlier: each substrate lift on
+    // the `check_*` executor surface gets fail-before-pass-after
+    // corner coverage that closes the primitive's boundary at ONE
+    // site so callers can compose on top through the shared return
+    // type (`Option<String>` here, `&str` there, `Vec<String>`
+    // above) without restating the composition discipline.
+
+    #[test]
+    fn min_defs_shortfall_msg_returns_none_when_defs_meet_the_minimum() {
+        // Happy-path pin: a source that compiles to exactly `min_defs`
+        // definitions (the boundary — `<` not `<=`) yields `None`, so
+        // the caller falls through to the `:requires`-tag verification
+        // rung. Load-bearing: a regression that swapped `<` for `<=`
+        // would silently reject every `checks.lisp` form that authored
+        // exactly `min_defs` definitions — the observability-stack
+        // check today authors exactly 1 `(defpoint …)` form at
+        // `min_defs = 1`, so an off-by-one shift lands as a full
+        // tatara-check failure at CI time.
+        assert!(min_defs_shortfall_msg(1, 1).is_none());
+        assert!(min_defs_shortfall_msg(3, 3).is_none());
+        assert!(min_defs_shortfall_msg(5, 1).is_none());
+    }
+
+    #[test]
+    fn min_defs_shortfall_msg_returns_the_shortfall_diagnostic_when_defs_are_short() {
+        // Shortfall-path pin: a source that compiles to fewer than
+        // `min_defs` definitions yields the exact pre-lift `format!`
+        // shape. Pin the byte-identical parity with both current
+        // callers' hand-authored diagnostic — a regression that
+        // reordered the two numeric slots or dropped the `≥` glyph
+        // surfaces HERE.
+        assert_eq!(
+            min_defs_shortfall_msg(0, 1),
+            Some("expected ≥ 1 definitions, got 0".to_string()),
+        );
+        assert_eq!(
+            min_defs_shortfall_msg(2, 5),
+            Some("expected ≥ 5 definitions, got 2".to_string()),
+        );
+    }
+
+    #[test]
+    fn min_defs_shortfall_msg_matches_pre_lift_chain_bytewise() {
+        // Byte-identical parity pin with the pre-lift four-line
+        // `if defs.len() < min_defs { return report.fail(label,
+        // format!("expected ≥ {} definitions, got {}", min_defs,
+        // defs.len())); }` chain both current callers restated. Sweeps
+        // the boundary corners: (a) empty defs against non-zero min,
+        // (b) exact-boundary defs-count matching min, (c) defs
+        // strictly above min, (d) large-integer corner. A regression
+        // in the primitive that broke byte identity with the pre-lift
+        // shape at ANY corner surfaces HERE rather than as silent
+        // check-executor drift across the two `check_lisp_compiles`
+        // domain arms.
+        for (defs_len, min_defs) in [(0usize, 0usize), (0, 1), (1, 1), (1, 2), (5, 3), (100, 99)] {
+            let via_primitive: Option<String> = min_defs_shortfall_msg(defs_len, min_defs);
+            let via_pre_lift: Option<String> = (defs_len < min_defs)
+                .then(|| format!("expected ≥ {} definitions, got {}", min_defs, defs_len));
+            assert_eq!(
+                via_primitive, via_pre_lift,
+                "drift on (defs_len={defs_len}, min_defs={min_defs})",
+            );
+        }
+    }
+
+    #[test]
+    fn min_defs_shortfall_msg_treats_zero_min_as_satisfied_by_zero_defs() {
+        // Zero-corner pin: a `:min-definitions 0` slot (an operator
+        // authoring a coherence check that only cares about compile
+        // success, not definition count) accepts an empty defs vec —
+        // matches the pre-lift `<` (not `<=`) comparator. Guards
+        // against a regression that promoted the comparator to `<=`
+        // and started rejecting the "no floor" case.
+        assert!(min_defs_shortfall_msg(0, 0).is_none());
     }
 
     #[test]

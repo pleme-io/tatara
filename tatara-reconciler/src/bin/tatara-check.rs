@@ -354,22 +354,12 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
             }
             let first = &defs[0];
             for req in &requires {
-                let ok = match req.as_str() {
-                    "aplicacao" => !first.spec.aplicacao.chart_ref.is_empty(),
-                    "ttl" => !first.spec.ttl.is_empty(),
-                    "teardown" => true, // typed enum — always present
-                    "postconditions" => !first.spec.postconditions.is_empty(),
-                    "preconditions" => !first.spec.preconditions.is_empty(),
-                    "closed-loop-auth" => first.spec.postconditions.iter().any(|c| {
-                        matches!(
-                            c.kind,
-                            tatara_process::boundary::ConditionKind::ClosedLoopAuth
-                        )
-                    }),
-                    other => {
+                let ok = match evaluate_ephemeral_require_tag(&first.spec, req) {
+                    Ok(matched) => matched,
+                    Err(UnknownRequireTag) => {
                         return report.fail(
                             label,
-                            format!("unknown :requires tag for ephemeral domain: {other}"),
+                            format!("unknown :requires tag for ephemeral domain: {req}"),
                         );
                     }
                 };
@@ -513,6 +503,70 @@ fn evaluate_point_require_tag(
         "boundary-post" => Ok(!spec.boundary.postconditions.is_empty()),
         "compliance" => Ok(!spec.compliance.bindings.is_empty()),
         "signals" => Ok(spec.signals.sigterm_grace_seconds > 0),
+        _ => Err(UnknownRequireTag),
+    }
+}
+
+/// Classify one `:requires <tag>` entry against a compiled
+/// [`tatara_process::ephemeral::EphemeralSpec`] and return whether the
+/// spec satisfies it. Peer of [`evaluate_point_require_tag`] on the
+/// ephemeral domain axis — same `Result<bool, UnknownRequireTag>`
+/// return shape so both surfaces route through the SAME classification-
+/// error taxonomy at the check-executor boundary. `Ok(true)` —
+/// satisfied; `Ok(false)` — a required slot is empty (caller's
+/// `definition missing required` diagnostic path);
+/// `Err(UnknownRequireTag)` — the tag isn't in the ephemeral-domain
+/// vocabulary (caller's `unknown :requires tag for ephemeral domain`
+/// diagnostic path).
+///
+/// # Vocabulary
+///
+/// Every tag is a fixed match on an [`EphemeralSpec`] slot; the
+/// ephemeral surface deliberately doesn't have a closed-set prefix
+/// family today (the sugar's own knobs — `aplicacao`, `ttl`,
+/// `teardown`, `postconditions`, `preconditions` — aren't
+/// discriminators of a closed set on `EphemeralSpec`). The vocabulary:
+///
+/// - `aplicacao` — the chart reference slot is populated
+///   (`!spec.aplicacao.chart_ref.is_empty()`).
+/// - `ttl` — the TTL slot is populated
+///   (`!spec.ttl.is_empty()`). Pre-lift a default ephemeral (via
+///   [`crate::lifetime::default_ephemeral_ttl`]'s `"1h"`) always
+///   satisfies this; a hand-authored empty TTL is the failure path.
+/// - `teardown` — always `Ok(true)`; [`TeardownPolicy`] is a typed
+///   enum with a `Default` impl (there is no absent state to detect).
+/// - `postconditions` / `preconditions` — the corresponding slot
+///   carries at least one [`crate::boundary::Condition`].
+/// - `closed-loop-auth` — at least one postcondition's `kind` is
+///   [`ConditionKind::ClosedLoopAuth`]. A finer-grained pin than
+///   `postconditions` — an ephemeral env with a HelmRelease-only
+///   postcondition list passes the coarse tag but fails this one.
+///
+/// A future closed-set prefix family lands as one `else if let Some(
+/// suffix) = tag.strip_prefix("<prefix>-")` branch that reads the same
+/// three-step (strip_prefix + parse + has) shape
+/// [`evaluate_point_require_tag`] publishes.
+///
+/// Pinned by [`tests::evaluate_ephemeral_require_tag_routes_populated_slots_true`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_slots`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_out_of_vocabulary_tag`],
+/// and [`tests::evaluate_ephemeral_require_tag_closed_loop_auth_reads_postcondition_kind`].
+fn evaluate_ephemeral_require_tag(
+    spec: &tatara_process::ephemeral::EphemeralSpec,
+    tag: &str,
+) -> Result<bool, UnknownRequireTag> {
+    match tag {
+        "aplicacao" => Ok(!spec.aplicacao.chart_ref.is_empty()),
+        "ttl" => Ok(!spec.ttl.is_empty()),
+        "teardown" => Ok(true),
+        "postconditions" => Ok(!spec.postconditions.is_empty()),
+        "preconditions" => Ok(!spec.preconditions.is_empty()),
+        "closed-loop-auth" => Ok(spec.postconditions.iter().any(|c| {
+            matches!(
+                c.kind,
+                tatara_process::boundary::ConditionKind::ClosedLoopAuth
+            )
+        })),
         _ => Err(UnknownRequireTag),
     }
 }
@@ -807,13 +861,16 @@ fn normalize(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        evaluate_point_require_tag, find_kw, find_kw_string_list, head_symbol_or_missing,
-        min_defs_shortfall_msg, parse_kwargs, positional_string, UnknownRequireTag,
-        MISSING_ARG_SLUG,
+        evaluate_ephemeral_require_tag, evaluate_point_require_tag, find_kw, find_kw_string_list,
+        head_symbol_or_missing, min_defs_shortfall_msg, parse_kwargs, positional_string,
+        UnknownRequireTag, MISSING_ARG_SLUG,
     };
     use tatara_lisp::{read, Sexp};
+    use tatara_process::boundary::{Condition, ConditionKind};
     use tatara_process::crd::ProcessSpec;
-    use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind};
+    use tatara_process::ephemeral::EphemeralSpec;
+    use tatara_process::intent::AplicacaoIntent;
+    use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind, TeardownPolicy};
 
     // Re-parse a `(list …)` source through the reader and hand its
     // interior slice to `parse_kwargs`, so every test exercises the
@@ -1548,6 +1605,201 @@ mod tests {
         );
         assert_eq!(
             evaluate_point_require_tag(&spec, "totally-unknown"),
+            Err(UnknownRequireTag),
+        );
+    }
+
+    // ── evaluate_ephemeral_require_tag substrate pins ────────────────
+    //
+    // Fail-before-pass-after granularity: `evaluate_ephemeral_require_tag`
+    // did not exist before this commit — the ephemeral require-tag
+    // dispatch lived inline inside `check_lisp_compiles` as a
+    // hand-authored `match req.as_str()` restating its own error-flow
+    // through `return report.fail(...)` and unreachable from tests. The
+    // extraction lifts the six-tag vocabulary to ONE testable owner
+    // whose return-shape (`Result<bool, UnknownRequireTag>`) is
+    // byte-identical to the [`evaluate_point_require_tag`] peer, so
+    // both classifiers now route through the SAME classification-error
+    // taxonomy at the check-executor boundary. A regression that
+    // dropped a vocabulary arm, silently reclassified a known slot's
+    // presence probe, or misclassified an out-of-vocabulary tag as
+    // `Ok(false)` fails HERE at ONE narrow substrate site rather than
+    // requiring an end-to-end `cargo run --bin tatara-check` sweep
+    // driving a `(defephemeral …)` form through the executor to catch.
+
+    fn ephemeral_fixture() -> EphemeralSpec {
+        EphemeralSpec {
+            aplicacao: AplicacaoIntent::chart_only("oci://ghcr.io/x", "1"),
+            ttl: "1h".into(),
+            teardown: TeardownPolicy::Always,
+            max_concurrent: 0,
+            postconditions: vec![],
+            preconditions: vec![],
+            verify_timeout: None,
+            classification: None,
+            parent: None,
+            exports: vec![],
+            routing: None,
+        }
+    }
+
+    /// POPULATED-slot pin — every vocabulary tag whose truth depends
+    /// on a mutable slot reads `Ok(true)` on a fully populated
+    /// [`EphemeralSpec`]. Locks the six-tag vocabulary at the
+    /// classifier boundary so a regression that dropped a slot arm
+    /// (e.g. silently rewrote `postconditions` to read a different
+    /// slot) fails here before landing at the operator-facing
+    /// checks.lisp surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_routes_populated_slots_true() {
+        let mut spec = ephemeral_fixture();
+        spec.postconditions = vec![Condition {
+            kind: ConditionKind::HelmReleaseReleased,
+            params: serde_json::Value::Null,
+        }];
+        spec.preconditions = vec![Condition {
+            kind: ConditionKind::KustomizationHealthy,
+            params: serde_json::Value::Null,
+        }];
+        for tag in [
+            "aplicacao",
+            "ttl",
+            "teardown",
+            "postconditions",
+            "preconditions",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, tag),
+                Ok(true),
+                "populated slot must classify as satisfied for tag {tag:?}",
+            );
+        }
+    }
+
+    /// EMPTY-slot pin — an ephemeral spec with empty collections and
+    /// empty strings reads `Ok(false)` for every emptiness-driven tag.
+    /// `teardown` reads `Ok(true)` unconditionally (typed enum with a
+    /// `Default` impl; the substrate has no absent-teardown state to
+    /// detect). A regression that flipped the always-satisfied
+    /// `teardown` arm or the emptiness polarity on the four
+    /// collection/string slots fails here.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_empty_slots() {
+        let spec = EphemeralSpec {
+            aplicacao: AplicacaoIntent::chart_only("", ""),
+            ttl: String::new(),
+            teardown: TeardownPolicy::default(),
+            max_concurrent: 0,
+            postconditions: vec![],
+            preconditions: vec![],
+            verify_timeout: None,
+            classification: None,
+            parent: None,
+            exports: vec![],
+            routing: None,
+        };
+        for tag in [
+            "aplicacao",
+            "ttl",
+            "postconditions",
+            "preconditions",
+            "closed-loop-auth",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, tag),
+                Ok(false),
+                "empty slot must classify as unsatisfied for tag {tag:?}",
+            );
+        }
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "teardown"),
+            Ok(true),
+            "teardown is a typed enum with Default — no absent state to detect",
+        );
+    }
+
+    /// UNKNOWN-tag pin — an out-of-vocabulary tag classifies as
+    /// [`UnknownRequireTag`] so the caller's operator-facing
+    /// `unknown :requires tag for ephemeral domain: <verbatim>`
+    /// diagnostic path fires. A regression that fell through to
+    /// `Ok(false)` (matching the pre-lift `match req.as_str() { ...
+    /// other => report.fail(...) }` arm's inverse) would silently
+    /// reclassify a misspelled tag as `definition missing required:
+    /// <tag>`, which reads as "the spec is wrong" rather than "your
+    /// check is wrong". Pin the distinction — parity with the point-
+    /// classifier's [`evaluate_point_require_tag_routes_fixed_tags_and_unknown_tail`]
+    /// unknown-tail pin.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_out_of_vocabulary_tag() {
+        let spec = ephemeral_fixture();
+        for tag in ["totally-unknown", "aplicaca", "cl-auth", ""] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, tag),
+                Err(UnknownRequireTag),
+                "out-of-vocabulary tag {tag:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// FINE-GRAINED-DISCRIMINATOR pin — `closed-loop-auth` reads
+    /// `Ok(true)` only when at least one postcondition's `kind` is
+    /// [`ConditionKind::ClosedLoopAuth`]. Cross-check that an
+    /// ephemeral spec whose postconditions carry a
+    /// [`ConditionKind::HelmReleaseReleased`] entry (satisfying the
+    /// coarse `postconditions` tag) still reads `Ok(false)` for
+    /// `closed-loop-auth`. A regression that widened the discriminator
+    /// to "any postcondition" — the same regression that would collapse
+    /// the closed-loop-auth destination-state's boundary theorem into
+    /// a plain "has some postcondition" assertion — fails here.
+    #[test]
+    fn evaluate_ephemeral_require_tag_closed_loop_auth_reads_postcondition_kind() {
+        let mut spec = ephemeral_fixture();
+        spec.postconditions = vec![Condition {
+            kind: ConditionKind::HelmReleaseReleased,
+            params: serde_json::Value::Null,
+        }];
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "closed-loop-auth"),
+            Ok(false),
+            "a HelmReleaseReleased postcondition must not satisfy the closed-loop-auth tag",
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "postconditions"),
+            Ok(true),
+            "the coarse postconditions tag must still be satisfied by any kind",
+        );
+        spec.postconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: serde_json::Value::Null,
+        });
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "closed-loop-auth"),
+            Ok(true),
+            "at least one ClosedLoopAuth postcondition must satisfy the closed-loop-auth tag",
+        );
+    }
+
+    /// PARITY pin — the ephemeral classifier's return shape is
+    /// `Result<bool, UnknownRequireTag>`, byte-identical to the peer
+    /// [`evaluate_point_require_tag`] classifier. A regression that
+    /// diverged the two classifiers' error type (e.g. returning
+    /// `Option<bool>` here, or a domain-specific `UnknownEphemeralTag`
+    /// sentinel) fails here — parity is what lets a future
+    /// `RequireTagClassifier` trait unify the two arms of
+    /// `check_lisp_compiles` behind ONE typed dispatcher.
+    #[test]
+    fn evaluate_ephemeral_require_tag_shares_error_taxonomy_with_point_peer() {
+        let eph = ephemeral_fixture();
+        let point = ProcessSpec::gate_compute_defaults();
+        // Both classifiers hand back the same `UnknownRequireTag`
+        // sentinel; a shared error type is the compile-time proof of
+        // parity. A future trait binding will consume both.
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&eph, "nope"),
+            Err(UnknownRequireTag),
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&point, "nope"),
             Err(UnknownRequireTag),
         );
     }

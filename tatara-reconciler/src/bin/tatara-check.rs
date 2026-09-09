@@ -308,14 +308,7 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
     let min_defs = find_kw(&kw, "min-definitions")
         .and_then(Sexp::as_int)
         .unwrap_or(1) as usize;
-    let requires: Vec<String> = find_kw(&kw, "requires")
-        .and_then(Sexp::as_list)
-        .map(|xs| {
-            xs.iter()
-                .filter_map(|s| s.as_symbol().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default();
+    let requires: Vec<String> = find_kw_string_list(&kw, "requires", Sexp::as_symbol);
     // Optional `:domain <name>` — selects which typed surface to compile.
     // Default `point` (ProcessSpec via `(defpoint …)`). New: `ephemeral`
     // (EphemeralSpec via `(defephemeral …)`).
@@ -451,14 +444,7 @@ fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
     let label = format!("File contains: {rel}");
 
     let kw = parse_kwargs(&args[1..]);
-    let strings: Vec<String> = find_kw(&kw, "strings")
-        .and_then(Sexp::as_list)
-        .map(|xs| {
-            xs.iter()
-                .filter_map(|s| s.as_string().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default();
+    let strings: Vec<String> = find_kw_string_list(&kw, "strings", Sexp::as_string);
     if strings.is_empty() {
         return report.fail(label, ":strings (...) missing or empty");
     }
@@ -505,6 +491,66 @@ fn parse_kwargs(rest: &[Sexp]) -> Vec<(String, Sexp)> {
     out
 }
 
+/// Collect the items under a `:name` keyword slot as `Vec<String>`,
+/// projecting each item through `proj` and skipping non-matching items —
+/// the ONE substrate owner of the `find_kw(&kw, NAME).and_then(Sexp::as_list)
+/// .map(|xs| xs.iter().filter_map(|s| s.<PROJ>().map(String::from)).collect())
+/// .unwrap_or_default()` five-line chain both [`check_lisp_compiles`]
+/// (`:requires` slot with [`Sexp::as_symbol`]) and [`check_file_contains`]
+/// (`:strings` slot with [`Sexp::as_string`]) hand-authored past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold.
+///
+/// The projection is a `fn(&Sexp) -> Option<&str>` — every atomic
+/// soft-projection on the substrate's [`Sexp`] algebra fits the bound
+/// ([`Sexp::as_symbol`], [`Sexp::as_string`], [`Sexp::as_keyword`],
+/// [`Sexp::as_symbol_or_string`]), so a future `:name-list` slot on a
+/// new keyword-family check axis (e.g. `:keywords` for a check that
+/// listed keyword literals, `:heads` for a hybrid symbol-or-string
+/// slot) binds through the SAME primitive with the matching typed
+/// projection — no per-slot restatement of the five-line
+/// find/list/filter/collect chain.
+///
+/// Semantics — byte-identical to the pre-lift chain:
+///
+/// * `:name` slot absent (`find_kw` returns `None`) → empty [`Vec`].
+/// * `:name` slot present but NOT a [`Sexp::List`] (a bare atom, a
+///   quote-family wrapper) → empty [`Vec`] (soft failure through
+///   `and_then(Sexp::as_list)`).
+/// * `:name` slot is a list → each item projected through `proj`;
+///   items whose projection returns `None` are silently skipped (a
+///   mixed list `(foo 42 "bar")` with [`Sexp::as_symbol`] collects
+///   just `["foo"]`), matching the pre-lift `filter_map` discipline.
+///
+/// Sibling of [`find_kw`] on the parsed-kwargs algebra: where
+/// [`find_kw`] is the substrate primitive for "resolve a `:name` slot
+/// to `Option<&Sexp>`", THIS primitive composes that lookup with the
+/// canonical list-of-atoms projection every executor that reads a
+/// list-shaped `:name-list` slot walks. Callers that need a
+/// non-string-shaped list projection (a `Vec<i64>` for a hypothetical
+/// `:thresholds` slot, a `Vec<PathBuf>` for a `:paths` slot) still
+/// compose their own `.map(...)` on top of `find_kw(&kw,
+/// NAME).and_then(Sexp::as_list)` — this primitive names the
+/// string-shape corner (the only shape both current callers walked).
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// byte-identical five-line inline compositions collapse onto ONE
+/// substrate owner past the ≥2 PRIME-DIRECTIVE trigger. THEORY.md
+/// §II.1 invariant 2 — free middle; both current executors AND every
+/// future `:name-list` slot on a new check axis route through the
+/// SAME parsed-kwargs-to-owned-string-list projection, so a
+/// regression that drifts one caller's discipline from the others
+/// becomes structurally impossible.
+fn find_kw_string_list(
+    kw: &[(String, Sexp)],
+    name: &str,
+    proj: fn(&Sexp) -> Option<&str>,
+) -> Vec<String> {
+    find_kw(kw, name)
+        .and_then(Sexp::as_list)
+        .map(|xs| xs.iter().filter_map(proj).map(String::from).collect())
+        .unwrap_or_default()
+}
+
 /// First-match lookup on the [`parse_kwargs`]-produced kwargs slice.
 ///
 /// Collapses the four sibling `kw.iter().find_map(|(k, v)| if k == NAME
@@ -545,7 +591,7 @@ fn normalize(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{find_kw, parse_kwargs};
+    use super::{find_kw, find_kw_string_list, parse_kwargs};
     use tatara_lisp::{read, Sexp};
 
     // Re-parse a `(list …)` source through the reader and hand its
@@ -608,5 +654,171 @@ mod tests {
         // fail here.
         let kw: Vec<(String, Sexp)> = Vec::new();
         assert!(find_kw(&kw, "any-name").is_none());
+    }
+
+    // ── find_kw_string_list substrate pins ───────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `find_kw_string_list`
+    // free function did not exist before this commit, so each test
+    // below fails to compile pre-lift. Post-lift they collectively
+    // pin the (find, list, filter, collect) chain semantics at ONE
+    // substrate owner — a regression that swapped the `filter_map`
+    // for a `map` (turning silent-skip of non-matching items into an
+    // implicit None-in-Vec), dropped the `find_kw` short-circuit
+    // (allowing empty output where `:name` was absent), or changed
+    // the `.unwrap_or_default()` corner (panicking on missing keys)
+    // surfaces HERE rather than as silent drift at both check
+    // executor callers.
+
+    #[test]
+    fn find_kw_string_list_collects_symbol_items_via_as_symbol_projection() {
+        // Byte-identical parity with the pre-lift `check_lisp_compiles`
+        // `:requires` decode: `(lisp-compiles ... :requires (intent-nix
+        // depends-on))` collects `["intent-nix", "depends-on"]` through
+        // `Sexp::as_symbol`. Pin the happy-path shape both current
+        // callers walk.
+        let kw = kwargs_from("(check :requires (intent-nix depends-on boundary-post))");
+        assert_eq!(
+            find_kw_string_list(&kw, "requires", Sexp::as_symbol),
+            vec![
+                "intent-nix".to_string(),
+                "depends-on".to_string(),
+                "boundary-post".to_string(),
+            ],
+        );
+    }
+
+    #[test]
+    fn find_kw_string_list_collects_string_items_via_as_string_projection() {
+        // Byte-identical parity with the pre-lift `check_file_contains`
+        // `:strings` decode: `(file-contains ... :strings ("foo" "bar"))`
+        // collects `["foo", "bar"]` through `Sexp::as_string`. Pin the
+        // second current caller's shape so a projection swap (e.g. an
+        // accidental `Sexp::as_symbol` reroute that would collect an
+        // empty vec from a string-only source) fails HERE.
+        let kw = kwargs_from(r#"(check :strings ("services.tatara.processes" "pointType"))"#);
+        assert_eq!(
+            find_kw_string_list(&kw, "strings", Sexp::as_string),
+            vec![
+                "services.tatara.processes".to_string(),
+                "pointType".to_string(),
+            ],
+        );
+    }
+
+    #[test]
+    fn find_kw_string_list_returns_empty_when_the_name_is_absent() {
+        // Miss-path pin: an unknown `:name` slot (a `(check :other 42)`
+        // form with no `:strings` slot) collects an empty Vec, matching
+        // the pre-lift `find_kw(...).<chain>.unwrap_or_default()` shape.
+        // Load-bearing: `check_file_contains` follows the empty-Vec
+        // return with `if strings.is_empty() { return report.fail(...) }`
+        // — a regression that panicked on the missing slot rather than
+        // returning empty would fail HERE before reaching that gate.
+        let kw = kwargs_from("(check :other 42)");
+        assert!(find_kw_string_list(&kw, "strings", Sexp::as_string).is_empty());
+    }
+
+    #[test]
+    fn find_kw_string_list_returns_empty_when_the_value_is_not_a_list() {
+        // Non-list value pin: a `:strings` slot bound to a bare atom
+        // (`(check :strings "just-one")`, a plausible operator typo
+        // meaning `(check :strings ("just-one"))`) collects an empty
+        // Vec, matching the pre-lift `.and_then(Sexp::as_list)`
+        // soft-failure shape. A regression that reached inside a bare
+        // atom would either surface here as a wrong non-empty Vec or
+        // as a panic on the missing list-shape.
+        let kw = kwargs_from(r#"(check :strings "just-one")"#);
+        assert!(find_kw_string_list(&kw, "strings", Sexp::as_string).is_empty());
+    }
+
+    #[test]
+    fn find_kw_string_list_silently_skips_items_the_projection_rejects() {
+        // Mixed-shape pin: a list with items of the "wrong" shape for
+        // the projection (integers and strings in a `:requires` slot
+        // expecting symbols) collects only the projection-accepted
+        // items, matching the pre-lift `filter_map` discipline. A
+        // regression that swapped `filter_map` for `map` (silently
+        // producing `Vec<Option<String>>` or panicking on the first
+        // rejection) fails HERE. Sibling-shape pin to the pre-lift
+        // behavior every operator authoring a mixed list relied on.
+        let kw = kwargs_from(r#"(check :requires (intent-nix 42 "quoted-str" depends-on))"#);
+        assert_eq!(
+            find_kw_string_list(&kw, "requires", Sexp::as_symbol),
+            vec!["intent-nix".to_string(), "depends-on".to_string()],
+        );
+    }
+
+    #[test]
+    fn find_kw_string_list_collects_empty_when_the_list_is_empty() {
+        // Empty-list pin: an explicit `:strings ()` slot collects an
+        // empty Vec — distinct from the "slot absent" case at
+        // `find_kw_string_list_returns_empty_when_the_name_is_absent`,
+        // but reaching the SAME empty output. Both paths must land on
+        // the same Vec shape so `check_file_contains`'s downstream
+        // `is_empty()` gate fires uniformly whether the operator wrote
+        // `(file-contains "path")` (slot absent) or `(file-contains
+        // "path" :strings ())` (slot present but empty).
+        let kw = kwargs_from("(check :strings ())");
+        assert!(find_kw_string_list(&kw, "strings", Sexp::as_string).is_empty());
+    }
+
+    #[test]
+    fn find_kw_string_list_matches_pre_lift_chain_bytewise_on_symbol_axis() {
+        // Byte-identical parity pin with the pre-lift five-line chain
+        // both current callers hand-authored, on the SYMBOL projection
+        // axis (`check_lisp_compiles`'s `:requires` slot). A regression
+        // in the primitive that broke byte identity with the pre-lift
+        // shape at ANY corner surfaces HERE rather than as silent
+        // check-executor drift.
+        for src in [
+            "(check :requires ())",
+            "(check :requires (foo))",
+            "(check :requires (foo bar baz))",
+            "(check :requires (foo 42 baz))",
+            "(check :other 1)",
+        ] {
+            let kw = kwargs_from(src);
+            let via_primitive: Vec<String> = find_kw_string_list(&kw, "requires", Sexp::as_symbol);
+            let via_pre_lift: Vec<String> = find_kw(&kw, "requires")
+                .and_then(Sexp::as_list)
+                .map(|xs| {
+                    xs.iter()
+                        .filter_map(|s| s.as_symbol().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            assert_eq!(via_primitive, via_pre_lift, "drift on {src}");
+        }
+    }
+
+    #[test]
+    fn find_kw_string_list_matches_pre_lift_chain_bytewise_on_string_axis() {
+        // Byte-identical parity pin with the pre-lift five-line chain
+        // both current callers hand-authored, on the STRING projection
+        // axis (`check_file_contains`'s `:strings` slot). Sibling-shape
+        // pin to `find_kw_string_list_matches_pre_lift_chain_bytewise_on_symbol_axis`
+        // — the two together anchor the primitive at both current
+        // caller-visible projection axes so a regression at either
+        // surface fails HERE rather than as silent drift downstream.
+        for src in [
+            r#"(check :strings ())"#,
+            r#"(check :strings ("only"))"#,
+            r#"(check :strings ("a" "b" "c"))"#,
+            r#"(check :strings ("a" 42 "b"))"#,
+            r#"(check :other 1)"#,
+        ] {
+            let kw = kwargs_from(src);
+            let via_primitive: Vec<String> = find_kw_string_list(&kw, "strings", Sexp::as_string);
+            let via_pre_lift: Vec<String> = find_kw(&kw, "strings")
+                .and_then(Sexp::as_list)
+                .map(|xs| {
+                    xs.iter()
+                        .filter_map(|s| s.as_string().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            assert_eq!(via_primitive, via_pre_lift, "drift on {src}");
+        }
     }
 }

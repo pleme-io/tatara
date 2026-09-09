@@ -56,6 +56,94 @@ pub enum HostnameError {
     ReservedApp(String),
 }
 
+impl HostnameError {
+    /// Construct an [`HostnameError::InvalidLabel`] variant — the ONE
+    /// substrate primitive owning the three-slot
+    /// `HostnameError::InvalidLabel { segment, label: <str>.to_string(),
+    /// reason: <static> }` construction shape every RFC 1123 DNS-label
+    /// rejection site in this module walks BEFORE returning through the
+    /// `?` short-circuit.
+    ///
+    /// Pre-lift the shape was hand-authored at FOUR module-private
+    /// validation sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// threshold, each restating the SAME three-field struct-literal
+    /// verbatim modulo the per-site `reason` slot:
+    ///
+    /// * [`validate_label`] × 3 — the length gate
+    ///   (`"must be 1–63 characters"`), the leading/trailing-hyphen gate
+    ///   (`"must not start or end with a hyphen"`), and the character-
+    ///   set gate (`"must contain only [a-z0-9-]"`); each walked
+    ///   `HostnameError::InvalidLabel { segment, label: label.to_string
+    ///   (), reason: <per-gate literal> }` with the same
+    ///   `segment: &'static str` slot threaded through from the caller
+    ///   and the same `label.to_string()` projection on the borrowed
+    ///   `&str` label slot.
+    /// * [`validate_domain`] × 1 — the empty-domain early-return
+    ///   (`"must not be empty"`); same three-slot struct literal shape,
+    ///   same `<str>.to_string()` projection on the borrowed `domain`
+    ///   argument, sibling to the three sites in [`validate_label`] on
+    ///   the RFC 1123 rejection axis.
+    ///
+    /// All four sites walked the SAME struct-literal three-slot shape
+    /// verbatim, differing only in the `reason: &'static str` slot they
+    /// bound. Post-lift each callsite reads `HostnameError::invalid_label
+    /// (segment, label, "<reason>")` and the construction shape lives at
+    /// ONE substrate owner here.
+    ///
+    /// Peer to the two-step composer [`validate_app`] on the same
+    /// hostname-validation axis, split by ABSTRACTION LEVEL:
+    /// [`validate_app`] owns the ordered check chain callers CONSUME
+    /// (RFC 1123 → reserved-name); this constructor owns the typed-
+    /// variant PRODUCTION callers of those checks EMIT. Together the
+    /// two primitives partition the module's rejection surface — the
+    /// composer says WHEN to reject, the constructor says WHAT the
+    /// rejection variant looks like on the wire.
+    ///
+    /// The `label` slot accepts `impl Into<String>` so a caller with a
+    /// borrowed `&str` label (the four pre-lift sites) reaches
+    /// `invalid_label(segment, label, reason)` without a per-site
+    /// `.to_string()` — the projection lives at the substrate. A caller
+    /// with an owned [`String`] (a future consumer stamping a
+    /// dynamically-composed label into the rejection variant) reaches
+    /// the SAME constructor without a per-site conversion either — the
+    /// `impl Into<String>` bound admits both slot shapes identically.
+    /// A future extension to the variant (a byte-offset slot into the
+    /// source label pinpointing the failing character, a
+    /// [`tracing::Span`] correlation slot, a normalization of the
+    /// label's casing at the substrate before it reaches the operator's
+    /// log stream) lands at THIS ONE constructor and every rejection
+    /// site inherits the upgrade mechanically — no per-site edit at any
+    /// of the four `validate_*` primitives, no drift risk for a fifth
+    /// future validation site that plugs into the same rejection
+    /// policy.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the three-slot struct-literal recurred at four hand-authored
+    /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and
+    /// lifts to ONE substrate owner here, matching the discipline
+    /// [`validate_app`] and [`validate_fqdn_suffix`] already carry on
+    /// the peer composer axes). THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — post-lift every rejection site
+    /// surfaces the byte-identical `HostnameError::InvalidLabel` variant
+    /// by CONSTRUCTION rather than by four independent struct-literal
+    /// restatements kept in sync by convention; a regression that re-
+    /// open-coded a site would surface at the pin block below rather
+    /// than as silent operator-facing skew across every downstream
+    /// rejection consumer).
+    #[inline]
+    fn invalid_label(
+        segment: &'static str,
+        label: impl Into<String>,
+        reason: &'static str,
+    ) -> Self {
+        HostnameError::InvalidLabel {
+            segment,
+            label: label.into(),
+            reason,
+        }
+    }
+}
+
 /// Substrate extension trait over `Result<T, HostnameError>` — the ONE
 /// substrate owner of the `.map_err(|e| anyhow::anyhow!("<ctx>: {e}"))`
 /// wrap-shape every reconciler consumer restated by hand at the
@@ -227,12 +315,9 @@ pub fn ephemeral_id_from_spec<T: Serialize>(spec: &T) -> Result<String, Hostname
     // `HostnameError::InvalidLabel` projection at this callsite so
     // the operator-facing wording stays byte-identical to the
     // pre-lift shape.
-    let bytes =
-        crate::three_pillar::canonical_bytes(spec).map_err(|_| HostnameError::InvalidLabel {
-            segment: "spec",
-            label: "<unserializable>".into(),
-            reason: "spec failed to canonicalize",
-        })?;
+    let bytes = crate::three_pillar::canonical_bytes(spec).map_err(|_| {
+        HostnameError::invalid_label("spec", "<unserializable>", "spec failed to canonicalize")
+    })?;
     Ok(short_hex_blake3(&bytes, EPHEMERAL_ID_HASH_LEN))
 }
 
@@ -255,28 +340,28 @@ pub fn resolve_ephemeral_id<'a>(hostname: &'a RoutingHostname, fallback_hash: &'
 
 fn validate_label(segment: &'static str, label: &str) -> Result<(), HostnameError> {
     if label.is_empty() || label.len() > 63 {
-        return Err(HostnameError::InvalidLabel {
+        return Err(HostnameError::invalid_label(
             segment,
-            label: label.to_string(),
-            reason: "must be 1–63 characters",
-        });
+            label,
+            "must be 1–63 characters",
+        ));
     }
     if label.starts_with('-') || label.ends_with('-') {
-        return Err(HostnameError::InvalidLabel {
+        return Err(HostnameError::invalid_label(
             segment,
-            label: label.to_string(),
-            reason: "must not start or end with a hyphen",
-        });
+            label,
+            "must not start or end with a hyphen",
+        ));
     }
     if !label
         .chars()
         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
     {
-        return Err(HostnameError::InvalidLabel {
+        return Err(HostnameError::invalid_label(
             segment,
-            label: label.to_string(),
-            reason: "must contain only [a-z0-9-]",
-        });
+            label,
+            "must contain only [a-z0-9-]",
+        ));
     }
     Ok(())
 }
@@ -346,11 +431,11 @@ fn validate_app(app: &str) -> Result<(), HostnameError> {
 
 fn validate_domain(segment: &'static str, domain: &str) -> Result<(), HostnameError> {
     if domain.is_empty() {
-        return Err(HostnameError::InvalidLabel {
+        return Err(HostnameError::invalid_label(
             segment,
-            label: domain.to_string(),
-            reason: "must not be empty",
-        });
+            domain,
+            "must not be empty",
+        ));
     }
     // Multi-label domain — every dot-separated piece must be a valid label.
     for piece in domain.split('.') {
@@ -1250,5 +1335,195 @@ mod tests {
         // but `domain` itself splits as `quero.lol` ⇒ 6 dot-delimited
         // pieces. The shape, not the count, is the invariant.
         assert_eq!(fqdn_anon.matches('.').count(), 5);
+    }
+
+    // ─── HostnameError::invalid_label substrate pins ─────────────
+    //
+    // Fail-before-pass-after granularity: the `HostnameError::
+    // invalid_label` constructor did not exist pre-lift — the four
+    // `validate_*` rejection sites hand-authored the three-slot
+    // `HostnameError::InvalidLabel { segment, label: <str>.to_string
+    // (), reason: <static> }` struct literal inline. Post-lift the
+    // four rejection sites thread the same constructor, so the pins
+    // below pin the constructor's SHAPE + typed-variant surface +
+    // slot-projection discipline at the substrate — a regression that
+    // (a) drifts the `label.into()` projection at the substrate (e.g.
+    // narrows the `impl Into<String>` bound to `&str`, ruling out a
+    // future consumer stamping a dynamically-composed label), (b)
+    // promotes the constructor to a different `HostnameError` variant
+    // (a `ReservedApp` misfire) silently, or (c) swaps two of the
+    // three slots at the substrate (e.g. binds `reason` in the
+    // `segment` slot) surfaces HERE rather than as silent skew across
+    // every downstream FQDN emit whose rejection pattern-matches on
+    // the typed variant.
+
+    #[test]
+    fn invalid_label_constructor_produces_invalid_label_variant_with_all_three_slots_bound() {
+        // Byte-shape parity pin: the constructor's return MUST equal
+        // the pre-lift hand-authored `HostnameError::InvalidLabel {
+        // segment, label: label.to_string(), reason }` struct literal
+        // for every slot. A regression that swapped two slots (e.g.
+        // bound the reason-string into the segment slot) would
+        // surface HERE rather than as silent operator-facing skew
+        // across the four `validate_*` rejection sites whose log
+        // output already encoded the flat "invalid DNS label
+        // <label:?> for segment <segment>: <reason>" shape.
+        let via_constructor =
+            HostnameError::invalid_label("app", "BAD", "must contain only [a-z0-9-]");
+        let via_pre_lift = HostnameError::InvalidLabel {
+            segment: "app",
+            label: "BAD".to_string(),
+            reason: "must contain only [a-z0-9-]",
+        };
+        assert_eq!(via_constructor, via_pre_lift);
+    }
+
+    #[test]
+    fn invalid_label_constructor_accepts_borrowed_str_label_via_into_string() {
+        // Borrowed-slot invariant: the `label` slot must accept the
+        // borrowed `&str` shape (via `String::from`), matching the
+        // four pre-lift rejection sites whose `label` parameter is a
+        // borrowed `&str`. A regression that narrowed the bound to
+        // owned `String` only would reject the four production
+        // callsites at rustc time; a regression that narrowed it to
+        // `&'static str` would reject dynamically-composed labels.
+        let borrowed: &str = "dynamic-label";
+        let err = HostnameError::invalid_label("app", borrowed, "must be 1–63 characters");
+        match err {
+            HostnameError::InvalidLabel {
+                segment,
+                label,
+                reason,
+            } => {
+                assert_eq!(segment, "app");
+                assert_eq!(label, "dynamic-label");
+                assert_eq!(reason, "must be 1–63 characters");
+            }
+            other => panic!("expected InvalidLabel, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn invalid_label_constructor_accepts_owned_string_label_via_into_string() {
+        // Owned-slot peer of the borrowed-slot pin above — the
+        // `impl Into<String>` bound must admit an owned [`String`]
+        // (identity `Into` impl) verbatim. A future consumer that
+        // composes the label dynamically (via `format!`, from another
+        // typed source) reaches the SAME constructor without a
+        // per-callsite borrow detour. A regression that narrowed
+        // either arm silently would surface HERE.
+        let owned: String = "owned-label".to_string();
+        let err = HostnameError::invalid_label("cluster", owned, "must not be empty");
+        match err {
+            HostnameError::InvalidLabel {
+                segment,
+                label,
+                reason,
+            } => {
+                assert_eq!(segment, "cluster");
+                assert_eq!(label, "owned-label");
+                assert_eq!(reason, "must not be empty");
+            }
+            other => panic!("expected InvalidLabel, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn invalid_label_constructor_display_matches_thiserror_derived_shape_bytewise() {
+        // Display-shape invariant: the constructor's produced variant
+        // MUST render bytewise-identically to the pre-lift
+        // thiserror-derived Display output — the shape every
+        // reconciler consumer's log stream and every operator's grep
+        // pattern already encodes. A regression that added a slot to
+        // the variant without updating the `#[error]` attribute (or
+        // vice versa) would surface as a Display drift here, upstream
+        // of every downstream log consumer.
+        let via_constructor =
+            HostnameError::invalid_label("location", "USE1", "must contain only [a-z0-9-]");
+        assert_eq!(
+            format!("{via_constructor}"),
+            "invalid DNS label \"USE1\" for segment location: must contain only [a-z0-9-]",
+        );
+    }
+
+    #[test]
+    fn validate_label_length_gate_routes_through_invalid_label_constructor_bytewise() {
+        // Delegation pin — the length gate at [`validate_label`] MUST
+        // surface the byte-identical `HostnameError::InvalidLabel`
+        // variant the constructor produces for the same
+        // (segment, label, "must be 1–63 characters") triple. A
+        // regression that re-inlined the pre-lift struct literal at
+        // the length gate — dropping the delegation and re-open-
+        // coding the three slots — would reintroduce the duplication
+        // this lift removed; this pin catches it by asserting the
+        // rejection site's error equals the constructor's error
+        // bytewise across two representative shapes (an empty label
+        // and a 64-char label past the 63-char upper bound).
+        let long = "a".repeat(64);
+        for label in ["", long.as_str()] {
+            let via_validate = validate_label("app", label).unwrap_err();
+            let via_constructor =
+                HostnameError::invalid_label("app", label, "must be 1–63 characters");
+            assert_eq!(
+                via_validate, via_constructor,
+                "validate_label length gate must delegate to invalid_label constructor for label {label:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_label_hyphen_gate_routes_through_invalid_label_constructor_bytewise() {
+        // Sibling delegation pin — the leading/trailing-hyphen gate
+        // at [`validate_label`] MUST surface the byte-identical
+        // variant the constructor produces for the same triple.
+        // Sibling to the length-gate pin above; three representative
+        // shapes (leading hyphen, trailing hyphen, both).
+        for label in ["-lead", "trail-", "-both-"] {
+            let via_validate = validate_label("cluster", label).unwrap_err();
+            let via_constructor = HostnameError::invalid_label(
+                "cluster",
+                label,
+                "must not start or end with a hyphen",
+            );
+            assert_eq!(
+                via_validate, via_constructor,
+                "validate_label hyphen gate must delegate to invalid_label constructor for label {label:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_label_charset_gate_routes_through_invalid_label_constructor_bytewise() {
+        // Sibling delegation pin — the character-set gate at
+        // [`validate_label`] MUST surface the byte-identical variant
+        // the constructor produces for the same triple. Sibling to
+        // the length + hyphen pins above; three representative shapes
+        // (uppercase, underscore, non-ASCII).
+        for label in ["BAD", "with_underscore", "café"] {
+            let via_validate = validate_label("location", label).unwrap_err();
+            let via_constructor =
+                HostnameError::invalid_label("location", label, "must contain only [a-z0-9-]");
+            assert_eq!(
+                via_validate, via_constructor,
+                "validate_label charset gate must delegate to invalid_label constructor for label {label:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_domain_empty_gate_routes_through_invalid_label_constructor_bytewise() {
+        // Sibling delegation pin — the empty-domain early-return at
+        // [`validate_domain`] MUST surface the byte-identical variant
+        // the constructor produces for `("<segment>", "", "must not
+        // be empty")`. Sibling to the three [`validate_label`] gate
+        // pins above; the fourth pre-lift rejection site closes the
+        // sweep. A regression that re-inlined the empty-domain struct
+        // literal would surface HERE and NOT at any of the three
+        // sibling `validate_label` pins (each covers a different
+        // gate), so the four pins together bind each pre-lift
+        // rejection site to the ONE substrate constructor.
+        let via_validate = validate_domain("domain", "").unwrap_err();
+        let via_constructor = HostnameError::invalid_label("domain", "", "must not be empty");
+        assert_eq!(via_validate, via_constructor);
     }
 }

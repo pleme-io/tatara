@@ -659,6 +659,67 @@ pub fn at_epoch_second(secs: i64) -> DateTime<Utc> {
     DateTime::<Utc>::from_timestamp(secs, 0).expect("valid epoch second")
 }
 
+/// The wall-clock drift tolerance between two `Utc::now()` reads
+/// inside a single test — the ONE substrate owner of the 100ms
+/// scheduler-jitter bound every test that composes two anchors from
+/// separate wall-clock reads (peer composer vs hand-authored
+/// `Utc::now()` block, sibling `tombstone_now()` vs
+/// `tombstone_at(Utc::now())` fixture, sibling
+/// `PoolStatus::observed_now(...)` vs `observed(..., Utc::now())`)
+/// restated pre-lift.
+///
+/// Pre-lift the SAME `chrono::Duration::milliseconds(100)` bound was
+/// hand-authored at EIGHT wall-clock parity pins past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold — SIX inside
+/// `crate::time::tests`
+/// (`seconds_ago_matches_hand_authored_pre_lift_chain_shape`,
+/// `seconds_from_now_matches_hand_authored_pre_lift_chain_shape`,
+/// `seconds_from_now_negates_seconds_ago_at_sign_flip`,
+/// `tombstone_now_matches_hand_authored_pre_lift_chain_shape`,
+/// `tombstone_now_and_tombstone_at_agree_at_the_current_instant`,
+/// `wire_time_some_matches_tombstone_now_anchor_pre_lift`) and TWO
+/// inside `crate::pool::tests`
+/// (`pool_status_observed_now_matches_pre_lift_utc_now_composition_shape`,
+/// `pool_status_observed_from_matches_pre_lift_observed_now_composition_shape`),
+/// each restating `delta <= chrono::Duration::milliseconds(100)` with
+/// a "100ms scheduler jitter" message verbatim, differing only in the
+/// two anchors under test.
+///
+/// Post-lift each callsite reads [`scheduler_jitter`] on the RHS of
+/// its `delta <= ...` assertion and interpolates
+/// [`SCHEDULER_JITTER_MS`] into the failure message so a future
+/// tolerance change (a tightening to 50ms on faster CI, a widening
+/// to 200ms after a runner-slowdown audit) lands at ONE substrate
+/// site and every downstream wall-clock parity pin inherits the
+/// shift by construction.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// same `chrono::Duration::milliseconds(100)` literal recurred at
+/// EIGHT test-scaffold sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication trigger, and is lifted to ONE substrate owner here).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// pins
+/// [`tests::scheduler_jitter_matches_pre_lift_100ms_bound_by_construction`]
+/// and [`tests::scheduler_jitter_is_a_non_negative_window`] bind the
+/// value + sign of the tolerance so a regression that widened,
+/// tightened, or flipped its sign surfaces at ONE substrate site
+/// rather than as silent flakiness across every wall-clock parity
+/// pin).
+#[cfg(test)]
+pub(crate) const SCHEDULER_JITTER_MS: i64 = 100;
+
+/// Constructs the [`SCHEDULER_JITTER_MS`]-scaled `chrono::Duration`
+/// — the wire-form the pre-lift `chrono::Duration::milliseconds(100)`
+/// callsites read on the RHS of their `delta <= ...` assertions.
+///
+/// See [`SCHEDULER_JITTER_MS`] for the substrate's charter, the
+/// enumerated pre-lift callsites, and the theory grounding.
+#[cfg(test)]
+#[must_use]
+pub(crate) fn scheduler_jitter() -> chrono::Duration {
+    chrono::Duration::milliseconds(SCHEDULER_JITTER_MS)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -818,8 +879,8 @@ mod tests {
             let hand_authored = Utc::now() - chrono::Duration::seconds(secs);
             let delta = (hand_authored - composed).abs();
             assert!(
-                delta <= chrono::Duration::milliseconds(100),
-                "composed {composed} and hand-authored {hand_authored} must agree within 100ms scheduler jitter for secs={secs}"
+                delta <= scheduler_jitter(),
+                "composed {composed} and hand-authored {hand_authored} must agree within {SCHEDULER_JITTER_MS}ms scheduler jitter for secs={secs}"
             );
         }
     }
@@ -926,8 +987,8 @@ mod tests {
             let hand_authored = Utc::now() + chrono::Duration::seconds(secs);
             let delta = (hand_authored - composed).abs();
             assert!(
-                delta <= chrono::Duration::milliseconds(100),
-                "composed {composed} and hand-authored {hand_authored} must agree within 100ms scheduler jitter for secs={secs}"
+                delta <= scheduler_jitter(),
+                "composed {composed} and hand-authored {hand_authored} must agree within {SCHEDULER_JITTER_MS}ms scheduler jitter for secs={secs}"
             );
         }
     }
@@ -986,8 +1047,8 @@ mod tests {
             let minus = seconds_ago(-secs);
             let delta = (plus - minus).abs();
             assert!(
-                delta <= chrono::Duration::milliseconds(100),
-                "seconds_from_now({secs}) and seconds_ago({}) must agree within 100ms scheduler jitter (plus={plus} minus={minus})",
+                delta <= scheduler_jitter(),
+                "seconds_from_now({secs}) and seconds_ago({}) must agree within {SCHEDULER_JITTER_MS}ms scheduler jitter (plus={plus} minus={minus})",
                 -secs,
             );
         }
@@ -1047,8 +1108,8 @@ mod tests {
         let hand_authored = Some(Time(Utc::now())).expect("hand-authored fixture");
         let delta = (hand_authored.0 - composed.0).abs();
         assert!(
-            delta <= chrono::Duration::milliseconds(100),
-            "composed {} and hand-authored {} must agree within 100ms scheduler jitter",
+            delta <= scheduler_jitter(),
+            "composed {} and hand-authored {} must agree within {SCHEDULER_JITTER_MS}ms scheduler jitter",
             composed.0,
             hand_authored.0,
         );
@@ -1108,8 +1169,8 @@ mod tests {
         let b = tombstone_at(Utc::now()).expect("tombstone_at returns Some");
         let delta = (b.0 - a.0).abs();
         assert!(
-            delta <= chrono::Duration::milliseconds(100),
-            "tombstone_now anchor {} and tombstone_at(Utc::now()) anchor {} must agree within 100ms scheduler jitter",
+            delta <= scheduler_jitter(),
+            "tombstone_now anchor {} and tombstone_at(Utc::now()) anchor {} must agree within {SCHEDULER_JITTER_MS}ms scheduler jitter",
             a.0,
             b.0,
         );
@@ -1725,10 +1786,51 @@ mod tests {
         let via_substrate = wire_time_some(Utc::now()).expect("wire_time_some returns Some");
         let delta = (via_substrate.0 - composed.0).abs();
         assert!(
-            delta <= chrono::Duration::milliseconds(100),
-            "tombstone_now anchor {} and wire_time_some(Utc::now()) anchor {} must agree within 100ms scheduler jitter",
+            delta <= scheduler_jitter(),
+            "tombstone_now anchor {} and wire_time_some(Utc::now()) anchor {} must agree within {SCHEDULER_JITTER_MS}ms scheduler jitter",
             composed.0,
             via_substrate.0,
         );
+    }
+
+    // ─── scheduler_jitter substrate pins ────────────────────────────
+    //
+    // Bind [`scheduler_jitter`] + [`SCHEDULER_JITTER_MS`] at
+    // fail-before-pass-after granularity so a regression that widened
+    // the tolerance (a 200ms bump after a runner-slowdown audit),
+    // tightened it (a 50ms bump on faster CI), or flipped its sign
+    // surfaces HERE rather than as silent flakiness at every
+    // wall-clock parity pin routed through the substrate.
+
+    #[test]
+    fn scheduler_jitter_matches_pre_lift_100ms_bound_by_construction() {
+        // Byte-identical parity with the pre-lift hand-authored
+        // `chrono::Duration::milliseconds(100)` literal every 8
+        // wall-clock parity pins restated verbatim (6 in this module
+        // + 2 in `crate::pool::tests`). Pins the value axis of the
+        // tolerance so a substrate-side change of the constant lands
+        // at THIS pin rather than as silent skew at every downstream
+        // `delta <= scheduler_jitter()` assertion.
+        assert_eq!(scheduler_jitter(), chrono::Duration::milliseconds(100));
+        assert_eq!(
+            scheduler_jitter(),
+            chrono::Duration::milliseconds(SCHEDULER_JITTER_MS),
+        );
+        assert_eq!(SCHEDULER_JITTER_MS, 100);
+    }
+
+    #[test]
+    fn scheduler_jitter_is_a_non_negative_window() {
+        // Sign pin: the jitter bound MUST be strictly positive. A
+        // negative constant would make the `|delta| <= scheduler_jitter()`
+        // assertion trivially false for every non-zero absolute delta
+        // and fail every wall-clock parity pin at once; a zero-valued
+        // constant would tolerate zero drift only and fail every pin
+        // whose two `Utc::now()` reads returned different sub-
+        // microsecond anchors. Pins the DOMAIN of the tolerance so a
+        // regression that flipped the sign or zeroed the constant
+        // surfaces HERE rather than as a flood of downstream flakes.
+        assert!(scheduler_jitter() > chrono::Duration::zero());
+        assert!(SCHEDULER_JITTER_MS > 0);
     }
 }

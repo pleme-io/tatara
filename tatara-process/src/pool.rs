@@ -2416,6 +2416,13 @@ mod tests {
     // the test module so the lib body doesn't carry an otherwise-unused
     // `use std::str::FromStr;` at the file head.
     use std::str::FromStr;
+    // Wall-clock parity pins below reach `crate::time`'s test-only
+    // substrate for the 100ms scheduler-jitter tolerance so both this
+    // module and the sibling `crate::time::tests` module read the
+    // bound from ONE canonical owner — a future tightening/widening
+    // lands at the substrate site and every downstream `delta <= ...`
+    // assertion inherits the shift by construction.
+    use crate::time::{scheduler_jitter, SCHEDULER_JITTER_MS};
 
     // ─── EPHEMERAL_POOL_KIND substrate pins ─────────────────────────
     //
@@ -4345,8 +4352,8 @@ mod tests {
                 .expect("observed stamps phase_since");
             let delta = (hand_authored - composed).abs();
             assert!(
-                delta <= chrono::Duration::milliseconds(100),
-                "composed {composed} and hand-authored {hand_authored} must agree within 100ms scheduler jitter for phase={phase:?}"
+                delta <= scheduler_jitter(),
+                "composed {composed} and hand-authored {hand_authored} must agree within {SCHEDULER_JITTER_MS}ms scheduler jitter for phase={phase:?}"
             );
         }
     }
@@ -4774,8 +4781,8 @@ mod tests {
         .expect("observed_now stamps phase_since");
         let delta = (hand_authored - composed).abs();
         assert!(
-            delta <= chrono::Duration::milliseconds(100),
-            "composed {composed} and hand-authored {hand_authored} must agree within 100ms scheduler jitter",
+            delta <= scheduler_jitter(),
+            "composed {composed} and hand-authored {hand_authored} must agree within {SCHEDULER_JITTER_MS}ms scheduler jitter",
         );
     }
 

@@ -197,10 +197,7 @@ fn summarize_value(v: &serde_json::Value) -> String {
 // ── executors ────────────────────────────────────────────────────────
 
 fn check_crd_in_sync(args: &[Sexp], root: &Path, report: &mut Report) {
-    let kind = args
-        .first()
-        .and_then(Sexp::as_symbol)
-        .unwrap_or("<missing>");
+    let kind = head_symbol_or_missing(args);
     let path = match args.get(1).and_then(Sexp::as_string) {
         Some(p) => root.join(p),
         None => return report.fail("crd-in-sync", "expected (crd-in-sync <Kind> \"path\")"),
@@ -258,10 +255,7 @@ fn check_yaml_parses(args: &[Sexp], root: &Path, report: &mut Report) {
 }
 
 fn check_yaml_parses_as(args: &[Sexp], root: &Path, report: &mut Report) {
-    let kind = args
-        .first()
-        .and_then(Sexp::as_symbol)
-        .unwrap_or("<missing>");
+    let kind = head_symbol_or_missing(args);
     let rel = match args.get(1).and_then(Sexp::as_string) {
         Some(s) => s,
         None => {
@@ -581,6 +575,68 @@ fn find_kw<'a>(kw: &'a [(String, Sexp)], name: &str) -> Option<&'a Sexp> {
     kw.iter().find_map(|(k, v)| (k == name).then_some(v))
 }
 
+/// Sentinel slug substituted for a missing / non-symbol positional
+/// head-arg on an executor's `args` slice — the ONE substrate owner of
+/// the `"<missing>"` literal both [`check_crd_in_sync`] and
+/// [`check_yaml_parses_as`] restated verbatim on their head-arg
+/// fallback rung past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold. See [`head_symbol_or_missing`] for the composed chain.
+const MISSING_ARG_SLUG: &str = "<missing>";
+
+/// Read the head positional arg on an executor's `args` slice as a
+/// symbol, falling back to [`MISSING_ARG_SLUG`] when the slot is
+/// absent or non-symbol — the ONE substrate owner of the
+/// `args.first().and_then(Sexp::as_symbol).unwrap_or("<missing>")`
+/// three-line chain both [`check_crd_in_sync`] and
+/// [`check_yaml_parses_as`] hand-authored past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication threshold to extract the `<Kind>` slot for the
+/// executor's error-label / dispatch prose.
+///
+/// Semantics — byte-identical to the pre-lift chain:
+///
+/// * `args` empty → [`MISSING_ARG_SLUG`].
+/// * `args[0]` present but NOT a [`Sexp::Symbol`] (a bare string, a
+///   nested list, a keyword) → [`MISSING_ARG_SLUG`] (soft failure
+///   through `and_then(Sexp::as_symbol)`).
+/// * `args[0]` is a symbol → the borrowed `&str` payload.
+///
+/// The return-lifetime is the input slice's lifetime — both callers'
+/// downstream `format!("<check> {kind}", ...)` label composition and
+/// [`KnownCrd::from_kind`] dispatch consume the borrowed `&str`
+/// without an intervening allocation.
+///
+/// Sibling of [`find_kw`] on the parsed-args algebra: [`find_kw`] is
+/// the substrate primitive for "resolve a `:name` kwarg slot to
+/// `Option<&Sexp>`"; THIS primitive is the peer on the POSITIONAL
+/// (head-arg) axis, projecting to `&str` with a domain-specific
+/// sentinel fallback so the pre-lift `unwrap_or("<missing>")` corner
+/// binds at ONE site rather than at each executor's head-arg decode.
+///
+/// A future normalization (a near-miss hint composed from
+/// [`KnownCrd::ALL`] when the head-arg is present but unknown, a
+/// promotion of the sentinel to a [`Result`]-shaped return that
+/// forces every caller to path-through `report.fail` explicitly, a
+/// swap of the sentinel spelling for a per-executor slug) lands at
+/// THIS ONE substrate primitive and both current callers plus every
+/// future positional-symbol executor (a `(kubectl-crd-in-sync <Kind>
+/// ...)` peer, a `(kustomization-parses-as <Kind> ...)` peer, a
+/// hypothetical `(helmrelease-shape <Kind> ...)` shape check) inherit
+/// the upgrade mechanically.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// three-line `args.first().and_then(...).unwrap_or(...)` chain
+/// recurred at TWO executor bodies past the ≥2 PRIME-DIRECTIVE
+/// trigger, and is lifted to ONE substrate owner here.
+/// THEORY.md §II.1 invariant 5 — composition preserves proofs; both
+/// callers routing through the SAME substrate primitive means a
+/// future sentinel or projection change lands at ONE site and every
+/// downstream head-arg consumer inherits the shift by construction.
+fn head_symbol_or_missing(args: &[Sexp]) -> &str {
+    args.first()
+        .and_then(Sexp::as_symbol)
+        .unwrap_or(MISSING_ARG_SLUG)
+}
+
 fn normalize(s: &str) -> String {
     s.lines()
         .map(str::trim_end)
@@ -591,7 +647,9 @@ fn normalize(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{find_kw, find_kw_string_list, parse_kwargs};
+    use super::{
+        find_kw, find_kw_string_list, head_symbol_or_missing, parse_kwargs, MISSING_ARG_SLUG,
+    };
     use tatara_lisp::{read, Sexp};
 
     // Re-parse a `(list …)` source through the reader and hand its
@@ -820,5 +878,140 @@ mod tests {
                 .unwrap_or_default();
             assert_eq!(via_primitive, via_pre_lift, "drift on {src}");
         }
+    }
+
+    // ── head_symbol_or_missing substrate pins ────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `head_symbol_or_missing`
+    // free function and the [`MISSING_ARG_SLUG`] const did not exist
+    // before this commit, so each test below fails to compile pre-lift.
+    // Post-lift they collectively pin the (positional first-arg,
+    // symbol projection, sentinel fallback) shape at ONE substrate
+    // owner — a regression that dropped the `Sexp::as_symbol`
+    // projection (silently promoting a bare string or nested list into
+    // the returned slug), swapped the sentinel spelling (`"<unknown>"`,
+    // `"?"`, `""`) so the two pre-lift callers' error-label prose drifts
+    // apart, or panicked on the empty-args corner surfaces HERE rather
+    // than as silent operator-facing drift at the two `check_*`
+    // executors that build their `format!("<check> {kind}", ...)` label
+    // from this primitive's return.
+
+    // Re-parse a bare positional source through the reader and hand
+    // its interior tail slice to the primitive — the same tokenizer +
+    // Sexp-shape pipeline the `check_*` executors walk when parsing a
+    // `(<check-name> <head-arg> ...)` form.
+    fn args_from(src: &str) -> Vec<Sexp> {
+        let forms = read(src).expect("test source must parse");
+        let outer = forms[0].as_list().expect("wrap source in a list");
+        outer[1..].to_vec()
+    }
+
+    #[test]
+    fn head_symbol_or_missing_returns_the_symbol_payload_at_position_zero() {
+        // Byte-identical parity with the pre-lift `check_crd_in_sync`
+        // head-arg decode: `(crd-in-sync Process "path")` yields the
+        // symbol payload `"Process"`. Pin the happy-path shape both
+        // current callers walk — a regression that dropped the symbol
+        // projection (returning a bare `Sexp` `Debug`-render, or
+        // failing to strip the `Symbol` newtype) would fail HERE.
+        let args =
+            args_from(r#"(crd-in-sync Process "chart/tatara-reconciler/crds/Process.yaml")"#);
+        assert_eq!(head_symbol_or_missing(&args), "Process");
+    }
+
+    #[test]
+    fn head_symbol_or_missing_returns_sentinel_when_args_is_empty() {
+        // Empty-args pin: an executor called with no positional args
+        // (`(crd-in-sync)`) returns the [`MISSING_ARG_SLUG`] sentinel.
+        // Load-bearing: both pre-lift callers proceed to `report.fail`
+        // downstream with the sentinel embedded in the error label —
+        // a regression that panicked on the empty slice would abort
+        // the whole `tatara-check` run rather than reporting a soft
+        // failure per check.
+        let args: Vec<Sexp> = Vec::new();
+        assert_eq!(head_symbol_or_missing(&args), MISSING_ARG_SLUG);
+    }
+
+    #[test]
+    fn head_symbol_or_missing_returns_sentinel_on_non_symbol_head_arg() {
+        // Non-symbol head-arg pin: an operator typo like
+        // `(crd-in-sync "Process" "path")` (quoted string where a
+        // symbol was expected) yields the [`MISSING_ARG_SLUG`]
+        // sentinel — matches the pre-lift `.and_then(Sexp::as_symbol)`
+        // soft-failure shape. A regression that reached inside a
+        // string / list / integer payload would either surface here
+        // as a wrong non-sentinel slug or as a panic on the projection
+        // arm.
+        for src in [
+            r#"(crd-in-sync "Process" "path")"#,
+            r#"(crd-in-sync 42 "path")"#,
+            r#"(crd-in-sync (nested) "path")"#,
+            r#"(crd-in-sync :Process "path")"#,
+        ] {
+            let args = args_from(src);
+            assert_eq!(
+                head_symbol_or_missing(&args),
+                MISSING_ARG_SLUG,
+                "non-symbol head-arg must fall through to sentinel on {src}",
+            );
+        }
+    }
+
+    #[test]
+    fn head_symbol_or_missing_matches_pre_lift_chain_bytewise() {
+        // Byte-identical parity pin with the pre-lift three-line chain
+        // both current callers hand-authored. Sweeps the four corners
+        // every pre-lift consumer visited: (a) present symbol, (b)
+        // empty args, (c) non-symbol head, (d) a symbol with a full
+        // trailing kwargs tail (the real-world shape). A regression in
+        // the primitive that broke byte identity with the pre-lift
+        // shape at ANY corner surfaces HERE rather than as silent
+        // check-executor drift between the migrated callers and any
+        // future caller that reads the primitive's output.
+        for src in [
+            "(check)",
+            "(check Process)",
+            r#"(check Process "path")"#,
+            r#"(check "Process" "path")"#,
+            r#"(check EphemeralPool "path" :extra 1)"#,
+        ] {
+            let args = args_from(src);
+            let via_primitive: &str = head_symbol_or_missing(&args);
+            let via_pre_lift: &str = args
+                .first()
+                .and_then(Sexp::as_symbol)
+                .unwrap_or("<missing>");
+            assert_eq!(via_primitive, via_pre_lift, "drift on {src}");
+        }
+    }
+
+    #[test]
+    fn missing_arg_slug_is_the_pre_lift_sentinel_literal() {
+        // Value pin binding the [`MISSING_ARG_SLUG`] const to the
+        // exact pre-lift literal both callers hand-authored — a
+        // regression that renamed the sentinel (`"<unknown>"`, `"?"`,
+        // `""`) would silently break every operator's grep on the
+        // sentinel-embedded error label the two pre-lift callers
+        // emitted. Surfaces at THIS pin rather than as silent
+        // sentinel-string drift.
+        assert_eq!(MISSING_ARG_SLUG, "<missing>");
+    }
+
+    #[test]
+    fn head_symbol_or_missing_only_reads_position_zero() {
+        // Positional-scope pin: the primitive ignores every arg past
+        // position 0 — a regression that scanned past the head (e.g.
+        // walking `.iter().find_map(Sexp::as_symbol)`, silently
+        // succeeding on a symbol at position 2 when position 0 is
+        // non-symbol) would fail HERE. Load-bearing: both current
+        // callers separately decode `args.get(1)` as their path slot,
+        // so the primitive must NOT reach past the head or the two
+        // callers' positional discipline drifts.
+        let args = args_from(r#"(check "leading-string" NotTheHead "path")"#);
+        assert_eq!(
+            head_symbol_or_missing(&args),
+            MISSING_ARG_SLUG,
+            "primitive must not scan past position 0",
+        );
     }
 }

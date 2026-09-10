@@ -73,7 +73,8 @@ pub mod prelude {
         UnknownOptimizationDirection, UnknownSubstrateType,
     };
     pub use crate::compliance::{
-        ComplianceBinding, ComplianceSpec, UnknownVerificationPhase, VerificationPhase,
+        ComplianceBinding, ComplianceBindingSliceExt, ComplianceSpec, UnknownVerificationPhase,
+        VerificationPhase,
     };
     pub use crate::crd::{Process, ProcessSpec, ProcessStatus};
     pub use crate::encapsulates::{

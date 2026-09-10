@@ -12,6 +12,7 @@ use std::str::FromStr;
 
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
+use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
 use tatara_process::intent::IntentKind;
 use tatara_process::lifetime::LifetimeKind;
 use tatara_process::signal::SighupStrategy;
@@ -524,7 +525,7 @@ struct UnknownRequireTag;
 ///
 /// # Vocabulary
 ///
-/// Four closed-set-driven prefix families dispatch through the
+/// Six closed-set-driven prefix families dispatch through the
 /// autoderived `FromStr` + the substrate presence probe on their
 /// respective parent:
 ///
@@ -586,6 +587,23 @@ struct UnknownRequireTag;
 ///   answers "is the sigterm-grace-seconds substrate default present"
 ///   without touching the SIGHUP-side of the policy) — the two tags
 ///   answer distinct questions.
+/// - `verification-phase-<kind>` — [`VerificationPhase`] closed set →
+///   [`tatara_process::compliance::ComplianceBindingSliceExt::has_verification_phase`]
+///   (a slice-level extension-trait probe over
+///   `spec.compliance.bindings`, so the operator's `:requires
+///   (verification-phase-PlanTime)` pins the presence of a SPECIFIC
+///   compliance-verification checkpoint the Process binds. Sixth
+///   closed-set-driven prefix family in the point-domain require-tag
+///   vocabulary and THIRD instance in the slice-level closed-set-
+///   driven presence-probe algebra (sibling to
+///   [`tatara_process::boundary::ConditionSliceExt::has_kind`] on
+///   `&[Condition]` and
+///   [`tatara_process::spec::DependsOnSliceExt::has_must_reach`] on
+///   `&[DependsOn]`). Coexists with the coarse `compliance` fixed
+///   tag (which answers "does the spec carry ANY compliance binding"
+///   regardless of phase); `verification-phase-<kind>` pins the
+///   presence of a SPECIFIC verification checkpoint across the
+///   bindings vector — the two surfaces answer distinct questions.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -619,7 +637,11 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_must_reach_suffix`],
 /// [`tests::evaluate_point_require_tag_returns_true_iff_sighup_strategy_matches_variant_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_true_on_default_signals_for_sighup_reconverge_only`],
-/// and [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_sighup_suffix`].
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_sighup_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_true_on_populated_verification_phase_slot_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_empty_compliance_for_every_verification_phase_kind`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_verification_phase_suffix`],
+/// and [`tests::evaluate_point_require_tag_verification_phase_and_compliance_coexist`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -657,6 +679,13 @@ fn evaluate_point_require_tag(
     {
         return res;
     }
+    if let Some(res) = strip_and_classify_prefixed_kind::<VerificationPhase, _>(
+        tag,
+        "verification-phase-",
+        |kind| spec.compliance.bindings.has_verification_phase(kind),
+    ) {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -670,12 +699,13 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the five closed-set-driven prefix families in
+/// shape the six closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
-/// `sighup-<kind>` on [`SighupStrategy`]) each dispatch through past
-/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
+/// `sighup-<kind>` on [`SighupStrategy`], `verification-phase-<kind>`
+/// on [`VerificationPhase`]) each dispatch through past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold.
 ///
 /// # Return shape
 ///
@@ -704,16 +734,16 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future sixth closed-set prefix family — `signal-<kind>` on
+/// A future seventh closed-set prefix family — `signal-<kind>` on
 /// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` on
-/// [`tatara_process::phase::ProcessPhase`], `verification-phase-<kind>`
-/// on [`tatara_process::compliance::VerificationPhase`] — lands as
-/// ONE more `if let Some(res) = strip_and_classify_prefixed_kind::<
-/// NewKind, _>(tag, "prefix-", |k| spec.<field>.has(k)) { return
-/// res; }` branch that reads the same three-step shape the five
-/// existing families publish. No per-caller `strip_prefix + parse +
-/// match { Ok(_) => …, Err(_) => Err(UnknownRequireTag) }`
-/// restatement.
+/// [`tatara_process::phase::ProcessPhase`], a hypothetical
+/// `routing-form-<kind>` on `spec.routing.as_ref().map(|r| r.form)`
+/// — lands as ONE more `if let Some(res) =
+/// strip_and_classify_prefixed_kind::<NewKind, _>(tag, "prefix-", |k|
+/// spec.<field>.has(k)) { return res; }` branch that reads the same
+/// three-step shape the six existing families publish. No per-caller
+/// `strip_prefix + parse + match { Ok(_) => …, Err(_) =>
+/// Err(UnknownRequireTag) }` restatement.
 ///
 /// A future diagnostic shift (attaching the offending suffix to
 /// [`UnknownRequireTag`], promoting the sentinel to carry a
@@ -723,7 +753,7 @@ fn evaluate_point_require_tag(
 /// construction.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// three-step chain recurred at TWO closed-set prefix families past
+/// three-step chain recurred at SIX closed-set prefix families past
 /// the ≥2 PRIME-DIRECTIVE trigger, and is lifted to ONE substrate
 /// owner here. THEORY.md §II.1 invariant 2 — free middle; the caller
 /// composes the closed-set choice (via the generic `K`) and the
@@ -1813,6 +1843,7 @@ mod tests {
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
+    use tatara_process::compliance::{ComplianceBinding, VerificationPhase};
     use tatara_process::crd::ProcessSpec;
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::intent::{AplicacaoIntent, IntentKind};
@@ -3171,6 +3202,159 @@ mod tests {
             evaluate_point_require_tag(&spec, "sighup-Restart"),
             Ok(false),
             "fine `sighup-Restart` must be false when strategy is Reconverge",
+        );
+    }
+
+    // ── verification-phase-<kind> prefix family pins ─────────────────
+    //
+    // Fail-before-pass-after granularity: the `verification-phase-<kind>`
+    // prefix family did not exist before this commit — the point-domain
+    // require-tag vocabulary carried only the coarse `compliance` fixed
+    // tag which answered "does the spec carry ANY compliance binding"
+    // without discriminating on the verification checkpoint. The lift
+    // adds the SIXTH closed-set-driven prefix family symmetrical with
+    // `intent-<kind>` + `lifetime-<kind>` + `condition-<kind>` +
+    // `must-reach-<kind>` + `sighup-<kind>`, routing through the
+    // newly-opened
+    // [`tatara_process::compliance::ComplianceBindingSliceExt::has_verification_phase`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`. Third
+    // instance in the SLICE-LEVEL axis of the closed-set-driven
+    // presence-probe algebra (peer of `ConditionSliceExt::has_kind` on
+    // `&[Condition]` and `DependsOnSliceExt::has_must_reach` on
+    // `&[DependsOn]`).
+
+    fn binding_at(phase: VerificationPhase) -> ComplianceBinding {
+        ComplianceBinding {
+            framework: "nist-800-53".into(),
+            control_id: "SC-7".into(),
+            phase,
+            description: None,
+        }
+    }
+
+    /// POPULATED-slot pin — `verification-phase-<kind>` dispatches
+    /// through the autoderived [`VerificationPhase`] `FromStr` + the
+    /// substrate
+    /// [`tatara_process::compliance::ComplianceBindingSliceExt::has_verification_phase`]
+    /// primitive, returning `true` only when the compliance bindings
+    /// vector carries at least one binding verifying at this
+    /// checkpoint. Sweep the [`VerificationPhase::ALL`] × ALL cross so
+    /// a regression that hard-coded the arm to a single kind (silently
+    /// returning `true` for every populated compliance vector
+    /// regardless of query kind) or wired the closure to a fixed
+    /// unrelated field (e.g. [`ComplianceBinding::framework`]) fails
+    /// HERE at the classifier before landing at the operator-facing
+    /// checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_populated_verification_phase_slot_per_kind() {
+        for populated in VerificationPhase::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.compliance.bindings.push(binding_at(populated));
+            for query in VerificationPhase::ALL {
+                let tag = format!("verification-phase-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "compliance populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-slot pin — a default [`ProcessSpec`] (empty
+    /// `compliance.bindings` vector) returns `false` for every
+    /// `verification-phase-<kind>` tag. Locks the write-side /
+    /// read-side split on the presence-probe boundary so an operator
+    /// authoring `:requires (verification-phase-AtBoundary)` against a
+    /// Process with no `:compliance` bindings gets the
+    /// `definition missing required` diagnostic, not a false-positive
+    /// pass. Distinct from `sighup-<kind>` (which returns `true` on
+    /// the [`SighupStrategy::default`] variant because its carrier is
+    /// scalar-not-Vec); this family reads a Vec so a default spec is
+    /// unambiguously empty across every kind.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_empty_compliance_for_every_verification_phase_kind(
+    ) {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in VerificationPhase::ALL {
+            let tag = format!("verification-phase-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "default compliance (empty vector) must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `verification-phase-<garbage>` classifies
+    /// as [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. A regression that fell through to `Ok(false)`
+    /// (matching the pre-lift fixed-tag `_ => Err(UnknownRequireTag)`
+    /// tail) would silently reclassify a `verification-phase-planTime`
+    /// casing typo (PascalCase-only closed set) as `definition
+    /// missing required`, which reads as "the spec is wrong" rather
+    /// than "your check is wrong". Pin the distinction. The empty-
+    /// suffix boundary is pinned by the shared substrate primitive's
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_verification_phase_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for garbage in [
+            "verification-phase-",
+            "verification-phase-plantime",
+            "verification-phase-ATBOUNDARY",
+            "verification-phase-Continuous",
+            "verification-phase-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// COARSE / FINE COEXISTENCE pin — a Process with a single
+    /// `ComplianceBinding` at `PlanTime` MUST satisfy BOTH the coarse
+    /// `compliance` fixed tag AND the fine
+    /// `verification-phase-PlanTime` prefix tag AND simultaneously
+    /// fail the off-diagonal `verification-phase-AtBoundary` /
+    /// `verification-phase-PostConvergence` probes. Locks the
+    /// semantic split between the two surfaces so a regression that
+    /// (a) collapsed `verification-phase-<kind>` to the coarse
+    /// `compliance` fixed answer (returning `true` for every kind on
+    /// any spec that satisfies `compliance`), or (b) drifted the
+    /// fixed `compliance` arm to match on verification-phase kind,
+    /// fails HERE at ONE narrow site.
+    #[test]
+    fn evaluate_point_require_tag_verification_phase_and_compliance_coexist() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.compliance
+            .bindings
+            .push(binding_at(VerificationPhase::PlanTime));
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "compliance"),
+            Ok(true),
+            "coarse `compliance` must be true when any binding is present",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "verification-phase-PlanTime"),
+            Ok(true),
+            "fine `verification-phase-PlanTime` must be true when a matching binding is present",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "verification-phase-AtBoundary"),
+            Ok(false),
+            "fine `verification-phase-AtBoundary` must be false when no binding gates at that phase",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "verification-phase-PostConvergence"),
+            Ok(false),
+            "fine `verification-phase-PostConvergence` must be false when no binding gates there",
         );
     }
 

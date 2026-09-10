@@ -180,6 +180,76 @@ impl ComplianceBinding {
     }
 }
 
+/// Slice-level `(VerificationPhase, presence)` probe on any
+/// `&[ComplianceBinding]` — the ONE substrate primitive that owns the
+/// `.iter().any(|b| b.phase == K)` walk shape for the compliance-
+/// binding vector. Callers compose the answer they want on top:
+/// `spec.compliance.bindings.has_verification_phase(kind)` for the
+/// point-domain `verification-phase-<kind>` require-tag family, a
+/// coherence check that verifies "every `PlanTime` binding predicates
+/// on a framework the fleet publishes", an editor completion listing
+/// which [`VerificationPhase`] gates the operator authored — every
+/// future consumer reaches this ONE primitive through
+/// `slice.has_verification_phase(k)` instead of restating the
+/// `.iter().any` closure body.
+///
+/// # Third instance in the slice-level presence-probe algebra
+///
+/// Same axis, same shape, third instance in the workspace-wide
+/// slice-level closed-set-driven presence-probe algebra alongside
+/// [`crate::boundary::ConditionSliceExt::has_kind`] on `&[Condition]`
+/// and [`crate::spec::DependsOnSliceExt::has_must_reach`] on
+/// `&[DependsOn]`. All three live one composition boundary below the
+/// tagged-union-parent probes ([`crate::intent::Intent::has`],
+/// [`crate::lifetime::Lifetime::has`],
+/// [`crate::boundary::Boundary::has_condition_kind`]) at the
+/// (`&self`, `K`) → `bool` signature; a future normalization at the
+/// slice-level probe shape (widening the return to
+/// `Option<&ComplianceBinding>` for deeper diagnostics, adding a
+/// debug-build assertion on redundant duplicate `(framework,
+/// control_id)` pairs at the same phase, switching to a linear scan
+/// that also counts matches) lands at ONE site here and every
+/// downstream `slice.has_verification_phase(K)` callsite picks it up
+/// mechanically.
+///
+/// # Compounding
+///
+/// The `verification-phase-<kind>` require-tag prefix family in
+/// `tatara-reconciler::bin::tatara-check` composes this primitive with
+/// the closed-set `FromStr` autoderived on [`VerificationPhase`]
+/// through the `strip_and_classify_prefixed_kind` substrate to publish
+/// a sixth closed-set-driven prefix family byte-for-byte symmetrical
+/// with `intent-<kind>` / `lifetime-<kind>` / `condition-<kind>` /
+/// `must-reach-<kind>` / `sighup-<kind>`. Coexists with the coarse
+/// `compliance` fixed tag (which answers "does this spec carry ANY
+/// compliance binding") — the two tags publish distinct answers.
+/// A future fourth [`VerificationPhase`] variant added to `ALL` (a
+/// hypothetical `Continuous` checkpoint) reaches every downstream
+/// through the SAME closed-set walk with no per-caller edit.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// proofs; the per-slice `phase` walk lives at ONE substrate site so
+/// every downstream (require-tag classifier, coherence check, editor
+/// completion) binds through the SAME shape rather than restating the
+/// `.iter().any(|b| b.phase == K)` closure body at each callsite.
+/// THEORY.md §VI.1 — generation over composition; a future
+/// [`VerificationPhase`] variant lands at ONE `ALL` entry + ONE
+/// `as_str` arm on the closed set and the presence probe picks it up
+/// mechanically without further per-consumer edits.
+pub trait ComplianceBindingSliceExt {
+    /// True iff at least one [`ComplianceBinding`] in this slice
+    /// verifies at the given [`VerificationPhase`]. The single-slice
+    /// presence probe every consumer of the `(&[ComplianceBinding],
+    /// VerificationPhase) -> bool` shape composes against.
+    fn has_verification_phase(&self, kind: VerificationPhase) -> bool;
+}
+
+impl ComplianceBindingSliceExt for [ComplianceBinding] {
+    fn has_verification_phase(&self, kind: VerificationPhase) -> bool {
+        self.iter().any(|b| b.phase == kind)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,6 +395,99 @@ mod tests {
             projections.len(),
             unique.len(),
             "gates_phase projection is not injective: {projections:?}",
+        );
+    }
+
+    // ── ComplianceBindingSliceExt::has_verification_phase substrate pins ──
+    //
+    // Fail-before-pass-after granularity: `ComplianceBindingSliceExt`
+    // did not exist before this commit — the `(&[ComplianceBinding],
+    // VerificationPhase) -> bool` walk shape was not spelled anywhere in
+    // the workspace. The lift opens the third instance in the slice-
+    // level closed-set-driven presence-probe algebra (peer of
+    // `ConditionSliceExt::has_kind` on `&[Condition]` and
+    // `DependsOnSliceExt::has_must_reach` on `&[DependsOn]`), enabling
+    // the sixth `verification-phase-<kind>` require-tag prefix family in
+    // `tatara-reconciler::bin::tatara-check` to compose against ONE
+    // substrate site rather than restating the `.iter().any(|b| b.phase
+    // == K)` closure body inline at the classifier.
+
+    fn binding_at(phase: VerificationPhase) -> ComplianceBinding {
+        ComplianceBinding {
+            framework: "nist-800-53".into(),
+            control_id: "SC-7".into(),
+            phase,
+            description: None,
+        }
+    }
+
+    /// EMPTY-SLICE pin — an empty `&[ComplianceBinding]` returns
+    /// `false` for EVERY [`VerificationPhase`]. Sweep
+    /// [`VerificationPhase::ALL`] so a new variant added without a
+    /// matching arm in the primitive surfaces at rustc's exhaustiveness
+    /// gate on the ALL literal (arity forced by `[Self; 3]`) rather than
+    /// as a silent false-positive at every downstream callsite composing
+    /// this primitive.
+    #[test]
+    fn compliance_binding_slice_has_verification_phase_returns_false_on_empty_slice_for_every_kind()
+    {
+        let empty: &[ComplianceBinding] = &[];
+        for kind in VerificationPhase::ALL {
+            assert!(
+                !empty.has_verification_phase(kind),
+                "empty slice must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// PER-VARIANT pin — a single-element slice returns `true` for
+    /// exactly the phase it carries, `false` for every other variant.
+    /// Sweep the [`VerificationPhase::ALL`] × ALL cross so a regression
+    /// that (a) hard-coded the arm to a single kind (silently returning
+    /// true for every populated slice regardless of query kind), or
+    /// (b) matched on [`ComplianceBinding::framework`] instead of
+    /// [`ComplianceBinding::phase`] fails HERE at the substrate
+    /// primitive.
+    #[test]
+    fn compliance_binding_slice_has_verification_phase_reads_phase_field_per_variant() {
+        for populated in VerificationPhase::ALL {
+            let slice = [binding_at(populated)];
+            for query in VerificationPhase::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    slice.has_verification_phase(query),
+                    expected,
+                    "populated={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// MULTI-ENTRY pin — a slice with multiple entries returns `true`
+    /// for every phase that appears at any position (existential
+    /// quantifier over the slice), `false` for phases that appear at
+    /// no position. Locks the `any` semantics so a regression that
+    /// collapsed to a `first`-only probe (`slice.first().map_or(false,
+    /// |b| b.phase == kind)`) fails here even though the single-element
+    /// per-variant pin above passes.
+    #[test]
+    fn compliance_binding_slice_has_verification_phase_scans_beyond_the_first_position() {
+        let slice = [
+            binding_at(VerificationPhase::PlanTime),
+            binding_at(VerificationPhase::PostConvergence),
+        ];
+        for present in [
+            VerificationPhase::PlanTime,
+            VerificationPhase::PostConvergence,
+        ] {
+            assert!(
+                slice.has_verification_phase(present),
+                "phase at any position must resolve true: {present:?}",
+            );
+        }
+        assert!(
+            !slice.has_verification_phase(VerificationPhase::AtBoundary),
+            "phase absent from the slice must resolve false: AtBoundary",
         );
     }
 }

@@ -1012,6 +1012,96 @@ impl fmt::Display for ExportTrigger {
 // [`crate::boundary::UnknownConditionKind`], and
 // [`crate::phase::UnknownPhase`].
 
+/// Slice-level `(ExportTrigger, presence)` probe on any `&[ExportSpec]`
+/// — the ONE substrate primitive that owns the
+/// `.iter().any(|e| e.when == K)` walk shape for the export-spec
+/// vector. Callers compose the answer they want on top:
+/// `spec.lifetime.resolved_ephemeral().is_some_and(|e|
+/// e.exports.has_when(kind))` for the point-domain
+/// `export-when-<kind>` require-tag family, a coherence check that
+/// verifies "every `Always` export ships through a JetStream-backed
+/// channel", an editor completion listing which
+/// [`ExportTrigger`] gates the operator authored — every future
+/// consumer reaches this ONE primitive through
+/// `slice.has_when(k)` instead of restating the `.iter().any`
+/// closure body.
+///
+/// # Fourth instance in the slice-level presence-probe algebra
+///
+/// Same axis, same shape, fourth instance in the workspace-wide
+/// slice-level closed-set-driven presence-probe algebra alongside
+/// [`crate::boundary::ConditionSliceExt::has_kind`] on `&[Condition]`,
+/// [`crate::spec::DependsOnSliceExt::has_must_reach`] on
+/// `&[DependsOn]`, and
+/// [`crate::compliance::ComplianceBindingSliceExt::has_verification_phase`]
+/// on `&[ComplianceBinding]`. All four live one composition boundary
+/// below the tagged-union-parent probes ([`crate::intent::Intent::has`],
+/// [`crate::lifetime::Lifetime::has`],
+/// [`crate::boundary::Boundary::has_condition_kind`]) at the
+/// (`&self`, `K`) → `bool` signature; a future normalization at the
+/// slice-level probe shape (widening the return to
+/// `Option<&ExportSpec>` for deeper diagnostics, adding a debug-build
+/// assertion on redundant duplicate `(source, channel)` pairs at the
+/// same trigger, switching to a linear scan that also counts matches)
+/// lands at ONE site here and every downstream
+/// `slice.has_when(K)` callsite picks it up mechanically.
+///
+/// # Compounding
+///
+/// The `export-when-<kind>` require-tag prefix family in
+/// `tatara-reconciler::bin::tatara-check` composes this primitive with
+/// the closed-set `FromStr` autoderived on [`ExportTrigger`] through
+/// the `strip_and_classify_prefixed_kind` substrate to publish a
+/// SEVENTH closed-set-driven prefix family byte-for-byte symmetrical
+/// with `intent-<kind>` / `lifetime-<kind>` / `condition-<kind>` /
+/// `must-reach-<kind>` / `sighup-<kind>` /
+/// `verification-phase-<kind>`. The `resolved_ephemeral` projection
+/// on the parent [`crate::lifetime::Lifetime`] gates the walk: a
+/// permanent Process (or an ambiguous one, or one without an
+/// `:exports` slot) returns `false` for every trigger kind because
+/// the exports vector isn't reachable — the same operator-facing
+/// answer as a resolved-ephemeral spec whose `exports` slot is
+/// present but empty. A future fourth [`ExportTrigger`] variant added
+/// to `ALL` (a hypothetical `OnFirstFailure` retry-scoped trigger, an
+/// `OnAborted` cancellation-scoped trigger) reaches every downstream
+/// through the SAME closed-set walk with no per-caller edit.
+///
+/// Peer to [`crate::lifetime::EphemeralLifetime::has_applicable_exports`]
+/// on the `(ExportTrigger, ProcessPhase) → bool` axis pair — that
+/// projection asks "does any export FIRE at this terminal phase" (a
+/// compound `(when, phase) → fires_on(phase)` walk that projects to
+/// a boolean the reconciler consumes in the `Releasing` gate); this
+/// primitive asks "does any export CARRY this trigger literal" (a
+/// direct `when == kind` equality walk that answers the operator's
+/// `:requires (export-when-<kind>)` audit tag). The two surfaces
+/// answer distinct questions and coexist — `has_applicable_exports`
+/// composes the closed-set dispatch over `ExportTrigger::fires_on`,
+/// while `has_when` composes the closed-set discriminator equality
+/// on the raw `when` field.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// proofs; the per-slice `when` walk lives at ONE substrate site so
+/// every downstream (require-tag classifier, coherence check, editor
+/// completion) binds through the SAME shape rather than restating the
+/// `.iter().any(|e| e.when == K)` closure body at each callsite.
+/// THEORY.md §VI.1 — generation over composition; a future
+/// [`ExportTrigger`] variant lands at ONE `ALL` entry + ONE `as_str`
+/// arm on the closed set and the presence probe picks it up
+/// mechanically without further per-consumer edits.
+pub trait ExportSpecSliceExt {
+    /// True iff at least one [`ExportSpec`] in this slice carries the
+    /// given [`ExportTrigger`] on its [`ExportSpec::when`] slot. The
+    /// single-slice presence probe every consumer of the
+    /// `(&[ExportSpec], ExportTrigger) -> bool` shape composes against.
+    fn has_when(&self, kind: ExportTrigger) -> bool;
+}
+
+impl ExportSpecSliceExt for [ExportSpec] {
+    fn has_when(&self, kind: ExportTrigger) -> bool {
+        self.iter().any(|e| e.when == kind)
+    }
+}
+
 // ─── Tests ─────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -2270,5 +2360,107 @@ mod tests {
             process_snapshot: sa.process_snapshot.or(sb.process_snapshot),
             run_marker: sa.run_marker.or(sb.run_marker),
         }
+    }
+
+    // ── ExportSpecSliceExt::has_when substrate pins ───────────────────
+    //
+    // Fail-before-pass-after granularity: `ExportSpecSliceExt` did not
+    // exist before this commit — the `(&[ExportSpec], ExportTrigger)
+    // -> bool` walk shape was not spelled anywhere in the workspace on
+    // the raw `when` field. The lift opens the FOURTH instance in the
+    // slice-level closed-set-driven presence-probe algebra (peer of
+    // `ConditionSliceExt::has_kind` on `&[Condition]`,
+    // `DependsOnSliceExt::has_must_reach` on `&[DependsOn]`, and
+    // `ComplianceBindingSliceExt::has_verification_phase` on
+    // `&[ComplianceBinding]`), enabling the seventh
+    // `export-when-<kind>` require-tag prefix family in
+    // `tatara-reconciler::bin::tatara-check` to compose against ONE
+    // substrate site rather than restating the `.iter().any(|e| e.when
+    // == K)` closure body inline at the classifier.
+
+    /// Fixture: a minimal `ExportSpec` with a chosen `when` trigger
+    /// and a single-slot receipts source + stdout channel. The trigger
+    /// is the only axis this test module discriminates on; the source
+    /// + channel are fixed at valid single-slot pairs so the primitive
+    /// under test reads the `when` field in isolation.
+    fn export_at(when: ExportTrigger) -> ExportSpec {
+        ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+            when,
+            experiment_id_override: None,
+        }
+    }
+
+    /// EMPTY-SLICE pin — an empty `&[ExportSpec]` returns `false` for
+    /// EVERY [`ExportTrigger`]. Sweep [`ExportTrigger::ALL`] so a new
+    /// variant added without a matching arm in the primitive surfaces
+    /// at rustc's exhaustiveness gate on the `ALL` literal (arity
+    /// forced by `[Self; 3]`) rather than as a silent false-positive
+    /// at every downstream callsite composing this primitive.
+    #[test]
+    fn export_spec_slice_has_when_returns_false_on_empty_slice_for_every_kind() {
+        let empty: &[ExportSpec] = &[];
+        for kind in ExportTrigger::ALL {
+            assert!(
+                !empty.has_when(kind),
+                "empty slice must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// PER-VARIANT pin — a single-element slice returns `true` for
+    /// exactly the trigger it carries, `false` for every other
+    /// variant. Sweep the [`ExportTrigger::ALL`] × ALL cross so a
+    /// regression that (a) hard-coded the arm to a single kind
+    /// (silently returning true for every populated slice regardless
+    /// of query kind), or (b) matched on a different field (a stray
+    /// `experiment_id_override.is_some()`, a `source`-side variant
+    /// discriminator) fails HERE at the substrate primitive rather
+    /// than at each downstream `export-when-<kind>` callsite.
+    #[test]
+    fn export_spec_slice_has_when_reads_when_field_per_variant() {
+        for populated in ExportTrigger::ALL {
+            let slice = [export_at(populated)];
+            for query in ExportTrigger::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    slice.has_when(query),
+                    expected,
+                    "populated={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// MULTI-ENTRY pin — a slice with multiple entries returns `true`
+    /// for every trigger that appears at any position (existential
+    /// quantifier over the slice), `false` for triggers that appear
+    /// at no position. Locks the `any` semantics so a regression that
+    /// collapsed to a `first`-only probe (`slice.first().is_some_and(
+    /// |e| e.when == kind)`) fails here even though the single-element
+    /// per-variant pin above passes.
+    #[test]
+    fn export_spec_slice_has_when_scans_beyond_the_first_position() {
+        let slice = [
+            export_at(ExportTrigger::OnAttested),
+            export_at(ExportTrigger::Always),
+        ];
+        for present in [ExportTrigger::OnAttested, ExportTrigger::Always] {
+            assert!(
+                slice.has_when(present),
+                "trigger at any position must resolve true: {present:?}",
+            );
+        }
+        assert!(
+            !slice.has_when(ExportTrigger::OnFailed),
+            "trigger absent from the slice must resolve false: OnFailed",
+        );
     }
 }

@@ -13,6 +13,7 @@ use std::str::FromStr;
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
 use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
+use tatara_process::export::{ExportSpecSliceExt, ExportTrigger};
 use tatara_process::intent::IntentKind;
 use tatara_process::lifetime::LifetimeKind;
 use tatara_process::signal::SighupStrategy;
@@ -525,7 +526,7 @@ struct UnknownRequireTag;
 ///
 /// # Vocabulary
 ///
-/// Six closed-set-driven prefix families dispatch through the
+/// Seven closed-set-driven prefix families dispatch through the
 /// autoderived `FromStr` + the substrate presence probe on their
 /// respective parent:
 ///
@@ -604,6 +605,30 @@ struct UnknownRequireTag;
 ///   regardless of phase); `verification-phase-<kind>` pins the
 ///   presence of a SPECIFIC verification checkpoint across the
 ///   bindings vector — the two surfaces answer distinct questions.
+/// - `export-when-<kind>` — [`ExportTrigger`] closed set →
+///   [`tatara_process::export::ExportSpecSliceExt::has_when`] (a
+///   slice-level extension-trait probe over
+///   `spec.lifetime.resolved_ephemeral().map(|e| &e.exports[..])`, so
+///   the operator's `:requires (export-when-OnAttested)` pins the
+///   presence of a SPECIFIC export trigger the ephemeral Process
+///   declares. Seventh closed-set-driven prefix family in the point-
+///   domain require-tag vocabulary and FOURTH instance in the slice-
+///   level closed-set-driven presence-probe algebra (sibling to
+///   [`tatara_process::boundary::ConditionSliceExt::has_kind`] on
+///   `&[Condition]`,
+///   [`tatara_process::spec::DependsOnSliceExt::has_must_reach`] on
+///   `&[DependsOn]`, and
+///   [`tatara_process::compliance::ComplianceBindingSliceExt::has_verification_phase`]
+///   on `&[ComplianceBinding]`). A permanent Process (or one with an
+///   ambiguous `Lifetime` or an empty `exports` vector) returns
+///   `false` for every trigger kind — the `resolved_ephemeral` gate
+///   on the parent [`tatara_process::lifetime::Lifetime`] short-
+///   circuits the walk. Coexists with the coarse `lifetime-ephemeral`
+///   presence probe (which answers "is this Process ephemeral at
+///   all" without discriminating on export triggers);
+///   `export-when-<kind>` pins the presence of a SPECIFIC trigger
+///   across the exports vector — the two surfaces answer distinct
+///   questions.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -611,18 +636,22 @@ struct UnknownRequireTag;
 /// closed-set surface opens for them (each addresses a slot whose
 /// carrier isn't a closed-set discriminator today).
 ///
-/// A future sixth `IntentKind` / `LifetimeKind` / `ConditionKind` /
-/// `MustReachPhase` / `SighupStrategy` variant lands at ONE `ALL`
-/// entry on its parent's closed set — no per-caller edit here. A
-/// future new prefix family (e.g. `signal-<kind>` for
+/// A future new `IntentKind` / `LifetimeKind` / `ConditionKind` /
+/// `MustReachPhase` / `SighupStrategy` / `VerificationPhase` /
+/// `ExportTrigger` variant lands at ONE `ALL` entry on its parent's
+/// closed set — no per-caller edit here. A future new prefix family
+/// (e.g. `signal-<kind>` for
 /// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` for
-/// [`tatara_process::phase::ProcessPhase`], `verification-phase-<kind>`
-/// for [`tatara_process::compliance::VerificationPhase`] on
-/// `spec.compliance.bindings[].phase`) lands as ONE more `if let
-/// Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(tag,
-/// "prefix-", |k| spec.<field>.has(k)) { return res; }` branch that
-/// reads the same three-step (strip_prefix + parse + has) shape all
-/// five existing families publish.
+/// [`tatara_process::phase::ProcessPhase`], `report-format-<kind>`
+/// for [`tatara_process::export::ReportFormat`] on
+/// `spec.lifetime.ephemeral.exports[].source.test_report.format`,
+/// `channel-<kind>` for
+/// [`tatara_process::export::ChannelKind`] on
+/// `spec.lifetime.ephemeral.exports[].channel`) lands as ONE more
+/// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind,
+/// _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res; }`
+/// branch that reads the same three-step (strip_prefix + parse +
+/// has) shape all seven existing families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
@@ -686,6 +715,15 @@ fn evaluate_point_require_tag(
     ) {
         return res;
     }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<ExportTrigger, _>(tag, "export-when-", |kind| {
+            spec.lifetime
+                .resolved_ephemeral()
+                .is_some_and(|e| e.exports.has_when(kind))
+        })
+    {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -699,12 +737,13 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the six closed-set-driven prefix families in
+/// shape the seven closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
 /// `sighup-<kind>` on [`SighupStrategy`], `verification-phase-<kind>`
-/// on [`VerificationPhase`]) each dispatch through past the ★★
+/// on [`VerificationPhase`], `export-when-<kind>` on
+/// [`ExportTrigger`]) each dispatch through past the ★★
 /// PRIME-DIRECTIVE ≥ 2 duplication threshold.
 ///
 /// # Return shape
@@ -1846,6 +1885,9 @@ mod tests {
     use tatara_process::compliance::{ComplianceBinding, VerificationPhase};
     use tatara_process::crd::ProcessSpec;
     use tatara_process::ephemeral::EphemeralSpec;
+    use tatara_process::export::{
+        ArtifactSource, ExportSpec, ExportTrigger, ReceiptsSource, StdoutChannel, VectorChannel,
+    };
     use tatara_process::intent::{AplicacaoIntent, IntentKind};
     use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind, TeardownPolicy};
     use tatara_process::signal::SighupStrategy;
@@ -3355,6 +3397,209 @@ mod tests {
             evaluate_point_require_tag(&spec, "verification-phase-PostConvergence"),
             Ok(false),
             "fine `verification-phase-PostConvergence` must be false when no binding gates there",
+        );
+    }
+
+    // ── export-when-<kind> prefix family (evaluate_point_require_tag) ─
+    //
+    // Fail-before-pass-after granularity: the `export-when-<kind>`
+    // prefix family did not exist before this commit — the point-domain
+    // require-tag vocabulary carried only the coarse
+    // `lifetime-ephemeral` presence probe which answered "is this
+    // Process ephemeral at all" without discriminating on the declared
+    // export trigger. The lift adds the SEVENTH closed-set-driven
+    // prefix family symmetrical with `intent-<kind>` +
+    // `lifetime-<kind>` + `condition-<kind>` + `must-reach-<kind>` +
+    // `sighup-<kind>` + `verification-phase-<kind>`, routing through
+    // the newly-opened
+    // [`tatara_process::export::ExportSpecSliceExt::has_when`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`.
+    // Fourth instance in the SLICE-LEVEL axis of the closed-set-driven
+    // presence-probe algebra (peer of `ConditionSliceExt::has_kind` on
+    // `&[Condition]`, `DependsOnSliceExt::has_must_reach` on
+    // `&[DependsOn]`, and
+    // `ComplianceBindingSliceExt::has_verification_phase` on
+    // `&[ComplianceBinding]`).
+
+    /// Fixture: a minimal `ExportSpec` with a chosen `when` trigger
+    /// and a single-slot receipts source + stdout channel. The trigger
+    /// is the only axis this test module discriminates on; the source
+    /// + channel are fixed at valid single-slot pairs so
+    /// `evaluate_point_require_tag` reads the `when` field in
+    /// isolation.
+    fn export_at(when: ExportTrigger) -> ExportSpec {
+        ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+            when,
+            experiment_id_override: None,
+        }
+    }
+
+    /// Compose a `ProcessSpec` whose ephemeral lifetime carries the
+    /// supplied export triggers. Routes through
+    /// [`Lifetime::ephemeral`] so the composer contract stays
+    /// byte-identical to every other ephemeral-fixture consumer.
+    fn ephemeral_spec_with_exports(exports: Vec<ExportSpec>) -> ProcessSpec {
+        ProcessSpec {
+            lifetime: Lifetime::ephemeral(EphemeralLifetime {
+                exports,
+                ..EphemeralLifetime::default()
+            }),
+            ..ProcessSpec::gate_compute_defaults()
+        }
+    }
+
+    /// POPULATED-slot pin — `export-when-<kind>` dispatches through
+    /// the autoderived [`ExportTrigger`] `FromStr` + the substrate
+    /// [`tatara_process::export::ExportSpecSliceExt::has_when`]
+    /// primitive, returning `true` only when the resolved ephemeral
+    /// lifetime carries at least one export whose `when` matches this
+    /// trigger. Sweep the [`ExportTrigger::ALL`] × ALL cross so a
+    /// regression that hard-coded the arm to a single kind (silently
+    /// returning `true` for every populated export vector regardless
+    /// of query kind) or wired the closure to a fixed unrelated field
+    /// (a stray `experiment_id_override.is_some()`) fails HERE at the
+    /// classifier before landing at the operator-facing checks.lisp
+    /// surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_populated_export_when_slot_per_kind() {
+        for populated in ExportTrigger::ALL {
+            let spec = ephemeral_spec_with_exports(vec![export_at(populated)]);
+            for query in ExportTrigger::ALL {
+                let tag = format!("export-when-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "export populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// PERMANENT-lifetime pin — a default (`Permanent`) [`ProcessSpec`]
+    /// returns `false` for every `export-when-<kind>` tag because the
+    /// `resolved_ephemeral` gate on the parent [`Lifetime`] short-
+    /// circuits the walk. Locks the compound-projection contract
+    /// (`resolved_ephemeral().is_some_and(|e| e.exports.has_when(k))`)
+    /// so a regression that dropped the ephemeral gate (probing an
+    /// absent `exports` slot as if it were the empty vector) would
+    /// still return `false` at this test but a regression that ROUTED
+    /// through the permanent-side default `EphemeralLifetime` (a
+    /// hypothetical `unwrap_or_default` on the projection) would
+    /// return `false` on `OnAttested`/`OnFailed` but `true` on
+    /// `Always` (which `fires_on` would honor on a synthetic terminal
+    /// phase) at a peer test — the pair pins the semantics from both
+    /// sides.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_export_when_kind() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in ExportTrigger::ALL {
+            let tag = format!("export-when-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "permanent lifetime must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// EMPTY-EXPORTS pin — an ephemeral [`ProcessSpec`] whose
+    /// `exports` vector is empty returns `false` for every
+    /// `export-when-<kind>` tag. Distinct from the permanent-lifetime
+    /// case above: the resolved-ephemeral gate DOES fire (the parent
+    /// projection returns `Some(&EphemeralLifetime)`), the walk over
+    /// the empty vector then returns `false` for every kind. Locks
+    /// the "reachable-but-empty" corner so a regression that
+    /// short-circuited on `resolved_ephemeral().is_some()` alone
+    /// (ignoring the exports contents) would return `true` here for
+    /// every kind and fail — the two corners (unreachable-parent vs
+    /// reachable-empty-child) both compose to `false` but through
+    /// different arms of the closed-set-driven projection.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_empty_exports_for_every_export_when_kind() {
+        let spec = ephemeral_spec_with_exports(vec![]);
+        for kind in ExportTrigger::ALL {
+            let tag = format!("export-when-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "resolved-ephemeral with empty exports must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `export-when-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. A regression that fell through to `Ok(false)`
+    /// (matching the pre-lift fixed-tag `_ => Err(UnknownRequireTag)`
+    /// tail) would silently reclassify a `export-when-onattested`
+    /// casing typo (PascalCase-only closed set) as `definition
+    /// missing required`, which reads as "the spec is wrong" rather
+    /// than "your check is wrong". Pin the distinction. The empty-
+    /// suffix boundary is pinned by the shared substrate primitive's
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_export_when_suffix() {
+        let spec = ephemeral_spec_with_exports(vec![]);
+        for garbage in [
+            "export-when-",
+            "export-when-onattested",
+            "export-when-ALWAYS",
+            "export-when-OnSuccess",
+            "export-when-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// COARSE / FINE COEXISTENCE pin — a Process with a single
+    /// ephemeral export at `OnAttested` MUST satisfy BOTH the coarse
+    /// `lifetime-ephemeral` presence probe AND the fine
+    /// `export-when-OnAttested` prefix tag AND simultaneously fail
+    /// the off-diagonal `export-when-OnFailed` / `export-when-Always`
+    /// probes. Locks the semantic split between the two surfaces so
+    /// a regression that (a) collapsed `export-when-<kind>` to the
+    /// coarse `lifetime-ephemeral` fixed answer (returning `true` for
+    /// every kind on any ephemeral Process), or (b) drifted the
+    /// `lifetime-ephemeral` arm to match on export-trigger kind,
+    /// fails HERE at ONE narrow site.
+    #[test]
+    fn evaluate_point_require_tag_export_when_and_lifetime_ephemeral_coexist() {
+        let spec = ephemeral_spec_with_exports(vec![export_at(ExportTrigger::OnAttested)]);
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "lifetime-ephemeral"),
+            Ok(true),
+            "coarse `lifetime-ephemeral` must be true on an ephemeral Process",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "export-when-OnAttested"),
+            Ok(true),
+            "fine `export-when-OnAttested` must be true when a matching export is present",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "export-when-OnFailed"),
+            Ok(false),
+            "fine `export-when-OnFailed` must be false when no export declares that trigger",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "export-when-Always"),
+            Ok(false),
+            "fine `export-when-Always` must be false when no export declares that trigger",
         );
     }
 

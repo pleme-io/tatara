@@ -86,11 +86,11 @@ pub mod prelude {
     pub use crate::err_ctx::ErrCtxExt;
     pub use crate::export::{
         ArtifactError, ArtifactKind, ArtifactSource, ArtifactVariant, ChannelError, ChannelKind,
-        ChannelVariant, ExportSpec, ExportTrigger, HttpEventChannel, NatsSubjectChannel,
-        ProcessSnapshotSource, ReceiptsSource, ReportFormat, ReportPayloadShape, RunMarkerSource,
-        StdoutChannel, TestReportSource, UnknownArtifactKind, UnknownChannelKind,
-        UnknownExportTrigger, UnknownReportFormat, VectorChannel, DEFAULT_NATS_URL,
-        DEFAULT_VECTOR_INGEST,
+        ChannelVariant, ExportSpec, ExportSpecSliceExt, ExportTrigger, HttpEventChannel,
+        NatsSubjectChannel, ProcessSnapshotSource, ReceiptsSource, ReportFormat,
+        ReportPayloadShape, RunMarkerSource, StdoutChannel, TestReportSource, UnknownArtifactKind,
+        UnknownChannelKind, UnknownExportTrigger, UnknownReportFormat, VectorChannel,
+        DEFAULT_NATS_URL, DEFAULT_VECTOR_INGEST,
     };
     pub use crate::flux_resource::FluxResource;
     pub use crate::hash::hex_blake3;

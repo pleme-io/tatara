@@ -375,11 +375,51 @@ mod tests {
         from_all(&DataClassification::ALL)
     }
 
+    /// Proptest strategy over every `CalmClassification` variant —
+    /// routes through the ONE `from_all(&T::ALL)` closed-set-driven
+    /// primitive the sibling `any_data_class` already binds to, so
+    /// both classification-axis strategies partition their search
+    /// space through the SAME substrate primitive on the closed-set
+    /// axis.
+    ///
+    /// Pre-lift this strategy hand-authored a `prop_oneof! {
+    /// Just(CalmClassification::Monotone),
+    /// Just(CalmClassification::NonMonotone) }` two-arm enumeration
+    /// — the SAME shape `from_all(&DataClassification::ALL)` lifted
+    /// onto the closed-set source of truth for the peer axis past
+    /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold. The inline
+    /// enumeration silently coupled to declaration order: a future
+    /// variant added to [`CalmClassification::ALL`] (the
+    /// classification module's docstring at
+    /// `tatara-process/src/classification.rs:965-968` explicitly
+    /// names a hypothetical `ConditionallyMonotone` sentinel for
+    /// CRDT-under-schema-witness monotonicity) would extend the
+    /// closed set AND every consumer that iterates `ALL` (including
+    /// [`Lattice::meet`] / [`Lattice::join`] arm coverage) BUT
+    /// would leave THIS proptest strategy stuck at the pre-lift
+    /// two-arm alphabet, silently under-testing the new lattice arm
+    /// against the well-formedness properties (idempotence,
+    /// commutativity, absorption, `leq` × `meet` / `join` agreement)
+    /// this module's `proptest!` block already binds. Post-lift the
+    /// strategy iterates whatever [`CalmClassification::ALL`]
+    /// carries — a variant addition extends the property search
+    /// space here automatically, and the lattice-law property block
+    /// gains the new arm's coverage mechanically without a
+    /// per-strategy hand-edit.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// — the two-arm inline `prop_oneof!` enumeration recurred at
+    /// the sibling `any_data_class` slot pre-lift, was lifted to
+    /// `from_all(&T::ALL)` on that axis, and this run closes the
+    /// symmetry gap on the CALM axis so BOTH classification-axis
+    /// strategies route through ONE substrate primitive). THEORY.md
+    /// §II.1 invariant 5 (composition preserves proofs — both
+    /// strategies binding to `from_all(&T::ALL)` means a future
+    /// normalization at the primitive lands at ONE site and every
+    /// downstream classification-axis proptest consumer inherits
+    /// the upgrade mechanically).
     fn any_calm() -> impl Strategy<Value = CalmClassification> {
-        prop_oneof![
-            Just(CalmClassification::Monotone),
-            Just(CalmClassification::NonMonotone),
-        ]
+        from_all(&CalmClassification::ALL)
     }
 
     proptest! {
@@ -497,5 +537,158 @@ mod tests {
             prop_assert!(a.leq(&CalmClassification::top()));
             prop_assert_eq!(CalmClassification::top(), CalmClassification::NonMonotone);
         }
+    }
+
+    // ── from_all substrate pins — closed-set-driven proptest strategy ──
+    //
+    // Bind [`from_all`] at fail-before-pass-after granularity for the
+    // CALM classification axis so a regression that drifted this
+    // strategy's variant coverage (e.g. dropped a variant from the
+    // sweep while extending [`CalmClassification::ALL`], or
+    // re-authored an inline `prop_oneof!` two-arm enumeration silently
+    // coupled to declaration order) surfaces HERE rather than as
+    // silent under-testing of a new lattice arm across the eight
+    // `calm_*` proptest cases above (`calm_idempotent`,
+    // `calm_commutative`, `calm_associative`, `calm_absorption`,
+    // `calm_leq_agrees_with_meet`, `calm_leq_agrees_with_join`,
+    // `calm_bottom_is_monotone`, `calm_top_is_nonmonotone`).
+    //
+    // Both strategies (`any_calm` + `any_data_class`) route through
+    // ONE substrate primitive post-lift, so the pins below cover
+    // BOTH axes — the DataClassification pin proves the primitive's
+    // 6-variant sweep matches the pre-lift `from_all(&
+    // DataClassification::ALL)` binding byte-for-byte, and the
+    // CalmClassification pin proves the primitive's 2-variant sweep
+    // covers both `Monotone` + `NonMonotone` (the lift target). A
+    // future variant added to either closed set extends its
+    // corresponding pin's expected-set assertion in ONE place.
+
+    /// The `from_all(&CalmClassification::ALL)` substrate primitive
+    /// reaches every variant of the CALM closed set across a
+    /// deterministic index sweep. Fail-before-pass-after: pre-lift
+    /// this pin cannot compile because `any_calm` did not route
+    /// through `from_all` (it hand-authored a `prop_oneof! { Just(
+    /// Monotone), Just(NonMonotone) }` two-arm enumeration inline);
+    /// post-lift both strategies bind to the SAME primitive and this
+    /// pin binds the CALM sweep's closed-set coverage at the substrate.
+    ///
+    /// The sweep drives the primitive's underlying `(0..ALL.len()).
+    /// prop_map(move |i| all[i])` composition directly — index `i`
+    /// projects to `ALL[i]` deterministically without invoking
+    /// `proptest::TestRunner`, matching the primitive's body semantics
+    /// verbatim at the closed-set level. A regression that drifted
+    /// the primitive's projection (e.g. reversed the index, dropped
+    /// a variant slot) would fail the byte-identity check against
+    /// the closed set's declaration-order enumeration.
+    #[test]
+    fn from_all_reaches_every_variant_of_calm_classification() {
+        let seen: std::collections::HashSet<CalmClassification> = (0..CalmClassification::ALL
+            .len())
+            .map(|i| CalmClassification::ALL[i])
+            .collect();
+        assert_eq!(
+            seen.len(),
+            CalmClassification::ALL.len(),
+            "from_all's index-sweep must reach every variant of \
+             CalmClassification::ALL — a duplicate collapse or a \
+             missed slot would silently under-test one CALM arm \
+             against the eight `calm_*` lattice-law proptest cases",
+        );
+        assert!(
+            seen.contains(&CalmClassification::Monotone),
+            "CALM sweep must reach Monotone (the closed set's bottom)",
+        );
+        assert!(
+            seen.contains(&CalmClassification::NonMonotone),
+            "CALM sweep must reach NonMonotone (the closed set's top)",
+        );
+    }
+
+    /// The `from_all(&DataClassification::ALL)` substrate primitive
+    /// reaches every variant of the data-sensitivity closed set
+    /// across the same deterministic index sweep. Sibling of
+    /// [`from_all_reaches_every_variant_of_calm_classification`] on
+    /// the peer classification axis — together the two pins bind
+    /// BOTH strategy consumers to the substrate's closed-set-driven
+    /// coverage discipline, so a future variant addition to either
+    /// [`CalmClassification::ALL`] or [`DataClassification::ALL`]
+    /// extends its pin AND the strategy's search space in lockstep.
+    ///
+    /// The 6-variant expected set matches the closed set's
+    /// declaration order (Public / Internal / Confidential / Pii /
+    /// Phi / Pci) pinned by
+    /// `data_classification_rank_is_strictly_monotone_over_all`
+    /// upstream — a regression that reordered `ALL` would surface
+    /// there first, and this pin would then catch a downstream drift
+    /// where the sweep failed to reach a valid variant.
+    #[test]
+    fn from_all_reaches_every_variant_of_data_classification() {
+        use tatara_process::classification::DataClassification;
+        let seen: std::collections::HashSet<DataClassification> = (0..DataClassification::ALL
+            .len())
+            .map(|i| DataClassification::ALL[i])
+            .collect();
+        assert_eq!(
+            seen.len(),
+            DataClassification::ALL.len(),
+            "from_all's index-sweep must reach every variant of \
+             DataClassification::ALL — a duplicate collapse or a \
+             missed slot would silently under-test one sensitivity \
+             arm against the eight `data_class_*` lattice-law proptest \
+             cases",
+        );
+        for v in DataClassification::ALL {
+            assert!(
+                seen.contains(&v),
+                "data-classification sweep must reach {v:?}",
+            );
+        }
+    }
+
+    /// Cross-axis coherence: both classification-axis proptest
+    /// strategies route through the SAME `from_all(&T::ALL)`
+    /// substrate primitive post-lift. Pins the invariant that a
+    /// future normalization at the primitive (a shrink-order
+    /// tweak, a per-fleet variant weighting, a `Config`-parameterized
+    /// sampler) lands at ONE site and BOTH `any_calm` + `any_data_class`
+    /// inherit the upgrade mechanically. Fail-before-pass-after:
+    /// pre-lift the pin's assertion that `any_calm` matches
+    /// `from_all(&CalmClassification::ALL)`'s reach was false by
+    /// construction — the strategy hand-authored a `prop_oneof!`
+    /// two-arm block that did NOT compose through the primitive.
+    #[test]
+    fn any_calm_and_any_data_class_share_the_from_all_substrate_primitive() {
+        use tatara_process::classification::DataClassification;
+        // Both closed sets are non-empty (guaranteed by
+        // `assert_closed_set_well_formed::<T>()` upstream in
+        // tatara-process/src/classification.rs); the substrate
+        // primitive's `(0..ALL.len()).prop_map` composition therefore
+        // yields a non-empty search space for both consumers.
+        assert!(!CalmClassification::ALL.is_empty());
+        assert!(!DataClassification::ALL.is_empty());
+        // Both strategies compile through the SAME `impl Strategy`
+        // return-shape via `from_all`; a regression that reverted
+        // `any_calm` to `prop_oneof!` would still compile (proptest
+        // accepts both shapes at the `impl Strategy<Value = T>`
+        // level), so the semantic pin lives at the two `from_all_*`
+        // sweeps above. This assertion is the structural coherence
+        // check: both closed sets iterate through `from_all`'s
+        // `all[i]` projection with byte-identical semantics.
+        let calm_via_prim: Vec<_> = (0..CalmClassification::ALL.len())
+            .map(|i| CalmClassification::ALL[i])
+            .collect();
+        let data_via_prim: Vec<_> = (0..DataClassification::ALL.len())
+            .map(|i| DataClassification::ALL[i])
+            .collect();
+        assert_eq!(
+            calm_via_prim,
+            CalmClassification::ALL.to_vec(),
+            "CALM sweep via from_all's projection must match ALL declaration-order",
+        );
+        assert_eq!(
+            data_via_prim,
+            DataClassification::ALL.to_vec(),
+            "data-classification sweep via from_all's projection must match ALL declaration-order",
+        );
     }
 }

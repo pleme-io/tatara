@@ -734,11 +734,30 @@ where
 ///
 /// # Vocabulary
 ///
-/// Every tag is a fixed match on an [`EphemeralSpec`] slot; the
-/// ephemeral surface deliberately doesn't have a closed-set prefix
-/// family today (the sugar's own knobs — `aplicacao`, `ttl`,
-/// `teardown`, `postconditions`, `preconditions` — aren't
-/// discriminators of a closed set on `EphemeralSpec`). The vocabulary:
+/// One closed-set-driven prefix family dispatches through the
+/// autoderived `FromStr` + the substrate presence probe on its
+/// discriminator's parent:
+///
+/// - `condition-<kind>` — [`ConditionKind`] closed set →
+///   [`tatara_process::ephemeral::EphemeralSpec::has_condition_kind`]
+///   (an inherent presence probe that unions `preconditions ∪
+///   postconditions`, so the operator's `:requires (condition-<kind>)`
+///   answers "does this ephemeral spec name this boundary predicate
+///   anywhere" without threading the pre/post side through the tag).
+///   Byte-for-byte symmetrical with the peer `condition-<kind>` family
+///   on the point surface via
+///   [`tatara_process::boundary::Boundary::has_condition_kind`] — both
+///   union bodies compose through the SAME slice-level substrate
+///   primitive
+///   [`tatara_process::boundary::ConditionSliceExt::has_kind`]. First
+///   closed-set prefix family in the ephemeral require-tag vocabulary.
+///
+/// Every other tag is a fixed match on an [`EphemeralSpec`] slot; the
+/// remaining sugar-surface knobs (`aplicacao`, `ttl`, `teardown`,
+/// `postconditions`, `preconditions`, `closed-loop-auth`) aren't
+/// discriminators of a closed set on `EphemeralSpec`, so they stay as
+/// hand-authored arms until a matching closed-set surface opens for
+/// them. The remaining vocabulary:
 ///
 /// - `aplicacao` — the chart reference slot is populated
 ///   (`!spec.aplicacao.chart_ref.is_empty()`).
@@ -758,25 +777,41 @@ where
 ///   [`tatara_process::boundary::ConditionSliceExt::has_kind`] — the
 ///   ONE substrate primitive that owns the
 ///   `(&[Condition], ConditionKind) -> bool` walk shape both this
-///   ephemeral arm (on `spec.postconditions` alone) and
-///   [`tatara_process::boundary::Boundary::has_condition_kind`] (on
-///   the `preconditions ∪ postconditions` union via `pre.has_kind ||
-///   post.has_kind`) hand-authored past the ★★ PRIME-DIRECTIVE ≥ 2
-///   duplication threshold before the lift.
+///   ephemeral arm (on `spec.postconditions` alone) and the new
+///   `condition-<kind>` prefix family above (on the pre ∪ post union)
+///   compose against. The two tags coexist: `closed-loop-auth` pins
+///   the post-only presence probe on ONE specific kind (the
+///   destination-state boundary theorem's canonical postcondition);
+///   `condition-ClosedLoopAuth` pins the pre ∪ post union answer on
+///   the same kind. Both queries are useful — a spec asserting the
+///   theorem via a pre-condition against a fixture issuer satisfies
+///   `condition-ClosedLoopAuth` but not `closed-loop-auth`.
 ///
-/// A future closed-set prefix family lands as one `else if let Some(
-/// suffix) = tag.strip_prefix("<prefix>-")` branch that reads the same
-/// three-step (strip_prefix + parse + has) shape
+/// A future closed-set prefix family lands as one
+/// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(
+/// tag, "prefix-", |k| spec.<field>.has(k)) { return res; }` branch
+/// that reads the same three-step (strip_prefix + parse + has) shape
 /// [`evaluate_point_require_tag`] publishes.
 ///
 /// Pinned by [`tests::evaluate_ephemeral_require_tag_routes_populated_slots_true`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_slots`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_out_of_vocabulary_tag`],
-/// and [`tests::evaluate_ephemeral_require_tag_closed_loop_auth_reads_postcondition_kind`].
+/// [`tests::evaluate_ephemeral_require_tag_closed_loop_auth_reads_postcondition_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_on_populated_condition_slot_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_slots_for_every_condition_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_condition_suffix`],
+/// and [`tests::evaluate_ephemeral_require_tag_unions_pre_and_post_conditions_for_condition_prefix`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
 ) -> Result<bool, UnknownRequireTag> {
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<ConditionKind, _>(tag, "condition-", |kind| {
+            spec.has_condition_kind(kind)
+        })
+    {
+        return res;
+    }
     match tag {
         "aplicacao" => Ok(!spec.aplicacao.chart_ref.is_empty()),
         "ttl" => Ok(!spec.ttl.is_empty()),
@@ -3304,6 +3339,283 @@ mod tests {
         assert_eq!(
             evaluate_point_require_tag(&point, "nope"),
             Err(UnknownRequireTag),
+        );
+    }
+
+    // ── ephemeral condition-<kind> prefix family pins ────────────────
+    //
+    // Fail-before-pass-after granularity: the ephemeral surface's
+    // `condition-<kind>` prefix family + the
+    // `tatara_process::ephemeral::EphemeralSpec::has_condition_kind`
+    // inherent method did not exist before this commit — the ephemeral
+    // require-tag vocabulary carried only fixed match arms, so an
+    // operator authoring `:requires (condition-ClosedLoopAuth)` in a
+    // `(lisp-compiles … :domain ephemeral)` check would classify as
+    // `UnknownRequireTag`. The lift adds the fifth closed-set-driven
+    // prefix family in the workspace-wide require-tag algebra
+    // (byte-for-byte symmetrical with the point surface's
+    // `condition-<kind>` family), routing through the newly-opened
+    // [`tatara_process::ephemeral::EphemeralSpec::has_condition_kind`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`.
+
+    /// POPULATED-slot pin — `condition-<kind>` dispatches through the
+    /// autoderived [`ConditionKind`] `FromStr` + the substrate
+    /// [`tatara_process::ephemeral::EphemeralSpec::has_condition_kind`]
+    /// primitive, returning `true` only when the ephemeral spec
+    /// carries at least one [`Condition`] with this kind on the pre
+    /// ∪ post union. Sweep the [`ConditionKind::ALL`] × ALL cross so
+    /// a regression that hard-coded the arm to a single kind or wired
+    /// the closure to a fixed unrelated field fails HERE at the
+    /// ephemeral classifier before landing at the operator-facing
+    /// checks.lisp surface. Byte-for-byte peer of
+    /// [`evaluate_point_require_tag_returns_true_on_populated_condition_slot_per_kind`]
+    /// on the point surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_populated_condition_slot_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut spec = ephemeral_fixture();
+            spec.postconditions.push(Condition {
+                kind: populated,
+                params: serde_json::Value::Null,
+            });
+            for query in ConditionKind::ALL {
+                let tag = format!("condition-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral condition populated={populated:?}: tag {tag:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-SPEC pin — a default ephemeral fixture (empty
+    /// preconditions, empty postconditions) returns `Ok(false)` for
+    /// every `condition-<kind>` tag. Locks the write-side / read-side
+    /// split on the presence-probe boundary so an operator authoring
+    /// `:requires (condition-JobAttested)` against an ephemeral env
+    /// whose boundary lists no such predicate gets the
+    /// `definition missing required` diagnostic, not a false-positive
+    /// pass.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_empty_slots_for_every_condition_kind() {
+        let spec = ephemeral_fixture();
+        for kind in ConditionKind::ALL {
+            let tag = format!("condition-{}", kind.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(false),
+                "empty ephemeral boundary must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `condition-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag for ephemeral domain:
+    /// <verbatim>` diagnostic path fires. A regression that fell
+    /// through to `Ok(false)` (matching the pre-lift fixed-tag
+    /// `_ => Err(UnknownRequireTag)` tail on a mis-typed prefix
+    /// suffix) would silently reclassify a `condition-jobAttested`
+    /// casing typo (PascalCase-only closed set) as `definition missing
+    /// required`, which reads as "the spec is wrong" rather than
+    /// "your check is wrong". Pin the distinction — parity with the
+    /// point-classifier's
+    /// [`evaluate_point_require_tag_returns_unknown_on_unknown_condition_suffix`]
+    /// pin.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_condition_suffix() {
+        let spec = ephemeral_fixture();
+        for garbage in [
+            "condition-",
+            "condition-jobAttested",
+            "condition-CLOSEDLOOPAUTH",
+            "condition-typo",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// UNION pin — the ephemeral `condition-<kind>` prefix family
+    /// unions `preconditions ∪ postconditions` (via the peer method
+    /// [`tatara_process::ephemeral::EphemeralSpec::has_condition_kind`])
+    /// so a kind that appears on preconditions ONLY resolves through
+    /// the same tag as one on postconditions. A regression that
+    /// dropped either arm of the OR (probing only one side of the
+    /// union) silently reclassifies pre-only or post-only boundary
+    /// predicates as absent. Byte-for-byte peer of
+    /// [`evaluate_point_require_tag_unions_pre_and_post_conditions_for_condition_prefix`]
+    /// on the point surface — the two-surface symmetry is what lets
+    /// operators author identical `condition-<kind>` semantics under
+    /// either `:domain point` or `:domain ephemeral` slot without a
+    /// per-surface behavioral gotcha. Also cross-checks the semantic
+    /// split against the fixed `closed-loop-auth` arm (post-only) —
+    /// a spec whose ClosedLoopAuth predicate lives on preconditions
+    /// satisfies `condition-ClosedLoopAuth` but NOT `closed-loop-auth`,
+    /// so the two coexisting tags publish distinct answers.
+    #[test]
+    fn evaluate_ephemeral_require_tag_unions_pre_and_post_conditions_for_condition_prefix() {
+        let mut spec = ephemeral_fixture();
+        spec.preconditions.push(Condition {
+            kind: ConditionKind::KustomizationHealthy,
+            params: serde_json::Value::Null,
+        });
+        spec.postconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: serde_json::Value::Null,
+        });
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "condition-KustomizationHealthy"),
+            Ok(true),
+            "pre-only kind must resolve through the union",
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "condition-ClosedLoopAuth"),
+            Ok(true),
+            "post-only kind must resolve through the union",
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "condition-PromQL"),
+            Ok(false),
+            "an absent kind must return false even with populated halves",
+        );
+
+        // SEMANTIC-SPLIT cross-check: the two coexisting ClosedLoopAuth
+        // tags publish distinct answers on a pre-only ClosedLoopAuth
+        // spec. `condition-ClosedLoopAuth` (union) reads Ok(true);
+        // `closed-loop-auth` (post-only) reads Ok(false). A regression
+        // that collapsed the two tags into a single answer fails HERE.
+        let mut pre_only = ephemeral_fixture();
+        pre_only.preconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: serde_json::Value::Null,
+        });
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&pre_only, "condition-ClosedLoopAuth"),
+            Ok(true),
+            "pre-only ClosedLoopAuth must satisfy the union tag",
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&pre_only, "closed-loop-auth"),
+            Ok(false),
+            "pre-only ClosedLoopAuth must NOT satisfy the post-only tag",
+        );
+    }
+
+    // ── EphemeralSpec::has_condition_kind substrate pins ─────────────
+    //
+    // Fail-before-pass-after granularity:
+    // `EphemeralSpec::has_condition_kind` did not exist before this
+    // commit — the (preconditions ∪ postconditions
+    // .iter().any(|c| c.kind == K)) union-probe shape lived at ONE
+    // struct-level site (`Boundary::has_condition_kind` on the point
+    // surface). The lift adds the peer inherent method on the
+    // [`EphemeralSpec`] surface so both struct-level union callers
+    // compose against the SAME slice-level substrate primitive
+    // `ConditionSliceExt::has_kind` in lockstep.
+
+    fn ephemeral_condition(kind: ConditionKind) -> Condition {
+        Condition {
+            kind,
+            params: serde_json::json!({}),
+        }
+    }
+
+    /// EMPTY-SPEC pin — a default ephemeral fixture (empty
+    /// preconditions, empty postconditions) returns `false` for EVERY
+    /// [`ConditionKind`]. Sweep `ConditionKind::ALL` so a new variant
+    /// added without a matching arm in the presence probe surfaces at
+    /// rustc's exhaustiveness gate on the ALL literal (arity forced by
+    /// `[Self; 8]`) rather than as a silent false-positive at every
+    /// downstream `condition-<kind>` ephemeral require-tag callsite.
+    /// Byte-for-byte peer of
+    /// `has_condition_kind_returns_false_on_empty_boundary_for_every_kind`
+    /// on the [`tatara_process::boundary::Boundary`] surface.
+    #[test]
+    fn ephemeral_has_condition_kind_returns_false_on_empty_spec_for_every_kind() {
+        let spec = ephemeral_fixture();
+        for kind in ConditionKind::ALL {
+            assert!(
+                !spec.has_condition_kind(kind),
+                "empty ephemeral spec must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// POSTCONDITION-only pin — an ephemeral spec that carries the
+    /// kind on ONLY postconditions returns `true` for that kind,
+    /// `false` for every other variant. Sweep the ALL × ALL cross
+    /// so a regression that hard-coded the arm to a single kind or
+    /// probed the wrong slot fails HERE at the substrate primitive.
+    #[test]
+    fn ephemeral_has_condition_kind_reads_postconditions_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut spec = ephemeral_fixture();
+            spec.postconditions.push(ephemeral_condition(populated));
+            for query in ConditionKind::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    spec.has_condition_kind(query),
+                    expected,
+                    "postcondition populated={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// PRECONDITION-only pin — mirrors the postcondition sweep on the
+    /// other half of the union. Locks the union semantics on both
+    /// halves separately so a regression that dropped the
+    /// pre-condition side of the OR fails here even though the
+    /// postcondition-side pin above passes.
+    #[test]
+    fn ephemeral_has_condition_kind_reads_preconditions_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut spec = ephemeral_fixture();
+            spec.preconditions.push(ephemeral_condition(populated));
+            for query in ConditionKind::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    spec.has_condition_kind(query),
+                    expected,
+                    "precondition populated={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// UNION pin — a kind that appears on preconditions returns
+    /// `true` even when postconditions carries a DIFFERENT kind, and
+    /// vice versa. Pins the OR-composition of the two halves so a
+    /// regression that collapsed the union to an intersection (AND)
+    /// silently reclassifies pre-only or post-only kinds as absent.
+    /// Byte-for-byte peer of
+    /// `has_condition_kind_unions_pre_and_post_condition_arms` on the
+    /// [`tatara_process::boundary::Boundary`] surface.
+    #[test]
+    fn ephemeral_has_condition_kind_unions_pre_and_post_condition_arms() {
+        let mut spec = ephemeral_fixture();
+        spec.preconditions
+            .push(ephemeral_condition(ConditionKind::KustomizationHealthy));
+        spec.postconditions
+            .push(ephemeral_condition(ConditionKind::ClosedLoopAuth));
+        assert!(
+            spec.has_condition_kind(ConditionKind::KustomizationHealthy),
+            "pre-only kind must resolve through the union",
+        );
+        assert!(
+            spec.has_condition_kind(ConditionKind::ClosedLoopAuth),
+            "post-only kind must resolve through the union",
+        );
+        assert!(
+            !spec.has_condition_kind(ConditionKind::PromQL),
+            "an absent kind must return false even with populated halves",
         );
     }
 

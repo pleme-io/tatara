@@ -49,6 +49,22 @@ impl Boundary {
     /// and every downstream `<xxx>-<kind>` require-tag family +
     /// closed-set audit dispatcher picks it up mechanically.
     ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::has_condition_kind`]
+    ///
+    /// Same signature `(ConditionKind) -> bool`, same union body
+    /// (`preconditions.has_kind(k) || postconditions.has_kind(k)`), on
+    /// the sugar-surface type [`crate::ephemeral::EphemeralSpec`] whose
+    /// pre/post condition vectors live directly on the struct rather
+    /// than inside a nested [`Boundary`] slot. Both methods compose
+    /// against the ONE slice-level substrate primitive
+    /// [`ConditionSliceExt::has_kind`] — a regression at the per-slice
+    /// walk fails at that primitive's tests rather than as silent drift
+    /// at either struct-level union caller. The ephemeral require-tag
+    /// classifier reaches its `condition-<kind>` prefix family through
+    /// the peer method byte-for-byte symmetrical with the point
+    /// surface's `condition-<kind>` family that composes through this
+    /// method.
+    ///
     /// # Compounding
     ///
     /// The point-domain require-tag surface in

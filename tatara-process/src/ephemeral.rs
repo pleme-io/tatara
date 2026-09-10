@@ -32,7 +32,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tatara_lisp::DeriveTataraDomain;
 
-use crate::boundary::{Boundary, Condition};
+use crate::boundary::{Boundary, Condition, ConditionKind, ConditionSliceExt};
 use crate::classification::Classification;
 use crate::crd::ProcessSpec;
 use crate::export::ExportSpec;
@@ -120,6 +120,77 @@ pub struct EphemeralSpec {
 // (TTL) and TWO (max-concurrent) restatements past the ★★ PRIME-
 // DIRECTIVE ≥ 2 duplication threshold. See the substrate owner's
 // doc-comment for the full migration rationale.
+
+impl EphemeralSpec {
+    /// True iff at least one [`Condition`] in
+    /// `preconditions ∪ postconditions` carries the given
+    /// [`ConditionKind`] — the peer of
+    /// [`crate::boundary::Boundary::has_condition_kind`] on the
+    /// [`EphemeralSpec`] surface.
+    ///
+    /// # Semantics — byte-identical to [`Boundary::has_condition_kind`]
+    ///
+    /// The two condition vectors are unioned: a caller asking "does this
+    /// ephemeral spec name a `ClosedLoopAuth` predicate anywhere" doesn't
+    /// care whether the operator authored it on the pre- or post-
+    /// condition side. A spec with the given kind on ONLY preconditions
+    /// returns `true`; a spec with the given kind on ONLY postconditions
+    /// returns `true`; a spec with neither returns `false`.
+    ///
+    /// Both halves compose through the SAME slice-level substrate
+    /// primitive [`ConditionSliceExt::has_kind`] that
+    /// [`Boundary::has_condition_kind`] walks — so a regression at the
+    /// per-slice presence probe fails at that primitive's tests rather
+    /// than as silent drift at either struct-level union caller.
+    ///
+    /// # Sibling to [`Boundary::has_condition_kind`]
+    ///
+    /// Same shape, same axis, same body — [`Boundary::has_condition_kind`]
+    /// composes `preconditions ∪ postconditions` on the point-domain
+    /// [`ProcessSpec`]'s nested [`Boundary`] slot;
+    /// [`Self::has_condition_kind`] composes the SAME union on
+    /// [`EphemeralSpec`]'s direct pre/post fields. `EphemeralSpec` has no
+    /// nested [`Boundary`] struct — the pre/post condition vectors are
+    /// stored directly on the sugar-surface type — so a byte-identical
+    /// inherent method here lets the ephemeral require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` publish a `condition-<kind>`
+    /// closed-set prefix family byte-for-byte symmetrical with the point
+    /// surface's family via [`Boundary::has_condition_kind`].
+    ///
+    /// # Compounding
+    ///
+    /// The ephemeral require-tag classifier composes this primitive with
+    /// the closed-set `FromStr` autoderived on [`ConditionKind`] through
+    /// the `strip_and_classify_prefixed_kind` substrate to publish a
+    /// fifth closed-set-driven prefix family across the workspace-wide
+    /// require-tag algebra (peer of `intent-<kind>` / `lifetime-<kind>` /
+    /// `condition-<kind>` / `must-reach-<kind>` on the point surface). A
+    /// future [`ConditionKind`] variant added to `ALL` reaches BOTH
+    /// surfaces' `condition-<kind>` prefix families through the SAME
+    /// closed-set walk with no per-caller edit — the two-surface
+    /// symmetry means adding a variant on the closed set publishes it in
+    /// lockstep across every downstream consumer.
+    ///
+    /// A future normalization at the presence-probe shape (a widened
+    /// return carrying the matching Condition ref, a debug-build
+    /// assertion on pre/post drift, a fleet-wide warn on redundant
+    /// duplicates) lands at the ONE slice-level substrate primitive
+    /// [`ConditionSliceExt::has_kind`] both this method and
+    /// [`Boundary::has_condition_kind`] compose against — so the two
+    /// struct-level union methods stay symmetric by construction.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the union body composes the SAME slice-level substrate
+    /// primitive on both this ephemeral surface and the point-domain
+    /// [`Boundary`] surface). THEORY.md §VI.1 (generation over
+    /// composition — a future [`ConditionKind`] variant added to `ALL`
+    /// reaches both `condition-<kind>` require-tag surfaces mechanically
+    /// through the SAME closed-set walk).
+    #[must_use]
+    pub fn has_condition_kind(&self, kind: ConditionKind) -> bool {
+        self.preconditions.has_kind(kind) || self.postconditions.has_kind(kind)
+    }
+}
 
 impl From<EphemeralSpec> for ProcessSpec {
     fn from(e: EphemeralSpec) -> Self {
@@ -421,6 +492,172 @@ mod tests {
         // Lowered ProcessSpec carries the exports through unchanged.
         let ps: ProcessSpec = d.spec.clone().into();
         assert_eq!(ps.lifetime.ephemeral.as_ref().unwrap().exports.len(), 3);
+    }
+
+    // ── EphemeralSpec::has_condition_kind substrate pins ─────────────
+    //
+    // Fail-before-pass-after granularity:
+    // `EphemeralSpec::has_condition_kind` did not exist before this
+    // commit — the (preconditions ∪ postconditions .iter().any(|c|
+    // c.kind == K)) union-probe shape lived at ONE struct-level site
+    // (`Boundary::has_condition_kind` on the point surface's nested
+    // [`Boundary`] slot). The lift adds the peer inherent method on the
+    // [`EphemeralSpec`] sugar-surface so both struct-level union
+    // callers compose against the SAME slice-level substrate primitive
+    // [`ConditionSliceExt::has_kind`] in lockstep. A regression that
+    // (a) hard-coded the arm to a single kind, (b) dropped the pre-
+    // condition side of the OR (a re-inheritance of the pre-lift
+    // ephemeral `closed-loop-auth` post-only shape at the union-tag
+    // level), or (c) probed the wrong slot fails HERE at the substrate
+    // primitive rather than as silent operator-facing drift at the
+    // ephemeral `condition-<kind>` require-tag surface.
+
+    fn empty_ephemeral() -> EphemeralSpec {
+        EphemeralSpec {
+            aplicacao: AplicacaoIntent::chart_only("oci://ghcr.io/x", "1"),
+            ttl: "1h".into(),
+            teardown: TeardownPolicy::Always,
+            max_concurrent: 0,
+            postconditions: vec![],
+            preconditions: vec![],
+            verify_timeout: None,
+            classification: None,
+            parent: None,
+            exports: vec![],
+            routing: None,
+        }
+    }
+
+    fn cond(kind: ConditionKind) -> Condition {
+        Condition {
+            kind,
+            params: serde_json::json!({}),
+        }
+    }
+
+    /// EMPTY-SPEC pin — a default [`EphemeralSpec`] (empty
+    /// preconditions, empty postconditions) returns `false` for EVERY
+    /// [`ConditionKind`]. Sweep `ConditionKind::ALL` so a new variant
+    /// added without a matching arm in the presence probe surfaces at
+    /// rustc's exhaustiveness gate on the ALL literal (arity forced by
+    /// `[Self; 8]`) rather than as a silent false-positive at every
+    /// downstream `condition-<kind>` ephemeral require-tag callsite.
+    /// Byte-for-byte peer of
+    /// `has_condition_kind_returns_false_on_empty_boundary_for_every_kind`
+    /// on the [`Boundary`] surface.
+    #[test]
+    fn has_condition_kind_returns_false_on_empty_ephemeral_for_every_kind() {
+        let spec = empty_ephemeral();
+        for kind in ConditionKind::ALL {
+            assert!(
+                !spec.has_condition_kind(kind),
+                "empty ephemeral spec must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// POSTCONDITION-only pin — an ephemeral spec that carries the
+    /// kind on ONLY postconditions returns `true` for that kind,
+    /// `false` for every other variant. Sweep the ALL × ALL cross so
+    /// a regression that hard-coded the arm to a single kind or
+    /// probed the wrong slot fails HERE at the substrate primitive.
+    #[test]
+    fn has_condition_kind_reads_ephemeral_postconditions_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            spec.postconditions.push(cond(populated));
+            for query in ConditionKind::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    spec.has_condition_kind(query),
+                    expected,
+                    "ephemeral postcondition populated={populated:?}: \
+                     query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// PRECONDITION-only pin — mirrors the postcondition sweep on the
+    /// other half of the union. Locks the union semantics on both
+    /// halves separately so a regression that dropped the pre-
+    /// condition side of the OR fails here even though the
+    /// postcondition-side pin above passes.
+    #[test]
+    fn has_condition_kind_reads_ephemeral_preconditions_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            spec.preconditions.push(cond(populated));
+            for query in ConditionKind::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    spec.has_condition_kind(query),
+                    expected,
+                    "ephemeral precondition populated={populated:?}: \
+                     query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// UNION pin — a kind that appears on preconditions returns
+    /// `true` even when postconditions carries a DIFFERENT kind, and
+    /// vice versa. Pins the OR-composition of the two halves so a
+    /// regression that collapsed the union to an intersection (AND)
+    /// silently reclassifies pre-only or post-only kinds as absent.
+    /// Byte-for-byte peer of
+    /// `has_condition_kind_unions_pre_and_post_condition_arms` on the
+    /// [`Boundary`] surface.
+    #[test]
+    fn has_condition_kind_unions_pre_and_post_ephemeral_condition_arms() {
+        let mut spec = empty_ephemeral();
+        spec.preconditions
+            .push(cond(ConditionKind::KustomizationHealthy));
+        spec.postconditions
+            .push(cond(ConditionKind::ClosedLoopAuth));
+        assert!(
+            spec.has_condition_kind(ConditionKind::KustomizationHealthy),
+            "pre-only kind must resolve through the union",
+        );
+        assert!(
+            spec.has_condition_kind(ConditionKind::ClosedLoopAuth),
+            "post-only kind must resolve through the union",
+        );
+        assert!(
+            !spec.has_condition_kind(ConditionKind::PromQL),
+            "an absent kind must return false even with populated halves",
+        );
+    }
+
+    /// COMPOSITION pin — [`EphemeralSpec::has_condition_kind`] equals
+    /// the OR of the two slice-level probes on the pre/post fields.
+    /// The struct-level union body composes ONLY [`ConditionSliceExt::has_kind`]
+    /// on each half; a regression that inlined a wide-net predicate
+    /// (`.iter().any(|c| c.kind != kind).not()`, an `all` instead of
+    /// `any`) drifts from the slice-level primitive here. Byte-for-
+    /// byte peer of the
+    /// `boundary_has_condition_kind_equals_or_of_half_slice_probes`
+    /// composition pin on the [`Boundary`] surface.
+    #[test]
+    fn ephemeral_has_condition_kind_equals_or_of_half_slice_probes() {
+        // Sweep every ConditionKind on both halves independently so the
+        // cross of half-slice probes reaches the OR-composition body
+        // exhaustively.
+        for populated in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            spec.preconditions.push(cond(populated));
+            spec.postconditions.push(cond(ConditionKind::PromQL));
+            for query in ConditionKind::ALL {
+                let via_or_of_halves =
+                    spec.preconditions.has_kind(query) || spec.postconditions.has_kind(query);
+                assert_eq!(
+                    spec.has_condition_kind(query),
+                    via_or_of_halves,
+                    "populated={populated:?} query={query:?}: struct-level \
+                     union drifted from OR of slice-level probes",
+                );
+            }
+        }
     }
 
     #[test]

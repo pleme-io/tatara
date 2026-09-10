@@ -234,6 +234,97 @@ pub fn blake3_scheme_display<H: Display>(hex: H) -> String {
     format!("{BLAKE3_SCHEME_PREFIX}{hex}")
 }
 
+/// The lowercase-64-hex BLAKE3 digest of a `&[u8]` payload — the
+/// byte-input peer of [`hex_blake3_of_json`] on the same
+/// value-to-identity-hex-BLAKE3 axis, and the intra-crate byte-input
+/// substrate owner of the `blake3::hash(bytes).to_hex().to_string()`
+/// one-link chain [`hex_blake3_of_json`]'s body walks once
+/// `serde_json::to_vec` has projected its `T: Serialize` receiver
+/// through the JSON encoder.
+///
+/// # Why the substrate lives here
+///
+/// Pre-lift the byte-input step was inlined inside
+/// [`hex_blake3_of_json`]'s body, coupled with the JSON-encode prefix
+/// through a single 2-link chain. Consumers holding a `&[u8]` directly
+/// (a payload buffer with no JSON intermediate, a canonical-form
+/// projection whose bytes are already materialized, a future in-crate
+/// composer that hashes a non-`Serialize` byte stream) had no
+/// workspace-owned entry point on the byte-input axis at this crate's
+/// layer — the peer surface on that axis lived at
+/// [`tatara-process::hash::hex_blake3`] one crate up the graph, which
+/// this crate cannot reach (an intentional dep-graph choice: the store
+/// / K8s three-pillar surface sits ABOVE the Lisp reader).
+///
+/// Post-lift the byte-input axis has a first-class owner at THIS
+/// crate's layer, so consumers reachable through [`tatara-lisp`] plug
+/// into the substrate without needing a `tatara-process` dep. The
+/// composition partition mirrors the sibling shape in `tatara-process`
+/// (`hex_blake3(bytes)` composed as `hex_blake3_hash(&blake3::hash(bytes))`):
+/// [`hex_blake3_of_json`]'s body now reads
+/// `hex_blake3_of_bytes(&serde_json::to_vec(v).unwrap_or_default())`,
+/// binding the (JSON-encode, byte-hash) pair through the substrate
+/// primitive rather than through an inline 2-link chain.
+///
+/// # Invariants
+///
+/// - **Length:** the returned string is always exactly 64 chars
+///   (BLAKE3's 32-byte digest encoded as lowercase hex).
+/// - **Charset:** every char is one of `[0-9a-f]` (lowercase).
+/// - **Determinism:** byte-identical output across runs for the same
+///   input bytes — pinned at
+///   [`tests::hex_blake3_of_bytes_is_deterministic_for_identical_input`].
+///
+/// Byte-shape parity with the hand-authored
+/// `hex::encode(blake3::hash(bytes).as_bytes())` spelling is pinned at
+/// [`tests::hex_blake3_of_bytes_matches_pre_lift_hex_encode_chain_bytewise`]
+/// so a substrate-side canonicalization the pre-lift chain does NOT
+/// apply (a hex-case flip, a `blake3::Hash::to_hex` reshape, a swap
+/// between `to_hex` and `hex::encode` that diverged byte-shape) surfaces
+/// HERE rather than as silent identity-slot drift downstream. The
+/// spelling matches [`hex_blake3_of_json`]'s (`blake3::Hash::to_hex`),
+/// so the two peers stay drift-free by construction.
+///
+/// # `#[must_use]`
+///
+/// Every consumer either stores the returned hex into an identity
+/// newtype, feeds it into a scheme-prefixed wire form via
+/// [`blake3_scheme_display`], or feeds it directly onto a wire.
+/// Dropping the return means the hash was computed for no observable
+/// reason; the attribute surfaces that as a warning at every consumer
+/// site.
+///
+/// # Sibling partitions
+///
+/// - **JSON-input axis (this crate):** [`hex_blake3_of_json`] — the
+///   `T: Serialize` → 64-hex projector. Composes `serde_json::to_vec`
+///   with THIS primitive.
+/// - **Byte-input axis (upper layer):**
+///   [`tatara-process::hash::hex_blake3`] — the byte-input owner one
+///   crate up, using the `hex::encode(<hash>.as_bytes())` spelling. Same
+///   invariants; different graph position.
+/// - **Streaming-digest axis (upper layer):**
+///   [`tatara-process::hash::hex_blake3_hash`] — the `&blake3::Hash` →
+///   64-hex projector for consumers that fold per-item updates into a
+///   `Hasher` before finalizing. Sibling to this one-shot byte-input
+///   primitive on the (one-shot, streaming) partition.
+/// - **Scheme-wrap axis (this crate):** [`blake3_scheme_display`] — the
+///   `"blake3:{hex}"` wire-form wrap composed on top of a hex handle.
+///   Consumers that need the scheme-prefixed form compose
+///   `blake3_scheme_display(hex_blake3_of_bytes(bytes))`.
+///
+/// Theory anchor: THEORY.md §V.3 (three-pillar attestation — the
+/// canonical `bytes → BLAKE3 → hex` byte-identity projection is the
+/// value-input axis's counterpart to the JSON-input axis, and the two
+/// peers now share ONE spelling at this crate's layer). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — the JSON-input peer
+/// routes through this byte-input peer, so a future spelling change
+/// lands at ONE site and both peers inherit the shift by construction).
+#[must_use]
+pub fn hex_blake3_of_bytes(bytes: &[u8]) -> String {
+    blake3::hash(bytes).to_hex().to_string()
+}
+
 /// The lowercase-64-hex BLAKE3 digest of `v`'s canonical JSON
 /// serialization — the workspace-wide ONE substrate owner of the
 /// two-line `serde_json::to_vec(v).unwrap_or_default()` +
@@ -253,18 +344,27 @@ pub fn blake3_scheme_display<H: Display>(hex: H) -> String {
 ///   `Serialize` is infallible) hashes the empty byte slice — matching
 ///   the pre-lift `.unwrap_or_default()` corner byte-for-byte.
 ///
-/// Byte-shape parity with the pre-lift hand-authored
-/// `hex::encode(blake3::hash(...).as_bytes())` chain is pinned at
-/// [`tests::hex_blake3_of_json_matches_pre_lift_hex_encode_chain_bytewise`].
+/// # Composition
+///
+/// Composes [`hex_blake3_of_bytes`] (the byte-input peer) over
+/// `serde_json::to_vec(v).unwrap_or_default()` — the (JSON-encode,
+/// byte-hash) pair binds through the byte-input substrate owner rather
+/// than through an inline 2-link chain. Byte-shape parity with the
+/// pre-lift hand-authored `hex::encode(blake3::hash(&bytes).as_bytes())`
+/// spelling stays pinned at
+/// [`tests::hex_blake3_of_json_matches_pre_lift_hex_encode_chain_bytewise`],
+/// and the (JSON-encode ∘ byte-hash) composition rule is pinned at
+/// [`tests::hex_blake3_of_json_composes_hex_blake3_of_bytes_over_serde_json_to_vec`].
 #[must_use]
 pub fn hex_blake3_of_json<T: Serialize + ?Sized>(v: &T) -> String {
-    let bytes = serde_json::to_vec(v).unwrap_or_default();
-    blake3::hash(&bytes).to_hex().to_string()
+    hex_blake3_of_bytes(&serde_json::to_vec(v).unwrap_or_default())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{blake3_scheme_display, hex_blake3_of_json, BLAKE3_SCHEME_PREFIX};
+    use super::{
+        blake3_scheme_display, hex_blake3_of_bytes, hex_blake3_of_json, BLAKE3_SCHEME_PREFIX,
+    };
     use serde::Serialize;
 
     #[derive(Serialize)]
@@ -396,6 +496,173 @@ mod tests {
             hex_blake3_of_json::<str>("hello"),
             hex_blake3_of_json(&owned)
         );
+    }
+
+    // ── hex_blake3_of_bytes substrate pins ───────────────────────────
+    //
+    // Each pin below binds [`hex_blake3_of_bytes`] at fail-before-pass-
+    // after granularity so a regression at the byte-input peer (a hex-
+    // case flip, a `blake3::Hash::to_hex` reshape, a `hex::encode`-vs-
+    // `to_hex` spelling swap that broke byte-shape) surfaces HERE rather
+    // than as silent identity-slot drift at every downstream consumer
+    // that composes through the primitive. The paired
+    // [`hex_blake3_of_json_composes_hex_blake3_of_bytes_over_serde_json_to_vec`]
+    // pin binds the JSON-input peer to route through this owner so a
+    // future spelling change lands at ONE site and both peers inherit
+    // the shift by construction.
+
+    /// Byte-identical parity with the pre-lift hand-authored
+    /// `hex::encode(blake3::hash(bytes).as_bytes())` spelling. A
+    /// regression in either [`blake3::Hash::to_hex`] (a major-version
+    /// bump reshaping the `ArrayString<64>` output) or the tatara-lisp
+    /// substrate's choice of the `to_hex` spelling versus the pre-lift
+    /// `hex::encode(<hash>.as_bytes())` spelling surfaces HERE, not as
+    /// silent drift at every downstream byte-input consumer. Sibling of
+    /// [`hex_blake3_of_json_matches_pre_lift_hex_encode_chain_bytewise`]
+    /// on the byte-input axis; both peers now share the SAME
+    /// `blake3::Hash::to_hex` spelling.
+    #[test]
+    fn hex_blake3_of_bytes_matches_pre_lift_hex_encode_chain_bytewise() {
+        for buf in [
+            b"" as &[u8],
+            b"x",
+            b"artifact-payload",
+            b"{\"kind\":\"tatara.export\"}",
+            &[0u8; 128],
+            &[0xFFu8; 256],
+        ] {
+            assert_eq!(
+                hex_blake3_of_bytes(buf),
+                hex::encode(blake3::hash(buf).as_bytes()),
+                "hex_blake3_of_bytes drifted from pre-lift hex::encode chain for buf.len()={}",
+                buf.len(),
+            );
+        }
+    }
+
+    /// Same input bytes → same hash. Every consumer that reaches for
+    /// the byte-input primitive (a canonical-form projection, a
+    /// content-addressed identity slot, an in-crate composer over a
+    /// non-`Serialize` byte stream) depends on this determinism
+    /// corner.
+    #[test]
+    fn hex_blake3_of_bytes_is_deterministic_for_identical_input() {
+        let payload = b"deterministic";
+        let a = hex_blake3_of_bytes(payload);
+        let b = hex_blake3_of_bytes(payload);
+        assert_eq!(a, b);
+    }
+
+    /// Distinct inputs → distinct hashes. Pins the "no accidental
+    /// collision at the hex layer" invariant a downstream identity-slot
+    /// consumer relies on to keep two distinct byte payloads on two
+    /// distinct rows.
+    #[test]
+    fn hex_blake3_of_bytes_distinct_inputs_hash_distinct() {
+        assert_ne!(hex_blake3_of_bytes(b"a"), hex_blake3_of_bytes(b"b"));
+        assert_ne!(hex_blake3_of_bytes(b""), hex_blake3_of_bytes(b"x"));
+    }
+
+    /// Output shape: exactly 64 lowercase-hex chars for every
+    /// observable input, no leading scheme prefix (the prefix lives on
+    /// the scheme-wrap primitive [`blake3_scheme_display`], not on the
+    /// bare byte-input projector every consumer here reaches for).
+    /// Pins the invariant a downstream fixed-width slot or a `^[0-9a-f]
+    /// {64}$` regex step relies on.
+    #[test]
+    fn hex_blake3_of_bytes_is_64_lowercase_hex_chars() {
+        for buf in [b"" as &[u8], b"x", b"shape", &[0u8; 32]] {
+            let h = hex_blake3_of_bytes(buf);
+            assert_eq!(
+                h.len(),
+                64,
+                "hex_blake3_of_bytes for {} bytes returned {} chars",
+                buf.len(),
+                h.len()
+            );
+            assert!(
+                h.chars()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+                "hex_blake3_of_bytes for buf.len()={} had non-lowercase-hex chars: {h:?}",
+                buf.len(),
+            );
+            assert!(
+                !h.starts_with(BLAKE3_SCHEME_PREFIX),
+                "bare hex projection must NOT carry the `{BLAKE3_SCHEME_PREFIX}` scheme prefix \
+                 (that's the wrap primitive's role); got {h:?}",
+            );
+        }
+    }
+
+    /// Known BLAKE3 digest of the empty input. A rename of the
+    /// underlying algorithm (an accidental switch to sha2, a salt
+    /// smuggled through `blake3::hash`'s constructor) or a drift in the
+    /// hex tail's spelling would land HERE rather than as silent
+    /// identity-slot drift across every downstream consumer. Sibling
+    /// pin to `tatara-process::hash::hex_blake3_empty_input_matches_known_digest`
+    /// upstream — both peers on the byte-input axis MUST agree on the
+    /// BLAKE3 empty-input digest byte-for-byte.
+    #[test]
+    fn hex_blake3_of_bytes_empty_input_matches_known_digest() {
+        assert_eq!(
+            hex_blake3_of_bytes(b""),
+            "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        );
+    }
+
+    /// Cross-primitive coherence: [`hex_blake3_of_json`] MUST agree
+    /// byte-for-byte with [`hex_blake3_of_bytes`] composed over
+    /// `serde_json::to_vec(v).unwrap_or_default()`. Pre-lift the
+    /// JSON-input peer inlined the byte-hash step; post-lift it routes
+    /// through the byte-input substrate owner. A regression that
+    /// specialized ONE peer (a canonicalization step, a per-fleet salt,
+    /// a spelling change that drifted only one arm) would surface HERE
+    /// rather than as silent drift between the JSON-input and byte-
+    /// input corners at every downstream consumer.
+    #[test]
+    fn hex_blake3_of_json_composes_hex_blake3_of_bytes_over_serde_json_to_vec() {
+        for spec in [
+            Fixture {
+                name: "arctic".into(),
+                n: 0,
+            },
+            Fixture {
+                name: "compose".into(),
+                n: 42,
+            },
+            Fixture {
+                name: String::new(),
+                n: u32::MAX,
+            },
+        ] {
+            let via_json_peer = hex_blake3_of_json(&spec);
+            let via_bytes_peer = {
+                let bytes = serde_json::to_vec(&spec).unwrap_or_default();
+                hex_blake3_of_bytes(&bytes)
+            };
+            assert_eq!(
+                via_json_peer, via_bytes_peer,
+                "hex_blake3_of_json drifted from hex_blake3_of_bytes ∘ serde_json::to_vec for {:?}",
+                spec.name,
+            );
+        }
+    }
+
+    /// `?Sized` reach on the JSON peer stays honest through the byte-
+    /// input delegation: a `&str` receiver flows through
+    /// `serde_json::to_vec` (which serializes `str` as a JSON string
+    /// literal, `"..."`) and then through [`hex_blake3_of_bytes`] on
+    /// the serialized bytes. Pinned here so a future refactor at either
+    /// peer that broke the `?Sized` receiver corner surfaces HERE.
+    #[test]
+    fn hex_blake3_of_bytes_composes_with_json_peer_on_unsized_str_receiver() {
+        let owned = String::from("hello");
+        let via_json_peer = hex_blake3_of_json::<str>(&owned);
+        let via_bytes_peer = {
+            let bytes = serde_json::to_vec::<str>(&owned).unwrap_or_default();
+            hex_blake3_of_bytes(&bytes)
+        };
+        assert_eq!(via_json_peer, via_bytes_peer);
     }
 
     // ── blake3_scheme_display substrate pins ─────────────────────────

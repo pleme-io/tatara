@@ -1158,6 +1158,45 @@ pub trait ExportSpecSliceExt {
     /// `e.source.test_report.as_ref().is_some_and(|tr| tr.format == K)`
     /// two-step chain at each callsite.
     fn has_report_format(&self, kind: ReportFormat) -> bool;
+
+    /// True iff at least one [`ExportSpec`] in this slice carries an
+    /// [`ArtifactSource`] whose `ArtifactKind::select`-populated slot
+    /// matches the given [`ArtifactKind`]. Composes the closed-set
+    /// [`ArtifactKind::select`] projection with the same
+    /// `.iter().any(|e| …)` walk shape [`Self::has_when`] +
+    /// [`Self::has_channel_kind`] + [`Self::has_report_format`] publish,
+    /// opening a FOURTH closed-set-driven presence probe on the SAME
+    /// `&[ExportSpec]` slice — the second probe on this trait whose
+    /// closure reads a TAGGED-UNION carrier (peer of
+    /// [`Self::has_channel_kind`] on `VectorChannel`; the
+    /// [`ArtifactKind::select`] projection is the ONE substrate owner
+    /// of the "is the slot populated" answer for the four-slot
+    /// [`ArtifactSource`] carrier, so a future fifth [`ArtifactKind`]
+    /// variant reaches this walk through the [`ArtifactKind::ALL`]
+    /// sweep + one `select` arm alone — no per-consumer edit here.
+    ///
+    /// Note that an ambiguous [`ArtifactSource`] (two or more slots
+    /// populated — a schema-invalid state that
+    /// [`ArtifactSource::variant`] rejects) STILL answers `true` for
+    /// every kind whose slot is populated because the walk reads the
+    /// raw `Option<…>` slot rather than the validated tagged-union
+    /// resolver. Callers whose invariant is "the spec is valid" reach
+    /// the same answer through the validation gate rather than this
+    /// primitive; callers whose invariant is "is this kind's slot
+    /// present at all" (require-tag classifier, editor completion,
+    /// coherence check like "every ephemeral export ships a receipts
+    /// artifact") reach through THIS primitive.
+    ///
+    /// Distinct from [`Self::has_report_format`] on ONE dimension:
+    /// `has_report_format` reads a NESTED-Option scalar
+    /// (`Option<TestReportSource>` past `ArtifactSource`, then
+    /// `ReportFormat` equality on the populated slot) while
+    /// `has_artifact_kind` reads the OUTER tagged-union carrier
+    /// directly (`Option<T>` past `ArtifactSource`) — a receipts-only
+    /// export answers `true` for `has_artifact_kind(Receipts)` but
+    /// `false` for every `has_report_format(k)` kind because the
+    /// `test_report` slot is empty.
+    fn has_artifact_kind(&self, kind: ArtifactKind) -> bool;
 }
 
 impl ExportSpecSliceExt for [ExportSpec] {
@@ -1176,6 +1215,10 @@ impl ExportSpecSliceExt for [ExportSpec] {
                 .as_ref()
                 .is_some_and(|tr| tr.format == kind)
         })
+    }
+
+    fn has_artifact_kind(&self, kind: ArtifactKind) -> bool {
+        self.iter().any(|e| kind.select(&e.source).is_some())
     }
 }
 
@@ -2812,6 +2855,137 @@ mod tests {
             assert!(
                 !slice.has_report_format(kind),
                 "receipts-only export must return false for every report format: {kind:?}",
+            );
+        }
+    }
+
+    // ── ExportSpecSliceExt::has_artifact_kind substrate pins ──────────
+    //
+    // Fail-before-pass-after granularity: `has_artifact_kind` did not
+    // exist before this commit — the `(&[ExportSpec], ArtifactKind) ->
+    // bool` walk shape was not spelled anywhere in the workspace on the
+    // tagged-union `source` field. The lift opens the FOURTH method on
+    // the slice-level `ExportSpecSliceExt` (peer of `has_when` +
+    // `has_channel_kind` + `has_report_format` on the SAME slice, and
+    // seventh instance across the workspace slice-level closed-set-
+    // driven presence-probe algebra), composing `ArtifactKind::select`
+    // — the ONE substrate owner of the "is the slot populated"
+    // projection for a tagged-union carrier — with the same
+    // `.iter().any(|e| …)` walk shape the three prior methods publish.
+    // Sibling to `has_channel_kind` in shape (tagged-union outer
+    // carrier), distinct from `has_report_format` (nested-Option scalar
+    // past the outer carrier).
+
+    /// Fixture: a minimal `ExportSpec` with a chosen [`ArtifactKind`]
+    /// populated on its `source` slot and a fixed single-slot stdout
+    /// channel + default `when` trigger. The artifact kind is the only
+    /// axis this test module discriminates on; the channel + trigger
+    /// are fixed at valid pairs so the primitive under test reads the
+    /// `source` slot in isolation.
+    ///
+    /// Sweeps [`ArtifactKind::ALL`] via `match` on the closed set so a
+    /// future fifth variant added to `ALL` reaches this fixture at
+    /// rustc's exhaustiveness gate on the `match` arm — the same
+    /// exhaustive-match contract [`ArtifactKind::select`] publishes.
+    fn export_with_artifact(kind: ArtifactKind) -> ExportSpec {
+        let source = match kind {
+            ArtifactKind::Receipts => ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::TestReport => ArtifactSource {
+                test_report: Some(TestReportSource {
+                    configmap: "junit-results".into(),
+                    key: "junit.xml".into(),
+                    format: ReportFormat::Junit,
+                    namespace: None,
+                }),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::ProcessSnapshot => ArtifactSource {
+                process_snapshot: Some(ProcessSnapshotSource::default()),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::RunMarker => ArtifactSource {
+                run_marker: Some(RunMarkerSource::default()),
+                ..ArtifactSource::default()
+            },
+        };
+        ExportSpec {
+            source,
+            channel: VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::default(),
+            experiment_id_override: None,
+        }
+    }
+
+    /// EMPTY-SLICE pin — an empty `&[ExportSpec]` returns `false` for
+    /// EVERY [`ArtifactKind`]. Sweep [`ArtifactKind::ALL`] so a new
+    /// variant added without a matching arm in `ArtifactKind::select`
+    /// surfaces at rustc's exhaustiveness gate on the `ALL` literal
+    /// (arity forced by `[Self; 4]`) rather than as a silent false-
+    /// positive at every downstream callsite composing this primitive.
+    #[test]
+    fn export_spec_slice_has_artifact_kind_returns_false_on_empty_slice_for_every_kind() {
+        let empty: &[ExportSpec] = &[];
+        for kind in ArtifactKind::ALL {
+            assert!(
+                !empty.has_artifact_kind(kind),
+                "empty slice must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// PER-VARIANT pin — a single-element slice returns `true` for
+    /// exactly the artifact kind whose slot is populated, `false` for
+    /// every other variant. Sweep the [`ArtifactKind::ALL`] × ALL cross
+    /// so a regression that (a) hard-coded the arm to a single kind
+    /// (silently returning `true` for every populated slice regardless
+    /// of query kind), or (b) probed on a different field (a stray
+    /// `experiment_id_override.is_some()`, a `channel`-side variant
+    /// discriminator, `when`) fails HERE at the substrate primitive
+    /// rather than at each downstream `artifact-<kind>` callsite.
+    #[test]
+    fn export_spec_slice_has_artifact_kind_reads_source_slot_per_variant() {
+        for populated in ArtifactKind::ALL {
+            let slice = [export_with_artifact(populated)];
+            for query in ArtifactKind::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    slice.has_artifact_kind(query),
+                    expected,
+                    "populated={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// MULTI-ENTRY pin — a slice with multiple entries returns `true`
+    /// for every artifact kind that appears at any position (existential
+    /// quantifier over the slice), `false` for kinds that appear at no
+    /// position. Locks the `any` semantics so a regression that
+    /// collapsed to a `first`-only probe (`slice.first().is_some_and(
+    /// |e| kind.select(&e.source).is_some())`) fails here even though
+    /// the single-element per-variant pin above passes.
+    #[test]
+    fn export_spec_slice_has_artifact_kind_scans_beyond_the_first_position() {
+        let slice = [
+            export_with_artifact(ArtifactKind::RunMarker),
+            export_with_artifact(ArtifactKind::Receipts),
+        ];
+        for present in [ArtifactKind::RunMarker, ArtifactKind::Receipts] {
+            assert!(
+                slice.has_artifact_kind(present),
+                "artifact kind at any position must resolve true: {present:?}",
+            );
+        }
+        for absent in [ArtifactKind::TestReport, ArtifactKind::ProcessSnapshot] {
+            assert!(
+                !slice.has_artifact_kind(absent),
+                "artifact kind absent from the slice must resolve false: {absent:?}",
             );
         }
     }

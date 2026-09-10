@@ -13,7 +13,9 @@ use std::str::FromStr;
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
 use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
-use tatara_process::export::{ChannelKind, ExportSpecSliceExt, ExportTrigger, ReportFormat};
+use tatara_process::export::{
+    ArtifactKind, ChannelKind, ExportSpecSliceExt, ExportTrigger, ReportFormat,
+};
 use tatara_process::intent::IntentKind;
 use tatara_process::lifetime::LifetimeKind;
 use tatara_process::signal::SighupStrategy;
@@ -688,6 +690,32 @@ struct UnknownRequireTag;
 ///   slice, so an audit like "every `OnAttested` JUnit report ships
 ///   through JetStream" reads as the three-way conjunction of the
 ///   three require-tags at the checks.lisp surface.
+/// - `artifact-<kind>` — [`ArtifactKind`] closed set →
+///   [`tatara_process::export::ExportSpecSliceExt::has_artifact_kind`]
+///   (a FOURTH slice-level extension-trait probe over the SAME
+///   `spec.lifetime.resolved_ephemeral().map(|e| &e.exports[..])`
+///   projection the `export-when-<kind>` / `channel-<kind>` /
+///   `report-format-<kind>` families walk, so the operator's
+///   `:requires (artifact-receipts)` pins the presence of a SPECIFIC
+///   artifact-source variant across the exports vector. Tenth
+///   closed-set-driven prefix family in the point-domain require-tag
+///   vocabulary and FOURTH method on [`ExportSpecSliceExt`] — the
+///   first slice whose slice-level probe surface carries FOUR
+///   closed-set-driven presence probes on distinct axes (the `when`
+///   trigger axis + the `channel` tagged-union axis + the
+///   `source.test_report.format` NESTED-Option scalar axis + the
+///   `source` OUTER tagged-union axis). Same `resolved_ephemeral`
+///   parent gate as the three prior slice-level families. Distinct
+///   from `report-format-<kind>` on ONE further dimension:
+///   `has_report_format` reads a NESTED-Option scalar past the
+///   `test_report` slot while `has_artifact_kind` reads the OUTER
+///   tagged-union carrier directly, so a receipts-only export answers
+///   `true` for `artifact-receipts` but `false` for every
+///   `report-format-<kind>`. Coexists with the three prior slice-level
+///   families on the SAME parent projection: `artifact-receipts` +
+///   `export-when-OnAttested` + `channel-natsSubject` +
+///   `report-format-Junit` independently probe the four axes on the
+///   SAME `&[ExportSpec]` slice.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -697,17 +725,17 @@ struct UnknownRequireTag;
 ///
 /// A future new `IntentKind` / `LifetimeKind` / `ConditionKind` /
 /// `MustReachPhase` / `SighupStrategy` / `VerificationPhase` /
-/// `ExportTrigger` / `ChannelKind` / `ReportFormat` variant lands at
-/// ONE `ALL` entry on its parent's closed set — no per-caller edit
-/// here. A future new prefix family (e.g. `signal-<kind>` for
-/// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` for
+/// `ExportTrigger` / `ChannelKind` / `ReportFormat` / `ArtifactKind`
+/// variant lands at ONE `ALL` entry on its parent's closed set — no
+/// per-caller edit here. A future new prefix family (e.g. `signal-<kind>`
+/// for [`tatara_process::signal::ProcessSignal`], `phase-<kind>` for
 /// [`tatara_process::phase::ProcessPhase`], a hypothetical
 /// `routing-form-<kind>` for a closed-set discriminator on
 /// `spec.routing`) lands as ONE more
 /// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind,
 /// _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res; }`
 /// branch that reads the same three-step (strip_prefix + parse +
-/// has) shape all nine existing families publish.
+/// has) shape all ten existing families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
@@ -737,7 +765,12 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_false_on_empty_exports_for_every_report_format_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_non_test_report_source_for_every_report_format_kind`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_report_format_suffix`],
-/// and [`tests::evaluate_point_require_tag_report_format_export_when_and_channel_coexist`].
+/// [`tests::evaluate_point_require_tag_report_format_export_when_and_channel_coexist`],
+/// [`tests::evaluate_point_require_tag_returns_true_on_populated_artifact_slot_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_artifact_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_empty_exports_for_every_artifact_kind`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_artifact_suffix`],
+/// and [`tests::evaluate_point_require_tag_artifact_coexists_with_prior_export_axes`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -807,6 +840,15 @@ fn evaluate_point_require_tag(
     {
         return res;
     }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<ArtifactKind, _>(tag, "artifact-", |kind| {
+            spec.lifetime
+                .resolved_ephemeral()
+                .is_some_and(|e| e.exports.has_artifact_kind(kind))
+        })
+    {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -820,15 +862,16 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the nine closed-set-driven prefix families in
+/// shape the ten closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
 /// `sighup-<kind>` on [`SighupStrategy`], `verification-phase-<kind>`
 /// on [`VerificationPhase`], `export-when-<kind>` on
 /// [`ExportTrigger`], `channel-<kind>` on [`ChannelKind`],
-/// `report-format-<kind>` on [`ReportFormat`]) each dispatch through
-/// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
+/// `report-format-<kind>` on [`ReportFormat`], `artifact-<kind>` on
+/// [`ArtifactKind`]) each dispatch through past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication threshold.
 ///
 /// # Return shape
 ///
@@ -857,16 +900,14 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future tenth closed-set prefix family — `signal-<kind>` on
+/// A future eleventh closed-set prefix family — `signal-<kind>` on
 /// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` on
 /// [`tatara_process::phase::ProcessPhase`], a hypothetical
-/// `routing-form-<kind>` on `spec.routing.as_ref().map(|r| r.form)`,
-/// a hypothetical `artifact-<kind>` on the tagged-union
-/// [`tatara_process::export::ArtifactKind`] over the SAME `exports`
-/// slice — lands as ONE more `if let Some(res) =
+/// `routing-form-<kind>` on `spec.routing.as_ref().map(|r| r.form)` —
+/// lands as ONE more `if let Some(res) =
 /// strip_and_classify_prefixed_kind::<NewKind, _>(tag, "prefix-", |k|
 /// spec.<field>.has(k)) { return res; }` branch that reads the same
-/// three-step shape the nine existing families publish. No per-caller
+/// three-step shape the ten existing families publish. No per-caller
 /// `strip_prefix + parse + match { Ok(_) => …, Err(_) =>
 /// Err(UnknownRequireTag) }` restatement.
 ///
@@ -878,7 +919,7 @@ fn evaluate_point_require_tag(
 /// construction.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// three-step chain now dispatches NINE closed-set prefix families
+/// three-step chain now dispatches TEN closed-set prefix families
 /// past the ≥2 PRIME-DIRECTIVE trigger through ONE substrate owner.
 /// THEORY.md §II.1 invariant 2 — free middle; the caller composes the
 /// closed-set choice (via the generic `K`) and the presence probe
@@ -1972,9 +2013,9 @@ mod tests {
     use tatara_process::crd::ProcessSpec;
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::export::{
-        ArtifactSource, ChannelKind, ExportSpec, ExportTrigger, HttpEventChannel,
-        NatsSubjectChannel, ReceiptsSource, ReportFormat, StdoutChannel, TestReportSource,
-        VectorChannel,
+        ArtifactKind, ArtifactSource, ChannelKind, ExportSpec, ExportTrigger, HttpEventChannel,
+        NatsSubjectChannel, ProcessSnapshotSource, ReceiptsSource, ReportFormat, RunMarkerSource,
+        StdoutChannel, TestReportSource, VectorChannel,
     };
     use tatara_process::intent::{AplicacaoIntent, IntentKind};
     use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind, TeardownPolicy};
@@ -4161,6 +4202,275 @@ mod tests {
             evaluate_point_require_tag(&spec, "report-format-Junit"),
             Ok(true),
             "fine `report-format-Junit` must be true when the sole export declares that format",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "export-when-OnFailed"),
+            Ok(false),
+            "off-diagonal `export-when-OnFailed` must be false: the export declares OnAttested",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "channel-stdout"),
+            Ok(false),
+            "off-diagonal `channel-stdout` must be false: the export ships through NATS",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "report-format-TapV13"),
+            Ok(false),
+            "off-diagonal `report-format-TapV13` must be false: the export declares Junit",
+        );
+    }
+
+    // ── artifact-<kind> prefix family (evaluate_point_require_tag) ───
+    //
+    // Fail-before-pass-after granularity: the `artifact-<kind>` prefix
+    // family did not exist before this commit — the point-domain
+    // require-tag vocabulary carried the nine prior closed-set-driven
+    // families (`intent-<kind>`, `lifetime-<kind>`, `condition-<kind>`,
+    // `must-reach-<kind>`, `sighup-<kind>`, `verification-phase-<kind>`,
+    // `export-when-<kind>`, `channel-<kind>`, `report-format-<kind>`)
+    // but had no way to distinguish which ARTIFACT SOURCE an ephemeral
+    // export ships out — a `receipts` chain vs a `test_report`
+    // ConfigMap vs a `process_snapshot` bundle vs a `run_marker`
+    // synthetic event. The lift adds the TENTH closed-set-driven
+    // prefix family symmetrical with the nine prior ones, routing
+    // through the newly-opened
+    // [`tatara_process::export::ExportSpecSliceExt::has_artifact_kind`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`.
+    // SEVENTH instance in the workspace slice-level closed-set-driven
+    // presence-probe algebra (FOURTH method on `ExportSpecSliceExt` —
+    // the first slice-level extension trait carrying probes on FOUR
+    // distinct axes: the `when` trigger axis, the `channel` tagged-
+    // union axis, the `source.test_report.format` nested-Option scalar
+    // axis, and the `source` OUTER tagged-union axis).
+    //
+    // Sibling to `channel-<kind>` in probe shape (tagged-union outer
+    // carrier, `.select(&e.<slot>).is_some()`), distinct from
+    // `report-format-<kind>` (nested-Option scalar past the outer
+    // carrier). A receipts-only export answers `true` for
+    // `artifact-receipts` but `false` for every `report-format-<kind>`
+    // — the axes commute on the SAME `&[ExportSpec]` slice and the
+    // coexistence pin below locks that split.
+
+    /// Fixture: a minimal `ExportSpec` with a chosen [`ArtifactKind`]
+    /// populated on its `source` slot and a fixed single-slot stdout
+    /// channel + default `when` trigger. The artifact kind is the only
+    /// axis this test module discriminates on; the channel + trigger
+    /// are fixed at valid pairs so `evaluate_point_require_tag` reads
+    /// the `source` slot in isolation. Sweeps [`ArtifactKind::ALL`]
+    /// via `match` on the closed set so a future fifth variant added
+    /// to `ALL` reaches this fixture at rustc's exhaustiveness gate.
+    fn export_with_artifact(kind: ArtifactKind) -> ExportSpec {
+        let source = match kind {
+            ArtifactKind::Receipts => ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::TestReport => ArtifactSource {
+                test_report: Some(TestReportSource {
+                    configmap: "junit-results".into(),
+                    key: "junit.xml".into(),
+                    format: ReportFormat::Junit,
+                    namespace: None,
+                }),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::ProcessSnapshot => ArtifactSource {
+                process_snapshot: Some(ProcessSnapshotSource::default()),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::RunMarker => ArtifactSource {
+                run_marker: Some(RunMarkerSource::default()),
+                ..ArtifactSource::default()
+            },
+        };
+        ExportSpec {
+            source,
+            channel: VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::default(),
+            experiment_id_override: None,
+        }
+    }
+
+    /// POPULATED-slot pin — `artifact-<kind>` dispatches through the
+    /// autoderived [`ArtifactKind`] `FromStr` + the substrate
+    /// [`tatara_process::export::ExportSpecSliceExt::has_artifact_kind`]
+    /// primitive, returning `true` only when the resolved ephemeral
+    /// lifetime carries at least one export whose `source` slot
+    /// matches this kind. Sweep the [`ArtifactKind::ALL`] × ALL cross
+    /// so a regression that hard-coded the arm to a single kind, or
+    /// wired the closure to a fixed unrelated field (a stray
+    /// `experiment_id_override.is_some()`, a probe on `when` /
+    /// `channel` / `source.test_report.format`) fails HERE at the
+    /// classifier before landing at the operator-facing checks.lisp
+    /// surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_populated_artifact_slot_per_kind() {
+        for populated in ArtifactKind::ALL {
+            let spec = ephemeral_spec_with_exports(vec![export_with_artifact(populated)]);
+            for query in ArtifactKind::ALL {
+                let tag = format!("artifact-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "artifact populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// PERMANENT-lifetime pin — a default (`Permanent`) [`ProcessSpec`]
+    /// returns `false` for every `artifact-<kind>` tag because the
+    /// `resolved_ephemeral` gate on the parent [`Lifetime`] short-
+    /// circuits the walk. Byte-for-byte symmetric with the peer
+    /// permanent-lifetime pins on the seventh (`export-when-<kind>`),
+    /// eighth (`channel-<kind>`), and ninth (`report-format-<kind>`)
+    /// families — all four prefix families share the SAME parent
+    /// gate, so a regression that dropped or narrowed the gate on
+    /// `artifact-<kind>` (probing an absent `exports` slot as if it
+    /// were the empty vector) fails HERE for every artifact kind and
+    /// the peer tests still pass — the quartet pins the contract from
+    /// four sides of the closed-set axis.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_artifact_kind() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in ArtifactKind::ALL {
+            let tag = format!("artifact-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "permanent lifetime must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// EMPTY-EXPORTS pin — an ephemeral [`ProcessSpec`] whose
+    /// `exports` vector is empty returns `false` for every
+    /// `artifact-<kind>` tag. Distinct from the permanent-lifetime
+    /// case above: the resolved-ephemeral gate DOES fire, the walk
+    /// over the empty vector then returns `false` for every kind.
+    /// Locks the "reachable-but-empty" corner so a regression that
+    /// short-circuited on `resolved_ephemeral().is_some()` alone
+    /// (ignoring the exports contents) would return `true` here for
+    /// every kind and fail.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_empty_exports_for_every_artifact_kind() {
+        let spec = ephemeral_spec_with_exports(vec![]);
+        for kind in ArtifactKind::ALL {
+            let tag = format!("artifact-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "resolved-ephemeral with empty exports must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `artifact-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`ArtifactKind`] labels are the
+    /// camelCase wire-format keys (`receipts`, `testReport`,
+    /// `processSnapshot`, `runMarker`) — matching the serde
+    /// `rename_all = "camelCase"` field names on [`ArtifactSource`]
+    /// verbatim — so PascalCase / snake_case / all-caps spellings are
+    /// UNKNOWN suffixes. Pin the case-sensitivity axis so a regression
+    /// that ASCIIfolded or PascalCased on parse (a hypothetical
+    /// `to_upper_camel` normalization at the tag layer) would fail
+    /// HERE. The empty-suffix boundary is pinned by the shared
+    /// substrate primitive's
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_artifact_suffix() {
+        let spec = ephemeral_spec_with_exports(vec![]);
+        for garbage in [
+            "artifact-",
+            "artifact-Receipts",
+            "artifact-test_report",
+            "artifact-RUNMARKER",
+            "artifact-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// SAME-EXPORT-AXIS QUADRUPLE-COEXISTENCE pin — a Process with a
+    /// SINGLE ephemeral export whose `source.test_report` slot is
+    /// populated with `format = Junit`, whose `channel` is
+    /// `NatsSubject`, and whose `when` is `OnAttested` MUST satisfy
+    /// ALL FOUR fine tags (`artifact-testReport` from the tenth
+    /// family, `export-when-OnAttested` from the seventh,
+    /// `channel-natsSubject` from the eighth, `report-format-Junit`
+    /// from the ninth) AND simultaneously fail each off-diagonal
+    /// probe (`artifact-receipts`, `export-when-OnFailed`,
+    /// `channel-stdout`, `report-format-TapV13`). Locks the semantic
+    /// split between the four probes on the SAME `&[ExportSpec]`
+    /// slice — the first quadruple-family conjunction in the point-
+    /// domain require-tag vocabulary — so a regression that (a)
+    /// collapsed `artifact-<kind>` to the eighth family (matching on
+    /// `channel` instead of `source`), (b) collapsed it to the ninth
+    /// (probing `source.test_report.format` instead of the outer
+    /// tagged-union carrier), or (c) drifted any of the other three
+    /// families onto the tenth's outer-carrier walk, fails HERE at
+    /// ONE narrow site. The audit `every OnAttested JUnit test-report
+    /// artifact ships through JetStream` reads as this exact four-way
+    /// conjunction at the checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_artifact_coexists_with_prior_export_axes() {
+        let export = ExportSpec {
+            source: ArtifactSource {
+                test_report: Some(TestReportSource {
+                    configmap: "junit-results".into(),
+                    key: "junit.xml".into(),
+                    format: ReportFormat::Junit,
+                    namespace: None,
+                }),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                nats_subject: Some(NatsSubjectChannel::publish(
+                    "pleme.pleme-dev.ephemeral.r1.test-report",
+                    "EPHEMERAL_TEST_REPORTS",
+                )),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::OnAttested,
+            experiment_id_override: None,
+        };
+        let spec = ephemeral_spec_with_exports(vec![export]);
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "artifact-testReport"),
+            Ok(true),
+            "fine `artifact-testReport` must be true when the sole export declares that source",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "export-when-OnAttested"),
+            Ok(true),
+            "fine `export-when-OnAttested` must be true when the sole export declares that trigger",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "channel-natsSubject"),
+            Ok(true),
+            "fine `channel-natsSubject` must be true when the sole export ships through NATS",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "report-format-Junit"),
+            Ok(true),
+            "fine `report-format-Junit` must be true when the sole export declares that format",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "artifact-receipts"),
+            Ok(false),
+            "off-diagonal `artifact-receipts` must be false: the export ships a test-report",
         );
         assert_eq!(
             evaluate_point_require_tag(&spec, "export-when-OnFailed"),

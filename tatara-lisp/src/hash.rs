@@ -329,7 +329,119 @@ pub fn blake3_scheme_display<H: Display>(hex: H) -> String {
 /// lands at ONE site and both peers inherit the shift by construction).
 #[must_use]
 pub fn hex_blake3_of_bytes(bytes: &[u8]) -> String {
-    blake3::hash(bytes).to_hex().to_string()
+    hex_blake3_of_hash(&blake3::hash(bytes))
+}
+
+/// The lowercase-64-hex encoding of an already-computed
+/// [`blake3::Hash`] handle — the workspace-wide ONE substrate owner of
+/// the `<hash>.to_hex().to_string()` one-link encoding step every
+/// `blake3::Hash → 64-hex` projector restated by hand pre-lift.
+///
+/// # Why the substrate lives here
+///
+/// Pre-lift the SAME 1-link encoding step was hand-authored at TWO
+/// workspace-visible owners past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold, each projecting a freshly-computed `blake3::Hash` handle
+/// onto its 64-lowercase-hex string form:
+///
+/// * [`hex_blake3_of_bytes`] — the byte-input owner in this crate.
+///   Pre-lift its body inlined `blake3::hash(bytes).to_hex().to_string()`,
+///   coupling the (one-shot digest, hex-encode) pair through a single
+///   inline chain; the terminal encoding step (`.to_hex().to_string()`)
+///   had no first-class name.
+/// * [`tatara-process::hash::hex_blake3_hash`] — the streaming-digest
+///   peer one crate up the graph. Pre-lift its body walked the
+///   byte-shape-equivalent spelling `hex::encode(<hash>.as_bytes())`,
+///   consumed by [`tatara-process::three_pillar::compose_root`] (the
+///   three-pillar Merkle composer's write tail) and by
+///   `tatara-reconciler::phase_machine::handle_running` (the per-ref
+///   artifact-hash fold on the ATTEST step). Both consumers held a
+///   `Hasher::finalize()` result and needed the 64-hex projection
+///   without re-hashing.
+///
+/// Both owners walked the SAME 1-link chain — take a `blake3::Hash`
+/// and produce its 64-lowercase-hex string — differing only in the
+/// SPELLING (`.to_hex().to_string()` here vs
+/// `hex::encode(<hash>.as_bytes())` at the tatara-process peer,
+/// byte-identical output pinned at
+/// [`tests::hex_blake3_of_hash_matches_pre_lift_hex_encode_chain_bytewise`])
+/// and in the receiver's ORIGIN (one-shot `blake3::hash(bytes)` at the
+/// byte-input owner, incremental `Hasher::finalize()` at the streaming
+/// peer). Post-lift the `.to_hex().to_string()` spelling lives at ONE
+/// substrate owner here, and every downstream `blake3::Hash → 64-hex`
+/// consumer binds through the ONE primitive — a regression that flips
+/// the case, swaps the encoding, or drifts the spelling reaches every
+/// consumer through ONE edit.
+///
+/// # Composition
+///
+/// [`hex_blake3_of_bytes`]'s body now reads
+/// `hex_blake3_of_hash(&blake3::hash(bytes))`, binding the (one-shot
+/// digest, hash-encode) pair through the substrate primitive rather
+/// than through an inline 2-link chain. The workspace's streaming-input
+/// peer [`tatara-process::hash::hex_blake3_hash`] delegates through
+/// this owner for the same reason [`tatara-process::hash::hex_blake3`]
+/// delegates through [`hex_blake3_of_bytes`]: the encoding step is a
+/// property of the identity-projection substrate, not of the
+/// K8s three-pillar surface. A consumer holding a `blake3::Hash`
+/// through either origin (one-shot or incremental) composes
+/// `hex_blake3_of_hash(&hash)`; a consumer holding raw bytes composes
+/// `hex_blake3_of_bytes(bytes)` and inherits the same encoding tail
+/// mechanically.
+///
+/// # Invariants
+///
+/// - **Length:** the returned string is always exactly 64 chars
+///   (BLAKE3's 32-byte digest encoded as lowercase hex).
+/// - **Charset:** every char is one of `[0-9a-f]` (lowercase).
+/// - **Determinism:** byte-identical output across runs for the same
+///   input hash — pinned at
+///   [`tests::hex_blake3_of_hash_is_deterministic_for_identical_input`].
+///
+/// # `#[must_use]`
+///
+/// Every consumer either stores the returned hex into an identity slot
+/// (a pillar-hash field, a `composed_root` slot, an FQDN segment) or
+/// feeds it directly onto a wire. Dropping the return means the
+/// encoding was performed for no observable reason; the attribute
+/// surfaces that as a warning at every consumer site.
+///
+/// # Sibling partitions
+///
+/// - **Byte-input origin (this crate):** [`hex_blake3_of_bytes`] — the
+///   one-shot `&[u8] → 64-hex` projector. Composes
+///   `blake3::hash(bytes)` with THIS primitive.
+/// - **JSON-input origin (this crate):** [`hex_blake3_of_json`] — the
+///   `T: Serialize → 64-hex` projector. Composes `serde_json::to_vec`
+///   with [`hex_blake3_of_bytes`] over THIS primitive.
+/// - **Streaming-input origin (upper layer):**
+///   [`tatara-process::hash::hex_blake3_hash`] — the `&blake3::Hash →
+///   64-hex` entry point one crate up. Post-lift it DELEGATES through
+///   this owner (matching how the byte-input peer already delegates),
+///   so the workspace's streaming and byte-input hex-encode axes now
+///   share ONE canonical spelling by construction.
+/// - **Scheme-wrap axis (this crate):** [`blake3_scheme_display`] — the
+///   `"blake3:{hex}"` wire-form wrap composed on top of a hex handle.
+///   A consumer that needs the scheme-prefixed form composes
+///   `blake3_scheme_display(hex_blake3_of_hash(&hash))`, binding all
+///   three shape primitives on the identity-projection axis through
+///   ONE call site.
+///
+/// Theory anchor: THEORY.md §V.3 (three-pillar attestation — the
+/// canonical `blake3::Hash → hex` encoding step is defined at ONE
+/// substrate owner; every workspace pillar-hash / composed-root /
+/// stable-name identity slot inherits the spelling by construction).
+/// THEORY.md §VI.1 (generation over composition — the one-link
+/// `<hash>.to_hex().to_string()` / `hex::encode(<hash>.as_bytes())`
+/// step recurred at TWO hand-authored owners past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+/// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+/// preserves proofs — every peer routes through the SAME primitive,
+/// so a future spelling change lands at ONE substrate function and
+/// reaches every downstream consumer mechanically).
+#[must_use]
+pub fn hex_blake3_of_hash(hash: &blake3::Hash) -> String {
+    hash.to_hex().to_string()
 }
 
 /// The lowercase-64-hex BLAKE3 digest of `v`'s canonical JSON
@@ -461,8 +573,8 @@ pub fn hex_prefix(hex: &str, len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        blake3_scheme_display, hex_blake3_of_bytes, hex_blake3_of_json, hex_prefix,
-        BLAKE3_SCHEME_PREFIX,
+        blake3_scheme_display, hex_blake3_of_bytes, hex_blake3_of_hash, hex_blake3_of_json,
+        hex_prefix, BLAKE3_SCHEME_PREFIX,
     };
     use serde::Serialize;
 
@@ -762,6 +874,220 @@ mod tests {
             hex_blake3_of_bytes(&bytes)
         };
         assert_eq!(via_json_peer, via_bytes_peer);
+    }
+
+    // ── hex_blake3_of_hash substrate pins ────────────────────────────
+    //
+    // Each pin below binds [`hex_blake3_of_hash`] at fail-before-pass-
+    // after granularity so a regression at the streaming-input peer (a
+    // hex-case flip, a `blake3::Hash::to_hex` reshape, a swap between
+    // `.to_hex().to_string()` and `hex::encode(<hash>.as_bytes())` that
+    // diverged byte-shape) surfaces HERE rather than as silent
+    // identity-slot drift at every downstream consumer that composes
+    // through the primitive. The paired
+    // [`hex_blake3_of_bytes_composes_hex_blake3_of_hash_over_blake3_hash`]
+    // pin binds the byte-input peer to route through this owner so a
+    // future spelling change lands at ONE site and both peers inherit
+    // the shift by construction.
+
+    /// Byte-identical parity with the pre-lift hand-authored
+    /// `hex::encode(<hash>.as_bytes())` spelling every
+    /// `tatara_process::hash::hex_blake3_hash` consumer walked pre-lift.
+    /// A regression at the substrate's `.to_hex().to_string()` spelling
+    /// (a blake3 major-version bump reshaping the `ArrayString<64>`
+    /// output, a case flip, a length-tag insertion) would silently
+    /// break parity with the upper-layer streaming peer whose pre-lift
+    /// body walked the `hex::encode` chain — this pin catches such a
+    /// drift at the substrate owner rather than as
+    /// composed-root/verify skew across every three-pillar consumer.
+    /// Sibling of
+    /// [`hex_blake3_of_bytes_matches_pre_lift_hex_encode_chain_bytewise`]
+    /// on the streaming-input axis; both peers now share the SAME
+    /// `blake3::Hash::to_hex`-backed spelling by construction.
+    #[test]
+    fn hex_blake3_of_hash_matches_pre_lift_hex_encode_chain_bytewise() {
+        for buf in [
+            b"" as &[u8],
+            b"x",
+            b"pillar-input",
+            b"tatara-receipt/v1",
+            &[0u8; 128],
+            &[0xFFu8; 256],
+        ] {
+            let hash = blake3::hash(buf);
+            assert_eq!(
+                hex_blake3_of_hash(&hash),
+                hex::encode(hash.as_bytes()),
+                "hex_blake3_of_hash drifted from pre-lift `hex::encode(<hash>.as_bytes())` chain for buf.len()={}",
+                buf.len(),
+            );
+        }
+    }
+
+    /// Byte-identical parity with the alternate `<hash>.to_hex().to_string()`
+    /// spelling — the substrate's own body. Pins the spelling under a
+    /// future refactor that swapped it for a different `Display`-based
+    /// composition (`format!("{h}")`, a `String::from(h.to_hex())`
+    /// chain) that produced byte-equivalent output only for well-formed
+    /// blake3 hashes. Both spellings must land on THIS primitive
+    /// byte-identically for the substrate to serve as the canonical
+    /// owner of the `blake3::Hash → 64-hex` encoding step.
+    #[test]
+    fn hex_blake3_of_hash_matches_pre_lift_to_hex_spelling_bytewise() {
+        for buf in [
+            b"" as &[u8],
+            b"x",
+            b"pillar-input",
+            &[0u8; 64],
+            &[0xFFu8; 128],
+        ] {
+            let hash = blake3::hash(buf);
+            assert_eq!(
+                hex_blake3_of_hash(&hash),
+                hash.to_hex().to_string(),
+                "hex_blake3_of_hash drifted from `.to_hex().to_string()` spelling for buf.len()={}",
+                buf.len(),
+            );
+        }
+    }
+
+    /// Same input hash → same encoding. Every consumer that reaches for
+    /// the streaming-input primitive (a `Hasher::finalize()` result fed
+    /// into a pillar slot, a one-shot `blake3::hash(bytes)` handle
+    /// wrapped into a stable-name projection) depends on this
+    /// determinism corner. A regression that mixed nondeterminism in (a
+    /// wall-clock read, a random seed, a per-fleet suffix) would
+    /// surface HERE rather than as flaky composed_root drift.
+    #[test]
+    fn hex_blake3_of_hash_is_deterministic_for_identical_input() {
+        let hash = blake3::hash(b"deterministic-hash-input");
+        assert_eq!(hex_blake3_of_hash(&hash), hex_blake3_of_hash(&hash));
+    }
+
+    /// Distinct hashes → distinct encodings. Pins the "no accidental
+    /// collision at the hex layer" invariant a downstream pillar / stable-
+    /// name consumer relies on to keep two distinct hashes on two
+    /// distinct rows.
+    #[test]
+    fn hex_blake3_of_hash_distinct_inputs_hash_distinct() {
+        let a = blake3::hash(b"a");
+        let b = blake3::hash(b"b");
+        assert_ne!(hex_blake3_of_hash(&a), hex_blake3_of_hash(&b));
+    }
+
+    /// Output shape: exactly 64 lowercase-hex chars for every observable
+    /// hash, no leading scheme prefix (that prefix lives on the
+    /// scheme-wrap primitive [`blake3_scheme_display`], not on the bare
+    /// hash-encoding projector every consumer here reaches for). Pins
+    /// the invariant a downstream fixed-width slot or a `^[0-9a-f]{64}$`
+    /// regex step relies on.
+    #[test]
+    fn hex_blake3_of_hash_is_64_lowercase_hex_chars() {
+        for buf in [b"" as &[u8], b"x", b"shape", &[0u8; 32]] {
+            let h = hex_blake3_of_hash(&blake3::hash(buf));
+            assert_eq!(
+                h.len(),
+                64,
+                "hex_blake3_of_hash for {} bytes returned {} chars",
+                buf.len(),
+                h.len()
+            );
+            assert!(
+                h.chars()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+                "hex_blake3_of_hash for buf.len()={} had non-lowercase-hex chars: {h:?}",
+                buf.len(),
+            );
+            assert!(
+                !h.starts_with(BLAKE3_SCHEME_PREFIX),
+                "bare hex projection must NOT carry the `{BLAKE3_SCHEME_PREFIX}` scheme prefix \
+                 (that's the wrap primitive's role); got {h:?}",
+            );
+        }
+    }
+
+    /// Known BLAKE3 digest of the empty input. A rename of the
+    /// underlying algorithm (an accidental switch to sha2, a salt
+    /// smuggled through `blake3::hash`'s constructor) or a drift in the
+    /// encoding tail's spelling would land HERE rather than as silent
+    /// identity-slot drift across every downstream consumer. Sibling
+    /// pin to [`hex_blake3_of_bytes_empty_input_matches_known_digest`]
+    /// on the byte-input axis and to
+    /// `tatara-process::hash::hex_blake3_empty_input_matches_known_digest`
+    /// one crate up — all three peers on the (byte-input, streaming-
+    /// input, upper-layer streaming) triangle MUST agree on the BLAKE3
+    /// empty-input digest byte-for-byte.
+    #[test]
+    fn hex_blake3_of_hash_empty_input_matches_known_digest() {
+        assert_eq!(
+            hex_blake3_of_hash(&blake3::hash(b"")),
+            "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        );
+    }
+
+    /// Composition law: [`hex_blake3_of_bytes`] MUST agree byte-for-
+    /// byte with [`hex_blake3_of_hash`] composed over
+    /// `blake3::hash(bytes)`. Pre-lift the byte-input peer inlined the
+    /// hash-encode step through `blake3::hash(bytes).to_hex().to_string()`;
+    /// post-lift it routes through the streaming-input substrate
+    /// owner. A regression that specialized ONE peer (an internal
+    /// canonicalization step, a per-fleet salt, a spelling change that
+    /// drifted only one arm) would surface HERE rather than as silent
+    /// drift between the byte-input and streaming-input corners at
+    /// every downstream consumer.
+    #[test]
+    fn hex_blake3_of_bytes_composes_hex_blake3_of_hash_over_blake3_hash() {
+        for buf in [
+            b"" as &[u8],
+            b"x",
+            b"compose-law",
+            b"tatara-receipt/v1",
+            &[0u8; 128],
+            &[0xFFu8; 256],
+        ] {
+            let via_bytes_peer = hex_blake3_of_bytes(buf);
+            let via_hash_peer = hex_blake3_of_hash(&blake3::hash(buf));
+            assert_eq!(
+                via_bytes_peer, via_hash_peer,
+                "hex_blake3_of_bytes drifted from hex_blake3_of_hash ∘ blake3::hash for buf.len()={}",
+                buf.len(),
+            );
+        }
+    }
+
+    /// Streaming-origin coherence: `blake3::Hasher::finalize()` MUST
+    /// produce a `blake3::Hash` whose encoding through this substrate
+    /// matches the one-shot `blake3::hash(bytes)` origin byte-for-byte
+    /// on the same input. Pins the (one-shot, incremental) origin
+    /// partition so a downstream consumer that folds per-item updates
+    /// into a `Hasher` (the three-pillar `compose_root` composer, the
+    /// reconciler's per-ref artifact-hash fold) reaches the SAME hex
+    /// as the byte-input origin over the concatenated bytes — an
+    /// invariant the reconciler's ATTEST step and the three-pillar
+    /// producer both rely on to keep observed and expected roots on
+    /// the same row.
+    #[test]
+    fn hex_blake3_of_hash_streaming_and_oneshot_origins_agree_bytewise() {
+        for buf in [
+            b"" as &[u8],
+            b"x",
+            b"streaming-origin",
+            &[0u8; 64],
+            &[0xFFu8; 128],
+        ] {
+            let one_shot = hex_blake3_of_hash(&blake3::hash(buf));
+            let incremental = {
+                let mut h = blake3::Hasher::new();
+                h.update(buf);
+                hex_blake3_of_hash(&h.finalize())
+            };
+            assert_eq!(
+                one_shot,
+                incremental,
+                "streaming-origin encoding drifted from one-shot-origin encoding for buf.len()={}",
+                buf.len(),
+            );
+        }
     }
 
     // ── blake3_scheme_display substrate pins ─────────────────────────

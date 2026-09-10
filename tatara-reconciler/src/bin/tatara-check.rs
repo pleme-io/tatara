@@ -282,10 +282,22 @@ fn check_yaml_parses(args: &[Sexp], root: &Path, report: &mut Report) {
     let Some(src) = read_or_fail(&path, &label, report) else {
         return;
     };
-    match serde_yaml::from_str::<serde_yaml::Value>(&src) {
-        Ok(_) => report.pass(label),
-        Err(e) => report.fail(label, format!("YAML: {e}")),
-    }
+    // Terminal `Result<T, E: Display>` sink rides the ONE substrate
+    // primitive `report_result_prefixed` — pre-lift this executor
+    // hand-authored a `match RESULT { Ok(_) => report.pass(label),
+    // Err(e) => report.fail(label, format!("<prefix>: {e}")) }` chain
+    // byte-identical to the peer `check_yaml_parses_as` executor's
+    // terminal shape modulo the prefix literal (`"YAML"` here vs
+    // `"parse"` there). Post-lift the (pass on `Ok`, fail with
+    // `<prefix>: {e}` on `Err`, label consumed by both arms) triad
+    // lives at ONE substrate owner across BOTH yaml-executor family
+    // members past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
+    report_result_prefixed(
+        serde_yaml::from_str::<serde_yaml::Value>(&src),
+        label,
+        "YAML",
+        report,
+    );
 }
 
 fn check_yaml_parses_as(args: &[Sexp], root: &Path, report: &mut Report) {
@@ -332,10 +344,17 @@ fn check_yaml_parses_as(args: &[Sexp], root: &Path, report: &mut Report) {
         Some(k) => k.parse_yaml_as(&src),
         None => return report.fail(label, format!("unknown kind: {kind}")),
     };
-    match result {
-        Ok(()) => report.pass(label),
-        Err(e) => report.fail(label, format!("parse: {e}")),
-    }
+    // Terminal `Result<T, E: Display>` sink rides the ONE substrate
+    // primitive `report_result_prefixed` — pre-lift this executor
+    // hand-authored a `match result { Ok(()) => report.pass(label),
+    // Err(e) => report.fail(label, format!("parse: {e}")) }` chain
+    // byte-identical to the peer `check_yaml_parses` executor's
+    // terminal shape modulo the prefix literal (`"parse"` here vs
+    // `"YAML"` there). Post-lift the (pass on `Ok`, fail with
+    // `<prefix>: {e}` on `Err`, label consumed by both arms) triad
+    // lives at ONE substrate owner across BOTH yaml-executor family
+    // members past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
+    report_result_prefixed(result, label, "parse", report);
 }
 
 fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
@@ -1289,6 +1308,134 @@ fn read_or_fail(path: &Path, label: &str, report: &mut Report) -> Option<String>
     }
 }
 
+/// Terminal `Result<T, E: Display>` sink that owns the (pass on `Ok`,
+/// fail with `<prefix>: {e}` on `Err`, label consumed by both arms)
+/// triad every `check_*` executor walks after routing its typed-parse
+/// result through the shared pass/fail report boundary.
+///
+/// The ONE substrate owner of the 4-link chain
+/// `match RESULT { Ok(_) => report.pass(label), Err(e) =>
+/// report.fail(label, format!("<prefix>: {e}")) }` every
+/// yaml-executor-family check hand-authored past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold:
+///
+/// * [`check_yaml_parses`] — the `(yaml-parses "path")` executor.
+///   Consumes `Result<serde_yaml::Value, serde_yaml::Error>` from
+///   `serde_yaml::from_str`. Prefix literal `"YAML"`. Pre-lift
+///   the `Err(e)` arm hand-authored `format!("YAML: {e}")`.
+/// * [`check_yaml_parses_as`] — the `(yaml-parses-as <Kind> "path")`
+///   executor. Consumes `Result<(), Box<dyn std::error::Error>>`
+///   (`E` erased through the trait object) from
+///   [`KnownCrd::parse_yaml_as`]. Prefix literal `"parse"`. Pre-lift
+///   the `Err(e)` arm hand-authored `format!("parse: {e}")`.
+///
+/// Both sites walked the SAME four-link chain — match the typed
+/// result, `report.pass(label)` on the `Ok` arm, `report.fail(label,
+/// format!("<prefix>: {e}"))` on the `Err` arm — differing only in
+/// the caller's `<T>` payload (`serde_yaml::Value` vs `()`), the
+/// caller's `<E>` carrier (`serde_yaml::Error` vs the boxed error
+/// [`KnownCrd::parse_yaml_as`] returns), and the diagnostic prefix
+/// literal (`"YAML"` vs `"parse"`). Post-lift each callsite reads
+/// `report_result_prefixed(<result>, label, "<prefix>", report);`
+/// and the (pass on `Ok`, fail with `<prefix>: {e}` on `Err`, label
+/// consumed by both arms) triad lives at ONE substrate owner.
+///
+/// # Ownership contract
+///
+/// `label: String` is consumed by the primitive — both terminal arms
+/// need it exactly once (the `Ok` arm passes it into
+/// [`Report::pass`] via `impl Into<String>`, the `Err` arm passes
+/// it into [`Report::fail`] via `impl Display`), so the caller
+/// hands over ownership at the substrate boundary. The peer
+/// substrate primitive [`read_or_fail`] takes its label by `&str`
+/// because BOTH the read side AND the subsequent
+/// pass/fail-on-parse-result site need to consume the label — the
+/// caller's `let label = format!(…)` slot lives across both
+/// substrate calls. This primitive is the terminal sink; no
+/// further site needs the label after it lands.
+///
+/// # `T` payload is discarded
+///
+/// The `Ok` arm ignores the payload — every yaml-executor-family
+/// consumer's success path composes its pass entry from the label
+/// alone (no data from the successful parse leaks into the pass
+/// prose). The generic `<T>` slot exists to accept every consumer's
+/// concrete payload type without forcing the caller to
+/// `.map(|_| ())` at the call boundary; the primitive discards it
+/// inside the `Ok(_)` arm. If a future consumer needs the payload
+/// on the pass side (a pass-prose that embeds a count or a name
+/// from the parsed value), it walks the peer substrate primitive
+/// [`Report::pass`] directly rather than this one — the two
+/// primitives partition the terminal-report axis at the
+/// (payload-carrying, payload-discarding) split.
+///
+/// # `E` carrier
+///
+/// `E: std::fmt::Display` — accepts both consumer's carriers:
+/// `serde_yaml::Error` implements [`std::fmt::Display`] directly,
+/// and the `Box<dyn std::error::Error>` [`KnownCrd::parse_yaml_as`]
+/// returns implements it through the [`std::error::Error`] super-
+/// trait bound. The `format!("{err_prefix}: {e}")` composition
+/// materializes at the primitive without allocating an
+/// intermediate `String` at the caller.
+///
+/// # Compounding
+///
+/// A future normalization of the terminal-report chain (a
+/// `tracing`-annotated failure span carrying label + prefix + error
+/// for post-hoc audit; a structured-log emit alongside the pass /
+/// fail entry; a per-executor histogram of pass vs fail counts; a
+/// swap to a typed error taxonomy that distinguishes
+/// serde_yaml::Error kinds instead of the current
+/// stringly-typed Display) lands at THIS ONE substrate owner and
+/// every downstream yaml-executor consumer — the two current
+/// callsites plus every future `check_<name>` executor whose
+/// terminal shape matches the (pass on `Ok`, fail with
+/// `<prefix>: {e}` on `Err`) triad — inherits the upgrade
+/// mechanically. Candidate future consumers: a `check_json_parses`
+/// executor for JSON coherence (`serde_json::Error` on the `Err`
+/// arm, `"JSON"` prefix), a `check_toml_parses` executor for
+/// `Cargo.toml` schema drift (`toml::de::Error`, `"TOML"`), a
+/// `check_ron_parses` executor for a Rusty-Object-Notation gate,
+/// or any future typed-parse coherence probe whose diagnostic
+/// prose follows the `<label>: <prefix>: <error>` shape.
+///
+/// # Sibling to [`read_or_fail`]
+///
+/// [`read_or_fail`] owns the (read attempt, [`Report::fail`]
+/// side-effect on I/O error, `None` control-flow signal for
+/// let-else early-return) triad on the read-side of the
+/// executor pipeline. `report_result_prefixed` owns the peer
+/// (pass on `Ok`, fail with `<prefix>: {e}` on `Err`, label
+/// consumed by both arms) triad on the terminal-report side. The
+/// two primitives partition the executor pipeline at the
+/// (read-side early-return, terminal-side pass/fail) split — every
+/// current + future check executor whose shape matches
+/// `read → parse → pass/fail` composes through both.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the four-link terminal `Result` sink recurred at 2 hand-
+/// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger and is lifted onto ONE substrate owner here).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+/// both consumers routing through the SAME substrate primitive
+/// means a future diagnostic-shape shift lands at ONE site and
+/// every downstream terminal-report consumer inherits the shift
+/// by construction).
+fn report_result_prefixed<T, E>(
+    result: Result<T, E>,
+    label: String,
+    err_prefix: &str,
+    report: &mut Report,
+) where
+    E: std::fmt::Display,
+{
+    match result {
+        Ok(_) => report.pass(label),
+        Err(e) => report.fail(label, format!("{err_prefix}: {e}")),
+    }
+}
+
 /// The pure `"tatara-check: {detail}"` startup-diagnostic prefix — the
 /// ONE substrate owner of the exact stderr-facing prose every
 /// [`main`]-side startup bail writes, split off from [`startup_bail`]
@@ -1453,8 +1600,8 @@ mod tests {
         check_yaml_parses, evaluate_ephemeral_require_tag, evaluate_point_require_tag, find_kw,
         find_kw_string_list, head_symbol_or_missing, known_require_tag_domain_names,
         min_defs_shortfall_msg, parse_kwargs, positional_string, read_or_fail,
-        require_tag_domain_by_name, required_positional_string, startup_diagnostic, Report,
-        UnknownRequireTag, ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
+        report_result_prefixed, require_tag_domain_by_name, required_positional_string,
+        startup_diagnostic, Report, UnknownRequireTag, ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
@@ -2906,6 +3053,151 @@ mod tests {
         assert!(
             failure.starts_with("missing label: read: "),
             "miss-path failure prose must start with `<label>: read: ` — pin the label prefix + the `read: ` sentinel prose downstream check-log grep keys on; got {failure:?}"
+        );
+    }
+
+    // ─── report_result_prefixed substrate pins ─────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `report_result_prefixed`
+    // free function did not exist on the pre-lift binary — the tests
+    // below do not compile before the lift. Post-lift they bind the
+    // terminal `Result<T, E>` sink at ONE substrate owner so a
+    // regression that drifted the pass entry (dropped the label, hung
+    // the payload off the pass prose), drifted the fail entry
+    // (dropped the `<prefix>: ` separator, swapped the arm-order,
+    // dropped the `report.fail` side-effect), or flipped the polarity
+    // (pass on `Err` / fail on `Ok`) surfaces HERE rather than as
+    // silent operator-facing diagnostic skew at each of the two
+    // consumer sites `check_yaml_parses` (prefix `"YAML"`) +
+    // `check_yaml_parses_as` (prefix `"parse"`).
+
+    #[test]
+    fn report_result_prefixed_pushes_pass_entry_on_ok_result_and_consumes_label() {
+        // Happy-path pin: an `Ok(_)` result lands as a pass entry
+        // carrying the label verbatim — the same shape both pre-lift
+        // callsites bound to through the `Ok(_) => report.pass(label)`
+        // arm of the pre-lift terminal match. A regression that
+        // decorated the pass prose (a `{label} (ok)` shape, a
+        // trailing whitespace strip, a `to_uppercase` transform) or
+        // dropped the pass push altogether would surface here rather
+        // than as silent drift at each downstream yaml-executor
+        // callsite. Uses `Result<serde_yaml::Value, serde_yaml::Error>`
+        // to exercise the same `<T, E>` axis
+        // [`check_yaml_parses`] threads through in production.
+        let mut report = Report::default();
+        let result: Result<serde_yaml::Value, serde_yaml::Error> =
+            serde_yaml::from_str("kind: Process\n");
+        assert!(result.is_ok(), "test fixture must construct an Ok result");
+        report_result_prefixed(result, "sample label".to_owned(), "YAML", &mut report);
+        assert!(
+            report.is_ok(),
+            "Ok result must not push a failure entry — a regression that inverted the arm polarity would surface here",
+        );
+        let pass = report
+            .passes
+            .last()
+            .expect("Ok result must push exactly one pass entry");
+        assert_eq!(
+            pass, "sample label",
+            "pass entry must carry the label verbatim — a regression that decorated the pass prose or dropped the label would surface here",
+        );
+    }
+
+    #[test]
+    fn report_result_prefixed_pushes_prefixed_fail_entry_on_err_result_composed_with_display() {
+        // Miss-path pin: an `Err(e)` result lands as a fail entry
+        // carrying the exact `<label>: <prefix>: <e>` byte shape both
+        // pre-lift callsites hand-authored through the `Err(e) =>
+        // report.fail(label, format!("<prefix>: {e}"))` arm. A
+        // regression that dropped the `<prefix>: ` mid-clause,
+        // swapped the separator, or dropped the `report.fail` side-
+        // effect surfaces here. Uses `serde_yaml::from_str` on a
+        // malformed source so the `E` carrier is the same
+        // `serde_yaml::Error` production sees at
+        // [`check_yaml_parses`].
+        let mut report = Report::default();
+        let result: Result<serde_yaml::Value, serde_yaml::Error> =
+            serde_yaml::from_str("{unbalanced: [");
+        assert!(result.is_err(), "test fixture must construct an Err result",);
+        let displayed = match &result {
+            Ok(_) => unreachable!(),
+            Err(e) => e.to_string(),
+        };
+        report_result_prefixed(result, "sample label".to_owned(), "YAML", &mut report);
+        assert!(
+            !report.is_ok(),
+            "Err result must push a failure entry — a regression that inverted the arm polarity or dropped the report.fail side-effect would surface here",
+        );
+        let failure = report
+            .failures
+            .last()
+            .expect("Err result must push exactly one failure entry");
+        let expected = format!("sample label: YAML: {displayed}");
+        assert_eq!(
+            failure, &expected,
+            "failure entry must match `<label>: <prefix>: <Display error>` byte-for-byte — a regression that dropped the `<prefix>: ` mid-clause or drifted the separator would surface here",
+        );
+    }
+
+    #[test]
+    fn report_result_prefixed_matches_pre_lift_chain_bytewise_across_both_consumers() {
+        // Sweep both pre-lift callsite prefix literals (`"YAML"` for
+        // [`check_yaml_parses`], `"parse"` for
+        // [`check_yaml_parses_as`]) and assert the substrate's fail
+        // entry is byte-identical to the pre-lift hand-authored
+        // `format!("<prefix>: {e}")` composition for each. Uses a
+        // `&'static str` `E` carrier so the `Display` output is
+        // deterministic across runs and the pin does not depend on
+        // any error-crate's internal prose. Load-bearing: an
+        // operator that greps for the pre-lift substring
+        // `": YAML: "` or `": parse: "` sees the SAME sentinel
+        // post-lift; a regression that reshuffled either prefix
+        // fires HERE at ONE substrate site rather than as silent
+        // drift across the two consumer callsites.
+        for (prefix, err) in [
+            ("YAML", "unbalanced brace"),
+            ("parse", "unknown field `foo`"),
+        ] {
+            let mut report = Report::default();
+            let result: Result<(), &'static str> = Err(err);
+            report_result_prefixed(result, "sample label".to_owned(), prefix, &mut report);
+            let failure = report
+                .failures
+                .last()
+                .expect("Err result must push exactly one failure entry");
+            let expected = format!("sample label: {prefix}: {err}");
+            assert_eq!(
+                failure, &expected,
+                "sweep for prefix {prefix:?}: substrate output must match pre-lift `format!(\"{{prefix}}: {{e}}\")` byte shape verbatim",
+            );
+        }
+    }
+
+    #[test]
+    fn report_result_prefixed_discards_the_ok_payload_and_pushes_the_label_alone() {
+        // Ownership + payload-discard pin: the `Ok(_)` arm ignores the
+        // payload — every yaml-executor-family consumer's success path
+        // composes its pass entry from the label alone (no data from
+        // the successful parse leaks into the pass prose). A
+        // regression that swapped `Ok(_) => report.pass(label)` for
+        // `Ok(v) => report.pass(format!("{label}: {v:?}"))` or
+        // similar would fail here — an `Ok(String)` payload with a
+        // deterministic string that would visibly appear in the pass
+        // prose if the payload were captured.
+        let mut report = Report::default();
+        let result: Result<String, &'static str> = Ok("payload-that-must-not-leak".to_owned());
+        report_result_prefixed(result, "sample label".to_owned(), "YAML", &mut report);
+        let pass = report
+            .passes
+            .last()
+            .expect("Ok result must push exactly one pass entry");
+        assert_eq!(
+            pass, "sample label",
+            "pass entry must NOT contain the payload — a regression that captured the Ok payload into the pass prose would surface here",
+        );
+        assert!(
+            !pass.contains("payload-that-must-not-leak"),
+            "pass entry must NOT leak the Ok payload into the operator-facing prose",
         );
     }
 

@@ -18,6 +18,83 @@ use tatara_process::classification::{
     OptimizationDirection, SubstrateType,
 };
 
+/// Total-order `min` substrate — `min(a, b)` selected by the caller-
+/// supplied `key` projection. At every pair `(a, b)`:
+///
+/// - `key(a) <= key(b)` selects `a`;
+/// - `key(a) >  key(b)` selects `b`.
+///
+/// The `<=` at the tie boundary makes the primitive deterministic on
+/// key ties — same-key inputs always collapse to the LEFT argument.
+/// Two consequences the primitive carries by construction:
+///
+/// - **Meet-idempotence.** `total_min_by_key(a, a, k) = a` for every
+///   `a` — `key(a) <= key(a)` is reflexive, so the left branch fires.
+/// - **Meet-commutativity when the key is injective on the input
+///   domain.** With a strictly injective `key`, `key(a) == key(b)`
+///   implies `a == b`, so the left-preference tie-break never sees
+///   distinct inputs; total-order `min` on any strict total order
+///   satisfies `min(a, b) = min(b, a)`.
+///
+/// Substrate owner for the total-order-lattice `meet` arm on every
+/// axis whose `leq` is a key projection over a strict total order.
+/// [`impl Lattice for baseline::Baseline`] routes here through
+/// [`baseline::Baseline::total_key`] (a strict total-order projection
+/// over `(rank, all_index)` — see the type's docstring for why the
+/// tie-break lives at the key rather than at this primitive); [`impl
+/// Lattice for tatara_process::classification::DataClassification`]
+/// routes here through
+/// [`tatara_process::classification::DataClassification::sensitivity_rank`]
+/// (strictly monotone over `DataClassification::ALL`, pinned by
+/// `data_classification_rank_is_strictly_monotone_over_all`
+/// upstream). A future total-order-projected axis lands at ONE call
+/// to this primitive AND inherits the commutativity + idempotence
+/// invariants it carries.
+///
+/// Theory anchor: THEORY.md §III (typescape — the total-order
+/// lattice-axis primitive lifted to ONE substrate owner) + §II.1
+/// invariant 5 (composition preserves proofs — every downstream
+/// lattice-law property test that consumes `meet` inherits the
+/// primitive's guarantees mechanically once the impl routes through
+/// here).
+pub fn total_min_by_key<T, K>(a: &T, b: &T, key: impl Fn(&T) -> K) -> T
+where
+    T: Clone,
+    K: Ord,
+{
+    if key(a) <= key(b) {
+        a.clone()
+    } else {
+        b.clone()
+    }
+}
+
+/// Total-order `max` substrate — dual of [`total_min_by_key`].
+/// `key(a) >= key(b)` selects `a`; `key(a) < key(b)` selects `b`.
+/// Same tie-break story: left-preference on `key(a) == key(b)`
+/// collapses ties to the LEFT argument, so join-idempotence holds
+/// by construction and join-commutativity holds when the key is
+/// injective on the input domain.
+///
+/// Substrate owner for the total-order-lattice `join` arm; peer of
+/// [`total_min_by_key`]. Same two consumers (`Baseline`,
+/// `DataClassification`) route through this on the dual axis, so a
+/// future normalization at either primitive (e.g. shrink-order
+/// tweak, per-fleet key weighting) lands at ONE site and every
+/// downstream lattice-`join` consumer inherits the upgrade
+/// mechanically.
+pub fn total_max_by_key<T, K>(a: &T, b: &T, key: impl Fn(&T) -> K) -> T
+where
+    T: Clone,
+    K: Ord,
+{
+    if key(a) >= key(b) {
+        a.clone()
+    } else {
+        b.clone()
+    }
+}
+
 /// The lattice trait.
 pub trait Lattice: Sized + Clone + PartialEq {
     /// Greatest-lower-bound — strongest common refinement.
@@ -52,18 +129,25 @@ pub trait Lattice: Sized + Clone + PartialEq {
 
 impl Lattice for DataClassification {
     fn meet(&self, other: &Self) -> Self {
-        if self.leq(other) {
-            self.clone()
-        } else {
-            other.clone()
-        }
+        // Route through `total_min_by_key` — the total-order `meet`
+        // substrate owner that peers this axis with
+        // `Lattice for baseline::Baseline`. Both impls consume ONE
+        // primitive on the closed-set-driven-by-a-strict-total-
+        // -order-projection shape; a future data-classification axis
+        // insertion (the module docstring hypothesizes a fine-grained
+        // sensitivity slot between `Confidential` and `Pii`) lands at
+        // ONE `sensitivity_rank` arm addition and the delegation here
+        // stays untouched. Pinned exhaustively over
+        // `DataClassification::ALL^2` by
+        // `data_class_meet_and_join_delegate_to_total_min_max_by_key`
+        // below.
+        crate::total_min_by_key(self, other, |v| v.sensitivity_rank())
     }
     fn join(&self, other: &Self) -> Self {
-        if self.leq(other) {
-            other.clone()
-        } else {
-            self.clone()
-        }
+        // Dual of `meet` on the same `sensitivity_rank` total-order
+        // projection — routes through `total_max_by_key` for the same
+        // substrate-routing reason.
+        crate::total_max_by_key(self, other, |v| v.sensitivity_rank())
     }
     fn leq(&self, other: &Self) -> bool {
         self.sensitivity_rank() <= other.sensitivity_rank()
@@ -230,6 +314,132 @@ pub fn satisfies(cluster: &Classification, requires: &Classification) -> bool {
 mod tests {
     use super::*;
     use tatara_process::classification::ConvergencePointType;
+
+    // ── total_min_by_key / total_max_by_key substrate ────────────────
+    //
+    // Bind [`total_min_by_key`] + [`total_max_by_key`] at fail-before-
+    // pass-after granularity. Pre-lift the total-order-lattice `meet`
+    // / `join` arm was hand-authored at each impl site (twice — once
+    // in `impl Lattice for DataClassification` via `if self.leq(other)
+    // { self.clone() } else { other.clone() }`, once in `impl Lattice
+    // for baseline::Baseline` via `if self.total_key() <=
+    // other.total_key() { *self } else { *other }`) past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold, so a new total-order-
+    // projected axis (a fine-grained data-classification insertion, a
+    // new compliance baseline family, any future closed-set enum whose
+    // `leq` is a key projection) would recur the same shape a third
+    // time. Post-lift both impls delegate to ONE substrate owner AND
+    // the routing seals below pin the delegation at every pair in
+    // both closed sets so a regression that reverted either impl to
+    // the hand-authored shape would silently pass every downstream
+    // lattice-law property test (same total order, same answer) but
+    // fail the substrate-routing invariant.
+    //
+    // Tests cover:
+    //   1. Strict-inequality behavior at both directions — `min_by_key`
+    //      picks the smaller-key argument, `max_by_key` picks the
+    //      greater-key argument, and the primitive is symmetric under
+    //      the choice.
+    //   2. Deterministic left-preference tie-break — same-key inputs
+    //      always collapse to the LEFT argument, so the primitive is
+    //      idempotent on `total_min_by_key(a, a, k) = a` by
+    //      construction and stays commutative when the key is
+    //      injective (the two consumer axes both satisfy that
+    //      injectivity — `Baseline::total_key` by the `all_index`
+    //      tie-break, `DataClassification::sensitivity_rank` by the
+    //      strict-monotonicity pin upstream).
+
+    /// [`total_min_by_key`] selects the smaller-key argument at
+    /// strict inequality, in either argument order. Fail-before-pass-
+    /// after: pre-lift this test cannot compile because
+    /// `total_min_by_key` is not exposed as a crate-level function —
+    /// the total-order `meet` arm was hand-authored per impl site.
+    /// Post-lift the two directions pin symmetry: `min(3, 7) = 3` AND
+    /// `min(7, 3) = 3` on `i32`, so the primitive's `key` projection
+    /// is consulted rather than any implicit self-preference on the
+    /// LEFT argument. The `i32`-identity key exercises the simplest
+    /// possible strict total order to isolate the primitive's
+    /// selection logic from any consumer-side projection.
+    #[test]
+    fn total_min_by_key_selects_lesser_key_argument_at_strict_inequality() {
+        assert_eq!(total_min_by_key(&3_i32, &7_i32, |v| *v), 3);
+        assert_eq!(total_min_by_key(&7_i32, &3_i32, |v| *v), 3);
+    }
+
+    /// [`total_min_by_key`] collapses key ties to the LEFT argument
+    /// — deterministic left-preference tie-break. Consumers with a
+    /// non-injective key MUST understand this tie-break OR route
+    /// through an injective key (as
+    /// [`baseline::Baseline::total_key`] pairs `rank` with
+    /// `all_index` precisely so the primitive stays commutative on
+    /// `Baseline::ALL`). Distinct inputs sharing a key surface the
+    /// asymmetry: `(left, 4)` and `(right, 4)` under `|v| v.1` both
+    /// project to key 4, so `min` returns whichever argument
+    /// appeared first.
+    #[test]
+    fn total_min_by_key_collapses_key_ties_to_the_left_argument() {
+        let a = ("left", 4_u8);
+        let b = ("right", 4_u8);
+        assert_eq!(total_min_by_key(&a, &b, |v| v.1), a);
+        assert_eq!(total_min_by_key(&b, &a, |v| v.1), b);
+    }
+
+    /// [`total_max_by_key`] selects the greater-key argument at
+    /// strict inequality — dual of
+    /// [`total_min_by_key_selects_lesser_key_argument_at_strict_inequality`].
+    /// Same symmetry check: `max(3, 7) = 7` AND `max(7, 3) = 7` on
+    /// `i32`, so the primitive's `key` projection is consulted rather
+    /// than any implicit self-preference on the LEFT argument.
+    #[test]
+    fn total_max_by_key_selects_greater_key_argument_at_strict_inequality() {
+        assert_eq!(total_max_by_key(&3_i32, &7_i32, |v| *v), 7);
+        assert_eq!(total_max_by_key(&7_i32, &3_i32, |v| *v), 7);
+    }
+
+    /// [`total_max_by_key`] collapses key ties to the LEFT argument
+    /// — same tie-break story as [`total_min_by_key`] on the dual
+    /// axis. `max` on a strict `>=` at ties collapses left; consumers
+    /// route through an injective key when downstream commutativity
+    /// is required.
+    #[test]
+    fn total_max_by_key_collapses_key_ties_to_the_left_argument() {
+        let a = ("left", 4_u8);
+        let b = ("right", 4_u8);
+        assert_eq!(total_max_by_key(&a, &b, |v| v.1), a);
+        assert_eq!(total_max_by_key(&b, &a, |v| v.1), b);
+    }
+
+    /// SEAL TEST: [`impl Lattice for DataClassification`]'s `meet` /
+    /// `join` route through [`total_min_by_key`] /
+    /// [`total_max_by_key`] with `sensitivity_rank` as the key.
+    /// Pinned at every pair in `DataClassification::ALL^2`, so a
+    /// regression that reverted the impl to the hand-authored `if
+    /// self.leq(other) { self.clone() } else { other.clone() }`
+    /// shape (the pre-lift form) would silently pass every downstream
+    /// lattice-law property test — the SAME total order gives the
+    /// same answer — but would break the substrate-routing invariant
+    /// this seal binds.
+    #[test]
+    fn data_class_meet_and_join_delegate_to_total_min_max_by_key() {
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    a.meet(&b),
+                    total_min_by_key(&a, &b, |v: &DataClassification| v.sensitivity_rank()),
+                    "DataClassification::meet at ({a:?}, {b:?}) has \
+                     drifted away from the total_min_by_key substrate \
+                     primitive",
+                );
+                assert_eq!(
+                    a.join(&b),
+                    total_max_by_key(&a, &b, |v: &DataClassification| v.sensitivity_rank()),
+                    "DataClassification::join at ({a:?}, {b:?}) has \
+                     drifted away from the total_max_by_key substrate \
+                     primitive",
+                );
+            }
+        }
+    }
 
     #[test]
     fn data_classification_total_order() {

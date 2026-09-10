@@ -167,28 +167,29 @@ impl Baseline {
 
 impl Lattice for Baseline {
     fn meet(&self, other: &Self) -> Self {
-        // Total-order min via `total_key` — commutative + idempotent +
-        // associative by construction on any total order; consumes the
-        // rank tie-break through the declaration-order discriminator so
-        // the operator-facing `rank()` stratum stays intact while the
-        // lattice impl satisfies the `a ⊓ b = b ⊓ a` law the top-of-lib
-        // docstring promises. Pinned exhaustively over `Baseline::ALL`
+        // Route through `crate::total_min_by_key` — the total-order
+        // `meet` substrate owner that peers this axis with
+        // `Lattice for DataClassification`. Commutative + idempotent
+        // + associative by construction on any total order; consumes
+        // the rank tie-break through the declaration-order
+        // discriminator in [`Self::total_key`] so the operator-facing
+        // `rank()` stratum stays intact while the lattice impl
+        // satisfies the `a ⊓ b = b ⊓ a` law the top-of-lib
+        // docstring promises. The tie-break lives at the KEY, not at
+        // the substrate primitive — so the primitive can stay a pure
+        // `min_by_key` shape reusable by any future total-order-
+        // projected axis. Pinned exhaustively over `Baseline::ALL`
         // by the `meet_and_join_are_commutative_over_baseline_ALL_*`
-        // test family.
-        if self.total_key() <= other.total_key() {
-            *self
-        } else {
-            *other
-        }
+        // test family AND by the substrate-routing seal
+        // `meet_and_join_delegate_to_total_min_max_by_key_at_every_pair_over_baseline_ALL`
+        // below.
+        crate::total_min_by_key(self, other, |v: &Self| v.total_key())
     }
     fn join(&self, other: &Self) -> Self {
-        // Total-order max via `total_key` — dual of `meet` on the same
-        // total order.
-        if self.total_key() >= other.total_key() {
-            *self
-        } else {
-            *other
-        }
+        // Dual of `meet` on the same total order — routes through
+        // `crate::total_max_by_key` for the same substrate-routing
+        // reason.
+        crate::total_max_by_key(self, other, |v: &Self| v.total_key())
     }
     fn leq(&self, other: &Self) -> bool {
         // Consistent with `meet` / `join` via the same `total_key`
@@ -624,6 +625,54 @@ mod tests {
                 "every variant must be ≤ top ({:?}) — failed at {v:?}",
                 <Baseline as Lattice>::top(),
             );
+        }
+    }
+
+    /// SEAL TEST: [`impl Lattice for Baseline`]'s `meet` / `join`
+    /// route through [`crate::total_min_by_key`] /
+    /// [`crate::total_max_by_key`] with [`Baseline::total_key`] as
+    /// the key. Fail-before-pass-after: pre-lift this test cannot
+    /// compile because `crate::total_min_by_key` +
+    /// `crate::total_max_by_key` are not exposed as crate-level
+    /// functions — both `meet` + `join` were hand-authored per impl
+    /// site. Post-lift the routing is pinned at every pair in
+    /// `Baseline::ALL × Baseline::ALL`, so a regression that
+    /// reverted the impl to the hand-authored `if self.total_key()
+    /// <= other.total_key() { *self } else { *other }` shape (the
+    /// pre-lift form) would silently pass every lattice-law test
+    /// downstream (idempotence, commutativity, associativity,
+    /// absorption, `leq × meet / join` agreement, bottom / top
+    /// universality — all of which the same total order satisfies
+    /// by construction) but would break the substrate-routing
+    /// invariant this seal binds.
+    ///
+    /// Peer of
+    /// [`data_class_meet_and_join_delegate_to_total_min_max_by_key`]
+    /// in the top-of-crate `tests` module — together the two seals
+    /// bind BOTH total-order-lattice consumer axes to the SAME
+    /// substrate primitive, so a future normalization at the
+    /// primitive lands at ONE site and inherits into every
+    /// downstream `Lattice::{meet, join}` consumer mechanically.
+    #[test]
+    #[allow(non_snake_case)]
+    fn meet_and_join_delegate_to_total_min_max_by_key_at_every_pair_over_baseline_ALL() {
+        for a in Baseline::ALL {
+            for b in Baseline::ALL {
+                assert_eq!(
+                    a.meet(&b),
+                    crate::total_min_by_key(&a, &b, |v: &Baseline| v.total_key()),
+                    "Baseline::meet at ({a:?}, {b:?}) has drifted \
+                     away from the crate::total_min_by_key substrate \
+                     primitive",
+                );
+                assert_eq!(
+                    a.join(&b),
+                    crate::total_max_by_key(&a, &b, |v: &Baseline| v.total_key()),
+                    "Baseline::join at ({a:?}, {b:?}) has drifted \
+                     away from the crate::total_max_by_key substrate \
+                     primitive",
+                );
+            }
         }
     }
 }

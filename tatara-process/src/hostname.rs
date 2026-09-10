@@ -522,10 +522,24 @@ fn validate_fqdn_suffix(cluster: &str, location: &str, domain: &str) -> Result<(
 
 fn short_hex_blake3(bytes: &[u8], len: usize) -> String {
     // Delegate the 2-link `blake3::hash → hex` step to the substrate
-    // primitive so the ephemeral-id prefix stays byte-identical to
-    // every receipt/attestation hex-digest workspace-wide; take a
-    // stable prefix of the shared full-length hex.
-    crate::hash::hex_blake3(bytes).chars().take(len).collect()
+    // primitive [`crate::hash::hex_blake3`] (itself a thin route
+    // through `tatara_lisp::hash::hex_blake3_of_bytes`, the workspace-
+    // wide byte-input owner) so the ephemeral-id prefix stays byte-
+    // identical to every receipt/attestation hex-digest workspace-wide.
+    // Delegate the terminal 1-link `.chars().take(len).collect()`
+    // truncation to the workspace-wide substrate owner
+    // [`tatara_lisp::hash::hex_prefix`] — sibling of the byte-input and
+    // scheme-wrap owners on the identity-projection axis. Pre-lift the
+    // truncation step was hand-authored at both this site + at
+    // `tatara_ui::event::ShortHash::from_blake3_hex` (a 7-char UI
+    // render prefix); post-lift both consumers route the take-prefix
+    // step through ONE substrate owner, so a future spelling change
+    // (a different truncation discipline, a padding rule for short
+    // receivers, a stable-`&str[..len]` byte-slice implementation)
+    // lands at ONE substrate function and reaches both the UI's
+    // 7-char short hash AND this crate's `EPHEMERAL_ID_HASH_LEN`-char
+    // FQDN slot through ONE edit.
+    tatara_lisp::hash::hex_prefix(&crate::hash::hex_blake3(bytes), len)
 }
 
 #[cfg(test)]

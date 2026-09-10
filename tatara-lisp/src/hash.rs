@@ -367,10 +367,102 @@ pub fn hex_blake3_of_json<T: Serialize + ?Sized>(v: &T) -> String {
     hex_blake3_of_bytes(&serde_json::to_vec(v).unwrap_or_default())
 }
 
+/// A stable-length prefix of a lowercase-hex string — the workspace-wide
+/// ONE substrate owner of the `hex.chars().take(len).collect::<String>()`
+/// one-link projection every "short-form hash" consumer that needs a
+/// fixed-width truncation of a 64-char BLAKE3-hex handle restated by
+/// hand pre-lift.
+///
+/// # Why the substrate lives here
+///
+/// Pre-lift the SAME 1-line `.chars().take(N).collect()` projection was
+/// hand-authored at TWO workspace-visible sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold, each producing a
+/// fixed-width prefix of a lowercase-hex BLAKE3 handle:
+///
+/// * `tatara_ui::event::ShortHash::from_blake3_hex` — the 7-char
+///   BLAKE3 prefix painted next to every `Renderer::artifact` line
+///   (`◇ blake3:xxxxxxx …`) and every `Renderer::summary` banner
+///   (`◇ content-root: xxxxxxx …`). Wraps the returned prefix in the
+///   [`ShortHash`](../../tatara_ui/event/struct.ShortHash.html) newtype
+///   the render surface consumes.
+/// * `tatara_process::hostname::short_hex_blake3` — the ephemeral-id
+///   prefix stamped into every ephemeral-env FQDN slot (an
+///   [`EPHEMERAL_ID_HASH_LEN`](../../tatara_process/hostname/constant.EPHEMERAL_ID_HASH_LEN.html)-char
+///   deterministic prefix of the spec's canonical-bytes hex-BLAKE3),
+///   consumed by `env::EphemeralEnvId::try_new` on the wire-format
+///   READ side.
+///
+/// Both sites walked the SAME 1-link chain — take a lowercase-hex
+/// string and produce a fixed-width prefix by `.chars().take(N).collect()`
+/// — differing only in the receiver's source (a `&str` handle at the
+/// UI site, a fresh [`hex_blake3_of_bytes`] output at the K8s
+/// hostname site) and the target length (a hard-coded `7` at the UI
+/// site, a variable `len: usize` at the hostname site). Post-lift each
+/// callsite reads `hex_prefix(<hex>, <len>)` and the prefix step lives
+/// at ONE substrate owner.
+///
+/// # Invariants
+///
+/// - **Char-boundary safety:** the primitive iterates over `.chars()`
+///   rather than slicing bytes, so an accidental non-ASCII receiver
+///   (a defensive future consumer that passes a `to_string()` of a
+///   non-hex source) never panics on a mid-codepoint split. On the
+///   pre-lift lowercase-hex-only receiver corner (every current
+///   consumer), each `.chars()` step advances exactly one byte, so the
+///   output is byte-identical to `&hex[..len]` on that corner and
+///   [`tests::hex_prefix_matches_byte_slice_on_ascii_hex_receiver`]
+///   pins the parity.
+/// - **Short-input corner:** if `hex.chars().count() < len`, the
+///   returned string is the entire input (no panic, no padding). Every
+///   current consumer feeds a 64-char lowercase-hex source, so the
+///   corner is unreachable in production; pinning it here at
+///   [`tests::hex_prefix_short_input_returns_full_input`] lets a future
+///   consumer that composes onto a bounded-length source rely on the
+///   corner mechanically.
+/// - **Determinism:** two calls with the same receiver + length
+///   produce byte-identical output — the primitive is pure, no
+///   wall-clock read, no random seed.
+///
+/// # `#[must_use]`
+///
+/// Every consumer either wraps the returned prefix in an identity
+/// newtype (`ShortHash`, `EphemeralEnvId`) or stamps it into a
+/// fixed-width slot on the wire (an FQDN `ephemeral_id` segment, a
+/// dim-styled artifact-line prefix). Dropping the return means the
+/// prefix was computed for no observable reason; the attribute
+/// surfaces that as a warning at every consumer site.
+///
+/// # Composition
+///
+/// Composes on top of [`hex_blake3_of_bytes`] (or the crate-layered
+/// peer [`tatara_process::hash::hex_blake3`] that routes through it)
+/// to produce a fixed-width prefix of the full 64-char hex digest.
+/// A future consumer that wants a scheme-prefixed short hash composes
+/// `blake3_scheme_display(&hex_prefix(&hex_blake3_of_bytes(bytes), 7))`,
+/// binding all three shape primitives on the identity-projection axis
+/// through ONE call site.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 1-link `.chars().take(N).collect()` prefix step recurred at TWO
+/// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger, and is lifted to ONE substrate owner here). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — the pin block below
+/// binds the primitive at fail-before-pass-after granularity so a
+/// regression that byte-sliced the receiver, padded the short-input
+/// corner, or drifted the character-take semantics surfaces at THESE
+/// pins rather than as silent short-hash drift across every downstream
+/// consumer).
+#[must_use]
+pub fn hex_prefix(hex: &str, len: usize) -> String {
+    hex.chars().take(len).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        blake3_scheme_display, hex_blake3_of_bytes, hex_blake3_of_json, BLAKE3_SCHEME_PREFIX,
+        blake3_scheme_display, hex_blake3_of_bytes, hex_blake3_of_json, hex_prefix,
+        BLAKE3_SCHEME_PREFIX,
     };
     use serde::Serialize;
 
@@ -822,5 +914,145 @@ mod tests {
         assert_eq!(BLAKE3_SCHEME_PREFIX, "blake3:");
         assert_eq!(BLAKE3_SCHEME_PREFIX.len(), 7);
         assert!(BLAKE3_SCHEME_PREFIX.is_ascii());
+    }
+
+    // ── hex_prefix substrate pins ────────────────────────────────────
+    //
+    // Each pin below binds [`hex_prefix`] at fail-before-pass-after
+    // granularity so a regression that byte-sliced the receiver, padded
+    // the short-input corner, drifted the character-take semantics, or
+    // introduced a non-`.chars()` iteration surfaces HERE rather than as
+    // silent short-hash drift across every downstream consumer
+    // (`ShortHash::from_blake3_hex`'s 7-char UI prefix,
+    // `short_hex_blake3`'s `EPHEMERAL_ID_HASH_LEN`-char FQDN slot, and
+    // every future consumer that reaches for a fixed-width truncation
+    // of a lowercase-hex handle).
+
+    /// Byte-identical parity with the pre-lift hand-authored
+    /// `hex.chars().take(N).collect::<String>()` chain both consumer
+    /// sites walked. Sweeps representative `(len, input)` shapes so the
+    /// composition composes byte-identically to the pre-lift form
+    /// across every corner: the tatara-ui 7-char UI prefix, the
+    /// tatara-process 8-char (`EPHEMERAL_ID_HASH_LEN`) ephemeral-id
+    /// prefix, and a future 16-char / 32-char short-hash slot.
+    #[test]
+    fn hex_prefix_matches_pre_lift_chars_take_collect_spelling_bytewise() {
+        let full = hex_blake3_of_bytes(b"pre-lift-parity");
+        for len in [0usize, 1, 7, 8, 16, 32, 64] {
+            let pre_lift: String = full.chars().take(len).collect();
+            assert_eq!(
+                hex_prefix(&full, len),
+                pre_lift,
+                "hex_prefix drifted from pre-lift `chars().take({len}).collect()` on 64-char hex receiver",
+            );
+        }
+    }
+
+    /// Char-boundary safety on the ASCII-hex receiver corner: every
+    /// `.chars()` step over lowercase hex advances exactly one byte, so
+    /// the output is byte-identical to `&hex[..len]` on that corner.
+    /// A regression that swapped `.chars().take()` for `.split_at()` on
+    /// a non-ASCII receiver would panic; on the ASCII-hex corner every
+    /// current consumer feeds, both produce the same bytes and this pin
+    /// binds the equivalence. Sibling of the composition pin above; the
+    /// two together bind both the pre-lift spelling and the byte-slice
+    /// spelling as observable-equivalent on the receiver shape every
+    /// current callsite hands in.
+    #[test]
+    fn hex_prefix_matches_byte_slice_on_ascii_hex_receiver() {
+        let full = hex_blake3_of_bytes(b"byte-slice-parity");
+        for len in [0usize, 1, 7, 8, 32, 64] {
+            assert_eq!(
+                hex_prefix(&full, len),
+                full[..len],
+                "hex_prefix diverged from &hex[..{len}] on ASCII-hex corner",
+            );
+        }
+    }
+
+    /// Short-input corner: `hex.chars().count() < len` MUST return the
+    /// entire input, no panic, no padding. Every current consumer feeds
+    /// a 64-char lowercase-hex source, so the corner is unreachable in
+    /// production — pinning it here lets a future consumer that composes
+    /// onto a bounded-length source (a truncated hash slot, a partial-
+    /// bytes preview) rely on the behavior mechanically. A regression
+    /// that panicked on short input (via a byte-slice implementation)
+    /// or padded with '0' (via a fixed-width formatting implementation)
+    /// would surface HERE rather than as a runtime panic / silent drift
+    /// at a future consumer.
+    #[test]
+    fn hex_prefix_short_input_returns_full_input() {
+        assert_eq!(hex_prefix("abc", 7), "abc");
+        assert_eq!(hex_prefix("", 7), "");
+        assert_eq!(hex_prefix("deadbeef", 32), "deadbeef");
+        // Boundary corner — asking for exactly the input's length
+        // returns the input verbatim.
+        assert_eq!(hex_prefix("deadbeef", 8), "deadbeef");
+    }
+
+    /// Output-length invariant: on a receiver of length ≥ len, the
+    /// output is exactly `len` chars. Pins the wire-shape budget every
+    /// downstream fixed-width slot (a 7-char UI-render column, an
+    /// 8-char DNS-segment slot in an FQDN) relies on. A regression
+    /// that off-by-one'd the take (a `+ 1` in the collect step, a
+    /// `>` versus `>=` boundary flip) surfaces HERE rather than as
+    /// silent width drift at every render/emit consumer downstream.
+    #[test]
+    fn hex_prefix_output_length_is_exactly_len_on_long_receiver() {
+        let full = hex_blake3_of_bytes(b"length-invariant");
+        assert_eq!(full.len(), 64);
+        for len in [0usize, 1, 7, 8, 16, 32, 64] {
+            let out = hex_prefix(&full, len);
+            assert_eq!(
+                out.chars().count(),
+                len,
+                "hex_prefix output was not exactly {len} chars on 64-char receiver",
+            );
+        }
+    }
+
+    /// Determinism pin: `hex_prefix` is a pure composition, so two
+    /// calls with the same receiver + length produce byte-identical
+    /// output. A regression that mixed nondeterminism in (a wall-clock
+    /// read, a random seed, a per-fleet suffix) would surface HERE
+    /// rather than as flaky short-hash output.
+    #[test]
+    fn hex_prefix_is_deterministic_for_identical_receiver_and_len() {
+        let full = hex_blake3_of_bytes(b"determinism");
+        for len in [7usize, 8, 16] {
+            let a = hex_prefix(&full, len);
+            let b = hex_prefix(&full, len);
+            assert_eq!(a, b);
+        }
+    }
+
+    /// Cross-primitive coherence: composing [`hex_prefix`] on top of
+    /// [`hex_blake3_of_bytes`] MUST produce the same output as the
+    /// pre-lift `hex_blake3_of_bytes(bytes).chars().take(len).collect()`
+    /// chain both `tatara_ui::event::ShortHash::from_blake3_hex` (with
+    /// a `hex_blake3_of_json` receiver) and
+    /// `tatara_process::hostname::short_hex_blake3` (with a
+    /// `hex_blake3_of_bytes` receiver) walked pre-lift. Pins the
+    /// composition invariant every consumer that reaches through the
+    /// (byte-input owner, prefix owner) pair relies on to stay
+    /// byte-identical across future spelling changes at either owner.
+    #[test]
+    fn hex_prefix_composes_with_hex_blake3_of_bytes_over_len() {
+        for payload in [
+            b"" as &[u8],
+            b"x",
+            b"short-hash-composition",
+            b"pleme-dev/ephemeral-test-01",
+        ] {
+            for len in [7usize, 8, 16] {
+                let via_composition = hex_prefix(&hex_blake3_of_bytes(payload), len);
+                let pre_lift: String = hex_blake3_of_bytes(payload).chars().take(len).collect();
+                assert_eq!(
+                    via_composition, pre_lift,
+                    "hex_prefix ∘ hex_blake3_of_bytes drifted from pre-lift chain for buf.len()={} len={}",
+                    payload.len(), len,
+                );
+            }
+        }
     }
 }

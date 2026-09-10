@@ -15,7 +15,20 @@ pub struct ShortHash(pub String);
 
 impl ShortHash {
     pub fn from_blake3_hex(full: &str) -> Self {
-        Self(full.chars().take(7).collect())
+        // Delegate the 1-link `.chars().take(N).collect()` truncation
+        // to the workspace-wide substrate owner
+        // [`tatara_lisp::hash::hex_prefix`] — sibling of
+        // [`tatara_lisp::hash::hex_blake3_of_json`] (the value-input
+        // owner this crate's `hash::hex_blake3_of_json` re-exports)
+        // and of [`tatara_lisp::hash::blake3_scheme_display`] (the
+        // scheme-wrap owner). Every current caller feeds a 64-char
+        // lowercase-hex handle, so the take-7 corner produces the same
+        // bytes as the pre-lift `full.chars().take(7).collect()`
+        // spelling; a future spelling change (a different truncation
+        // discipline, a padding rule for short receivers) lands at ONE
+        // substrate function and reaches every downstream short-hash
+        // consumer through ONE edit.
+        Self(tatara_lisp::hash::hex_prefix(full, 7))
     }
 }
 

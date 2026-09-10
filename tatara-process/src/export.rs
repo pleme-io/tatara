@@ -1125,6 +1125,39 @@ pub trait ExportSpecSliceExt {
     /// coherence check that flags a `stdout` export as
     /// non-guaranteed-delivery) reach through THIS primitive.
     fn has_channel_kind(&self, kind: ChannelKind) -> bool;
+
+    /// True iff at least one [`ExportSpec`] in this slice carries an
+    /// [`ArtifactSource::test_report`] populated with a
+    /// [`TestReportSource`] whose [`TestReportSource::format`] equals
+    /// the given [`ReportFormat`]. Composes the nested-`Option`
+    /// projection past `source.test_report` with the same
+    /// `.iter().any(|e| …)` walk shape [`Self::has_when`] and
+    /// [`Self::has_channel_kind`] publish, opening a THIRD closed-set-
+    /// driven presence probe on the SAME `&[ExportSpec]` slice — the
+    /// first probe on this trait that reads a NESTED-Option scalar
+    /// (`Option<TestReportSource>` past `ArtifactSource`, then
+    /// `ReportFormat` equality on the populated slot) rather than a
+    /// tagged-union carrier (`has_channel_kind` on `VectorChannel`) or
+    /// a direct closed-set field (`has_when` on `ExportTrigger`). A
+    /// future fifth [`ReportFormat`] variant reaches this walk through
+    /// the [`ReportFormat::ALL`] sweep alone — the equality body reads
+    /// the raw `format` field so no per-variant substrate edit lands
+    /// here.
+    ///
+    /// Note that an export whose `source` has NO `test_report` slot
+    /// populated (a `receipts` / `process_snapshot` / `run_marker`
+    /// export) contributes `false` for EVERY [`ReportFormat`] kind —
+    /// the outer nested-Option projection collapses before the
+    /// equality on `format` fires, so the default [`ReportFormat::Raw`]
+    /// (which the empty projection would spuriously compare to a
+    /// hand-authored `Raw`-tagged report) never leaks through.
+    /// Callers whose invariant is "does any test-report export declare
+    /// THIS payload format" (require-tag classifier, coherence check
+    /// like "every JUnit report ships through JetStream", editor
+    /// completion) reach this ONE primitive rather than restating the
+    /// `e.source.test_report.as_ref().is_some_and(|tr| tr.format == K)`
+    /// two-step chain at each callsite.
+    fn has_report_format(&self, kind: ReportFormat) -> bool;
 }
 
 impl ExportSpecSliceExt for [ExportSpec] {
@@ -1134,6 +1167,15 @@ impl ExportSpecSliceExt for [ExportSpec] {
 
     fn has_channel_kind(&self, kind: ChannelKind) -> bool {
         self.iter().any(|e| kind.select(&e.channel).is_some())
+    }
+
+    fn has_report_format(&self, kind: ReportFormat) -> bool {
+        self.iter().any(|e| {
+            e.source
+                .test_report
+                .as_ref()
+                .is_some_and(|tr| tr.format == kind)
+        })
     }
 }
 
@@ -2613,5 +2655,164 @@ mod tests {
             !slice.has_channel_kind(ChannelKind::HttpEvent),
             "channel kind absent from the slice must resolve false: HttpEvent",
         );
+    }
+
+    // ── ExportSpecSliceExt::has_report_format substrate pins ──────────
+    //
+    // Fail-before-pass-after granularity: `has_report_format` did not
+    // exist before this commit — the `(&[ExportSpec], ReportFormat) ->
+    // bool` walk shape was not spelled anywhere in the workspace on the
+    // nested-Option `source.test_report.format` field. The lift opens
+    // the THIRD method on the slice-level `ExportSpecSliceExt` (peer of
+    // `has_when` + `has_channel_kind` on the SAME slice, and sixth
+    // instance across the workspace slice-level closed-set-driven
+    // presence-probe algebra), composing an inner `.as_ref().is_some_and`
+    // gate on the `Option<TestReportSource>` field with a raw
+    // `ReportFormat` equality on the populated slot — the FIRST probe
+    // on this trait whose closure reads a NESTED-Option scalar rather
+    // than a tagged-union `select` or a direct closed-set field.
+
+    /// Fixture: a minimal `ExportSpec` whose `source` carries a
+    /// [`TestReportSource`] tagged with the chosen [`ReportFormat`] and
+    /// a fixed single-slot stdout channel + default `when` trigger. The
+    /// report format is the only axis this test module discriminates
+    /// on; the channel + trigger + configmap/key strings are fixed at
+    /// valid pairs so the primitive under test reads the
+    /// `source.test_report.format` slot in isolation.
+    ///
+    /// Sweeps [`ReportFormat::ALL`] via the [`ReportFormat`] closed set
+    /// so a future fifth variant reaches this fixture by hitting the
+    /// `ALL` array literal's arity gate at every call site.
+    fn export_with_report_format(kind: ReportFormat) -> ExportSpec {
+        ExportSpec {
+            source: ArtifactSource {
+                test_report: Some(TestReportSource {
+                    configmap: "junit-results".into(),
+                    key: "junit.xml".into(),
+                    format: kind,
+                    namespace: None,
+                }),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::default(),
+            experiment_id_override: None,
+        }
+    }
+
+    /// EMPTY-SLICE pin — an empty `&[ExportSpec]` returns `false` for
+    /// EVERY [`ReportFormat`]. Sweep [`ReportFormat::ALL`] so a new
+    /// variant added without matching visits in the surrounding
+    /// substrate reaches rustc's exhaustiveness gate on the `ALL`
+    /// literal (arity forced by `[Self; 4]`) rather than as a silent
+    /// false-positive at every downstream callsite composing this
+    /// primitive.
+    #[test]
+    fn export_spec_slice_has_report_format_returns_false_on_empty_slice_for_every_kind() {
+        let empty: &[ExportSpec] = &[];
+        for kind in ReportFormat::ALL {
+            assert!(
+                !empty.has_report_format(kind),
+                "empty slice must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// PER-VARIANT pin — a single-element slice returns `true` for
+    /// exactly the [`ReportFormat`] its `TestReportSource` carries,
+    /// `false` for every other variant. Sweep the [`ReportFormat::ALL`]
+    /// × ALL cross so a regression that (a) hard-coded the arm to a
+    /// single kind (silently returning `true` for every populated slice
+    /// regardless of query kind), (b) probed a different field (a stray
+    /// `experiment_id_override.is_some()`, a `channel`-side variant
+    /// discriminator, `when`), or (c) collapsed the outer
+    /// nested-Option projection (probing `test_report.is_some()` and
+    /// treating the empty case as `ReportFormat::default() == Raw`)
+    /// fails HERE at the substrate primitive rather than at each
+    /// downstream `report-format-<kind>` callsite.
+    #[test]
+    fn export_spec_slice_has_report_format_reads_test_report_slot_per_variant() {
+        for populated in ReportFormat::ALL {
+            let slice = [export_with_report_format(populated)];
+            for query in ReportFormat::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    slice.has_report_format(query),
+                    expected,
+                    "populated={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// MULTI-ENTRY pin — a slice with multiple entries returns `true`
+    /// for every [`ReportFormat`] that appears at any position
+    /// (existential quantifier over the slice), `false` for formats
+    /// that appear at no position. Locks the `any` semantics so a
+    /// regression that collapsed to a `first`-only probe
+    /// (`slice.first().is_some_and(|e|
+    /// e.source.test_report.as_ref().is_some_and(|tr| tr.format ==
+    /// kind))`) fails here even though the single-element per-variant
+    /// pin above passes.
+    #[test]
+    fn export_spec_slice_has_report_format_scans_beyond_the_first_position() {
+        let slice = [
+            export_with_report_format(ReportFormat::Junit),
+            export_with_report_format(ReportFormat::TapV13),
+        ];
+        for present in [ReportFormat::Junit, ReportFormat::TapV13] {
+            assert!(
+                slice.has_report_format(present),
+                "report format at any position must resolve true: {present:?}",
+            );
+        }
+        assert!(
+            !slice.has_report_format(ReportFormat::NdJson),
+            "report format absent from the slice must resolve false: NdJson",
+        );
+        assert!(
+            !slice.has_report_format(ReportFormat::Raw),
+            "report format absent from the slice must resolve false: Raw",
+        );
+    }
+
+    /// NESTED-OPTION-COLLAPSE pin — an export whose `source` carries
+    /// NO `test_report` slot (a `receipts`-only source) contributes
+    /// `false` for EVERY [`ReportFormat`] kind, INCLUDING the default
+    /// [`ReportFormat::Raw`] that a naive `unwrap_or_default()`
+    /// projection would spuriously match. Locks the outer
+    /// nested-`Option` short-circuit contract so a regression that
+    /// dropped the `.as_ref().is_some_and(…)` gate (e.g. rewriting to
+    /// `e.source.test_report.map_or(ReportFormat::default(), |tr|
+    /// tr.format) == kind`, which returns `true` for every non-
+    /// test-report export when `kind == Raw`) fails HERE at ONE
+    /// narrow substrate site rather than at every downstream `report-
+    /// format-Raw` classifier callsite. Sweeps
+    /// [`ReportFormat::ALL`] so the contract is pinned symmetrically
+    /// across every format the closed set names.
+    #[test]
+    fn export_spec_slice_has_report_format_returns_false_on_non_test_report_source() {
+        let receipts_only = ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::default(),
+            experiment_id_override: None,
+        };
+        let slice = [receipts_only];
+        for kind in ReportFormat::ALL {
+            assert!(
+                !slice.has_report_format(kind),
+                "receipts-only export must return false for every report format: {kind:?}",
+            );
+        }
     }
 }

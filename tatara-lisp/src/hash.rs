@@ -300,9 +300,16 @@ pub fn blake3_scheme_display<H: Display>(hex: H) -> String {
 ///   `T: Serialize` → 64-hex projector. Composes `serde_json::to_vec`
 ///   with THIS primitive.
 /// - **Byte-input axis (upper layer):**
-///   [`tatara-process::hash::hex_blake3`] — the byte-input owner one
-///   crate up, using the `hex::encode(<hash>.as_bytes())` spelling. Same
-///   invariants; different graph position.
+///   [`tatara-process::hash::hex_blake3`] — the byte-input entry point
+///   one crate up. Post-lift it DELEGATES through this owner (the
+///   follow-up call the byte-input opener named), so the two crates'
+///   byte-input peers now share ONE canonical spelling by construction.
+///   A future re-encoding at THIS owner reaches BOTH peers through ONE
+///   edit — the tatara-process entry keeps its public API for consumers
+///   downstream of that crate (the closed-loop probe's three pillars,
+///   the reconciler's `render`/`phase_machine` composers, and
+///   `crate::hostname::short_hex_blake3`) without forcing a workspace-
+///   wide import rewrite.
 /// - **Streaming-digest axis (upper layer):**
 ///   [`tatara-process::hash::hex_blake3_hash`] — the `&blake3::Hash` →
 ///   64-hex projector for consumers that fold per-item updates into a

@@ -1,17 +1,35 @@
 //! Substrate primitive for BLAKE3 hex digests.
 //!
 //! Two peer entries — [`hex_blake3`] for the in-memory-buffer shape
-//! (`hex::encode(blake3::hash(bytes).as_bytes())`) every three-pillar
-//! attestation producer that fed BLAKE3 a single buffer restated by
-//! hand pre-lift, and [`hex_blake3_hash`] for the streaming-digest
-//! shape (`hex::encode(hash.as_bytes())` where `hash =
-//! blake3::Hasher::finalize()`) every consumer that folded per-item
-//! updates into a `Hasher` before finalizing walked. Both peers ride
-//! through ONE hex-encoding step at [`hex_blake3_hash`] so a future
-//! swap onto `blake3::Hash::to_hex().to_string()` (or a different
-//! encoding — base32, base64url, uppercase hex for a downstream tool)
-//! lands at ONE substrate function and every downstream three-pillar
-//! consumer inherits the upgrade mechanically.
+//! every three-pillar attestation producer that fed BLAKE3 a single
+//! buffer restated by hand pre-lift, and [`hex_blake3_hash`] for the
+//! streaming-digest shape (`hex::encode(hash.as_bytes())` where
+//! `hash = blake3::Hasher::finalize()`) every consumer that folded
+//! per-item updates into a `Hasher` before finalizing walked.
+//!
+//! # Crate-layer partition on the byte-input axis
+//!
+//! The byte-input peer [`hex_blake3`] delegates through
+//! [`tatara_lisp::hash::hex_blake3_of_bytes`] — the workspace-wide
+//! byte-input owner opened at the `tatara-lisp` layer (commit
+//! `524e543`, sibling of `hex_blake3_of_json`). Both byte-input
+//! owners now share ONE canonical spelling via that substrate:
+//! `blake3::hash(bytes).to_hex().to_string()`. A future encoding
+//! change (base32, base64url, uppercase hex for a downstream tool)
+//! at [`tatara_lisp::hash::hex_blake3_of_bytes`] reaches every
+//! byte-input consumer across the workspace — the three
+//! `tatara-closed-loop-probe` receipt pillars, the `tatara-reconciler`
+//! `render`/`phase_machine` composers, `tatara-export-worker`'s
+//! event-run digest, `crate::hostname::short_hex_blake3`, and every
+//! future consumer — through ONE edit. Pre-lift the workspace had
+//! two independent byte-input owners (`tatara-process::hash::hex_blake3`
+//! keyed off `hex::encode(<hash>.as_bytes())`, and
+//! `tatara-lisp::hash::hex_blake3_of_bytes` keyed off
+//! `.to_hex().to_string()`); post-lift only the streaming-hash peer
+//! [`hex_blake3_hash`] (structurally distinct, receives `&blake3::Hash`
+//! rather than `&[u8]`) keeps the `hex::encode(<hash>.as_bytes())`
+//! spelling — a spelling required by consumers that already hold a
+//! finalized `blake3::Hash`, not a byte buffer.
 //!
 //! Return type is `String` for wire-shape stability with the pre-lift
 //! consumers — `ReceiptEnvelope.{intent,artifact,control}_hash` are
@@ -20,8 +38,9 @@
 //!
 //! # Which peer to call
 //!
-//! - Have `&[u8]` in hand → [`hex_blake3`]. Internally it composes
-//!   [`hex_blake3_hash`] over `blake3::hash(bytes)`.
+//! - Have `&[u8]` in hand → [`hex_blake3`]. Delegates to
+//!   [`tatara_lisp::hash::hex_blake3_of_bytes`], the workspace-wide
+//!   byte-input owner.
 //! - Have a `blake3::Hasher` you already folded per-item updates into
 //!   → `hex_blake3_hash(&h.finalize())`. Skips the one-shot round-trip
 //!   through `&[u8]` that would force the caller to materialize the
@@ -46,14 +65,38 @@
 /// hash was computed for no observable reason — the attribute
 /// surfaces that as a warning at every call site.
 ///
-/// Delegates the terminal `hex::encode(...as_bytes())` step to the
-/// sibling [`hex_blake3_hash`] primitive so the encoding rule lives at
-/// ONE substrate owner; a future re-encoding (base32, base64url,
-/// uppercase, `blake3::Hash::to_hex()`) reaches BOTH the one-shot and
-/// the streaming corner through ONE edit.
+/// # Delegation
+///
+/// Routes through [`tatara_lisp::hash::hex_blake3_of_bytes`] — the
+/// workspace-wide byte-input owner (commit `524e543` opened it at the
+/// `tatara-lisp` layer as the sibling of `hex_blake3_of_json` on the
+/// value-input axis). Pre-lift the workspace had TWO independent
+/// byte-input owners: this crate's `hex_blake3` keyed off
+/// `hex::encode(<hash>.as_bytes())`, and `tatara-lisp`'s
+/// `hex_blake3_of_bytes` keyed off `.to_hex().to_string()`. Both
+/// produced byte-identical output but through two spellings, so a
+/// future encoding change would have to land at both sites or
+/// silently break receipt / stable-name parity at the corner that
+/// missed the update. Post-lift the byte-input axis has ONE canonical
+/// owner, and BOTH this crate's peer and `tatara-lisp`'s peer share
+/// its spelling by construction — a future re-encoding (base32,
+/// base64url, uppercase, an alternate `to_hex` shape on a future
+/// blake3 major-version bump) lands at ONE substrate function and
+/// reaches every downstream three-pillar / receipt / hostname /
+/// export-run identity slot mechanically.
+///
+/// The streaming peer [`hex_blake3_hash`] cannot fold into the same
+/// owner because it takes `&blake3::Hash` rather than `&[u8]` — a
+/// structurally distinct entry point for consumers that folded
+/// per-item updates into a `Hasher` before finalizing. Both peers
+/// still agree byte-for-byte (pinned at
+/// [`tests::hex_blake3_bytes_form_delegates_through_hex_blake3_hash`]
+/// on the two-corner axis, and at
+/// [`tests::hex_blake3_delegates_through_tatara_lisp_hex_blake3_of_bytes`]
+/// on the cross-crate axis).
 #[must_use]
 pub fn hex_blake3(bytes: &[u8]) -> String {
-    hex_blake3_hash(&blake3::hash(bytes))
+    tatara_lisp::hash::hex_blake3_of_bytes(bytes)
 }
 
 /// Streaming-digest peer of [`hex_blake3`] — the ONE substrate owner
@@ -306,5 +349,50 @@ mod tests {
         h.update(b"input");
         let hash = h.finalize();
         assert_eq!(hex_blake3_hash(&hash), hex_blake3_hash(&hash));
+    }
+
+    // ── cross-crate byte-input owner delegation pin ────────────────
+
+    /// Fail-before-pass-after: this crate's byte-input peer
+    /// [`hex_blake3`] MUST agree byte-for-byte with the workspace-wide
+    /// byte-input owner [`tatara_lisp::hash::hex_blake3_of_bytes`] on
+    /// every observable input. Pre-lift the two owners lived side-by-
+    /// side with distinct internal spellings (this crate walked
+    /// `hex::encode(<hash>.as_bytes())`; tatara-lisp walked
+    /// `.to_hex().to_string()`), producing identical output but
+    /// through two independent code paths. Post-lift this peer
+    /// DELEGATES through the tatara-lisp owner, so the two byte-input
+    /// entry points across the workspace share ONE canonical spelling
+    /// by construction. A regression that specialized ONE peer (a
+    /// per-fleet canonicalization step at either site, an encoding
+    /// swap at only one owner, a future spelling change that landed
+    /// at the tatara-process peer but not the tatara-lisp owner or
+    /// vice versa) would surface HERE — not as silent identity-slot
+    /// drift across every downstream consumer that crosses the crate
+    /// boundary between the two byte-input axes.
+    ///
+    /// Swept across the same representative buffer shapes the sibling
+    /// pin [`hex_blake3_matches_pre_lift_hex_encode_spelling_bytewise`]
+    /// walks, so a byte-shape regression at either end of the two-crate
+    /// axis surfaces at the same corners the pre-lift parity pin
+    /// covered.
+    #[test]
+    fn hex_blake3_delegates_through_tatara_lisp_hex_blake3_of_bytes() {
+        for buf in [
+            b"" as &[u8],
+            b"x",
+            b"hello",
+            &[0u8; 256],
+            b"tatara-receipt/v1",
+            b"{\"kind\":\"tatara.export\"}",
+        ] {
+            assert_eq!(
+                hex_blake3(buf),
+                tatara_lisp::hash::hex_blake3_of_bytes(buf),
+                "tatara-process::hash::hex_blake3 drifted from \
+                 tatara_lisp::hash::hex_blake3_of_bytes for buf.len()={}",
+                buf.len(),
+            );
+        }
     }
 }

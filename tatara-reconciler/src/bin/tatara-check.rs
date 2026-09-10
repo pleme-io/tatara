@@ -13,7 +13,7 @@ use std::str::FromStr;
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
 use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
-use tatara_process::export::{ExportSpecSliceExt, ExportTrigger};
+use tatara_process::export::{ChannelKind, ExportSpecSliceExt, ExportTrigger};
 use tatara_process::intent::IntentKind;
 use tatara_process::lifetime::LifetimeKind;
 use tatara_process::signal::SighupStrategy;
@@ -629,6 +629,33 @@ struct UnknownRequireTag;
 ///   `export-when-<kind>` pins the presence of a SPECIFIC trigger
 ///   across the exports vector — the two surfaces answer distinct
 ///   questions.
+/// - `channel-<kind>` — [`ChannelKind`] closed set →
+///   [`tatara_process::export::ExportSpecSliceExt::has_channel_kind`]
+///   (a second slice-level extension-trait probe over the SAME
+///   `spec.lifetime.resolved_ephemeral().map(|e| &e.exports[..])`
+///   projection the `export-when-<kind>` family walks, so the
+///   operator's `:requires (channel-natsSubject)` pins the presence
+///   of a SPECIFIC delivery channel across the exports vector. Eighth
+///   closed-set-driven prefix family in the point-domain require-tag
+///   vocabulary and SECOND method on [`ExportSpecSliceExt`] — the
+///   first slice whose slice-level probe surface carries TWO closed-
+///   set-driven presence probes on distinct axes (the `when` trigger
+///   axis + the `channel` tagged-union axis) rather than a single one.
+///   Same `resolved_ephemeral` parent gate as `export-when-<kind>`:
+///   a permanent Process (or one with an ambiguous `Lifetime` or an
+///   empty `exports` vector) returns `false` for every channel kind.
+///   Coexists with `export-when-<kind>` on the SAME parent projection
+///   (both walk the ephemeral `exports` slice) and answers a distinct
+///   axis: `export-when-OnFailed` and `channel-natsSubject`
+///   independently probe the trigger and the sink slot, so an audit
+///   like "every `OnFailed` export ships through JetStream" reads as
+///   the conjunction of the two require-tags at the checks.lisp
+///   surface. Both walks compose the closed-set discriminator on the
+///   raw field ([`ExportTrigger`] equality on `when`,
+///   [`ChannelKind::select`] population on `channel`) rather than
+///   the compound-projection `has_applicable_exports` walk on
+///   `(when, phase) → fires_on(phase)` — the audit tag answers "is
+///   this kind DECLARED" not "will it FIRE at some phase".
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -638,20 +665,18 @@ struct UnknownRequireTag;
 ///
 /// A future new `IntentKind` / `LifetimeKind` / `ConditionKind` /
 /// `MustReachPhase` / `SighupStrategy` / `VerificationPhase` /
-/// `ExportTrigger` variant lands at ONE `ALL` entry on its parent's
-/// closed set — no per-caller edit here. A future new prefix family
-/// (e.g. `signal-<kind>` for
+/// `ExportTrigger` / `ChannelKind` variant lands at ONE `ALL` entry
+/// on its parent's closed set — no per-caller edit here. A future new
+/// prefix family (e.g. `signal-<kind>` for
 /// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` for
 /// [`tatara_process::phase::ProcessPhase`], `report-format-<kind>`
 /// for [`tatara_process::export::ReportFormat`] on
-/// `spec.lifetime.ephemeral.exports[].source.test_report.format`,
-/// `channel-<kind>` for
-/// [`tatara_process::export::ChannelKind`] on
-/// `spec.lifetime.ephemeral.exports[].channel`) lands as ONE more
+/// `spec.lifetime.ephemeral.exports[].source.test_report.format`)
+/// lands as ONE more
 /// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind,
 /// _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res; }`
 /// branch that reads the same three-step (strip_prefix + parse +
-/// has) shape all seven existing families publish.
+/// has) shape all eight existing families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
@@ -670,7 +695,12 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_true_on_populated_verification_phase_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_empty_compliance_for_every_verification_phase_kind`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_verification_phase_suffix`],
-/// and [`tests::evaluate_point_require_tag_verification_phase_and_compliance_coexist`].
+/// [`tests::evaluate_point_require_tag_verification_phase_and_compliance_coexist`],
+/// [`tests::evaluate_point_require_tag_returns_true_on_populated_channel_slot_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_channel_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_empty_exports_for_every_channel_kind`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_channel_suffix`],
+/// and [`tests::evaluate_point_require_tag_channel_and_export_when_coexist`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -724,6 +754,13 @@ fn evaluate_point_require_tag(
     {
         return res;
     }
+    if let Some(res) = strip_and_classify_prefixed_kind::<ChannelKind, _>(tag, "channel-", |kind| {
+        spec.lifetime
+            .resolved_ephemeral()
+            .is_some_and(|e| e.exports.has_channel_kind(kind))
+    }) {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -737,14 +774,15 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the seven closed-set-driven prefix families in
+/// shape the eight closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
 /// `sighup-<kind>` on [`SighupStrategy`], `verification-phase-<kind>`
 /// on [`VerificationPhase`], `export-when-<kind>` on
-/// [`ExportTrigger`]) each dispatch through past the ★★
-/// PRIME-DIRECTIVE ≥ 2 duplication threshold.
+/// [`ExportTrigger`], `channel-<kind>` on [`ChannelKind`]) each
+/// dispatch through past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold.
 ///
 /// # Return shape
 ///
@@ -773,14 +811,18 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future seventh closed-set prefix family — `signal-<kind>` on
+/// A future ninth closed-set prefix family — `signal-<kind>` on
 /// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` on
 /// [`tatara_process::phase::ProcessPhase`], a hypothetical
-/// `routing-form-<kind>` on `spec.routing.as_ref().map(|r| r.form)`
-/// — lands as ONE more `if let Some(res) =
+/// `report-format-<kind>` on
+/// `spec.lifetime.ephemeral.exports[].source.test_report.format` (a
+/// nested-Option projection past the resolved-ephemeral parent gate),
+/// a hypothetical `routing-form-<kind>` on
+/// `spec.routing.as_ref().map(|r| r.form)` — lands as ONE more
+/// `if let Some(res) =
 /// strip_and_classify_prefixed_kind::<NewKind, _>(tag, "prefix-", |k|
 /// spec.<field>.has(k)) { return res; }` branch that reads the same
-/// three-step shape the six existing families publish. No per-caller
+/// three-step shape the eight existing families publish. No per-caller
 /// `strip_prefix + parse + match { Ok(_) => …, Err(_) =>
 /// Err(UnknownRequireTag) }` restatement.
 ///
@@ -1886,7 +1928,8 @@ mod tests {
     use tatara_process::crd::ProcessSpec;
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::export::{
-        ArtifactSource, ExportSpec, ExportTrigger, ReceiptsSource, StdoutChannel, VectorChannel,
+        ArtifactSource, ChannelKind, ExportSpec, ExportTrigger, HttpEventChannel,
+        NatsSubjectChannel, ReceiptsSource, StdoutChannel, VectorChannel,
     };
     use tatara_process::intent::{AplicacaoIntent, IntentKind};
     use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind, TeardownPolicy};
@@ -3600,6 +3643,212 @@ mod tests {
             evaluate_point_require_tag(&spec, "export-when-Always"),
             Ok(false),
             "fine `export-when-Always` must be false when no export declares that trigger",
+        );
+    }
+
+    // ── channel-<kind> prefix family (evaluate_point_require_tag) ────
+    //
+    // Fail-before-pass-after granularity: the `channel-<kind>` prefix
+    // family did not exist before this commit — the point-domain
+    // require-tag vocabulary carried the seven prior closed-set-driven
+    // families (`intent-<kind>`, `lifetime-<kind>`, `condition-<kind>`,
+    // `must-reach-<kind>`, `sighup-<kind>`, `verification-phase-<kind>`,
+    // `export-when-<kind>`) but had no way to distinguish which VECTOR
+    // CHANNEL an ephemeral export ships through — a JetStream-backed
+    // guarantee vs a bare-stdout log lift. The lift adds the EIGHTH
+    // closed-set-driven prefix family symmetrical with the seven prior
+    // ones, routing through the newly-opened
+    // [`tatara_process::export::ExportSpecSliceExt::has_channel_kind`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`. Fifth
+    // instance in the workspace slice-level closed-set-driven presence-
+    // probe algebra (peer of `has_when` on the SAME slice — the first
+    // slice whose extension trait carries two probes on distinct axes).
+    // Same `resolved_ephemeral` parent gate as `export-when-<kind>`:
+    // the two prefix families share the exact same projection so the
+    // permanent-lifetime + empty-exports corners answer `false` for
+    // every channel kind through the same short-circuit path
+    // `export-when-<kind>` already publishes.
+
+    /// Fixture: a minimal `ExportSpec` with a chosen [`ChannelKind`]
+    /// populated on its `channel` slot and a fixed single-slot
+    /// receipts source + default `when` trigger. The channel kind is
+    /// the only axis this test module discriminates on; the source +
+    /// trigger are fixed at valid pairs so the classifier reads the
+    /// `channel` slot in isolation. Sweeps [`ChannelKind::ALL`] via
+    /// exhaustive `match` on the closed set so a future fourth variant
+    /// reaches this fixture at rustc's exhaustiveness gate.
+    fn export_with_channel(kind: ChannelKind) -> ExportSpec {
+        let channel = match kind {
+            ChannelKind::HttpEvent => VectorChannel {
+                http_event: Some(HttpEventChannel::signal("test-report")),
+                ..VectorChannel::default()
+            },
+            ChannelKind::NatsSubject => VectorChannel {
+                nats_subject: Some(NatsSubjectChannel::publish("s", "STREAM")),
+                ..VectorChannel::default()
+            },
+            ChannelKind::Stdout => VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+        };
+        ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel,
+            when: ExportTrigger::default(),
+            experiment_id_override: None,
+        }
+    }
+
+    /// POPULATED-slot pin — `channel-<kind>` dispatches through the
+    /// autoderived [`ChannelKind`] `FromStr` + the substrate
+    /// [`tatara_process::export::ExportSpecSliceExt::has_channel_kind`]
+    /// primitive, returning `true` only when the resolved ephemeral
+    /// lifetime carries at least one export whose `channel` slot for
+    /// this kind is populated. Sweep the [`ChannelKind::ALL`] × ALL
+    /// cross so a regression that hard-coded the arm to a single kind
+    /// (silently returning `true` for every populated export vector
+    /// regardless of query kind) or wired the closure to a fixed
+    /// unrelated field (a stray `experiment_id_override.is_some()`, a
+    /// probe on `when` or `source`) fails HERE at the classifier
+    /// before landing at the operator-facing checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_populated_channel_slot_per_kind() {
+        for populated in ChannelKind::ALL {
+            let spec = ephemeral_spec_with_exports(vec![export_with_channel(populated)]);
+            for query in ChannelKind::ALL {
+                let tag = format!("channel-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "channel populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// PERMANENT-lifetime pin — a default (`Permanent`) [`ProcessSpec`]
+    /// returns `false` for every `channel-<kind>` tag because the
+    /// `resolved_ephemeral` gate on the parent [`Lifetime`] short-
+    /// circuits the walk. Byte-for-byte symmetric with the
+    /// `evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_export_when_kind`
+    /// pin on the seventh family — the two prefix families share the
+    /// SAME parent gate, so a regression that dropped or narrowed the
+    /// gate on `channel-<kind>` (probing an absent `exports` slot as
+    /// if it were the empty vector, or worse routing through the
+    /// permanent-side default `EphemeralLifetime`) fails HERE for every
+    /// channel kind and the peer test still passes — the pair pins the
+    /// contract from both sides of the closed-set axis.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_channel_kind() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in ChannelKind::ALL {
+            let tag = format!("channel-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "permanent lifetime must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// EMPTY-EXPORTS pin — an ephemeral [`ProcessSpec`] whose
+    /// `exports` vector is empty returns `false` for every
+    /// `channel-<kind>` tag. Distinct from the permanent-lifetime case
+    /// above: the resolved-ephemeral gate DOES fire, the walk over the
+    /// empty vector then returns `false` for every kind. Locks the
+    /// "reachable-but-empty" corner so a regression that short-
+    /// circuited on `resolved_ephemeral().is_some()` alone (ignoring
+    /// the exports contents) would return `true` here for every kind
+    /// and fail — the two corners (unreachable-parent vs reachable-
+    /// empty-child) both compose to `false` but through different arms
+    /// of the closed-set-driven projection.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_empty_exports_for_every_channel_kind() {
+        let spec = ephemeral_spec_with_exports(vec![]);
+        for kind in ChannelKind::ALL {
+            let tag = format!("channel-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "resolved-ephemeral with empty exports must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `channel-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`ChannelKind`] labels are camelCase
+    /// (`httpEvent`, `natsSubject`, `stdout`) — matching the serde
+    /// `rename_all = "camelCase"` field name on `VectorChannel` — so
+    /// PascalCase spellings (`HttpEvent`, `NatsSubject`) are UNKNOWN
+    /// suffixes, a distinct contract from the PascalCase closed sets
+    /// [`ExportTrigger`] / [`ConditionKind`] / [`IntentKind`] carry.
+    /// Pin the case-sensitivity axis so a regression that ASCIIfolded
+    /// or PascalCased on parse (a hypothetical `to_lower_camel`
+    /// normalization at the tag layer) would fail HERE.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_channel_suffix() {
+        let spec = ephemeral_spec_with_exports(vec![]);
+        for garbage in [
+            "channel-",
+            "channel-HttpEvent",
+            "channel-NatsSubject",
+            "channel-STDOUT",
+            "channel-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// SAME-EXPORT AXIS COEXISTENCE pin — a Process with a SINGLE
+    /// ephemeral export whose `when` is `OnFailed` and whose `channel`
+    /// is `NatsSubject` MUST satisfy BOTH the fine
+    /// `export-when-OnFailed` tag (from the seventh prefix family) AND
+    /// the fine `channel-natsSubject` tag (from the eighth) AND
+    /// simultaneously fail the off-diagonal `export-when-OnAttested` /
+    /// `channel-stdout` probes. Locks the semantic split between the
+    /// two probes on the SAME `&[ExportSpec]` slice so a regression
+    /// that (a) collapsed `channel-<kind>` to the seventh family
+    /// (matching on `when` instead of `channel`), or (b) collapsed
+    /// `export-when-<kind>` to the eighth (matching on `channel`
+    /// instead of `when`), fails HERE at ONE narrow site. The audit
+    /// `every OnFailed export ships through JetStream` reads as this
+    /// exact conjunction at the checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_channel_and_export_when_coexist() {
+        let mut export = export_with_channel(ChannelKind::NatsSubject);
+        export.when = ExportTrigger::OnFailed;
+        let spec = ephemeral_spec_with_exports(vec![export]);
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "export-when-OnFailed"),
+            Ok(true),
+            "fine `export-when-OnFailed` must be true when the sole export declares that trigger",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "channel-natsSubject"),
+            Ok(true),
+            "fine `channel-natsSubject` must be true when the sole export ships through NATS",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "export-when-OnAttested"),
+            Ok(false),
+            "off-diagonal `export-when-OnAttested` must be false: the export declares OnFailed",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "channel-stdout"),
+            Ok(false),
+            "off-diagonal `channel-stdout` must be false: the export ships through NATS",
         );
     }
 

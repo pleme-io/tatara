@@ -1048,23 +1048,28 @@ impl fmt::Display for ExportTrigger {
 ///
 /// # Compounding
 ///
-/// The `export-when-<kind>` require-tag prefix family in
-/// `tatara-reconciler::bin::tatara-check` composes this primitive with
-/// the closed-set `FromStr` autoderived on [`ExportTrigger`] through
-/// the `strip_and_classify_prefixed_kind` substrate to publish a
-/// SEVENTH closed-set-driven prefix family byte-for-byte symmetrical
-/// with `intent-<kind>` / `lifetime-<kind>` / `condition-<kind>` /
-/// `must-reach-<kind>` / `sighup-<kind>` /
-/// `verification-phase-<kind>`. The `resolved_ephemeral` projection
-/// on the parent [`crate::lifetime::Lifetime`] gates the walk: a
-/// permanent Process (or an ambiguous one, or one without an
-/// `:exports` slot) returns `false` for every trigger kind because
-/// the exports vector isn't reachable — the same operator-facing
-/// answer as a resolved-ephemeral spec whose `exports` slot is
+/// The `export-when-<kind>` and `channel-<kind>` require-tag prefix
+/// families in `tatara-reconciler::bin::tatara-check` compose the
+/// [`Self::has_when`] and [`Self::has_channel_kind`] primitives with
+/// the closed-set `FromStr` autoderived on [`ExportTrigger`] +
+/// [`ChannelKind`] through the `strip_and_classify_prefixed_kind`
+/// substrate to publish the SEVENTH + EIGHTH closed-set-driven prefix
+/// families byte-for-byte symmetrical with `intent-<kind>` /
+/// `lifetime-<kind>` / `condition-<kind>` / `must-reach-<kind>` /
+/// `sighup-<kind>` / `verification-phase-<kind>`. The
+/// `resolved_ephemeral` projection on the parent
+/// [`crate::lifetime::Lifetime`] gates BOTH walks: a permanent
+/// Process (or an ambiguous one, or one without an `:exports` slot)
+/// returns `false` for every trigger kind AND every channel kind
+/// because the exports vector isn't reachable — the same operator-
+/// facing answer as a resolved-ephemeral spec whose `exports` slot is
 /// present but empty. A future fourth [`ExportTrigger`] variant added
-/// to `ALL` (a hypothetical `OnFirstFailure` retry-scoped trigger, an
-/// `OnAborted` cancellation-scoped trigger) reaches every downstream
-/// through the SAME closed-set walk with no per-caller edit.
+/// to [`ExportTrigger::ALL`] (a hypothetical `OnFirstFailure` retry-
+/// scoped trigger, an `OnAborted` cancellation-scoped trigger)
+/// reaches every downstream through the SAME closed-set walk with no
+/// per-caller edit, as does a future fourth [`ChannelKind`] variant
+/// added to [`ChannelKind::ALL`] (a hypothetical
+/// `KubernetesEventSink` slot, a `WebhookPost` slot).
 ///
 /// Peer to [`crate::lifetime::EphemeralLifetime::has_applicable_exports`]
 /// on the `(ExportTrigger, ProcessPhase) → bool` axis pair — that
@@ -1094,11 +1099,41 @@ pub trait ExportSpecSliceExt {
     /// single-slice presence probe every consumer of the
     /// `(&[ExportSpec], ExportTrigger) -> bool` shape composes against.
     fn has_when(&self, kind: ExportTrigger) -> bool;
+
+    /// True iff at least one [`ExportSpec`] in this slice ships through
+    /// a [`VectorChannel`] whose `ChannelKind::select`-populated slot
+    /// matches the given [`ChannelKind`]. Composes the closed-set
+    /// [`ChannelKind::select`] projection with the same
+    /// `.iter().any(|e| …)` walk shape [`Self::has_when`] publishes on
+    /// the `when` axis, opening a second closed-set-driven presence
+    /// probe on the SAME `&[ExportSpec]` slice. The
+    /// [`ChannelKind::select`] projection is the ONE substrate owner
+    /// of the "is the slot populated" answer for a tagged-union
+    /// carrier, so a future fourth [`ChannelKind`] variant reaches this
+    /// walk through the `ALL` sweep + one `select` arm alone — no
+    /// per-consumer edit here.
+    ///
+    /// Note that an ambiguous [`VectorChannel`] (two or more slots
+    /// populated — a schema-invalid state that
+    /// [`VectorChannel::variant`] rejects) STILL answers `true` for
+    /// every kind whose slot is populated because the walk reads the
+    /// raw `Option<…>` slot rather than the validated tagged-union
+    /// resolver. Callers whose invariant is "the spec is valid" reach
+    /// the same answer through the validation gate rather than this
+    /// primitive; callers whose invariant is "is this kind's slot
+    /// present at all" (require-tag classifier, editor completion,
+    /// coherence check that flags a `stdout` export as
+    /// non-guaranteed-delivery) reach through THIS primitive.
+    fn has_channel_kind(&self, kind: ChannelKind) -> bool;
 }
 
 impl ExportSpecSliceExt for [ExportSpec] {
     fn has_when(&self, kind: ExportTrigger) -> bool {
         self.iter().any(|e| e.when == kind)
+    }
+
+    fn has_channel_kind(&self, kind: ChannelKind) -> bool {
+        self.iter().any(|e| kind.select(&e.channel).is_some())
     }
 }
 
@@ -2461,6 +2496,122 @@ mod tests {
         assert!(
             !slice.has_when(ExportTrigger::OnFailed),
             "trigger absent from the slice must resolve false: OnFailed",
+        );
+    }
+
+    // ── ExportSpecSliceExt::has_channel_kind substrate pins ───────────
+    //
+    // Fail-before-pass-after granularity: `has_channel_kind` did not
+    // exist before this commit — the `(&[ExportSpec], ChannelKind) ->
+    // bool` walk shape was not spelled anywhere in the workspace on the
+    // tagged-union `channel` field. The lift opens the SECOND method
+    // on the slice-level `ExportSpecSliceExt` (peer of `has_when` on
+    // the same slice, and fifth instance across the workspace slice-
+    // level closed-set-driven presence-probe algebra), composing
+    // `ChannelKind::select` — the ONE substrate owner of the "is the
+    // slot populated" projection for a tagged-union carrier — with the
+    // same `.iter().any(|e| …)` walk shape `has_when` publishes.
+
+    /// Fixture: a minimal `ExportSpec` with a chosen [`ChannelKind`]
+    /// populated on its `channel` slot and a fixed single-slot
+    /// receipts source + default `when` trigger. The channel kind is
+    /// the only axis this test module discriminates on; the source +
+    /// trigger are fixed at valid pairs so the primitive under test
+    /// reads the `channel` slot in isolation.
+    ///
+    /// Sweeps [`ChannelKind::ALL`] via `match` on the closed set so a
+    /// future fourth variant added to `ALL` reaches this fixture at
+    /// rustc's exhaustiveness gate on the `match` arm — the same
+    /// exhaustive-match contract [`ChannelKind::select`] publishes.
+    fn export_with_channel(kind: ChannelKind) -> ExportSpec {
+        let channel = match kind {
+            ChannelKind::HttpEvent => VectorChannel {
+                http_event: Some(HttpEventChannel::signal("test-report")),
+                ..VectorChannel::default()
+            },
+            ChannelKind::NatsSubject => VectorChannel {
+                nats_subject: Some(NatsSubjectChannel::publish("s", "STREAM")),
+                ..VectorChannel::default()
+            },
+            ChannelKind::Stdout => VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+        };
+        ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel,
+            when: ExportTrigger::default(),
+            experiment_id_override: None,
+        }
+    }
+
+    /// EMPTY-SLICE pin — an empty `&[ExportSpec]` returns `false` for
+    /// EVERY [`ChannelKind`]. Sweep [`ChannelKind::ALL`] so a new
+    /// variant added without a matching arm in `ChannelKind::select`
+    /// surfaces at rustc's exhaustiveness gate on the `ALL` literal
+    /// (arity forced by `[Self; 3]`) rather than as a silent false-
+    /// positive at every downstream callsite composing this primitive.
+    #[test]
+    fn export_spec_slice_has_channel_kind_returns_false_on_empty_slice_for_every_kind() {
+        let empty: &[ExportSpec] = &[];
+        for kind in ChannelKind::ALL {
+            assert!(
+                !empty.has_channel_kind(kind),
+                "empty slice must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// PER-VARIANT pin — a single-element slice returns `true` for
+    /// exactly the channel kind whose slot is populated, `false` for
+    /// every other variant. Sweep the [`ChannelKind::ALL`] × ALL cross
+    /// so a regression that (a) hard-coded the arm to a single kind
+    /// (silently returning `true` for every populated slice regardless
+    /// of query kind), or (b) probed on a different field (a stray
+    /// `experiment_id_override.is_some()`, a `source`-side variant
+    /// discriminator, `when`) fails HERE at the substrate primitive
+    /// rather than at each downstream `channel-<kind>` callsite.
+    #[test]
+    fn export_spec_slice_has_channel_kind_reads_channel_slot_per_variant() {
+        for populated in ChannelKind::ALL {
+            let slice = [export_with_channel(populated)];
+            for query in ChannelKind::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    slice.has_channel_kind(query),
+                    expected,
+                    "populated={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// MULTI-ENTRY pin — a slice with multiple entries returns `true`
+    /// for every channel kind that appears at any position (existential
+    /// quantifier over the slice), `false` for kinds that appear at no
+    /// position. Locks the `any` semantics so a regression that
+    /// collapsed to a `first`-only probe (`slice.first().is_some_and(
+    /// |e| kind.select(&e.channel).is_some())`) fails here even though
+    /// the single-element per-variant pin above passes.
+    #[test]
+    fn export_spec_slice_has_channel_kind_scans_beyond_the_first_position() {
+        let slice = [
+            export_with_channel(ChannelKind::Stdout),
+            export_with_channel(ChannelKind::NatsSubject),
+        ];
+        for present in [ChannelKind::Stdout, ChannelKind::NatsSubject] {
+            assert!(
+                slice.has_channel_kind(present),
+                "channel kind at any position must resolve true: {present:?}",
+            );
+        }
+        assert!(
+            !slice.has_channel_kind(ChannelKind::HttpEvent),
+            "channel kind absent from the slice must resolve false: HttpEvent",
         );
     }
 }

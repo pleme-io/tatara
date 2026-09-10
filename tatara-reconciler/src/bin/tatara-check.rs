@@ -14,6 +14,7 @@ use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
 use tatara_process::intent::IntentKind;
 use tatara_process::lifetime::LifetimeKind;
+use tatara_process::spec::{DependsOnSliceExt, MustReachPhase};
 use tatara_reconciler::known_crd::KnownCrd;
 
 #[derive(Default)]
@@ -522,7 +523,7 @@ struct UnknownRequireTag;
 ///
 /// # Vocabulary
 ///
-/// Three closed-set-driven prefix families dispatch through the
+/// Four closed-set-driven prefix families dispatch through the
 /// autoderived `FromStr` + the substrate presence probe on their
 /// respective parent:
 ///
@@ -552,6 +553,20 @@ struct UnknownRequireTag;
 ///   their side; `condition-<kind>` pins the presence of a SPECIFIC
 ///   condition kind across both sides — the two surfaces answer
 ///   distinct questions and coexist.
+/// - `must-reach-<kind>` — [`MustReachPhase`] closed set →
+///   [`tatara_process::spec::DependsOnSliceExt::has_must_reach`] (a
+///   slice-level extension-trait probe over `spec.depends_on`, so the
+///   operator's `:requires (must-reach-Attested)` pins the presence of
+///   a SPECIFIC gating checkpoint the Process waits on before
+///   proceeding past Forking. Fourth instance in the workspace-wide
+///   closed-set-driven presence-probe algebra, opened alongside the
+///   fixed `depends-on` tag which pins the presence of ANY dependency
+///   regardless of checkpoint; `must-reach-<kind>` pins the presence
+///   of a SPECIFIC checkpoint across the dependency vector — the two
+///   surfaces answer distinct questions and coexist. Second instance
+///   in the slice-level closed-set-driven presence-probe algebra
+///   (sibling to [`tatara_process::boundary::ConditionSliceExt::has_kind`]
+///   on `&[Condition]`).
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -559,15 +574,17 @@ struct UnknownRequireTag;
 /// closed-set surface opens for them (each addresses a slot whose
 /// carrier isn't a closed-set discriminator today).
 ///
-/// A future fourth `IntentKind` / `LifetimeKind` / `ConditionKind`
-/// variant lands at ONE `ALL` entry on its parent's closed set — no
-/// per-caller edit here. A future new prefix family (e.g.
-/// `signal-<kind>` for [`tatara_process::signal::ProcessSignal`],
-/// `phase-<kind>` for [`tatara_process::phase::ProcessPhase`]) lands
-/// as ONE more `if let Some(res) = strip_and_classify_prefixed_kind::<
-/// NewKind, _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res;
-/// }` branch that reads the same three-step (strip_prefix + parse +
-/// has) shape all three existing families publish.
+/// A future fifth `IntentKind` / `LifetimeKind` / `ConditionKind` /
+/// `MustReachPhase` variant lands at ONE `ALL` entry on its parent's
+/// closed set — no per-caller edit here. A future new prefix family
+/// (e.g. `signal-<kind>` for [`tatara_process::signal::ProcessSignal`],
+/// `phase-<kind>` for [`tatara_process::phase::ProcessPhase`],
+/// `sighup-<kind>` for [`tatara_process::signal::SighupStrategy`] on
+/// `spec.signals.sighup_strategy`) lands as ONE more
+/// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(
+/// tag, "prefix-", |k| spec.<field>.has(k)) { return res; }` branch
+/// that reads the same three-step (strip_prefix + parse + has) shape
+/// all four existing families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
@@ -576,7 +593,10 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_true_on_populated_condition_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_empty_boundary_for_every_condition_kind`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_condition_suffix`],
-/// and [`tests::evaluate_point_require_tag_unions_pre_and_post_conditions_for_condition_prefix`].
+/// [`tests::evaluate_point_require_tag_unions_pre_and_post_conditions_for_condition_prefix`],
+/// [`tests::evaluate_point_require_tag_returns_true_on_populated_must_reach_slot_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_empty_depends_on_for_every_must_reach_kind`],
+/// and [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_must_reach_suffix`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -600,6 +620,13 @@ fn evaluate_point_require_tag(
     {
         return res;
     }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<MustReachPhase, _>(tag, "must-reach-", |kind| {
+            spec.depends_on.has_must_reach(kind)
+        })
+    {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -613,10 +640,12 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape both closed-set-driven prefix families in
+/// shape the four closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
-/// `lifetime-<kind>` on [`LifetimeKind`]) hand-authored past the ★★
-/// PRIME-DIRECTIVE ≥ 2 duplication threshold.
+/// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
+/// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`])
+/// each dispatch through past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold.
 ///
 /// # Return shape
 ///
@@ -645,13 +674,13 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future third closed-set prefix family — `signal-<kind>` on
-/// [`tatara_process::signal::SignalKind`], `phase-<kind>` on
-/// [`tatara_process::phase::ProcessPhase`], `condition-<kind>` on
-/// [`tatara_process::boundary::ConditionKind`] — lands as ONE more
+/// A future fifth closed-set prefix family — `signal-<kind>` on
+/// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` on
+/// [`tatara_process::phase::ProcessPhase`], `sighup-<kind>` on
+/// [`tatara_process::signal::SighupStrategy`] — lands as ONE more
 /// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(
 /// tag, "prefix-", |k| spec.<field>.has(k)) { return res; }` branch
-/// that reads the same three-step shape both existing families
+/// that reads the same three-step shape the four existing families
 /// publish. No per-caller `strip_prefix + parse + match { Ok(_) =>
 /// …, Err(_) => Err(UnknownRequireTag) }` restatement.
 ///
@@ -1722,6 +1751,7 @@ mod tests {
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::intent::{AplicacaoIntent, IntentKind};
     use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind, TeardownPolicy};
+    use tatara_process::spec::MustReachPhase;
 
     // Re-parse a `(list …)` source through the reader and hand its
     // interior slice to `parse_kwargs`, so every test exercises the
@@ -2801,6 +2831,139 @@ mod tests {
             evaluate_point_require_tag(&spec, "condition-PromQL"),
             Ok(false),
             "an absent kind must return false even with populated halves",
+        );
+    }
+
+    // ── must-reach-<kind> prefix family pins ─────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `must-reach-<kind>` prefix
+    // family did not exist before this commit — the require-tag
+    // vocabulary carried only `depends-on` fixed tag that answered
+    // "does the spec carry ANY dependency", never "does the spec carry
+    // a dependency gating on THIS SPECIFIC checkpoint". The lift adds
+    // the fourth closed-set-driven prefix family symmetrical with
+    // `intent-<kind>` / `lifetime-<kind>` / `condition-<kind>`, routing
+    // through the newly-opened
+    // [`tatara_process::spec::DependsOnSliceExt::has_must_reach`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`.
+
+    fn dep_with(must_reach: MustReachPhase) -> tatara_process::spec::DependsOn {
+        tatara_process::spec::DependsOn {
+            name: "target".to_string(),
+            namespace: None,
+            must_reach,
+        }
+    }
+
+    /// POPULATED-slot pin — `must-reach-<kind>` dispatches through the
+    /// autoderived [`MustReachPhase`] `FromStr` + the substrate
+    /// [`DependsOnSliceExt::has_must_reach`] primitive, returning
+    /// `true` only when the depends-on vector carries at least one
+    /// dependency gating on this checkpoint. Sweep the
+    /// [`MustReachPhase::ALL`] × ALL cross so a regression that
+    /// hard-coded the arm to a single kind (silently returning `true`
+    /// for every populated depends-on regardless of query kind), or
+    /// wired the closure to a fixed unrelated field (e.g.
+    /// [`DependsOn::name`]) fails HERE at the classifier before landing
+    /// at the operator-facing checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_populated_must_reach_slot_per_kind() {
+        for populated in MustReachPhase::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.depends_on.push(dep_with(populated));
+            for query in MustReachPhase::ALL {
+                let tag = format!("must-reach-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "depends-on populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-slot pin — a default [`ProcessSpec`] (empty depends-on
+    /// vector) returns `false` for every `must-reach-<kind>` tag.
+    /// Locks the write-side / read-side split on the presence-probe
+    /// boundary so an operator authoring `:requires (must-reach-Attested)`
+    /// against a Process with no `:depends-on` slot gets the
+    /// `definition missing required` diagnostic, not a false-positive
+    /// pass.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_empty_depends_on_for_every_must_reach_kind() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in MustReachPhase::ALL {
+            let tag = format!("must-reach-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "default depends-on (empty vector) must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `must-reach-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. A regression that fell through to `Ok(false)`
+    /// (matching the pre-lift fixed-tag `_ => Err(UnknownRequireTag)`
+    /// tail) would silently reclassify a `must-reach-attested` casing
+    /// typo (PascalCase-only closed set) as `definition missing
+    /// required`, which reads as "the spec is wrong" rather than "your
+    /// check is wrong". Pin the distinction. `Pending` / `Failed` /
+    /// `Reaped` are legal [`ProcessPhase`]s but NOT valid
+    /// [`MustReachPhase`] checkpoints — the closed subset's own
+    /// FROM-STR rejection is inherited here at the prefix-family
+    /// boundary.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_must_reach_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for garbage in [
+            "must-reach-",
+            "must-reach-running",
+            "must-reach-ATTESTED",
+            "must-reach-Pending",
+            "must-reach-Failed",
+            "must-reach-Reaped",
+            "must-reach-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// COARSE / FINE COEXISTENCE pin — a Process with a single
+    /// `depends_on` entry gating on `Attested` MUST satisfy BOTH the
+    /// coarse `depends-on` fixed tag AND the fine
+    /// `must-reach-Attested` prefix tag AND simultaneously fail the
+    /// off-diagonal `must-reach-Running` probe. Locks the semantic
+    /// split between the two surfaces so a regression that (a)
+    /// collapsed `must-reach-<kind>` to the coarse "any dependency"
+    /// answer, or (b) drifted the fixed `depends-on` arm to match on
+    /// checkpoint kind fails HERE at ONE narrow site.
+    #[test]
+    fn evaluate_point_require_tag_must_reach_and_depends_on_coexist() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.depends_on.push(dep_with(MustReachPhase::Attested));
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "depends-on"),
+            Ok(true),
+            "coarse `depends-on` must be true when any dependency is present",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "must-reach-Attested"),
+            Ok(true),
+            "fine `must-reach-Attested` must be true when a matching dep is present",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "must-reach-Running"),
+            Ok(false),
+            "fine `must-reach-Running` must be false when no dep gates on Running",
         );
     }
 

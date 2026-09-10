@@ -135,6 +135,76 @@ impl From<MustReachPhase> for ProcessPhase {
     }
 }
 
+/// Slice-level `(MustReachPhase, presence)` probe on any `&[DependsOn]`
+/// — the ONE substrate primitive that owns the
+/// `.iter().any(|d| d.must_reach == K)` walk shape past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold on the `Vec<DependsOn>`
+/// axis. Callers compose the answer they want on top:
+/// `spec.depends_on.has_must_reach(kind)` for the point-domain
+/// `must-reach-<kind>` require-tag family, a coherence check that
+/// wants "does any depended-on Process have to reach `Attested`
+/// before this one proceeds", an editor completion listing which
+/// `MustReachPhase` checkpoints the operator authored — every future
+/// consumer reaches this ONE primitive through
+/// `slice.has_must_reach(k)` instead of restating the `.iter().any`
+/// closure body.
+///
+/// # Sibling to [`crate::boundary::ConditionSliceExt::has_kind`]
+///
+/// Same axis, same shape, second instance in the workspace-wide
+/// slice-level closed-set-driven presence-probe algebra:
+/// `ConditionSliceExt::has_kind` owns the `(&[Condition],
+/// ConditionKind) -> bool` walk over the boundary's per-side vectors;
+/// `DependsOnSliceExt::has_must_reach` owns the `(&[DependsOn],
+/// MustReachPhase) -> bool` walk over the spec's dependency vector.
+/// Both live one composition boundary below the tagged-union-parent
+/// probes (`Intent::has`, `Lifetime::has`,
+/// `Boundary::has_condition_kind`) at the (`&self`, `K`) → `bool`
+/// signature, so a future normalization at the slice-level probe shape
+/// (widening the return to `Option<&DependsOn>` for deeper
+/// diagnostics, adding a debug-build assertion on redundant duplicate
+/// entries, switching to a linear scan that also counts matches) lands
+/// at ONE site here and every downstream `slice.has_must_reach(K)`
+/// callsite picks it up mechanically.
+///
+/// # Compounding
+///
+/// The `must-reach-<kind>` require-tag prefix family in
+/// `tatara-reconciler::bin::tatara-check` composes this primitive with
+/// the closed-set `FromStr` autoderived on [`MustReachPhase`] through
+/// the `strip_and_classify_prefixed_kind` substrate to publish a
+/// fourth closed-set-driven prefix family byte-for-byte symmetrical
+/// with `intent-<kind>` / `lifetime-<kind>` / `condition-<kind>`. A
+/// future [`MustReachPhase`] variant added to `ALL` (a hypothetical
+/// `Released` checkpoint that waits for the target to have reached a
+/// terminal exit; see the SUBSET CONTRACT test on
+/// `must_reach_phase_projects_only_to_live_checkpoints` for the
+/// semantic gate that guards this) reaches every downstream through
+/// the SAME closed-set walk with no per-caller edit.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// proofs; the per-slice `must_reach` walk lives at ONE substrate site
+/// so every downstream (require-tag classifier, coherence check,
+/// editor completion) binds through the SAME shape rather than
+/// restating the `.iter().any(|d| d.must_reach == K)` closure body at
+/// each callsite. THEORY.md §VI.1 — generation over composition; a
+/// future [`MustReachPhase`] variant lands at ONE `ALL` entry + ONE
+/// `as_str` arm on the closed set and the presence probe picks it up
+/// mechanically without further per-consumer edits.
+pub trait DependsOnSliceExt {
+    /// True iff at least one [`DependsOn`] in this slice gates on the
+    /// given [`MustReachPhase`] checkpoint. The single-slice
+    /// presence probe every consumer of the `(Vec<DependsOn>,
+    /// MustReachPhase) -> bool` shape composes against.
+    fn has_must_reach(&self, kind: MustReachPhase) -> bool;
+}
+
+impl DependsOnSliceExt for [DependsOn] {
+    fn has_must_reach(&self, kind: MustReachPhase) -> bool {
+        self.iter().any(|d| d.must_reach == kind)
+    }
+}
+
 /// Signal policy — how the Process responds to signals.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -323,5 +393,105 @@ mod tests {
             );
         }
         assert_eq!(seen.len(), MustReachPhase::ALL.len());
+    }
+
+    // ── DependsOnSliceExt::has_must_reach substrate pins ─────────────
+    //
+    // Fail-before-pass-after granularity: `DependsOnSliceExt` did not
+    // exist before this commit — the `(&[DependsOn], MustReachPhase)
+    // -> bool` walk did not have a substrate owner yet. The lift places
+    // the per-slice presence probe on ONE site so a future consumer
+    // (require-tag classifier, coherence check, editor completion)
+    // composes against the SAME primitive rather than restating the
+    // `.iter().any(|d| d.must_reach == K)` closure body at each site.
+    // The tests below sweep the (empty, per-variant, multi-entry) matrix
+    // so a variant added to `MustReachPhase::ALL` without a matching
+    // primitive arm surfaces at rustc's exhaustiveness gate on the ALL
+    // literal (arity forced by `[Self; 2]`) rather than as a silent
+    // false-positive at every downstream `slice.has_must_reach(K)`
+    // callsite.
+
+    fn dep_with(must_reach: MustReachPhase) -> DependsOn {
+        DependsOn {
+            name: "target".to_string(),
+            namespace: None,
+            must_reach,
+        }
+    }
+
+    /// EMPTY-SLICE pin — an empty `&[DependsOn]` returns `false` for
+    /// EVERY [`MustReachPhase`]. Sweep `MustReachPhase::ALL` so a new
+    /// variant added without a matching arm in the primitive surfaces
+    /// at rustc's exhaustiveness gate on the ALL literal (arity forced
+    /// by `[Self; 2]`) rather than as a silent false-positive at every
+    /// downstream callsite composing this primitive.
+    #[test]
+    fn depends_on_slice_has_must_reach_returns_false_on_empty_slice_for_every_kind() {
+        let empty: &[DependsOn] = &[];
+        for kind in MustReachPhase::ALL {
+            assert!(
+                !empty.has_must_reach(kind),
+                "empty slice must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// PER-VARIANT pin — a single-element slice returns `true` for
+    /// exactly the checkpoint it gates on, `false` for every other
+    /// variant. Sweep the `ALL × ALL` cross so a regression that
+    /// (a) hard-coded the arm to a single kind (silently returning
+    /// true for every populated slice regardless of query kind), or
+    /// (b) matched on [`DependsOn::name`] instead of
+    /// [`DependsOn::must_reach`] fails HERE at the substrate primitive.
+    #[test]
+    fn depends_on_slice_has_must_reach_reads_must_reach_field_per_variant() {
+        for populated in MustReachPhase::ALL {
+            let slice = [dep_with(populated)];
+            for query in MustReachPhase::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    slice.has_must_reach(query),
+                    expected,
+                    "populated={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// MULTI-ENTRY pin — a slice with multiple entries returns `true`
+    /// for every kind that appears at any position (existential
+    /// quantifier over the slice), `false` for kinds that appear at
+    /// no position. Locks the `any` semantics so a regression that
+    /// collapsed to a `first`-only probe (`slice.first().map_or(false,
+    /// |d| d.must_reach == kind)`) fails here even though the
+    /// single-element per-variant pin above passes.
+    #[test]
+    fn depends_on_slice_has_must_reach_scans_beyond_the_first_position() {
+        // Two entries with distinct checkpoints — the `Attested` entry
+        // sits at index 1, so a `first`-only regression on the
+        // `Running`-at-index-0 arrangement returns the wrong answer for
+        // an `Attested` query.
+        let slice = [
+            dep_with(MustReachPhase::Running),
+            dep_with(MustReachPhase::Attested),
+        ];
+        for present in MustReachPhase::ALL {
+            assert!(
+                slice.has_must_reach(present),
+                "kind at any position must resolve true: {present:?}",
+            );
+        }
+        // Single-checkpoint slice — the OTHER variant must resolve
+        // false. Pins the negative arm of the existential quantifier so
+        // a regression that widened the probe (e.g. `_ => true` catchall)
+        // fails here.
+        let running_only = [
+            dep_with(MustReachPhase::Running),
+            dep_with(MustReachPhase::Running),
+        ];
+        assert!(
+            !running_only.has_must_reach(MustReachPhase::Attested),
+            "kind absent from every position must resolve false",
+        );
     }
 }

@@ -140,7 +140,8 @@ pub mod prelude {
     pub use crate::routing_edge_resource::RoutingEdgeResource;
     pub use crate::signal::{ProcessSignal, SighupStrategy, UnknownSighupStrategy};
     pub use crate::spec::{
-        DependsOn, IdentitySpec, MustReachPhase, SignalPolicy, UnknownMustReachPhase,
+        DependsOn, DependsOnSliceExt, IdentitySpec, MustReachPhase, SignalPolicy,
+        UnknownMustReachPhase,
     };
     pub use crate::status::{
         BoundaryStatus, CheckedCondition, ComplianceStatus, FluxResourceRef, ProcessCondition,

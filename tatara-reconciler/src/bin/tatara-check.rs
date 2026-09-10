@@ -267,12 +267,24 @@ fn check_yaml_parses(args: &[Sexp], root: &Path, report: &mut Report) {
     };
     let path = root.join(rel);
     let label = format!("YAML parses: {rel}");
-    match fs::read_to_string(&path) {
-        Ok(src) => match serde_yaml::from_str::<serde_yaml::Value>(&src) {
-            Ok(_) => report.pass(label),
-            Err(e) => report.fail(label, format!("YAML: {e}")),
-        },
-        Err(e) => report.fail(label, format!("read: {e}")),
+    // Read-side dispatch rides the ONE substrate primitive
+    // `read_or_fail` — pre-lift this executor hand-authored a `match
+    // fs::read_to_string(&path) { Ok(src) => <inline-pass>, Err(e) =>
+    // report.fail(label, format!("read: {e}")) }` chain whose failure
+    // arm was byte-identical to the three peer executors
+    // (`check_yaml_parses_as`, `check_lisp_compiles`,
+    // `check_file_contains`) already routing through the substrate.
+    // The pre-lift match wrapped the pass path inline rather than
+    // early-returning, so the prior lift missed this fourth consumer;
+    // post-lift the `check_*` family's read + `"read: {e}"` failure-
+    // arm shape lives at ONE substrate owner across all FOUR
+    // executors.
+    let Some(src) = read_or_fail(&path, &label, report) else {
+        return;
+    };
+    match serde_yaml::from_str::<serde_yaml::Value>(&src) {
+        Ok(_) => report.pass(label),
+        Err(e) => report.fail(label, format!("YAML: {e}")),
     }
 }
 
@@ -297,11 +309,12 @@ fn check_yaml_parses_as(args: &[Sexp], root: &Path, report: &mut Report) {
     // Read-side dispatch rides the ONE substrate primitive
     // `read_or_fail` — pre-lift this was a hand-authored 4-link
     // `match fs::read_to_string(&path) { Ok(s) => s, Err(e) => return
-    // report.fail(label, format!("read: {e}")) }` chain, one of THREE
+    // report.fail(label, format!("read: {e}")) }` chain, one of FOUR
     // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
-    // duplication threshold (peers at `check_lisp_compiles` +
-    // `check_file_contains`). Post-lift the read + `"read: {e}"`
-    // failure-arm shape lives at ONE substrate owner.
+    // duplication threshold (peers at `check_yaml_parses` +
+    // `check_lisp_compiles` + `check_file_contains`). Post-lift the
+    // read + `"read: {e}"` failure-arm shape lives at ONE substrate
+    // owner.
     let Some(src) = read_or_fail(&path, &label, report) else {
         return;
     };
@@ -375,11 +388,12 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
     // Read-side dispatch rides the ONE substrate primitive
     // `read_or_fail` — pre-lift this was a hand-authored 4-link
     // `match fs::read_to_string(&path) { Ok(s) => s, Err(e) => return
-    // report.fail(label, format!("read: {e}")) }` chain, one of THREE
+    // report.fail(label, format!("read: {e}")) }` chain, one of FOUR
     // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
-    // duplication threshold (peers at `check_yaml_parses_as` +
-    // `check_file_contains`). Post-lift the read + `"read: {e}"`
-    // failure-arm shape lives at ONE substrate owner.
+    // duplication threshold (peers at `check_yaml_parses` +
+    // `check_yaml_parses_as` + `check_file_contains`). Post-lift the
+    // read + `"read: {e}"` failure-arm shape lives at ONE substrate
+    // owner.
     let Some(src) = read_or_fail(&path, &label, report) else {
         return;
     };
@@ -437,11 +451,12 @@ fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
     // Read-side dispatch rides the ONE substrate primitive
     // `read_or_fail` — pre-lift this was a hand-authored 4-link
     // `match fs::read_to_string(&path) { Ok(s) => s, Err(e) => return
-    // report.fail(label, format!("read: {e}")) }` chain, one of THREE
+    // report.fail(label, format!("read: {e}")) }` chain, one of FOUR
     // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
-    // duplication threshold (peers at `check_yaml_parses_as` +
-    // `check_lisp_compiles`). Post-lift the read + `"read: {e}"`
-    // failure-arm shape lives at ONE substrate owner.
+    // duplication threshold (peers at `check_yaml_parses` +
+    // `check_yaml_parses_as` + `check_lisp_compiles`). Post-lift the
+    // read + `"read: {e}"` failure-arm shape lives at ONE substrate
+    // owner.
     let Some(src) = read_or_fail(&path, &label, report) else {
         return;
     };
@@ -1175,11 +1190,24 @@ fn min_defs_shortfall_msg(defs_len: usize, min_defs: usize) -> Option<String> {
 /// The ONE substrate owner of the 4-link chain
 /// `let src = match fs::read_to_string(&path) { Ok(s) => s, Err(e) =>
 /// return report.fail(label, format!("read: {e}")) }` every check
-/// executor that reads its input file walks. Pre-lift the SAME chain
-/// was hand-authored at THREE consumer sites past the ★★
-/// PRIME-DIRECTIVE ≥ 2 duplication threshold across the executor
-/// family:
+/// executor that reads its input file walks. The prior lift routed
+/// three consumer sites through the primitive; this run closes the
+/// symmetry gap on the fourth ([`check_yaml_parses`]) whose pre-lift
+/// match wrapped the pass path inline rather than early-returning,
+/// so all FOUR read-consuming executors now share ONE substrate
+/// owner past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold:
 ///
+/// * [`check_yaml_parses`] — the `(yaml-parses "path")` executor.
+///   Reads the operator-supplied YAML file before handing the source
+///   to `serde_yaml::from_str::<serde_yaml::Value>` for a schema-free
+///   parse. Pre-lift wrapped the pass arm inline through
+///   `match fs::read_to_string(&path) { Ok(src) => <inline-pass>,
+///   Err(e) => report.fail(label, format!("read: {e}")) }` — the
+///   fourth site the earlier lift missed because the match shape
+///   diverged from the peer sites' let-else early-return shape.
+///   Post-lift the executor early-returns through the substrate and
+///   its pass path (`serde_yaml::from_str` + `report.pass` /
+///   `report.fail(label, format!("YAML: {e}"))`) stays inline.
 /// * [`check_yaml_parses_as`] — the `(yaml-parses-as <Kind> "path")`
 ///   executor. Reads the operator-supplied YAML file before handing
 ///   the source to [`KnownCrd::parse_yaml_as`] for the typed-CRD parse.
@@ -1192,7 +1220,7 @@ fn min_defs_shortfall_msg(defs_len: usize, min_defs: usize) -> Option<String> {
 ///   (...))` executor. Reads the target file before the substring-
 ///   presence sweep across the operator-declared `:strings` list.
 ///
-/// All THREE sites walked the SAME four-link chain — read the file
+/// All FOUR sites walked the SAME four-link chain — read the file
 /// as UTF-8, then match `Ok(s) => s` in the pass arm and `Err(e) =>
 /// return report.fail(<pre-composed label>, format!("read: {e}"))`
 /// in the fail arm — differing only in the `<path>` operand and in
@@ -1242,7 +1270,7 @@ fn min_defs_shortfall_msg(defs_len: usize, min_defs: usize) -> Option<String> {
 /// follow the read).
 ///
 /// Theory anchor: THEORY.md §VI.1 (generation over composition —
-/// the four-link read + fail chain recurred at 3 hand-authored
+/// the four-link read + fail chain recurred at 4 hand-authored
 /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and
 /// is lifted onto ONE substrate owner here). THEORY.md §II.1
 /// invariant 5 (composition preserves proofs — the pin block below
@@ -1250,7 +1278,7 @@ fn min_defs_shortfall_msg(defs_len: usize, min_defs: usize) -> Option<String> {
 /// regression that drifted the `"read: {e}"` prefix, dropped the
 /// `report.fail` side-effect on the `Err` arm, or flipped the
 /// return polarity surfaces HERE rather than as silent operator-
-/// facing diagnostic skew at each of the three consumer sites).
+/// facing diagnostic skew at each of the four consumer sites).
 fn read_or_fail(path: &Path, label: &str, report: &mut Report) -> Option<String> {
     match fs::read_to_string(path) {
         Ok(s) => Some(s),
@@ -1422,11 +1450,11 @@ fn normalize(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        evaluate_ephemeral_require_tag, evaluate_point_require_tag, find_kw, find_kw_string_list,
-        head_symbol_or_missing, known_require_tag_domain_names, min_defs_shortfall_msg,
-        parse_kwargs, positional_string, read_or_fail, require_tag_domain_by_name,
-        required_positional_string, startup_diagnostic, Report, UnknownRequireTag,
-        ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
+        check_yaml_parses, evaluate_ephemeral_require_tag, evaluate_point_require_tag, find_kw,
+        find_kw_string_list, head_symbol_or_missing, known_require_tag_domain_names,
+        min_defs_shortfall_msg, parse_kwargs, positional_string, read_or_fail,
+        require_tag_domain_by_name, required_positional_string, startup_diagnostic, Report,
+        UnknownRequireTag, ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
@@ -2801,8 +2829,18 @@ mod tests {
     // `report.fail` side-effect on the `Err` arm, or flipped the
     // return polarity (`Some` on `Err` / `None` on `Ok`) surfaces
     // HERE rather than as silent operator-facing diagnostic skew at
-    // each of the three consumer sites `check_yaml_parses_as` /
-    // `check_lisp_compiles` / `check_file_contains`.
+    // each of the four consumer sites `check_yaml_parses` /
+    // `check_yaml_parses_as` / `check_lisp_compiles` /
+    // `check_file_contains`. The fourth site
+    // (`check_yaml_parses`, added this run) closes the executor-
+    // family symmetry gap the earlier lift missed because its
+    // pre-lift match wrapped the pass path inline rather than
+    // early-returning; the executor-level seal
+    // `check_yaml_parses_read_failure_prose_routes_through_read_or_fail_substrate`
+    // pins the diagnostic prose at the callsite so a regression that
+    // reintroduced the pre-lift inline match at THIS executor (rather
+    // than the shared substrate) surfaces there rather than as silent
+    // drift across the fourth site's operator-facing diagnostic.
 
     fn scratch_path(tag: &str) -> std::path::PathBuf {
         // A per-test-name scratch path under the OS temp dir, keyed
@@ -3042,5 +3080,123 @@ mod tests {
         // primitive did not move it.
         report.pass(label);
         assert_eq!(report.passes.len(), 1);
+    }
+
+    // ─── check_yaml_parses read-side substrate seal ─────────────────────
+    //
+    // Fail-before-pass-after granularity: pre-lift this pin cannot
+    // compile because [`check_yaml_parses`] was not exposed to the
+    // tests module — the pre-lift executor hand-authored a `match
+    // fs::read_to_string(&path) { Ok(src) => <inline-pass>, Err(e) =>
+    // report.fail(label, format!("read: {e}")) }` chain whose failure
+    // arm was byte-identical to the substrate's owned prose but whose
+    // pass arm wrapped `serde_yaml::from_str` INSIDE the `Ok(src)`
+    // branch rather than early-returning through a let-else. That
+    // shape divergence hid the fourth consumer from the earlier lift.
+    // Post-lift the executor routes through [`read_or_fail`] and the
+    // seal below observes the substrate's canonical
+    // `<label>: read: <io_error>` prose landing at this executor's
+    // failure entry — a regression that reintroduced the pre-lift
+    // inline match at THIS executor (rather than the shared
+    // substrate) would either produce a different label prefix, drop
+    // the `"read: "` sentinel, or omit the failure altogether on the
+    // miss path, and each such drift fires HERE at the executor
+    // callsite rather than as silent operator-facing diagnostic skew
+    // in a downstream check-log grep.
+
+    #[test]
+    fn check_yaml_parses_read_failure_prose_routes_through_read_or_fail_substrate() {
+        // End-to-end: hand [`check_yaml_parses`] a nonexistent path
+        // via the `(yaml-parses "…")` executor entry point and pin
+        // that the failure prose carries the exact substrate-owned
+        // shape `"<label>: read: "` where `<label> == "YAML parses:
+        // <rel>"`. Rendering the source through the reader (rather
+        // than composing `Sexp` values by hand) exercises the same
+        // tokenizer + Sexp-shape pipeline the `dispatch` entry
+        // reaches through in production, so a regression that
+        // decoupled the reader's string-literal decode from the
+        // executor's `required_positional_string` slot surfaces here
+        // too.
+        //
+        // The path is a `<scratch_path>-derived leaf under the OS
+        // temp dir keyed on the test-tag + PID so parallel test runs
+        // never collide on the same inode; `remove_file` up front is
+        // belt-and-braces so a residue from a previous failed run
+        // can't accidentally satisfy the read.
+        let missing_scratch = scratch_path("check-yaml-parses-missing");
+        let _ = std::fs::remove_file(&missing_scratch);
+        let rel = missing_scratch
+            .file_name()
+            .and_then(|s| s.to_str())
+            .expect("scratch path has a UTF-8 leaf");
+        let root = std::env::temp_dir();
+        let src = format!("(yaml-parses \"{rel}\")");
+        let forms = read(&src).expect("test source must parse");
+        let outer = forms[0].as_list().expect("wrap source in a list");
+        let mut report = Report::default();
+        check_yaml_parses(&outer[1..], &root, &mut report);
+
+        assert!(
+            !report.is_ok(),
+            "missing-path read must push a failure entry on the Report — a regression that dropped the substrate's `report.fail(label, format!(\"read: {{e}}\"))` side-effect on the Err arm would surface here as a silently-passing check",
+        );
+        let failure = report
+            .failures
+            .last()
+            .expect("missing-path check must push exactly one failure");
+        let expected_prefix = format!("YAML parses: {rel}: read: ");
+        assert!(
+            failure.starts_with(&expected_prefix),
+            "check_yaml_parses miss-path prose must route through the read_or_fail substrate — the diagnostic prefix MUST match `<label>: read: <io_error>` where `<label> = \"YAML parses: <rel>\"`; got {failure:?}, expected prefix {expected_prefix:?}",
+        );
+        // Belt-and-braces: NO `YAML: ` sentinel — that prefix means
+        // `serde_yaml::from_str` errored, i.e. the executor mis-
+        // routed a read failure through the yaml-parse path.
+        assert!(
+            !failure.contains(": YAML: "),
+            "check_yaml_parses miss-path prose must NOT carry the `: YAML: ` sentinel — that would mean the substrate's `Err(io)` arm was mis-routed through the yaml-parse fail path; got {failure:?}",
+        );
+    }
+
+    #[test]
+    fn check_yaml_parses_pass_path_still_matches_yaml_parse_prose_on_valid_source() {
+        // Pass-path pin: an existing UTF-8 file with valid YAML must
+        // still ride through both substrate primitives cleanly. Pre-
+        // lift the pass path lived inside `Ok(src) => match
+        // serde_yaml::from_str(&src) { ... }`; post-lift it lives on
+        // the callsite after the substrate's let-else. A regression
+        // that swapped the pass-path shape (drifted the `YAML parses:
+        // <rel>` label prose, dropped the pass push, or accidentally
+        // reported `YAML: <err>` on a well-formed input) surfaces
+        // here rather than at the four-executor read-side seal
+        // above.
+        let happy_scratch = scratch_path("check-yaml-parses-happy");
+        std::fs::write(&happy_scratch, "kind: Process\nmetadata:\n  name: probe\n")
+            .expect("scratch write");
+        let rel = happy_scratch
+            .file_name()
+            .and_then(|s| s.to_str())
+            .expect("scratch path has a UTF-8 leaf")
+            .to_owned();
+        let root = std::env::temp_dir();
+        let src = format!("(yaml-parses \"{rel}\")");
+        let forms = read(&src).expect("test source must parse");
+        let outer = forms[0].as_list().expect("wrap source in a list");
+        let mut report = Report::default();
+        check_yaml_parses(&outer[1..], &root, &mut report);
+        let _ = std::fs::remove_file(&happy_scratch);
+        assert!(
+            report.is_ok(),
+            "valid-YAML pass path must not push a failure entry — a regression that mis-routed the substrate's `Ok(src)` arm through the yaml-parse fail path would surface here",
+        );
+        let pass = report
+            .passes
+            .last()
+            .expect("valid-YAML pass path must push exactly one pass");
+        assert_eq!(
+            pass,
+            &format!("YAML parses: {rel}"),
+            "pass-path label must carry the `YAML parses: <rel>` prose byte-for-byte — pre-lift + post-lift shapes must agree on the pass label at ONE substrate composition site",
+        );
     }
 }

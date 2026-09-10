@@ -11,6 +11,62 @@
 
 use serde::{Deserialize, Serialize};
 
+/// The canonical `"blake3:"` scheme prefix every three-pillar wire-form
+/// BLAKE3 hash string in this crate opens with — the intra-crate ONE
+/// substrate owner of the scheme literal on the READ (predicate) AND
+/// WRITE (compose) axes.
+///
+/// ## Why the substrate lives here
+///
+/// Pre-lift the SAME `"blake3:"` bare literal was hand-authored across
+/// ONE WRITE site ([`scheme_display_hash`]'s `format!("blake3:{h}")`
+/// composition — the wrap primitive both [`pillar_hash`] and
+/// [`compose_root`] route through) AND ~13 READ-side test predicates
+/// (`att.<pillar>.starts_with("blake3:")` in `test_produce_attestation`,
+/// `root.starts_with("blake3:")` in the `compose_root` scheme-prefix
+/// pin, `pillar_hash(_).starts_with("blake3:")` × 2 in the pillar-hash
+/// prefix pin, `scheme_display_hash(_).starts_with("blake3:")` × 2 in
+/// the wrap-primitive prefix pin, `out.starts_with("blake3:")` × 2 in
+/// the length pins, and 2 sites in `dag_executor::tests` guarding the
+/// ATTEST-phase attestation-string composer). Every READ site walked
+/// the SAME 1-link `.starts_with("blake3:")` shape, and every one was
+/// re-authoring the same bare literal the WRITE composition emits.
+///
+/// Post-lift the scheme literal appears at ONE spelling here, and
+/// every WRITE and READ site routes through it. A future scheme
+/// change — a `b3:` shorthand, a version discriminator (`blake3-v2:`),
+/// a per-fleet suffix — lands at ONE constant and both the wrap
+/// primitive AND every downstream READ predicate inherit the shift
+/// mechanically. Pre-lift such a rename would touch the write side
+/// AND every hand-authored `.starts_with(...)` predicate; the two
+/// sides could drift silently under review and only surface as a
+/// produce/verify skew across the workspace's three-pillar consumers.
+///
+/// ## Sibling owner in `tatara-lisp`
+///
+/// [`tatara_lisp::hash::BLAKE3_SCHEME_PREFIX`] owns the SAME canonical
+/// literal at the workspace layer as the substrate owner every
+/// `tatara-lisp`-depending crate reaches for. That owner cannot fold
+/// into this one because `tatara-engine` does not depend on
+/// `tatara-lisp` (an intentional dep-graph choice: the engine crate
+/// carries the seven-driver executor + Raft/gossip planes, and the
+/// Lisp reader has no place in that graph). The two owners partition
+/// the same scheme-literal surface at the crate boundary; both hold
+/// the same value + shape, pinned at
+/// [`tests::blake3_scheme_prefix_constant_value_is_the_canonical_seven_byte_ascii_literal`]
+/// so a divergence between the two crate-layer owners' spellings
+/// surfaces HERE rather than as silent cross-crate composed-root /
+/// pillar-hash parse drift.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the wire-form scheme literal at ONE substrate owner means
+/// every WRITE-side wrap and every READ-side predicate agree
+/// bytewise by construction). THEORY.md §V.3 (three-pillar
+/// attestation — the canonical pillar-hash shape is `"blake3:{hex}"`;
+/// this constant pins the scheme prefix half of that shape at the
+/// intra-crate scheme-owner axis).
+pub(crate) const BLAKE3_SCHEME_PREFIX: &str = "blake3:";
+
 /// Substrate primitive over `&[u8]` — the ONE substrate owner of the
 /// `format!("blake3:{}", blake3::hash(<bytes>))` two-link chain every
 /// three-pillar producer restated by hand at the "cast an input
@@ -171,7 +227,7 @@ pub(crate) fn pillar_hash(bytes: &[u8]) -> String {
 /// pillar / composed-root emit inherits the shift by construction).
 #[must_use]
 fn scheme_display_hash(h: blake3::Hash) -> String {
-    format!("blake3:{h}")
+    format!("{BLAKE3_SCHEME_PREFIX}{h}")
 }
 
 /// A convergence attestation — the three-pillar CertificationArtifact
@@ -324,10 +380,14 @@ mod tests {
             1,
             None,
         );
-        assert!(att.artifact_hash.starts_with("blake3:"));
-        assert!(att.control_hash.as_ref().unwrap().starts_with("blake3:"));
-        assert!(att.intent_hash.starts_with("blake3:"));
-        assert!(att.composed_root.starts_with("blake3:"));
+        assert!(att.artifact_hash.starts_with(BLAKE3_SCHEME_PREFIX));
+        assert!(att
+            .control_hash
+            .as_ref()
+            .unwrap()
+            .starts_with(BLAKE3_SCHEME_PREFIX));
+        assert!(att.intent_hash.starts_with(BLAKE3_SCHEME_PREFIX));
+        assert!(att.composed_root.starts_with(BLAKE3_SCHEME_PREFIX));
         assert_eq!(att.generation, 1);
     }
 
@@ -484,8 +544,8 @@ mod tests {
         // strip step expects the exact `"blake3:"` scheme.
         let root = compose_root("blake3:A", None, "blake3:B", None);
         assert!(
-            root.starts_with("blake3:"),
-            "composed root must carry the `blake3:` scheme prefix, got {root:?}",
+            root.starts_with(BLAKE3_SCHEME_PREFIX),
+            "composed root must carry the `{BLAKE3_SCHEME_PREFIX}` scheme prefix, got {root:?}",
         );
     }
 
@@ -576,12 +636,12 @@ mod tests {
         // silently break downstream consumers whose prefix-strip or
         // regex step expects the exact `"blake3:"` scheme.
         assert!(
-            pillar_hash(b"any").starts_with("blake3:"),
-            "pillar_hash output must carry the `blake3:` scheme prefix",
+            pillar_hash(b"any").starts_with(BLAKE3_SCHEME_PREFIX),
+            "pillar_hash output must carry the `{BLAKE3_SCHEME_PREFIX}` scheme prefix",
         );
         assert!(
-            pillar_hash(b"").starts_with("blake3:"),
-            "pillar_hash output must carry the `blake3:` scheme prefix on the empty input too",
+            pillar_hash(b"").starts_with(BLAKE3_SCHEME_PREFIX),
+            "pillar_hash output must carry the `{BLAKE3_SCHEME_PREFIX}` scheme prefix on the empty input too",
         );
     }
 
@@ -595,9 +655,13 @@ mod tests {
         // [0-9a-f]{64}$`) surfaces here rather than as a parse
         // failure downstream.
         let out = pillar_hash(b"pillar-input");
-        assert_eq!(out.len(), 7 + 64, "pillar_hash length must be 7 + 64");
-        assert!(out.starts_with("blake3:"));
-        let hex = &out[7..];
+        assert_eq!(
+            out.len(),
+            BLAKE3_SCHEME_PREFIX.len() + 64,
+            "pillar_hash length must be BLAKE3_SCHEME_PREFIX.len() + 64",
+        );
+        assert!(out.starts_with(BLAKE3_SCHEME_PREFIX));
+        let hex = &out[BLAKE3_SCHEME_PREFIX.len()..];
         assert_eq!(hex.len(), 64);
         assert!(
             hex.chars()
@@ -729,12 +793,12 @@ mod tests {
         // consumers whose regex or prefix-strip step expects the
         // exact `"blake3:"` scheme.
         assert!(
-            scheme_display_hash(blake3::hash(b"any")).starts_with("blake3:"),
-            "scheme_display_hash output must carry the `blake3:` scheme prefix",
+            scheme_display_hash(blake3::hash(b"any")).starts_with(BLAKE3_SCHEME_PREFIX),
+            "scheme_display_hash output must carry the `{BLAKE3_SCHEME_PREFIX}` scheme prefix",
         );
         assert!(
-            scheme_display_hash(blake3::hash(b"")).starts_with("blake3:"),
-            "scheme_display_hash output must carry the `blake3:` scheme prefix on the empty input too",
+            scheme_display_hash(blake3::hash(b"")).starts_with(BLAKE3_SCHEME_PREFIX),
+            "scheme_display_hash output must carry the `{BLAKE3_SCHEME_PREFIX}` scheme prefix on the empty input too",
         );
     }
 
@@ -750,11 +814,11 @@ mod tests {
         let out = scheme_display_hash(blake3::hash(b"pillar-input"));
         assert_eq!(
             out.len(),
-            7 + 64,
-            "scheme_display_hash length must be 7 + 64"
+            BLAKE3_SCHEME_PREFIX.len() + 64,
+            "scheme_display_hash length must be BLAKE3_SCHEME_PREFIX.len() + 64",
         );
-        assert!(out.starts_with("blake3:"));
-        let hex_tail = &out[7..];
+        assert!(out.starts_with(BLAKE3_SCHEME_PREFIX));
+        let hex_tail = &out[BLAKE3_SCHEME_PREFIX.len()..];
         assert_eq!(hex_tail.len(), 64);
         assert!(
             hex_tail
@@ -829,6 +893,71 @@ mod tests {
             via_compose, via_re_derive,
             "compose_root's write tail must route through scheme_display_hash",
         );
+    }
+
+    // ─── BLAKE3_SCHEME_PREFIX substrate pins ────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `BLAKE3_SCHEME_PREFIX`
+    // constant did not exist before this commit, so each test below
+    // fails to compile pre-lift. Post-lift they collectively pin the
+    // scheme literal at ONE intra-crate substrate owner — every
+    // WRITE-side wrap (`scheme_display_hash`) AND every READ-side
+    // predicate (`att.starts_with(BLAKE3_SCHEME_PREFIX)` at ~13 test
+    // sites in this file + 2 in `dag_executor::tests`) routes through
+    // the SAME constant, so a future scheme rename (a `b3:`
+    // shorthand, a version discriminator, a per-fleet suffix) lands
+    // at ONE substrate literal and both write + read agree bytewise
+    // by construction.
+
+    #[test]
+    fn blake3_scheme_prefix_constant_value_is_the_canonical_seven_byte_ascii_literal() {
+        // Constant-value pin: the intra-crate scheme prefix IS the
+        // seven-byte ASCII literal `"blake3:"`. Pins the shape so a
+        // regression that widened it (a length tag, a version
+        // discriminator suffix), narrowed it (a `b3:` shorthand), or
+        // drifted the case (`BLAKE3:`) surfaces HERE and every
+        // downstream READ / WRITE consumer sees the change through
+        // the ONE substrate owner. Sibling to
+        // `tatara_lisp::hash::tests::blake3_scheme_prefix_is_the_canonical_seven_byte_ascii_literal`
+        // at the workspace-layer scheme owner — the two crate-layer
+        // owners MUST hold the same value + shape, since a cross-crate
+        // consumer (a `sekiban` admission webhook, a `kensa`
+        // compliance checker, a HeartbeatChain scan tool) reading an
+        // attestation emitted by this crate parses the scheme prefix
+        // through whichever constant its own crate reaches for. A
+        // divergence between the two crate-layer spellings surfaces
+        // HERE rather than as silent cross-crate composed-root /
+        // pillar-hash parse drift.
+        assert_eq!(BLAKE3_SCHEME_PREFIX, "blake3:");
+        assert_eq!(BLAKE3_SCHEME_PREFIX.len(), 7);
+        assert!(BLAKE3_SCHEME_PREFIX.is_ascii());
+    }
+
+    #[test]
+    fn scheme_display_hash_write_and_read_side_predicates_share_scheme_constant() {
+        // Cross-consumer coherence: the WRITE-side wrap primitive
+        // `scheme_display_hash` AND every READ-side
+        // `.starts_with(BLAKE3_SCHEME_PREFIX)` predicate route through
+        // the SAME canonical scheme literal. A rename of the constant's
+        // VALUE (`"blake3:"` → `"b3:"`) would land the WRITE output on
+        // the new prefix AND every READ predicate would accept the new
+        // prefix as its scheme-present floor, keeping both sides in
+        // lockstep at ONE substrate owner. Pins the invariant the
+        // two-way partition between the bare `blake3::Hash: Display`
+        // hex tail (no prefix) and the wrapped wire form
+        // (prefix + hex) rides. Sibling of the tatara-lisp pin
+        // `blake3_scheme_display_wrap_and_read_side_pin_share_scheme_constant`
+        // on the workspace-layer scheme owner; both crate-layer owners
+        // pin the same WRITE/READ coherence invariant.
+        let out = scheme_display_hash(blake3::hash(b"any"));
+        assert!(
+            out.starts_with(BLAKE3_SCHEME_PREFIX),
+            "WRITE-side wrap must carry the substrate's canonical scheme prefix",
+        );
+        // Length check via the constant length rather than a magic 7 —
+        // pins that the wire-shape budget (prefix bytes + 64 hex chars)
+        // stays in lockstep with the constant's length.
+        assert_eq!(out.len(), BLAKE3_SCHEME_PREFIX.len() + 64);
     }
 
     #[test]

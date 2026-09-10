@@ -276,6 +276,7 @@ impl DagExecutor {
 
 #[cfg(test)]
 mod tests {
+    use super::super::attestation::BLAKE3_SCHEME_PREFIX;
     use super::*;
     use tatara_core::domain::convergence_graph::*;
     use tatara_core::domain::convergence_state::*;
@@ -446,9 +447,12 @@ mod tests {
         let att_b = result.outcomes[&b].attestation.as_ref().unwrap();
         // Attestations should be different (different inputs)
         assert_ne!(att_a, att_b);
-        // Both should start with blake3:
-        assert!(att_a.starts_with("blake3:"));
-        assert!(att_b.starts_with("blake3:"));
+        // Both should start with the canonical BLAKE3 scheme prefix —
+        // routed through the attestation module's substrate owner so a
+        // future scheme rename lands at ONE constant and this READ
+        // predicate inherits the shift by construction.
+        assert!(att_a.starts_with(BLAKE3_SCHEME_PREFIX));
+        assert!(att_b.starts_with(BLAKE3_SCHEME_PREFIX));
     }
 
     #[tokio::test]

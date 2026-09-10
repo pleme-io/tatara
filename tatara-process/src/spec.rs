@@ -234,6 +234,96 @@ impl Default for SignalPolicy {
     }
 }
 
+impl SignalPolicy {
+    /// Closed-set-driven presence probe — does this [`SignalPolicy`] carry
+    /// the given [`SighupStrategy`] discriminator on its
+    /// [`Self::sighup_strategy`] slot? The ONE substrate primitive that
+    /// owns the `(SignalPolicy, SighupStrategy) -> bool` scalar-carrier
+    /// walk shape.
+    ///
+    /// # Third representation kind on the presence-probe axis
+    ///
+    /// The workspace-wide closed-set-driven presence-probe algebra spans
+    /// three underlying representation kinds; every downstream consumer
+    /// composes through the SAME `has(kind: K) -> bool` shape regardless
+    /// of the field's Rust type:
+    ///
+    /// - **Option-slot** (populated-slot semantics) —
+    ///   [`crate::intent::Intent::has`] and
+    ///   [`crate::lifetime::Lifetime::has`], both bodies
+    ///   `kind.select(self).is_some()` over a tagged-union parent whose
+    ///   discriminator's `select` projects onto an `Option<&V>`.
+    /// - **Slice** (walk-a-Vec semantics) —
+    ///   [`crate::boundary::ConditionSliceExt::has_kind`] on
+    ///   `&[Condition]` and [`crate::spec::DependsOnSliceExt::has_must_reach`]
+    ///   on `&[DependsOn]`, both bodies `self.iter().any(|c| c.kind ==
+    ///   kind)` over a per-entry discriminator field.
+    /// - **Scalar** (variant-equality semantics) — THIS primitive on
+    ///   `spec.signals.sighup_strategy`, body `self.sighup_strategy ==
+    ///   kind` over a non-Option, non-Vec closed-set-discriminator field.
+    ///   [`SighupStrategy`] is a `#[derive(DeriveClosedSet)]` implementor
+    ///   with a `Default` impl, so the field is ALWAYS one of the ALL
+    ///   variants — there is no absent state to detect, and the probe
+    ///   answers "does the carrier's variant equal this discriminator"
+    ///   rather than "is this slot populated".
+    ///
+    /// # Semantics — VARIANT match, not POPULATED slot
+    ///
+    /// `has_sighup_strategy(kind)` returns `true` iff
+    /// `self.sighup_strategy == kind`. On a [`SignalPolicy::default`]
+    /// (`sighup_strategy: SighupStrategy::default() = Reconverge`) the
+    /// probe returns `true` for [`SighupStrategy::Reconverge`] and
+    /// `false` for every other variant — distinct from the Option-slot
+    /// axis where a default carrier returns `false` for EVERY kind. The
+    /// [`SighupStrategy::default`] arm's answer is legitimate operator
+    /// signal: a Process that left `:signals :sighupStrategy` at the
+    /// substrate default IS configured for `Reconverge`, and a
+    /// `:requires (sighup-Reconverge)` should pass; only an operator who
+    /// deliberately overrode the strategy to `Restart` or `Noop` fails
+    /// the tag on this axis.
+    ///
+    /// # Sibling to the presence-probe algebra
+    ///
+    /// Same shape (`has(kind)`), same axis (closed-set discriminator on
+    /// a `ProcessSpec` field), same operator-facing answer (does this
+    /// spec carry this discriminator on this axis). A future
+    /// unification (a trait for closed-set-driven presence probes that
+    /// admits all three representation kinds — Option-slot,
+    /// slice, scalar) lands as ONE peer trait with every current
+    /// implementor picking up the trait default in lockstep.
+    ///
+    /// # Compounding
+    ///
+    /// A future closed-set-discriminator scalar field on `ProcessSpec`
+    /// (or any of its nested structs) that wants a
+    /// `<prefix>-<kind>` require-tag family — a
+    /// `verification-phase-<kind>` on `spec.compliance.<binding>.phase`,
+    /// a `routing-form-<kind>` on `spec.routing.as_ref().map(|r|
+    /// r.form)`, a future `intent-kind` scalar discriminator on any
+    /// scalar-enum spec field — lands as ONE peer inherent method with
+    /// the same one-line `self.<field> == kind` body and routes through
+    /// the same `strip_and_classify_prefixed_kind::<K, _>` shape in
+    /// `tatara-check`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the scalar-carrier presence-probe body lives at
+    /// ONE substrate site so every downstream
+    /// (`sighup-<kind>` require-tag family in tatara-check, closed-set
+    /// audit dispatchers, future variant additions on
+    /// [`SighupStrategy`]) binds through the SAME shape rather than
+    /// restating the `signals.sighup_strategy == kind` closure body at
+    /// each callsite. THEORY.md §VI.1 — generation over composition;
+    /// a future [`SighupStrategy`] variant (a `Suspend` that maps SIGHUP
+    /// onto [`crate::phase::ProcessPhase::Zombie`] via
+    /// [`SighupStrategy::sighup_target`]) lands at ONE `ALL` entry + ONE
+    /// `as_str` arm on the closed set and the probe picks it up
+    /// mechanically without further per-consumer edits.
+    #[must_use]
+    pub fn has_sighup_strategy(&self, kind: SighupStrategy) -> bool {
+        self.sighup_strategy == kind
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,6 +339,70 @@ mod tests {
         assert_eq!(p.sigterm_grace_seconds, 480);
         assert!(p.sigkill_force);
         assert!(!p.start_suspended);
+    }
+
+    // ── scalar-carrier presence probe on SignalPolicy × SighupStrategy ──
+    //
+    // Fail-before-pass-after granularity: [`SignalPolicy::has_sighup_strategy`]
+    // did not exist before this commit — every consumer of the
+    // `(SignalPolicy, SighupStrategy) -> bool` scalar-carrier probe
+    // shape restated the `signals.sighup_strategy == kind` closure body
+    // at its own callsite. Post-lift the shape lives at ONE substrate
+    // owner and every downstream (the `sighup-<kind>` require-tag family
+    // in `tatara-check`, future audit dispatchers walking
+    // [`SighupStrategy::ALL`], any future CRD-facing closed-set
+    // discriminator on a scalar `ProcessSpec` field) binds through the
+    // SAME `has(kind)` shape the Option-slot (Intent::has, Lifetime::has)
+    // and slice-level (ConditionSliceExt::has_kind,
+    // DependsOnSliceExt::has_must_reach) primitives publish.
+
+    /// DIAGONAL — for every [`SighupStrategy`] variant, a
+    /// [`SignalPolicy`] whose `sighup_strategy` field is set to that
+    /// variant returns `true` from `has_sighup_strategy` on that same
+    /// variant AND `false` on every other variant. Sweep the
+    /// [`SighupStrategy::ALL`] × ALL cross so a regression that hard-
+    /// coded the arm to a single variant (silently returning `true` on
+    /// every populated policy regardless of query kind) or wired the
+    /// equality to a fixed unrelated field fails HERE at the substrate
+    /// primitive before landing at the operator-facing checks.lisp
+    /// surface.
+    #[test]
+    fn signal_policy_has_sighup_strategy_returns_true_iff_variant_matches() {
+        for populated in SighupStrategy::ALL {
+            let policy = SignalPolicy {
+                sighup_strategy: populated,
+                ..SignalPolicy::default()
+            };
+            for query in SighupStrategy::ALL {
+                assert_eq!(
+                    policy.has_sighup_strategy(query),
+                    query == populated,
+                    "sighup_strategy={populated:?}: query {query:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// DEFAULT — a [`SignalPolicy::default`] carries
+    /// `sighup_strategy: SighupStrategy::default() = Reconverge`, so
+    /// the scalar-carrier probe returns `true` on
+    /// [`SighupStrategy::Reconverge`] and `false` on every other
+    /// variant. Distinct from the Option-slot axis where a default
+    /// carrier returns `false` for EVERY kind — pins the
+    /// scalar-vs-option semantic split at ONE narrow substrate site so
+    /// a regression that rewired the probe to Option-slot semantics
+    /// (returning `false` on the default) fails here.
+    #[test]
+    fn signal_policy_has_sighup_strategy_default_probes_reconverge_only() {
+        let policy = SignalPolicy::default();
+        for kind in SighupStrategy::ALL {
+            let expected = kind == SighupStrategy::Reconverge;
+            assert_eq!(
+                policy.has_sighup_strategy(kind),
+                expected,
+                "default policy (sighup_strategy=Reconverge) must return {expected} for {kind:?}",
+            );
+        }
     }
 
     // ── closed-set algebra for MustReachPhase (ALL × as_str × FromStr ×

@@ -14,6 +14,7 @@ use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
 use tatara_process::intent::IntentKind;
 use tatara_process::lifetime::LifetimeKind;
+use tatara_process::signal::SighupStrategy;
 use tatara_process::spec::{DependsOnSliceExt, MustReachPhase};
 use tatara_reconciler::known_crd::KnownCrd;
 
@@ -567,6 +568,24 @@ struct UnknownRequireTag;
 ///   in the slice-level closed-set-driven presence-probe algebra
 ///   (sibling to [`tatara_process::boundary::ConditionSliceExt::has_kind`]
 ///   on `&[Condition]`).
+/// - `sighup-<kind>` — [`SighupStrategy`] closed set →
+///   [`tatara_process::spec::SignalPolicy::has_sighup_strategy`] (a
+///   scalar-carrier variant-equality probe on
+///   `spec.signals.sighup_strategy`, so the operator's `:requires
+///   (sighup-Reconverge)` pins that the Process handles SIGHUP by
+///   re-converging without teardown, `:requires (sighup-Restart)`
+///   pins full-respawn semantics, and `:requires (sighup-Noop)` pins
+///   the deliberate ignore-the-signal posture. Fifth closed-set-
+///   driven prefix family in the point-domain require-tag vocabulary
+///   and FIRST instance on the scalar-carrier axis of the presence-
+///   probe algebra — the field is non-Option, non-Vec, so on a
+///   default [`tatara_process::spec::SignalPolicy`] the probe returns
+///   `true` on the [`SighupStrategy::default`] variant
+///   ([`SighupStrategy::Reconverge`]) rather than `false` for every
+///   kind. Coexists with the coarse `signals` fixed tag (which
+///   answers "is the sigterm-grace-seconds substrate default present"
+///   without touching the SIGHUP-side of the policy) — the two tags
+///   answer distinct questions.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -574,17 +593,18 @@ struct UnknownRequireTag;
 /// closed-set surface opens for them (each addresses a slot whose
 /// carrier isn't a closed-set discriminator today).
 ///
-/// A future fifth `IntentKind` / `LifetimeKind` / `ConditionKind` /
-/// `MustReachPhase` variant lands at ONE `ALL` entry on its parent's
-/// closed set — no per-caller edit here. A future new prefix family
-/// (e.g. `signal-<kind>` for [`tatara_process::signal::ProcessSignal`],
-/// `phase-<kind>` for [`tatara_process::phase::ProcessPhase`],
-/// `sighup-<kind>` for [`tatara_process::signal::SighupStrategy`] on
-/// `spec.signals.sighup_strategy`) lands as ONE more
-/// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(
-/// tag, "prefix-", |k| spec.<field>.has(k)) { return res; }` branch
-/// that reads the same three-step (strip_prefix + parse + has) shape
-/// all four existing families publish.
+/// A future sixth `IntentKind` / `LifetimeKind` / `ConditionKind` /
+/// `MustReachPhase` / `SighupStrategy` variant lands at ONE `ALL`
+/// entry on its parent's closed set — no per-caller edit here. A
+/// future new prefix family (e.g. `signal-<kind>` for
+/// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` for
+/// [`tatara_process::phase::ProcessPhase`], `verification-phase-<kind>`
+/// for [`tatara_process::compliance::VerificationPhase`] on
+/// `spec.compliance.bindings[].phase`) lands as ONE more `if let
+/// Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(tag,
+/// "prefix-", |k| spec.<field>.has(k)) { return res; }` branch that
+/// reads the same three-step (strip_prefix + parse + has) shape all
+/// five existing families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
@@ -596,7 +616,10 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_unions_pre_and_post_conditions_for_condition_prefix`],
 /// [`tests::evaluate_point_require_tag_returns_true_on_populated_must_reach_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_empty_depends_on_for_every_must_reach_kind`],
-/// and [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_must_reach_suffix`].
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_must_reach_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_true_iff_sighup_strategy_matches_variant_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_true_on_default_signals_for_sighup_reconverge_only`],
+/// and [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_sighup_suffix`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -627,6 +650,13 @@ fn evaluate_point_require_tag(
     {
         return res;
     }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<SighupStrategy, _>(tag, "sighup-", |kind| {
+            spec.signals.has_sighup_strategy(kind)
+        })
+    {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -640,12 +670,12 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the four closed-set-driven prefix families in
+/// shape the five closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
-/// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`])
-/// each dispatch through past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-/// threshold.
+/// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
+/// `sighup-<kind>` on [`SighupStrategy`]) each dispatch through past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
 ///
 /// # Return shape
 ///
@@ -674,15 +704,16 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future fifth closed-set prefix family — `signal-<kind>` on
+/// A future sixth closed-set prefix family — `signal-<kind>` on
 /// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` on
-/// [`tatara_process::phase::ProcessPhase`], `sighup-<kind>` on
-/// [`tatara_process::signal::SighupStrategy`] — lands as ONE more
-/// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(
-/// tag, "prefix-", |k| spec.<field>.has(k)) { return res; }` branch
-/// that reads the same three-step shape the four existing families
-/// publish. No per-caller `strip_prefix + parse + match { Ok(_) =>
-/// …, Err(_) => Err(UnknownRequireTag) }` restatement.
+/// [`tatara_process::phase::ProcessPhase`], `verification-phase-<kind>`
+/// on [`tatara_process::compliance::VerificationPhase`] — lands as
+/// ONE more `if let Some(res) = strip_and_classify_prefixed_kind::<
+/// NewKind, _>(tag, "prefix-", |k| spec.<field>.has(k)) { return
+/// res; }` branch that reads the same three-step shape the five
+/// existing families publish. No per-caller `strip_prefix + parse +
+/// match { Ok(_) => …, Err(_) => Err(UnknownRequireTag) }`
+/// restatement.
 ///
 /// A future diagnostic shift (attaching the offending suffix to
 /// [`UnknownRequireTag`], promoting the sentinel to carry a
@@ -1786,6 +1817,7 @@ mod tests {
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::intent::{AplicacaoIntent, IntentKind};
     use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind, TeardownPolicy};
+    use tatara_process::signal::SighupStrategy;
     use tatara_process::spec::MustReachPhase;
 
     // Re-parse a `(list …)` source through the reader and hand its
@@ -2999,6 +3031,146 @@ mod tests {
             evaluate_point_require_tag(&spec, "must-reach-Running"),
             Ok(false),
             "fine `must-reach-Running` must be false when no dep gates on Running",
+        );
+    }
+
+    // ── sighup-<kind> prefix family pins ─────────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `sighup-<kind>` prefix
+    // family did not exist before this commit — the point-domain
+    // require-tag vocabulary carried only the coarse `signals` fixed
+    // tag which answered "does the signal policy carry a positive
+    // sigterm-grace-seconds" without touching the SIGHUP side of the
+    // policy. The lift adds the fifth closed-set-driven prefix family
+    // symmetrical with `intent-<kind>` + `lifetime-<kind>` +
+    // `condition-<kind>` + `must-reach-<kind>`, routing through the
+    // newly-opened
+    // [`tatara_process::spec::SignalPolicy::has_sighup_strategy`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`.
+    // First instance on the SCALAR-CARRIER axis of the closed-set-
+    // driven presence-probe algebra (peer of the Option-slot Intent::has
+    // / Lifetime::has and the slice-level ConditionSliceExt::has_kind /
+    // DependsOnSliceExt::has_must_reach primitives).
+
+    /// VARIANT-MATCH pin — `sighup-<kind>` dispatches through the
+    /// autoderived [`SighupStrategy`] `FromStr` + the substrate
+    /// [`SignalPolicy::has_sighup_strategy`] primitive, returning
+    /// `true` only when the policy's `sighup_strategy` field equals
+    /// this variant. Sweep the [`SighupStrategy::ALL`] × ALL cross so
+    /// a regression that hard-coded the arm to a single kind
+    /// (silently returning `true` for every populated policy
+    /// regardless of query kind) or wired the closure to a fixed
+    /// unrelated field (e.g. `signals.start_suspended`) fails HERE at
+    /// the classifier before landing at the operator-facing
+    /// checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_sighup_strategy_matches_variant_per_kind() {
+        for populated in SighupStrategy::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.signals.sighup_strategy = populated;
+            for query in SighupStrategy::ALL {
+                let tag = format!("sighup-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "sighup_strategy={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// DEFAULT / SCALAR-vs-OPTION pin — a default [`ProcessSpec`]
+    /// carries `signals.sighup_strategy: SighupStrategy::default() =
+    /// Reconverge`, so `sighup-Reconverge` classifies `Ok(true)` and
+    /// the other two variants classify `Ok(false)`. Locks the scalar-
+    /// carrier axis's semantic split against the Option-slot axis at
+    /// the classifier boundary: pre-lift the reader might assume
+    /// "default spec must return false for every closed-set prefix
+    /// query" (which holds for `intent-<kind>` / `lifetime-<kind>` /
+    /// `condition-<kind>` / `must-reach-<kind>`, each of which
+    /// probes an Option-slot or a Vec that is empty on a default
+    /// spec). `sighup-<kind>` returns `true` on the
+    /// [`SighupStrategy::default`] variant precisely because the
+    /// field is non-Option — the operator hasn't "left the slot
+    /// empty," they've picked (perhaps by omission) the substrate
+    /// default. Pin the distinction so a regression that special-
+    /// cased the default policy to return `false` for every kind (to
+    /// preserve the pre-lift "default returns false" symmetry) fails
+    /// HERE.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_default_signals_for_sighup_reconverge_only() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in SighupStrategy::ALL {
+            let tag = format!("sighup-{}", kind.as_str());
+            let expected = kind == SighupStrategy::Reconverge;
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(expected),
+                "default signals (sighup_strategy=Reconverge): tag {tag:?} \
+                 must return {expected}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `sighup-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. A regression that fell through to `Ok(false)`
+    /// (matching the pre-lift fixed-tag `_ => Err(UnknownRequireTag)`
+    /// tail) would silently reclassify a `sighup-reconverge` casing
+    /// typo (PascalCase-only closed set) as `definition missing
+    /// required`, which reads as "the spec is wrong" rather than
+    /// "your check is wrong". Pin the distinction. The empty-suffix
+    /// boundary is pinned by the shared substrate primitive's
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_sighup_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for garbage in [
+            "sighup-",
+            "sighup-reconverge",
+            "sighup-RECONVERGE",
+            "sighup-Suspend",
+            "sighup-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// COARSE / FINE COEXISTENCE pin — a default [`ProcessSpec`]
+    /// (positive `sigterm_grace_seconds`, `sighup_strategy: Reconverge`)
+    /// MUST satisfy BOTH the coarse `signals` fixed tag AND the fine
+    /// `sighup-Reconverge` prefix tag AND simultaneously fail the
+    /// off-diagonal `sighup-Restart` probe. Locks the semantic split
+    /// between the two surfaces so a regression that (a) collapsed
+    /// `sighup-<kind>` to the coarse `signals` fixed answer
+    /// (returning `true` for every kind on any policy that satisfies
+    /// `signals`), or (b) drifted the fixed `signals` arm to match on
+    /// SIGHUP strategy kind, fails HERE at ONE narrow site.
+    #[test]
+    fn evaluate_point_require_tag_sighup_and_signals_coexist() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "signals"),
+            Ok(true),
+            "coarse `signals` must be true on default policy (positive grace)",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-Reconverge"),
+            Ok(true),
+            "fine `sighup-Reconverge` must be true on default sighup strategy",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-Restart"),
+            Ok(false),
+            "fine `sighup-Restart` must be false when strategy is Reconverge",
         );
     }
 

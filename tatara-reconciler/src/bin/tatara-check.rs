@@ -8,6 +8,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::str::FromStr;
 
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::intent::IntentKind;
@@ -561,17 +562,17 @@ fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
 ) -> Result<bool, UnknownRequireTag> {
-    if let Some(suffix) = tag.strip_prefix("intent-") {
-        return match suffix.parse::<IntentKind>() {
-            Ok(kind) => Ok(spec.intent.has(kind)),
-            Err(_) => Err(UnknownRequireTag),
-        };
+    if let Some(res) = strip_and_classify_prefixed_kind::<IntentKind, _>(tag, "intent-", |kind| {
+        spec.intent.has(kind)
+    }) {
+        return res;
     }
-    if let Some(suffix) = tag.strip_prefix("lifetime-") {
-        return match suffix.parse::<LifetimeKind>() {
-            Ok(kind) => Ok(spec.lifetime.has(kind)),
-            Err(_) => Err(UnknownRequireTag),
-        };
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<LifetimeKind, _>(tag, "lifetime-", |kind| {
+            spec.lifetime.has(kind)
+        })
+    {
+        return res;
     }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
@@ -581,6 +582,87 @@ fn evaluate_point_require_tag(
         "signals" => Ok(spec.signals.sigterm_grace_seconds > 0),
         _ => Err(UnknownRequireTag),
     }
+}
+
+/// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
+/// `K` and hand the parsed kind to `probe` — the ONE substrate owner
+/// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
+/// shape both closed-set-driven prefix families in
+/// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
+/// `lifetime-<kind>` on [`LifetimeKind`]) hand-authored past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold.
+///
+/// # Return shape
+///
+/// * `None` — `tag` does not begin with `<prefix>`; the caller falls
+///   through to the next prefix family or the fixed-tag match tail.
+/// * `Some(Ok(bool))` — prefix matched, suffix parsed to `K`,
+///   `probe(kind)` yielded the presence answer.
+/// * `Some(Err(UnknownRequireTag))` — prefix matched but the suffix
+///   is not a canonical `K` label (a `lifetime-burst` typo, a bare
+///   `lifetime-` with an empty suffix, an `intent-<misspelled>`).
+///
+/// # Why lift
+///
+/// The (strip_prefix + parse + Ok/Err) triad is a substrate primitive
+/// on the (`&str`, closed-set `K`) algebra: the outer `Option`
+/// discriminates "prefix hit" from "prefix miss" so the caller's
+/// `if let Some(res) = …` early-return chain composes multiple prefix
+/// families without restating the strip/parse boilerplate at each
+/// branch. Both `IntentKind` and `LifetimeKind` implement
+/// [`std::str::FromStr`] through
+/// `#[derive(DeriveClosedSet)]`, so the bound `K: FromStr` catches
+/// every workspace-wide closed-set discriminator by construction —
+/// the parse-error type `<K as FromStr>::Err` is soft-mapped to
+/// [`UnknownRequireTag`] so callers do not thread a per-K carrier
+/// through the diagnostic prose.
+///
+/// # Compounding
+///
+/// A future third closed-set prefix family — `signal-<kind>` on
+/// [`tatara_process::signal::SignalKind`], `phase-<kind>` on
+/// [`tatara_process::phase::ProcessPhase`], `condition-<kind>` on
+/// [`tatara_process::boundary::ConditionKind`] — lands as ONE more
+/// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(
+/// tag, "prefix-", |k| spec.<field>.has(k)) { return res; }` branch
+/// that reads the same three-step shape both existing families
+/// publish. No per-caller `strip_prefix + parse + match { Ok(_) =>
+/// …, Err(_) => Err(UnknownRequireTag) }` restatement.
+///
+/// A future diagnostic shift (attaching the offending suffix to
+/// [`UnknownRequireTag`], promoting the sentinel to carry a
+/// `<K as ClosedSet>::labels_joined("/")` near-miss list) lands at
+/// THIS ONE substrate owner and both current prefix families plus
+/// every future closed-set prefix family inherit the shift by
+/// construction.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// three-step chain recurred at TWO closed-set prefix families past
+/// the ≥2 PRIME-DIRECTIVE trigger, and is lifted to ONE substrate
+/// owner here. THEORY.md §II.1 invariant 2 — free middle; the caller
+/// composes the closed-set choice (via the generic `K`) and the
+/// presence probe (via the `probe` closure) independently, so a
+/// regression that drifted one prefix family's strip/parse discipline
+/// from the other becomes structurally impossible.
+///
+/// Pinned by [`tests::strip_and_classify_prefixed_kind_returns_none_when_prefix_does_not_match`],
+/// [`tests::strip_and_classify_prefixed_kind_returns_ok_when_suffix_is_canonical`],
+/// [`tests::strip_and_classify_prefixed_kind_returns_unknown_on_out_of_vocabulary_suffix`],
+/// and [`tests::strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`].
+fn strip_and_classify_prefixed_kind<K, F>(
+    tag: &str,
+    prefix: &str,
+    probe: F,
+) -> Option<Result<bool, UnknownRequireTag>>
+where
+    K: FromStr,
+    F: FnOnce(K) -> bool,
+{
+    let suffix = tag.strip_prefix(prefix)?;
+    Some(match suffix.parse::<K>() {
+        Ok(kind) => Ok(probe(kind)),
+        Err(_) => Err(UnknownRequireTag),
+    })
 }
 
 /// Classify one `:requires <tag>` entry against a compiled
@@ -1601,13 +1683,14 @@ mod tests {
         find_kw_string_list, head_symbol_or_missing, known_require_tag_domain_names,
         min_defs_shortfall_msg, parse_kwargs, positional_string, read_or_fail,
         report_result_prefixed, require_tag_domain_by_name, required_positional_string,
-        startup_diagnostic, Report, UnknownRequireTag, ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
+        startup_diagnostic, strip_and_classify_prefixed_kind, Report, UnknownRequireTag,
+        ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
     use tatara_process::crd::ProcessSpec;
     use tatara_process::ephemeral::EphemeralSpec;
-    use tatara_process::intent::AplicacaoIntent;
+    use tatara_process::intent::{AplicacaoIntent, IntentKind};
     use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind, TeardownPolicy};
 
     // Re-parse a `(list …)` source through the reader and hand its
@@ -2553,6 +2636,151 @@ mod tests {
         assert_eq!(
             evaluate_point_require_tag(&spec, "totally-unknown"),
             Err(UnknownRequireTag),
+        );
+    }
+
+    // ── strip_and_classify_prefixed_kind substrate pins ──────────────
+    //
+    // Fail-before-pass-after granularity: `strip_and_classify_prefixed_kind`
+    // did not exist before this commit — the (strip_prefix + parse::<K>
+    // + Ok/Err mapping) three-step shape lived inline at both closed-
+    // set prefix families (`intent-<kind>`, `lifetime-<kind>`) in
+    // `evaluate_point_require_tag`, restated byte-for-byte across TWO
+    // branches past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
+    // The lift places the shape on ONE testable owner so a regression
+    // that (a) swapped the `strip_prefix` semantics for a `contains`
+    // (dropping the anchoring), (b) collapsed the parse-error arm to
+    // `Ok(false)` (silently reclassifying an out-of-vocabulary suffix
+    // as "spec missing slot"), or (c) special-cased the empty suffix
+    // (treating a bare `intent-` as "any populated") fails HERE at ONE
+    // narrow substrate site rather than propagating through both
+    // per-family test cohorts before catching.
+
+    /// PREFIX-MISS pin — a tag that does not begin with the prefix
+    /// yields `None`, so the caller's `if let Some(res) = …` early-
+    /// return chain falls through to the next prefix family or the
+    /// fixed-tag match tail. A regression that fired the parse arm on
+    /// a non-matching prefix (e.g. an unchecked `.get(prefix.len()..)`
+    /// call) would trip the `LifetimeKind::from_str` error path and
+    /// return `Some(Err(UnknownRequireTag))`, silently masking every
+    /// fixed tag (`depends-on`, `boundary-pre`, …) as unknown.
+    #[test]
+    fn strip_and_classify_prefixed_kind_returns_none_when_prefix_does_not_match() {
+        // Fixed-tag shape — no prefix match anywhere.
+        assert_eq!(
+            strip_and_classify_prefixed_kind::<LifetimeKind, _>(
+                "depends-on",
+                "lifetime-",
+                |_kind| true,
+            ),
+            None,
+        );
+        // Sibling prefix — `intent-<kind>` does NOT match the
+        // `lifetime-` family. Locks the per-family branching
+        // discipline: each `if let Some(res) = …` step tests its own
+        // prefix independently and never bleeds across families.
+        assert_eq!(
+            strip_and_classify_prefixed_kind::<LifetimeKind, _>(
+                "intent-nix",
+                "lifetime-",
+                |_kind| true,
+            ),
+            None,
+        );
+        // Empty tag — degenerate boundary; nothing to strip.
+        assert_eq!(
+            strip_and_classify_prefixed_kind::<LifetimeKind, _>("", "lifetime-", |_kind| true),
+            None,
+        );
+    }
+
+    /// PREFIX-HIT-PARSE-OK pin — a tag matching the prefix whose
+    /// suffix parses to a canonical `K` label hands the parsed kind to
+    /// `probe` and wraps the probe's return in `Some(Ok(…))`. Sweep
+    /// every [`LifetimeKind`] variant so a regression that hard-coded
+    /// a single arm (silently returning `Ok(true)` for every canonical
+    /// suffix regardless of which variant parsed) fails here.
+    #[test]
+    fn strip_and_classify_prefixed_kind_returns_ok_when_suffix_is_canonical() {
+        for canonical in LifetimeKind::ALL {
+            let tag = format!("lifetime-{}", canonical.as_str());
+            // Identity probe — `Ok(kind == canonical)` ↔ the parsed
+            // kind equals the one this iteration expects. Pins that
+            // the parsed suffix reaches the probe under the SAME
+            // discriminator the caller composed, not a positional
+            // swap or a default fallback.
+            assert_eq!(
+                strip_and_classify_prefixed_kind::<LifetimeKind, _>(&tag, "lifetime-", |parsed| {
+                    parsed == canonical
+                },),
+                Some(Ok(true)),
+                "suffix {tag:?} must parse to {canonical:?} and reach the probe",
+            );
+        }
+        // Cross-family variant: an `intent-` tag routes through the
+        // `IntentKind` bound at the same primitive, sharing the exact
+        // (strip + parse + probe) discipline the lifetime-side cohort
+        // uses. Sibling coverage so both closed-set prefix families
+        // route through ONE primitive.
+        for canonical in IntentKind::ALL {
+            let tag = format!("intent-{}", canonical.as_str());
+            assert_eq!(
+                strip_and_classify_prefixed_kind::<IntentKind, _>(&tag, "intent-", |parsed| parsed
+                    == canonical,),
+                Some(Ok(true)),
+                "suffix {tag:?} must parse to {canonical:?} and reach the probe",
+            );
+        }
+    }
+
+    /// PREFIX-HIT-PARSE-FAIL pin — a tag matching the prefix whose
+    /// suffix is NOT a canonical `K` label yields
+    /// `Some(Err(UnknownRequireTag))`, so the caller's operator-facing
+    /// `unknown :requires tag: <verbatim>` diagnostic path fires. A
+    /// regression that fell through to `Some(Ok(false))` would
+    /// silently reclassify a `lifetime-burst` typo as
+    /// `definition missing required: lifetime-burst` — the operator
+    /// reads "the spec is wrong" instead of "your check is wrong".
+    /// This pin closes the two-cell (parse-ok, parse-fail) matrix at
+    /// the substrate primitive's return-shape boundary.
+    #[test]
+    fn strip_and_classify_prefixed_kind_returns_unknown_on_out_of_vocabulary_suffix() {
+        // Never-fire probe — parse failure must short-circuit before
+        // the closure runs, so a regression that inverted the Ok/Err
+        // arms would panic here.
+        let unreachable_probe = |_kind: LifetimeKind| unreachable!("probe fires only on Ok");
+        for typo in ["burst", "typo", "PERMANENT", "Ephemeral", "ephemeral-2"] {
+            let tag = format!("lifetime-{typo}");
+            assert_eq!(
+                strip_and_classify_prefixed_kind::<LifetimeKind, _>(
+                    &tag,
+                    "lifetime-",
+                    unreachable_probe,
+                ),
+                Some(Err(UnknownRequireTag)),
+                "out-of-vocabulary suffix {tag:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// EMPTY-SUFFIX pin — a bare `<prefix>` (no suffix) routes through
+    /// the SAME (parse-fail → UnknownRequireTag) arm because the empty
+    /// string is not a canonical `K` label. Locks the boundary shared
+    /// with [`evaluate_point_require_tag_returns_unknown_on_bare_lifetime_prefix`]
+    /// so a regression that special-cased the empty suffix (e.g.
+    /// treating `lifetime-` as "any populated") fails at BOTH the
+    /// substrate primitive AND the caller-side pin — the double pin
+    /// keeps the (primitive, caller) pair proven-equivalent.
+    #[test]
+    fn strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix() {
+        let unreachable_probe = |_kind: LifetimeKind| unreachable!("probe fires only on Ok");
+        assert_eq!(
+            strip_and_classify_prefixed_kind::<LifetimeKind, _>(
+                "lifetime-",
+                "lifetime-",
+                unreachable_probe,
+            ),
+            Some(Err(UnknownRequireTag)),
         );
     }
 

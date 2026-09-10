@@ -72,8 +72,84 @@ impl Boundary {
     /// up mechanically without further per-consumer edits).
     #[must_use]
     pub fn has_condition_kind(&self, kind: ConditionKind) -> bool {
-        self.preconditions.iter().any(|c| c.kind == kind)
-            || self.postconditions.iter().any(|c| c.kind == kind)
+        self.preconditions.has_kind(kind) || self.postconditions.has_kind(kind)
+    }
+}
+
+/// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
+/// — the ONE substrate primitive that owns the
+/// `.iter().any(|c| c.kind == K)` walk shape both current production
+/// sites hand-authored past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold. Callers compose the two-half union at their site
+/// ([`Boundary::has_condition_kind`] on `preconditions ∪
+/// postconditions`) or on ONE half only (the ephemeral require-tag
+/// classifier's `closed-loop-auth` arm on `spec.postconditions`) —
+/// the primitive owns ONLY the per-slice walk, so the composition
+/// choice stays typed at the caller.
+///
+/// # Why lift
+///
+/// Pre-lift the `.iter().any(|c| c.kind == K)` walk lived
+/// hand-authored at THREE production sites: twice inside
+/// [`Boundary::has_condition_kind`]'s union (pre + post), once at
+/// `evaluate_ephemeral_require_tag`'s `closed-loop-auth` arm in
+/// `tatara-reconciler::bin::tatara-check` (with `matches!` sugar
+/// instead of `==`, but the same predicate). The (`&[Condition]`,
+/// `ConditionKind`) → `bool` shape is the substrate primitive: a
+/// future consumer that walks a `Vec<Condition>` (a coherence check
+/// that verifies "every `ClosedLoopAuth` postcondition carries an
+/// `issuer` param key", an editor completion listing which
+/// [`ConditionKind`] arms appear on ONE side only, a hypothetical
+/// `postcondition-<kind>` require-tag prefix family that dispatches
+/// on `postconditions` alone — the peer of the existing
+/// `condition-<kind>` family that dispatches on the pre ∪ post union
+/// via [`Boundary::has_condition_kind`]) reaches this ONE primitive
+/// through `slice.has_kind(k)` instead of restating the `.iter().any`
+/// closure body.
+///
+/// # Sibling to [`Boundary::has_condition_kind`]
+///
+/// Same axis, one refinement lower: `Boundary::has_condition_kind` is
+/// the two-slice-union probe; `has_kind` here is the one-slice probe
+/// the union composes twice. A future normalization at the presence
+/// probe shape (widening the return to `Option<&Condition>` for
+/// deeper diagnostics, adding a debug-build assertion on redundant
+/// duplicates, switching to a linear scan that also counts matches)
+/// lands at ONE site here — both [`Boundary::has_condition_kind`] +
+/// every downstream `slice.has_kind(K)` callsite pick it up
+/// mechanically.
+///
+/// # Compounding
+///
+/// A future extension of the probe algebra to a
+/// `has_kind_matching(|&Condition| -> bool)` predicate variant (e.g.
+/// "does any `ClosedLoopAuth` postcondition have a non-empty
+/// `probeImage`?") lands as ONE new default method on this trait —
+/// the closed-set discriminator case above becomes `has_kind(k) ==
+/// self.has_kind_matching(|c| c.kind == k)` by construction, so a
+/// regression that drifted one from the other becomes structurally
+/// impossible past the trait boundary.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// proofs; the per-slice walk lives at ONE substrate site so the
+/// two-half union in [`Boundary`] and the one-half probe on
+/// [`crate::ephemeral::EphemeralSpec::postconditions`] compose
+/// through the SAME primitive. THEORY.md §VI.1 — generation over
+/// composition; a future `Vec<Condition>` consumer reaches the
+/// primitive through `slice.has_kind(k)` with no per-caller
+/// restatement of the `.iter().any(|c| c.kind == K)` closure body.
+pub trait ConditionSliceExt {
+    /// True iff at least one [`Condition`] in this slice carries the
+    /// given [`ConditionKind`]. The single-slice presence probe both
+    /// [`Boundary::has_condition_kind`] (twice, in a union) and the
+    /// ephemeral `closed-loop-auth` require-tag arm (once, on
+    /// postconditions only) compose against.
+    fn has_kind(&self, kind: ConditionKind) -> bool;
+}
+
+impl ConditionSliceExt for [Condition] {
+    fn has_kind(&self, kind: ConditionKind) -> bool {
+        self.iter().any(|c| c.kind == kind)
     }
 }
 
@@ -635,5 +711,127 @@ mod tests {
             !b.has_condition_kind(ConditionKind::PromQL),
             "an absent kind must return false even with populated halves",
         );
+    }
+
+    // ── ConditionSliceExt::has_kind substrate pins ────────────────────
+    //
+    // Fail-before-pass-after granularity: `ConditionSliceExt::has_kind`
+    // did not exist before this commit — the `(&[Condition],
+    // ConditionKind) -> bool` walk shape lived hand-authored inline at
+    // THREE production sites (twice inside `Boundary::has_condition_kind`
+    // on `preconditions` ∪ `postconditions`, once at the ephemeral
+    // require-tag classifier's `closed-loop-auth` arm on
+    // `spec.postconditions` in `tatara-reconciler::bin::tatara-check`,
+    // with `matches!` sugar instead of `==` but the same predicate).
+    // The lift places the per-slice presence probe on ONE substrate site
+    // so the two-half union at `Boundary` and the one-half probe at the
+    // ephemeral surface compose against the SAME primitive rather than
+    // restating the `.iter().any(|c| c.kind == K)` closure body.
+
+    /// EMPTY-SLICE pin — an empty `&[Condition]` returns `false` for
+    /// EVERY [`ConditionKind`]. Sweep `ConditionKind::ALL` so a new
+    /// variant added without a matching arm in the primitive surfaces
+    /// at rustc's exhaustiveness gate on the ALL literal (arity forced
+    /// by `[Self; 8]`) rather than as a silent false-positive at every
+    /// downstream callsite composing this primitive.
+    #[test]
+    fn condition_slice_has_kind_returns_false_on_empty_slice_for_every_kind() {
+        let empty: &[Condition] = &[];
+        for kind in ConditionKind::ALL {
+            assert!(
+                !empty.has_kind(kind),
+                "empty slice must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// PER-VARIANT pin — a single-element slice returns `true` for
+    /// exactly the kind it carries, `false` for every other variant.
+    /// Sweep the ALL × ALL cross so a regression that (a) hard-coded
+    /// the arm to a single kind (silently returning true for every
+    /// populated slice regardless of query kind), or (b) matched on
+    /// [`Condition::params`] instead of [`Condition::kind`] fails HERE
+    /// at the substrate primitive.
+    #[test]
+    fn condition_slice_has_kind_reads_kind_field_per_variant() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            for query in ConditionKind::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    slice.has_kind(query),
+                    expected,
+                    "populated={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// MULTI-ENTRY pin — a slice with multiple entries returns `true`
+    /// for every kind that appears at any position (existential
+    /// quantifier over the slice), `false` for kinds that appear at
+    /// no position. Locks the `any` semantics so a regression that
+    /// collapsed to a `first`-only probe (`slice.first().map_or(false,
+    /// |c| c.kind == kind)`) fails here even though the single-element
+    /// per-variant pin above passes.
+    #[test]
+    fn condition_slice_has_kind_scans_beyond_the_first_position() {
+        let slice = [
+            condition_with(ConditionKind::KustomizationHealthy),
+            condition_with(ConditionKind::ClosedLoopAuth),
+            condition_with(ConditionKind::JobAttested),
+        ];
+        for present in [
+            ConditionKind::KustomizationHealthy,
+            ConditionKind::ClosedLoopAuth,
+            ConditionKind::JobAttested,
+        ] {
+            assert!(
+                slice.has_kind(present),
+                "kind at any position must resolve true: {present:?}",
+            );
+        }
+        for absent in [
+            ConditionKind::ProcessPhase,
+            ConditionKind::HelmReleaseReleased,
+            ConditionKind::PromQL,
+            ConditionKind::Cel,
+            ConditionKind::NixEval,
+        ] {
+            assert!(
+                !slice.has_kind(absent),
+                "kind absent from the slice must resolve false: {absent:?}",
+            );
+        }
+    }
+
+    /// COMPOSITION pin — [`Boundary::has_condition_kind`] equals the OR
+    /// of the two half-slice probes at EVERY (populated arrangement,
+    /// query) pair on `ConditionKind::ALL`. Locks the (union-probe =
+    /// pre.has_kind ∨ post.has_kind) composition contract at ONE test
+    /// so a regression that (a) dropped the `||` (silently narrowing
+    /// the union to an intersection, or to one side only), or
+    /// (b) hand-authored the union with a divergent walk shape (e.g.
+    /// summing counts, comparing lengths) surfaces HERE at the
+    /// composition boundary rather than as silent classifier drift at
+    /// every downstream `condition-<kind>` require-tag callsite.
+    #[test]
+    fn boundary_has_condition_kind_equals_or_of_half_slice_probes() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+                for query in ConditionKind::ALL {
+                    let expected =
+                        b.preconditions.has_kind(query) || b.postconditions.has_kind(query);
+                    assert_eq!(
+                        b.has_condition_kind(query),
+                        expected,
+                        "union drifted: pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
     }
 }

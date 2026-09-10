@@ -63,7 +63,9 @@ pub mod prelude {
     };
     pub use crate::anyhow_flatten::FlattenCtxExt;
     pub use crate::attestation::ProcessAttestation;
-    pub use crate::boundary::{Boundary, Condition, ConditionKind, UnknownConditionKind};
+    pub use crate::boundary::{
+        Boundary, Condition, ConditionKind, ConditionSliceExt, UnknownConditionKind,
+    };
     pub use crate::classification::{
         Arity, CalmClassification, Classification, ConvergencePointType, DataClassification,
         Horizon, HorizonKind, OptimizationDirection, SubstrateType, UnknownCalmClassification,

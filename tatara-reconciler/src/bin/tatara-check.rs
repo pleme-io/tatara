@@ -11,7 +11,7 @@ use std::process::ExitCode;
 use std::str::FromStr;
 
 use tatara_lisp::{domain, read, Expander, Sexp};
-use tatara_process::boundary::ConditionKind;
+use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
 use tatara_process::intent::IntentKind;
 use tatara_process::lifetime::LifetimeKind;
 use tatara_reconciler::known_crd::KnownCrd;
@@ -725,6 +725,15 @@ where
 ///   [`ConditionKind::ClosedLoopAuth`]. A finer-grained pin than
 ///   `postconditions` — an ephemeral env with a HelmRelease-only
 ///   postcondition list passes the coarse tag but fails this one.
+///   Composes through
+///   [`tatara_process::boundary::ConditionSliceExt::has_kind`] — the
+///   ONE substrate primitive that owns the
+///   `(&[Condition], ConditionKind) -> bool` walk shape both this
+///   ephemeral arm (on `spec.postconditions` alone) and
+///   [`tatara_process::boundary::Boundary::has_condition_kind`] (on
+///   the `preconditions ∪ postconditions` union via `pre.has_kind ||
+///   post.has_kind`) hand-authored past the ★★ PRIME-DIRECTIVE ≥ 2
+///   duplication threshold before the lift.
 ///
 /// A future closed-set prefix family lands as one `else if let Some(
 /// suffix) = tag.strip_prefix("<prefix>-")` branch that reads the same
@@ -745,12 +754,7 @@ fn evaluate_ephemeral_require_tag(
         "teardown" => Ok(true),
         "postconditions" => Ok(!spec.postconditions.is_empty()),
         "preconditions" => Ok(!spec.preconditions.is_empty()),
-        "closed-loop-auth" => Ok(spec.postconditions.iter().any(|c| {
-            matches!(
-                c.kind,
-                tatara_process::boundary::ConditionKind::ClosedLoopAuth
-            )
-        })),
+        "closed-loop-auth" => Ok(spec.postconditions.has_kind(ConditionKind::ClosedLoopAuth)),
         _ => Err(UnknownRequireTag),
     }
 }

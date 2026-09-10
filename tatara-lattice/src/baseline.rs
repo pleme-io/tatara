@@ -113,25 +113,92 @@ impl Baseline {
             _ => None,
         }
     }
+
+    /// Declaration-order position in [`Self::ALL`] — the injective
+    /// tie-breaking discriminator that lifts [`Self::rank`] from a
+    /// rank-only pre-order (which admits the documented three-way
+    /// `Soc2` / `PciDss` / `FedrampModerate` tie at rank 4) onto a
+    /// strict total order via [`Self::total_key`]. Exhaustive match so
+    /// a future variant addition triggers the compiler's exhaustiveness
+    /// check at this site rather than silently defaulting to any single
+    /// index; kept in lockstep with [`Self::ALL`] by
+    /// [`tests::all_index_matches_declaration_order_position_in_ALL_for_every_variant`],
+    /// which iterates the closed set and asserts
+    /// `Self::ALL[i].all_index() == i as u8` at every slot.
+    pub const fn all_index(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::CisL1 => 1,
+            Self::CisL2 => 2,
+            Self::FedrampLow => 3,
+            Self::FedrampModerate => 4,
+            Self::FedrampHigh => 5,
+            Self::Soc2 => 6,
+            Self::PciDss => 7,
+        }
+    }
+
+    /// Total-order tie-breaking key over `(rank, all_index)` — the
+    /// strict total order the [`Lattice`] impl routes `meet` / `join`
+    /// / `leq` through. Pre-lift the lattice impl used
+    /// `self.rank() <= other.rank()` as its ordering test, which broke
+    /// [`Lattice::meet`] / [`Lattice::join`] commutativity on the
+    /// documented three-way rank-4 tie stratum (`FedrampModerate`,
+    /// `Soc2`, `PciDss` all sharing `rank() == 4`): `Soc2.meet(&PciDss)`
+    /// returned `Soc2` by self-preference while `PciDss.meet(&Soc2)`
+    /// returned `PciDss` by the same test, violating the top-of-lib
+    /// [`Lattice`]-trait docstring's `a ⊓ b = b ⊓ a` law. Post-lift
+    /// pairing `rank()` with [`Self::all_index`] (an injection over
+    /// [`Self::ALL`] by declaration order) yields a strict total order
+    /// on which `min` / `max` are commutative by construction — the
+    /// rank stratum stays documented at [`Self::rank`] as the
+    /// operator-facing semantic AND the lattice impl now satisfies
+    /// every law the top-of-lib docstring promises. At the tie stratum,
+    /// declaration-order breaks the tie: `FedrampModerate` (index 4) <
+    /// `Soc2` (index 6) < `PciDss` (index 7); consumers that need to
+    /// probe "same rank stratum" should compare `rank()` directly
+    /// rather than reading `leq` into a pre-order semantic. Round-trip
+    /// injectivity over [`Self::ALL`] is sealed by
+    /// [`tests::total_key_is_injective_over_baseline_ALL`].
+    pub const fn total_key(self) -> (u8, u8) {
+        (self.rank(), self.all_index())
+    }
 }
 
 impl Lattice for Baseline {
     fn meet(&self, other: &Self) -> Self {
-        if self.rank() <= other.rank() {
+        // Total-order min via `total_key` — commutative + idempotent +
+        // associative by construction on any total order; consumes the
+        // rank tie-break through the declaration-order discriminator so
+        // the operator-facing `rank()` stratum stays intact while the
+        // lattice impl satisfies the `a ⊓ b = b ⊓ a` law the top-of-lib
+        // docstring promises. Pinned exhaustively over `Baseline::ALL`
+        // by the `meet_and_join_are_commutative_over_baseline_ALL_*`
+        // test family.
+        if self.total_key() <= other.total_key() {
             *self
         } else {
             *other
         }
     }
     fn join(&self, other: &Self) -> Self {
-        if self.rank() >= other.rank() {
+        // Total-order max via `total_key` — dual of `meet` on the same
+        // total order.
+        if self.total_key() >= other.total_key() {
             *self
         } else {
             *other
         }
     }
     fn leq(&self, other: &Self) -> bool {
-        self.rank() <= other.rank()
+        // Consistent with `meet` / `join` via the same `total_key`
+        // projection — pinned by
+        // `leq_agrees_with_meet_and_join_over_baseline_ALL`. At the
+        // rank-4 tie stratum this is antisymmetric (declaration-order
+        // breaks the tie) rather than symmetric (both directions true
+        // under rank-only) — see `Self::total_key` for the semantic
+        // note.
+        self.total_key() <= other.total_key()
     }
     fn bottom() -> Self {
         Self::None
@@ -290,19 +357,23 @@ mod tests {
     /// CisL1 (1) ≤ CisL2 (2) ≤ FedrampLow (3) ≤ FedrampModerate (4)
     /// ≤ FedrampHigh (5)` — with the two rank-4 aliases (`Soc2`,
     /// `PciDss`) explicitly documented as sharing the
-    /// `FedrampModerate` stratum. Pins the seven pairwise
+    /// `FedrampModerate` stratum. Pins the five pairwise
     /// declaration-order inequalities that
-    /// [`impl Lattice for Baseline`]'s `leq` relies on so a future
-    /// variant insertion or rank refactor surfaces here before
-    /// reaching the compliance-lattice consumers.
+    /// [`impl Lattice for Baseline`]'s `leq` relies on (via the
+    /// primary axis of [`Baseline::total_key`]) so a future variant
+    /// insertion or rank refactor surfaces here before reaching the
+    /// compliance-lattice consumers.
     ///
-    /// Note: this test intentionally does NOT assert that `rank`
-    /// pins a strict total order across ALL — the SOC2 / PCI-DSS /
+    /// Note: this test intentionally does NOT assert that `rank` pins
+    /// a strict total order across ALL — the SOC2 / PCI-DSS /
     /// FedrampModerate three-way tie at rank 4 is a documented
-    /// domain choice (see `Self::rank`'s inline comments) that
-    /// currently breaks `Lattice::meet`'s commutativity on those
-    /// pairs (a separate substrate-lift concern; not this run's
-    /// scope).
+    /// domain choice (see [`Baseline::rank`]'s inline comments). The
+    /// lattice-law commutativity `meet` / `join` need across that
+    /// stratum is delivered by [`Baseline::total_key`]'s
+    /// (rank, all_index) pairing, pinned by the
+    /// `meet_is_commutative_at_the_rank_4_tie_stratum` +
+    /// `join_is_commutative_at_the_rank_4_tie_stratum` sibling tests
+    /// below and by the exhaustive `..._over_baseline_ALL` sweeps.
     #[test]
     fn rank_climbs_monotonically_across_the_module_docstring_backbone() {
         assert!(Baseline::None.rank() < Baseline::CisL1.rank());
@@ -316,5 +387,243 @@ mod tests {
         // would surface here.
         assert_eq!(Baseline::Soc2.rank(), Baseline::FedrampModerate.rank());
         assert_eq!(Baseline::PciDss.rank(), Baseline::FedrampModerate.rank());
+    }
+
+    // ── total_key substrate + lattice-law seals ──────────────────────
+    //
+    // Bind [`Baseline::all_index`] + [`Baseline::total_key`] and pin the
+    // [`Lattice for Baseline`] impl's law-abiding shape at fail-before-
+    // pass-after granularity over the closed set [`Baseline::ALL`].
+    //
+    // Pre-lift the lattice impl used `self.rank() <= other.rank()` as
+    // its ordering test, which broke [`Lattice::meet`] / [`Lattice::join`]
+    // commutativity on the documented three-way rank-4 tie stratum
+    // (`FedrampModerate`, `Soc2`, `PciDss`): `Soc2.meet(&PciDss)`
+    // returned `Soc2` by self-preference while `PciDss.meet(&Soc2)`
+    // returned `PciDss` by the same test, violating the top-of-lib
+    // `Lattice`-trait docstring's `a ⊓ b = b ⊓ a` law. Post-lift the
+    // lattice routes through `total_key` (a total order over `(rank,
+    // all_index)`) so `meet` / `join` / `leq` satisfy every lattice law
+    // by construction on the closed set. The tests below cover:
+    //   1. `all_index` matches [`Baseline::ALL`]'s declaration order
+    //      at every slot — the injection substrate the total-order lift
+    //      rests on.
+    //   2. `total_key` is injective over [`Baseline::ALL`] — no two
+    //      variants share a key, so `min`/`max` on the total order
+    //      return a UNIQUE element per input pair.
+    //   3. The rank-4 tie-stratum commutativity fix, pinned per-pair as
+    //      explicit before/after regression seals.
+    //   4. Exhaustive lattice laws over `Baseline::ALL` — idempotence,
+    //      commutativity, associativity, absorption, `leq` × `meet` /
+    //      `join` agreement, bottom / top universality.
+
+    /// [`Baseline::all_index`] matches [`Baseline::ALL`]'s
+    /// declaration-order position at every slot. Fail-before-pass-
+    /// after: pre-lift `all_index` did not exist as an inherent
+    /// method — the total-order tie-break the [`Lattice`] impl now
+    /// routes through had no source-of-truth injection to bind to.
+    /// Post-lift this test iterates the closed set index-by-index and
+    /// asserts `Baseline::ALL[i].all_index() == i as u8` at every
+    /// slot; a future variant insertion that extends `ALL` but not
+    /// `all_index` (or vice versa) will surface here as a slot
+    /// mismatch rather than as silent lattice-law drift downstream.
+    #[test]
+    #[allow(non_snake_case)]
+    fn all_index_matches_declaration_order_position_in_ALL_for_every_variant() {
+        for (i, v) in Baseline::ALL.iter().enumerate() {
+            assert_eq!(
+                v.all_index(),
+                i as u8,
+                "Baseline::ALL[{i}] = {v:?} has all_index() = {} — the \
+                 declaration-order discriminator has drifted away from \
+                 the closed set's index, silently breaking the total \
+                 order Baseline::total_key routes meet / join / leq \
+                 through",
+                v.all_index(),
+            );
+        }
+    }
+
+    /// [`Baseline::total_key`] is injective over [`Baseline::ALL`] —
+    /// no two variants share a `(rank, all_index)` key, so `min` /
+    /// `max` on the total order return a UNIQUE element per input
+    /// pair. Consequence: [`Lattice::meet`] / [`Lattice::join`] are
+    /// commutative by construction (min / max on any total order are
+    /// commutative) AND `a.meet(&b) == a || a.meet(&b) == b` for every
+    /// `(a, b)` in `ALL × ALL` (the meet is always one of the inputs,
+    /// never a third element).
+    #[test]
+    #[allow(non_snake_case)]
+    fn total_key_is_injective_over_baseline_ALL() {
+        use std::collections::HashSet;
+        let keys: HashSet<(u8, u8)> = Baseline::ALL.iter().map(|v| v.total_key()).collect();
+        assert_eq!(
+            keys.len(),
+            Baseline::ALL.len(),
+            "Baseline::total_key must be injective over Baseline::ALL — \
+             two variants sharing a key would collapse the total order \
+             back into a pre-order and re-introduce the rank-tie \
+             commutativity break the lift severed",
+        );
+    }
+
+    /// Explicit before/after commutativity seal on the `Soc2` × `PciDss`
+    /// pair — the pair the prior-commit follow-up note ("out of scope
+    /// for this run") named as breaking `Lattice::meet` commutativity
+    /// under the pre-lift rank-only ordering. Post-lift both directions
+    /// must return the same variant. The `total_key`-driven `meet`
+    /// picks the smaller-`all_index` variant at ties — `Soc2` (index 6)
+    /// < `PciDss` (index 7) — so both directions collapse to `Soc2`.
+    #[test]
+    fn meet_is_commutative_at_the_rank_4_tie_stratum() {
+        assert_eq!(
+            Baseline::Soc2.meet(&Baseline::PciDss),
+            Baseline::PciDss.meet(&Baseline::Soc2),
+            "meet must be commutative on the rank-4 tie stratum — \
+             pre-lift Soc2.meet(&PciDss)=Soc2 while PciDss.meet(&Soc2)\
+             =PciDss under the rank-only ordering test",
+        );
+        assert_eq!(
+            Baseline::FedrampModerate.meet(&Baseline::Soc2),
+            Baseline::Soc2.meet(&Baseline::FedrampModerate),
+        );
+        assert_eq!(
+            Baseline::FedrampModerate.meet(&Baseline::PciDss),
+            Baseline::PciDss.meet(&Baseline::FedrampModerate),
+        );
+    }
+
+    /// Sibling of [`meet_is_commutative_at_the_rank_4_tie_stratum`]
+    /// on the `join` axis — same three-way tie stratum, same commutativity
+    /// obligation, same total-order-driven fix.
+    #[test]
+    fn join_is_commutative_at_the_rank_4_tie_stratum() {
+        assert_eq!(
+            Baseline::Soc2.join(&Baseline::PciDss),
+            Baseline::PciDss.join(&Baseline::Soc2),
+        );
+        assert_eq!(
+            Baseline::FedrampModerate.join(&Baseline::Soc2),
+            Baseline::Soc2.join(&Baseline::FedrampModerate),
+        );
+        assert_eq!(
+            Baseline::FedrampModerate.join(&Baseline::PciDss),
+            Baseline::PciDss.join(&Baseline::FedrampModerate),
+        );
+    }
+
+    /// Exhaustive coverage of the lattice laws (idempotence,
+    /// commutativity, absorption, `leq` × `meet` / `join` agreement)
+    /// over `Baseline::ALL × Baseline::ALL` — 64 ordered pairs pinned
+    /// in one sweep. Bottom / top universality is pinned in the sibling
+    /// test below. Associativity is pinned in its own sibling
+    /// (`Baseline::ALL × ALL × ALL` = 512 triples) so a regression in
+    /// the pairwise laws does not mask under the triple sweep's
+    /// aggregation.
+    #[test]
+    #[allow(non_snake_case)]
+    fn meet_join_and_leq_satisfy_pairwise_lattice_laws_over_baseline_ALL() {
+        for a in Baseline::ALL {
+            // Idempotence — `a ⊓ a = a`, `a ⊔ a = a`.
+            assert_eq!(a.meet(&a), a, "meet idempotence failed at {a:?}");
+            assert_eq!(a.join(&a), a, "join idempotence failed at {a:?}");
+            for b in Baseline::ALL {
+                // Commutativity — `a ⊓ b = b ⊓ a`, `a ⊔ b = b ⊔ a`.
+                assert_eq!(
+                    a.meet(&b),
+                    b.meet(&a),
+                    "meet commutativity failed at ({a:?}, {b:?})",
+                );
+                assert_eq!(
+                    a.join(&b),
+                    b.join(&a),
+                    "join commutativity failed at ({a:?}, {b:?})",
+                );
+                // Meet / join return one of the inputs — a consequence
+                // of `total_key`'s injectivity plus the min / max
+                // ordering test.
+                assert!(
+                    a.meet(&b) == a || a.meet(&b) == b,
+                    "meet at ({a:?}, {b:?}) returned {:?}, which is neither input",
+                    a.meet(&b),
+                );
+                assert!(
+                    a.join(&b) == a || a.join(&b) == b,
+                    "join at ({a:?}, {b:?}) returned {:?}, which is neither input",
+                    a.join(&b),
+                );
+                // Absorption — `a ⊓ (a ⊔ b) = a`, `a ⊔ (a ⊓ b) = a`.
+                assert_eq!(
+                    a.meet(&a.join(&b)),
+                    a,
+                    "absorption a ⊓ (a ⊔ b) = a failed at ({a:?}, {b:?})",
+                );
+                assert_eq!(
+                    a.join(&a.meet(&b)),
+                    a,
+                    "absorption a ⊔ (a ⊓ b) = a failed at ({a:?}, {b:?})",
+                );
+                // `leq` agrees with `meet` and `join` — the backbone
+                // identity the top-of-lib docstring promises.
+                assert_eq!(
+                    a.leq(&b),
+                    a.meet(&b) == a,
+                    "leq × meet agreement failed at ({a:?}, {b:?})",
+                );
+                assert_eq!(
+                    a.leq(&b),
+                    a.join(&b) == b,
+                    "leq × join agreement failed at ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    /// Associativity of `meet` / `join` over `Baseline::ALL^3` — 512
+    /// ordered triples pinned in one sweep. Kept as its own test so a
+    /// regression in the triple sweep does not mask a pairwise-law
+    /// regression the sibling
+    /// [`meet_join_and_leq_satisfy_pairwise_lattice_laws_over_baseline_ALL`]
+    /// covers.
+    #[test]
+    #[allow(non_snake_case)]
+    fn meet_and_join_are_associative_over_baseline_ALL() {
+        for a in Baseline::ALL {
+            for b in Baseline::ALL {
+                for c in Baseline::ALL {
+                    assert_eq!(
+                        a.meet(&b).meet(&c),
+                        a.meet(&b.meet(&c)),
+                        "meet associativity failed at ({a:?}, {b:?}, {c:?})",
+                    );
+                    assert_eq!(
+                        a.join(&b).join(&c),
+                        a.join(&b.join(&c)),
+                        "join associativity failed at ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    /// Bottom / top universality over `Baseline::ALL` — `bottom() ≤ x`
+    /// and `x ≤ top()` for every `x` in the closed set. Pins
+    /// `Baseline::None` as the least element and `Baseline::FedrampHigh`
+    /// as the greatest under the `total_key`-driven `leq`.
+    #[test]
+    #[allow(non_snake_case)]
+    fn bottom_and_top_are_universal_over_baseline_ALL() {
+        for v in Baseline::ALL {
+            assert!(
+                <Baseline as Lattice>::bottom().leq(&v),
+                "bottom ({:?}) must be ≤ every variant — failed at {v:?}",
+                <Baseline as Lattice>::bottom(),
+            );
+            assert!(
+                v.leq(&<Baseline as Lattice>::top()),
+                "every variant must be ≤ top ({:?}) — failed at {v:?}",
+                <Baseline as Lattice>::top(),
+            );
+        }
     }
 }

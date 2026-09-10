@@ -60,6 +60,85 @@ pub struct EncapsulatesSpec {
     pub mode: EncapsulationMode,
 }
 
+impl EncapsulatesSpec {
+    /// Closed-set-driven presence probe — does this [`EncapsulatesSpec`]
+    /// carry the given [`EncapsulationMode`] discriminator on its
+    /// [`Self::mode`] slot? The ONE substrate primitive that owns the
+    /// `(EncapsulatesSpec, EncapsulationMode) -> bool` scalar-carrier walk
+    /// shape.
+    ///
+    /// # Second scalar-carrier peer on the presence-probe axis
+    ///
+    /// Peer of [`crate::spec::SignalPolicy::has_sighup_strategy`] — both
+    /// probe a scalar closed-set-discriminator field on an inner
+    /// [`crate::crd::ProcessSpec`] struct via a one-line
+    /// `self.<field> == kind` body. Together they close the SCALAR-CARRIER
+    /// stratum of the workspace-wide closed-set-driven presence-probe
+    /// algebra (the workspace-wide algebra spans three underlying
+    /// representation kinds — Option-slot, slice, scalar — see the
+    /// [`crate::spec::SignalPolicy::has_sighup_strategy`] docstring for
+    /// the full-shape rundown; this method is the second scalar-carrier
+    /// instance).
+    ///
+    /// # Semantics — VARIANT match, not POPULATED slot
+    ///
+    /// `has_mode(kind)` returns `true` iff `self.mode == kind`. On an
+    /// [`EncapsulatesSpec`] whose `mode` slot is the substrate default
+    /// ([`EncapsulationMode::default`] = [`EncapsulationMode::Manage`])
+    /// the probe returns `true` for [`EncapsulationMode::Manage`] and
+    /// `false` for every other variant — legitimate operator signal
+    /// symmetric to [`crate::signal::SighupStrategy::default`]. An
+    /// operator who opted `encapsulates` in (populating the parent
+    /// `Option<EncapsulatesSpec>`) but left `:mode` unset IS configured
+    /// for `Manage`, and a `:requires (encapsulation-mode-Manage)` check
+    /// should pass on that spec.
+    ///
+    /// # Interaction with the parent `Option` gate
+    ///
+    /// The parent `Process.spec.encapsulates` field is an
+    /// `Option<EncapsulatesSpec>` (greenfield Processes carry `None`);
+    /// downstream consumers gate this probe on the parent presence via
+    /// `spec.encapsulates.as_ref().is_some_and(|e| e.has_mode(kind))`.
+    /// A permanent Process with `encapsulates: None` returns `false` for
+    /// every kind — including the default `Manage` variant — because
+    /// the operator DECLINED the encapsulation surface entirely rather
+    /// than defaulting into it. Symmetric to the
+    /// `resolved_ephemeral().is_some_and(…)` gate the
+    /// `export-when-<kind>` / `channel-<kind>` / `report-format-<kind>` /
+    /// `artifact-<kind>` slice-level probes compose on the ephemeral
+    /// axis.
+    ///
+    /// # Compounding
+    ///
+    /// A future closed-set-discriminator scalar field on `EncapsulatesSpec`
+    /// (a hypothetical `SubmodeKind` selecting a sub-strategy inside the
+    /// Adopt/Manage modes; a `HandoffPhase` scalar selecting when the
+    /// reconciler swaps ownership) lands as ONE peer inherent method
+    /// with the same one-line `self.<field> == kind` body and routes
+    /// through the same `strip_and_classify_prefixed_kind::<K, _>` shape
+    /// in `tatara-check`. A future
+    /// [`EncapsulationMode`] variant (a hypothetical `Observe` submode,
+    /// a `Migrate` for scripted mode transitions) reaches every
+    /// downstream through ONE `ALL` entry on the closed set with the
+    /// probe body untouched.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the scalar-carrier presence-probe body lives at ONE
+    /// substrate site so every downstream (`encapsulation-mode-<kind>`
+    /// require-tag family in `tatara-check`, closed-set audit
+    /// dispatchers, future variant additions on [`EncapsulationMode`])
+    /// binds through the SAME shape rather than restating the
+    /// `encapsulates.mode == kind` closure body at each callsite.
+    /// THEORY.md §VI.1 — generation over composition; a future
+    /// [`EncapsulationMode`] variant lands at ONE `ALL` entry + ONE
+    /// `as_str` arm on the closed set and the probe picks it up
+    /// mechanically without further per-consumer edits.
+    #[must_use]
+    pub fn has_mode(&self, kind: EncapsulationMode) -> bool {
+        self.mode == kind
+    }
+}
+
 /// Three concrete kinds the substrate knows how to wrap. Exactly-
 /// one-Option pattern matching `Intent` / `Lifetime` — additive on
 /// the wire, every variant typed.
@@ -491,6 +570,79 @@ mod tests {
     #[test]
     fn mode_default_is_manage() {
         assert_eq!(EncapsulationMode::default(), EncapsulationMode::Manage);
+    }
+
+    // ── scalar-carrier presence probe on EncapsulatesSpec × EncapsulationMode ─
+    //
+    // Fail-before-pass-after granularity: [`EncapsulatesSpec::has_mode`]
+    // did not exist before this commit — every consumer of the
+    // `(EncapsulatesSpec, EncapsulationMode) -> bool` scalar-carrier
+    // probe shape restated the `encapsulates.mode == kind` closure body
+    // at its own callsite. Post-lift the shape lives at ONE substrate
+    // owner and every downstream (the `encapsulation-mode-<kind>`
+    // require-tag family in `tatara-check`, future audit dispatchers
+    // walking [`EncapsulationMode::ALL`], any future CRD-facing closed-
+    // set discriminator on a scalar `EncapsulatesSpec` field) binds
+    // through the SAME `has(kind)` shape the Option-slot (Intent::has,
+    // Lifetime::has), slice-level (ConditionSliceExt::has_kind,
+    // DependsOnSliceExt::has_must_reach, ComplianceBindingSliceExt::
+    // has_verification_phase, ExportSpecSliceExt::{has_when,
+    // has_channel_kind, has_report_format, has_artifact_kind}) and
+    // sister scalar-carrier ([`crate::spec::SignalPolicy::has_sighup_strategy`])
+    // primitives publish.
+
+    /// DIAGONAL — for every [`EncapsulationMode`] variant, an
+    /// [`EncapsulatesSpec`] whose `mode` field is set to that variant
+    /// returns `true` from `has_mode` on that same variant AND `false`
+    /// on every other variant. Sweep the [`EncapsulationMode::ALL`] ×
+    /// ALL cross so a regression that hard-coded the arm to a single
+    /// variant (silently returning `true` on every populated spec
+    /// regardless of query kind) or wired the equality to a fixed
+    /// unrelated field (a stray probe on `kind` — the tagged-union
+    /// carrier — instead of `mode`) fails HERE at the substrate
+    /// primitive before landing at the operator-facing checks.lisp
+    /// surface.
+    #[test]
+    fn encapsulates_spec_has_mode_returns_true_iff_variant_matches() {
+        for populated in EncapsulationMode::ALL {
+            let spec = EncapsulatesSpec {
+                kind: EncapsulationKind::default(),
+                mode: populated,
+            };
+            for query in EncapsulationMode::ALL {
+                assert_eq!(
+                    spec.has_mode(query),
+                    query == populated,
+                    "mode={populated:?}: query {query:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// DEFAULT — an [`EncapsulatesSpec`] constructed with the
+    /// [`EncapsulationMode::default`] variant carries
+    /// `mode: EncapsulationMode::Manage`, so the scalar-carrier probe
+    /// returns `true` on [`EncapsulationMode::Manage`] and `false` on
+    /// every other variant. Symmetric to the
+    /// [`crate::spec::SignalPolicy::has_sighup_strategy`] default pin —
+    /// both scalar-carrier peers publish the SAME "default is a
+    /// legitimate operator answer" contract at the substrate boundary,
+    /// distinct from the Option-slot axis where a default carrier
+    /// returns `false` for EVERY kind.
+    #[test]
+    fn encapsulates_spec_has_mode_default_probes_manage_only() {
+        let spec = EncapsulatesSpec {
+            kind: EncapsulationKind::default(),
+            mode: EncapsulationMode::default(),
+        };
+        for kind in EncapsulationMode::ALL {
+            let expected = kind == EncapsulationMode::Manage;
+            assert_eq!(
+                spec.has_mode(kind),
+                expected,
+                "default spec (mode=Manage) must return {expected} for {kind:?}",
+            );
+        }
     }
 
     // ── closed-set algebra for EncapsulationMode (ALL × as_str ×

@@ -13,6 +13,7 @@ use std::str::FromStr;
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
 use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
+use tatara_process::encapsulates::EncapsulationMode;
 use tatara_process::export::{
     ArtifactKind, ChannelKind, ExportSpecSliceExt, ExportTrigger, ReportFormat,
 };
@@ -528,7 +529,7 @@ struct UnknownRequireTag;
 ///
 /// # Vocabulary
 ///
-/// Seven closed-set-driven prefix families dispatch through the
+/// Eleven closed-set-driven prefix families dispatch through the
 /// autoderived `FromStr` + the substrate presence probe on their
 /// respective parent:
 ///
@@ -716,6 +717,34 @@ struct UnknownRequireTag;
 ///   `export-when-OnAttested` + `channel-natsSubject` +
 ///   `report-format-Junit` independently probe the four axes on the
 ///   SAME `&[ExportSpec]` slice.
+/// - `encapsulation-mode-<kind>` — [`EncapsulationMode`] closed set →
+///   [`tatara_process::encapsulates::EncapsulatesSpec::has_mode`] (a
+///   scalar-carrier variant-equality probe on
+///   `spec.encapsulates.as_ref().map(|e| e.mode)`, so the operator's
+///   `:requires (encapsulation-mode-Adopt)` pins that a Process is in
+///   the `Adopt` mode of its wrapped pre-existing state, `:requires
+///   (encapsulation-mode-Observe)` pins the read-only observing
+///   posture, and `:requires (encapsulation-mode-Manage)` pins the
+///   default full-ownership posture. Eleventh closed-set-driven prefix
+///   family in the point-domain require-tag vocabulary and SECOND
+///   instance on the scalar-carrier axis of the presence-probe algebra
+///   (sibling to `sighup-<kind>` on
+///   [`tatara_process::spec::SignalPolicy::has_sighup_strategy`]). Same
+///   variant-equality semantics as `sighup-<kind>` but gated on the
+///   parent `Option<EncapsulatesSpec>` presence via
+///   `spec.encapsulates.as_ref().is_some_and(…)`: a greenfield Process
+///   with `encapsulates: None` returns `false` for every mode —
+///   including the default [`EncapsulationMode::Manage`] — because the
+///   operator DECLINED the encapsulation surface entirely rather than
+///   defaulting into it. This distinguishes the encapsulation-mode
+///   axis from the sighup-strategy axis (which defaults into
+///   [`SighupStrategy::Reconverge`] on a bare `SignalPolicy`): the
+///   parent gate composes an Option-slot precondition onto a scalar-
+///   carrier probe, closing the (Option-parent × scalar-child) corner
+///   of the presence-probe algebra. Coexists with a hypothetical
+///   coarse `encapsulates` fixed tag (not present today; would pin
+///   "does the spec wrap ANY pre-existing state" without touching the
+///   mode axis); the two answers are distinct.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -725,10 +754,11 @@ struct UnknownRequireTag;
 ///
 /// A future new `IntentKind` / `LifetimeKind` / `ConditionKind` /
 /// `MustReachPhase` / `SighupStrategy` / `VerificationPhase` /
-/// `ExportTrigger` / `ChannelKind` / `ReportFormat` / `ArtifactKind`
-/// variant lands at ONE `ALL` entry on its parent's closed set — no
-/// per-caller edit here. A future new prefix family (e.g. `signal-<kind>`
-/// for [`tatara_process::signal::ProcessSignal`], `phase-<kind>` for
+/// `ExportTrigger` / `ChannelKind` / `ReportFormat` / `ArtifactKind` /
+/// `EncapsulationMode` variant lands at ONE `ALL` entry on its
+/// parent's closed set — no per-caller edit here. A future new prefix
+/// family (e.g. `signal-<kind>` for
+/// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` for
 /// [`tatara_process::phase::ProcessPhase`], a hypothetical
 /// `routing-form-<kind>` for a closed-set discriminator on
 /// `spec.routing`) lands as ONE more
@@ -770,7 +800,11 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_artifact_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_empty_exports_for_every_artifact_kind`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_artifact_suffix`],
-/// and [`tests::evaluate_point_require_tag_artifact_coexists_with_prior_export_axes`].
+/// [`tests::evaluate_point_require_tag_artifact_coexists_with_prior_export_axes`],
+/// [`tests::evaluate_point_require_tag_returns_true_iff_encapsulation_mode_matches_variant_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_absent_encapsulates_for_every_mode`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_encapsulation_mode_suffix`],
+/// and [`tests::evaluate_point_require_tag_encapsulation_mode_and_sighup_scalar_carriers_coexist`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -849,6 +883,13 @@ fn evaluate_point_require_tag(
     {
         return res;
     }
+    if let Some(res) = strip_and_classify_prefixed_kind::<EncapsulationMode, _>(
+        tag,
+        "encapsulation-mode-",
+        |kind| spec.encapsulates.as_ref().is_some_and(|e| e.has_mode(kind)),
+    ) {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -862,7 +903,7 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the ten closed-set-driven prefix families in
+/// shape the eleven closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
@@ -870,8 +911,9 @@ fn evaluate_point_require_tag(
 /// on [`VerificationPhase`], `export-when-<kind>` on
 /// [`ExportTrigger`], `channel-<kind>` on [`ChannelKind`],
 /// `report-format-<kind>` on [`ReportFormat`], `artifact-<kind>` on
-/// [`ArtifactKind`]) each dispatch through past the ★★ PRIME-DIRECTIVE
-/// ≥ 2 duplication threshold.
+/// [`ArtifactKind`], `encapsulation-mode-<kind>` on
+/// [`EncapsulationMode`]) each dispatch through past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold.
 ///
 /// # Return shape
 ///
@@ -900,14 +942,14 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future eleventh closed-set prefix family — `signal-<kind>` on
+/// A future twelfth closed-set prefix family — `signal-<kind>` on
 /// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` on
 /// [`tatara_process::phase::ProcessPhase`], a hypothetical
 /// `routing-form-<kind>` on `spec.routing.as_ref().map(|r| r.form)` —
 /// lands as ONE more `if let Some(res) =
 /// strip_and_classify_prefixed_kind::<NewKind, _>(tag, "prefix-", |k|
 /// spec.<field>.has(k)) { return res; }` branch that reads the same
-/// three-step shape the ten existing families publish. No per-caller
+/// three-step shape the eleven existing families publish. No per-caller
 /// `strip_prefix + parse + match { Ok(_) => …, Err(_) =>
 /// Err(UnknownRequireTag) }` restatement.
 ///
@@ -919,7 +961,7 @@ fn evaluate_point_require_tag(
 /// construction.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// three-step chain now dispatches TEN closed-set prefix families
+/// three-step chain now dispatches ELEVEN closed-set prefix families
 /// past the ≥2 PRIME-DIRECTIVE trigger through ONE substrate owner.
 /// THEORY.md §II.1 invariant 2 — free middle; the caller composes the
 /// closed-set choice (via the generic `K`) and the presence probe
@@ -2011,6 +2053,9 @@ mod tests {
     use tatara_process::boundary::{Condition, ConditionKind};
     use tatara_process::compliance::{ComplianceBinding, VerificationPhase};
     use tatara_process::crd::ProcessSpec;
+    use tatara_process::encapsulates::{
+        BareWorkload, EncapsulatesSpec, EncapsulationKind, EncapsulationMode,
+    };
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::export::{
         ArtifactKind, ArtifactSource, ChannelKind, ExportSpec, ExportTrigger, HttpEventChannel,
@@ -4486,6 +4531,207 @@ mod tests {
             evaluate_point_require_tag(&spec, "report-format-TapV13"),
             Ok(false),
             "off-diagonal `report-format-TapV13` must be false: the export declares Junit",
+        );
+    }
+
+    // ── encapsulation-mode-<kind> prefix family (evaluate_point_require_tag) ─
+    //
+    // Fail-before-pass-after granularity: the `encapsulation-mode-<kind>`
+    // prefix family did not exist before this commit — the point-domain
+    // require-tag vocabulary carried the ten prior closed-set-driven
+    // families but had no way to discriminate which
+    // [`EncapsulationMode`] a Process wraps its pre-existing state
+    // through (`Manage` full-ownership vs `Adopt` in-place takeover vs
+    // `Observe` read-only). The lift adds the ELEVENTH closed-set-
+    // driven prefix family symmetrical with the ten prior ones, routing
+    // through the newly-opened
+    // [`tatara_process::encapsulates::EncapsulatesSpec::has_mode`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`.
+    // SECOND instance on the SCALAR-CARRIER axis of the closed-set-
+    // driven presence-probe algebra (peer of the sighup-strategy probe
+    // on [`tatara_process::spec::SignalPolicy::has_sighup_strategy`]),
+    // gated on the parent `Option<EncapsulatesSpec>` presence — the
+    // FIRST (Option-parent × scalar-child) corner of the algebra.
+    //
+    // Distinct from every prior scalar-carrier probe: the sighup-
+    // strategy field lives on a non-Option, `Default`-carrying parent
+    // ([`tatara_process::spec::SignalPolicy`]), so on a default spec the
+    // probe returns `true` on the [`SighupStrategy::default`] variant;
+    // the encapsulation-mode field lives on an OPTIONAL parent
+    // (`spec.encapsulates: Option<EncapsulatesSpec>`), so on a default
+    // spec (no encapsulates set) the probe returns `false` for EVERY
+    // mode — the operator DECLINED the encapsulation surface entirely
+    // rather than defaulting into it. Locks the two-tier distinction
+    // (Option-parent, scalar-child) at ONE narrow site.
+
+    /// Fixture: a minimal [`EncapsulatesSpec`] with a chosen
+    /// [`EncapsulationMode`] populated on its `mode` slot and a
+    /// bare-workload payload on `kind` so `EncapsulationKind::variant`
+    /// resolves (an ambiguous / empty `kind` would fail the parent
+    /// CRD validation but is not what this family probes). The mode
+    /// axis is the only one this test module discriminates on; the
+    /// `kind` slot is fixed at a single valid variant so
+    /// `evaluate_point_require_tag` reads the `mode` slot in isolation.
+    fn encapsulates_with_mode(mode: EncapsulationMode) -> EncapsulatesSpec {
+        EncapsulatesSpec {
+            kind: EncapsulationKind {
+                bare_workload: Some(BareWorkload {
+                    namespace: "demo-ns".into(),
+                    selector: std::collections::BTreeMap::from([("app".into(), "demo".into())]),
+                }),
+                ..EncapsulationKind::default()
+            },
+            mode,
+        }
+    }
+
+    /// POPULATED-slot pin — `encapsulation-mode-<kind>` dispatches
+    /// through the autoderived [`EncapsulationMode`] `FromStr` + the
+    /// substrate
+    /// [`tatara_process::encapsulates::EncapsulatesSpec::has_mode`]
+    /// primitive, returning `true` only when the resolved
+    /// [`EncapsulatesSpec`] on `spec.encapsulates` carries the queried
+    /// mode. Sweep the [`EncapsulationMode::ALL`] × ALL cross so a
+    /// regression that hard-coded the arm to a single variant, or
+    /// wired the closure to a fixed unrelated field (a stray probe on
+    /// `spec.encapsulates.as_ref().map(|e| e.kind.bare_workload
+    /// .is_some())`) fails HERE at the classifier before landing at
+    /// the operator-facing checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_encapsulation_mode_matches_variant_per_kind() {
+        for populated in EncapsulationMode::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.encapsulates = Some(encapsulates_with_mode(populated));
+            for query in EncapsulationMode::ALL {
+                let tag = format!("encapsulation-mode-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "encapsulation mode={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// ABSENT-PARENT pin — a default (`encapsulates: None`)
+    /// [`ProcessSpec`] returns `false` for every
+    /// `encapsulation-mode-<kind>` tag because the parent
+    /// `Option<EncapsulatesSpec>` gate on
+    /// `spec.encapsulates.as_ref().is_some_and(…)` short-circuits the
+    /// probe. Byte-for-byte symmetric with the peer permanent-lifetime
+    /// pins on the four export-side families — all five gated
+    /// families share the SAME shape: a parent projection produces
+    /// `None` (or an `Option::None`-equivalent Lifetime resolution),
+    /// the closure short-circuits, every kind reads `false`. Locks
+    /// the (Option-parent × scalar-child) two-tier gate at ONE site so
+    /// a regression that dropped the parent gate (probing an absent
+    /// `encapsulates` slot as if it were the default
+    /// [`EncapsulationMode::Manage`] via `unwrap_or_default()`) would
+    /// return `true` here for `Manage` and fail. Locks the semantic
+    /// split against the sighup-strategy family (which returns `true`
+    /// on the [`SighupStrategy::default`] variant on a default spec
+    /// because its parent [`tatara_process::spec::SignalPolicy`] is
+    /// non-Option): the two scalar-carrier peers publish OPPOSITE
+    /// default-spec answers on their default variants precisely
+    /// because the parent shapes differ.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_absent_encapsulates_for_every_mode() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert!(
+            spec.encapsulates.is_none(),
+            "gate_compute_defaults baseline must be greenfield (encapsulates: None)",
+        );
+        for kind in EncapsulationMode::ALL {
+            let tag = format!("encapsulation-mode-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "absent encapsulates must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `encapsulation-mode-<garbage>` classifies
+    /// as [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`EncapsulationMode`] labels are the
+    /// PascalCase wire-format keys (`Manage`, `Adopt`, `Observe`) —
+    /// matching the serde `rename_all = "PascalCase"` external-tag
+    /// form on the wire verbatim — so lowercased / all-caps / typo
+    /// spellings are UNKNOWN suffixes. Pin the case-sensitivity axis
+    /// so a regression that ASCIIfolded or lowercased on parse (a
+    /// hypothetical `to_lower` normalization at the tag layer) would
+    /// fail HERE. The empty-suffix boundary is pinned by the shared
+    /// substrate primitive's
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_encapsulation_mode_suffix() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.encapsulates = Some(encapsulates_with_mode(EncapsulationMode::Adopt));
+        for garbage in [
+            "encapsulation-mode-",
+            "encapsulation-mode-manage",
+            "encapsulation-mode-ADOPT",
+            "encapsulation-mode-Observed",
+            "encapsulation-mode-Wrap",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// SCALAR-CARRIER PEER COEXISTENCE pin — a Process with
+    /// `spec.signals.sighup_strategy = Restart` AND
+    /// `spec.encapsulates = Some({ mode: Adopt, … })` MUST satisfy
+    /// BOTH fine scalar-carrier tags (`sighup-Restart` from the fifth
+    /// family, `encapsulation-mode-Adopt` from the eleventh)
+    /// simultaneously AND fail each off-diagonal probe
+    /// (`sighup-Reconverge`, `encapsulation-mode-Observe`,
+    /// `encapsulation-mode-Manage`). Locks the SECOND scalar-carrier
+    /// peer's independence from the FIRST at ONE narrow site — the
+    /// two peers walk distinct parent shapes (`SignalPolicy` non-
+    /// Option vs `Option<EncapsulatesSpec>`), so a regression that
+    /// collapsed either onto the other's field (a stray probe of
+    /// `sighup-<kind>` against `spec.encapsulates` or of
+    /// `encapsulation-mode-<kind>` against `spec.signals`) would fail
+    /// HERE. The audit `every Adopt-mode Process handles SIGHUP by
+    /// Restart` reads as this exact two-way conjunction at the
+    /// checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_encapsulation_mode_and_sighup_scalar_carriers_coexist() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.signals.sighup_strategy = SighupStrategy::Restart;
+        spec.encapsulates = Some(encapsulates_with_mode(EncapsulationMode::Adopt));
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-Restart"),
+            Ok(true),
+            "fine `sighup-Restart` must be true when the policy declares Restart",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "encapsulation-mode-Adopt"),
+            Ok(true),
+            "fine `encapsulation-mode-Adopt` must be true when the spec declares Adopt",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-Reconverge"),
+            Ok(false),
+            "off-diagonal `sighup-Reconverge` must be false: the policy declares Restart",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "encapsulation-mode-Observe"),
+            Ok(false),
+            "off-diagonal `encapsulation-mode-Observe` must be false: the spec declares Adopt",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "encapsulation-mode-Manage"),
+            Ok(false),
+            "off-diagonal `encapsulation-mode-Manage` must be false: the spec declares Adopt",
         );
     }
 

@@ -11,6 +11,7 @@ use std::process::ExitCode;
 use std::str::FromStr;
 
 use tatara_lisp::{domain, read, Expander, Sexp};
+use tatara_process::boundary::ConditionKind;
 use tatara_process::intent::IntentKind;
 use tatara_process::lifetime::LifetimeKind;
 use tatara_reconciler::known_crd::KnownCrd;
@@ -521,7 +522,7 @@ struct UnknownRequireTag;
 ///
 /// # Vocabulary
 ///
-/// Two closed-set-driven prefix families dispatch through the
+/// Three closed-set-driven prefix families dispatch through the
 /// autoderived `FromStr` + the substrate presence probe on their
 /// respective parent:
 ///
@@ -539,6 +540,18 @@ struct UnknownRequireTag;
 ///   first.spec.lifetime.is_ephemeral()` arm AND publishes the
 ///   `lifetime-permanent` tag for free — the symmetry gap against the
 ///   intent side is closed.
+/// - `condition-<kind>` — [`ConditionKind`] closed set →
+///   [`tatara_process::boundary::Boundary::has_condition_kind`] (an
+///   inherent presence probe that unions `preconditions ∪
+///   postconditions`, so the operator's `:requires (condition-<kind>)`
+///   answers "does this spec name this boundary predicate anywhere"
+///   without threading the pre/post side through the tag. Third
+///   instance in the workspace-wide closed-set-driven presence-probe
+///   algebra, opened alongside the fixed `boundary-pre` /
+///   `boundary-post` tags which pin the presence of ANY condition on
+///   their side; `condition-<kind>` pins the presence of a SPECIFIC
+///   condition kind across both sides — the two surfaces answer
+///   distinct questions and coexist.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -546,18 +559,24 @@ struct UnknownRequireTag;
 /// closed-set surface opens for them (each addresses a slot whose
 /// carrier isn't a closed-set discriminator today).
 ///
-/// A future third `IntentKind` or `LifetimeKind` variant lands at ONE
-/// `ALL` entry + ONE `select` arm on its parent's closed set — no per-
-/// caller edit here. A future new prefix family (e.g.
-/// `signal-<kind>` for [`tatara_process::signal::SignalKind`]) lands
-/// as ONE more `else if let Some(suffix) = req.strip_prefix("<prefix>-")`
-/// branch that reads the same three-step (strip_prefix + parse + has)
-/// shape both existing families publish.
+/// A future fourth `IntentKind` / `LifetimeKind` / `ConditionKind`
+/// variant lands at ONE `ALL` entry on its parent's closed set — no
+/// per-caller edit here. A future new prefix family (e.g.
+/// `signal-<kind>` for [`tatara_process::signal::ProcessSignal`],
+/// `phase-<kind>` for [`tatara_process::phase::ProcessPhase`]) lands
+/// as ONE more `if let Some(res) = strip_and_classify_prefixed_kind::<
+/// NewKind, _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res;
+/// }` branch that reads the same three-step (strip_prefix + parse +
+/// has) shape all three existing families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_lifetime_suffix`],
-/// and [`tests::evaluate_point_require_tag_returns_unknown_on_bare_lifetime_prefix`].
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_lifetime_prefix`],
+/// [`tests::evaluate_point_require_tag_returns_true_on_populated_condition_slot_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_empty_boundary_for_every_condition_kind`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_condition_suffix`],
+/// and [`tests::evaluate_point_require_tag_unions_pre_and_post_conditions_for_condition_prefix`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -570,6 +589,13 @@ fn evaluate_point_require_tag(
     if let Some(res) =
         strip_and_classify_prefixed_kind::<LifetimeKind, _>(tag, "lifetime-", |kind| {
             spec.lifetime.has(kind)
+        })
+    {
+        return res;
+    }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<ConditionKind, _>(tag, "condition-", |kind| {
+            spec.boundary.has_condition_kind(kind)
         })
     {
         return res;
@@ -2636,6 +2662,141 @@ mod tests {
         assert_eq!(
             evaluate_point_require_tag(&spec, "totally-unknown"),
             Err(UnknownRequireTag),
+        );
+    }
+
+    // ── condition-<kind> prefix family pins ──────────────────────────
+    //
+    // Fail-before-pass-after granularity: the `condition-<kind>` prefix
+    // family did not exist before this commit — the require-tag
+    // vocabulary carried only `boundary-pre` / `boundary-post` fixed
+    // tags that answered "does the boundary carry ANY condition on this
+    // side", never "does the boundary carry THIS SPECIFIC condition
+    // kind anywhere". The lift adds the third closed-set-driven prefix
+    // family symmetrical with `intent-<kind>` + `lifetime-<kind>`,
+    // routing through the newly-opened
+    // [`tatara_process::boundary::Boundary::has_condition_kind`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`.
+
+    fn condition_with(kind: ConditionKind) -> Condition {
+        Condition {
+            kind,
+            params: serde_json::json!({}),
+        }
+    }
+
+    /// POPULATED-slot pin — `condition-<kind>` dispatches through the
+    /// autoderived [`ConditionKind`] `FromStr` + the substrate
+    /// [`Boundary::has_condition_kind`] primitive, returning `true`
+    /// only when the boundary carries at least one Condition with
+    /// this kind. Sweep the [`ConditionKind::ALL`] × ALL cross so a
+    /// regression that hard-coded the arm to a single kind (silently
+    /// returning `true` for every populated boundary regardless of
+    /// which kind was queried) or wired the closure to a fixed
+    /// unrelated field fails HERE at the classifier before landing at
+    /// the operator-facing checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_populated_condition_slot_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.boundary.postconditions.push(condition_with(populated));
+            for query in ConditionKind::ALL {
+                let tag = format!("condition-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "condition populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-BOUNDARY pin — a default [`ProcessSpec`] (empty
+    /// preconditions, empty postconditions) returns `false` for every
+    /// `condition-<kind>` tag. Locks the write-side / read-side split
+    /// on the presence-probe boundary so an operator authoring
+    /// `:requires (condition-JobAttested)` against a Process whose
+    /// boundary lists no such predicate gets the
+    /// `definition missing required` diagnostic, not a false-positive
+    /// pass.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_empty_boundary_for_every_condition_kind() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in ConditionKind::ALL {
+            let tag = format!("condition-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "default boundary must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `condition-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. A regression that fell through to `Ok(false)`
+    /// (matching the pre-lift fixed-tag `_ => Err(UnknownRequireTag)`
+    /// tail) would silently reclassify a `condition-jobAttested`
+    /// casing typo (PascalCase-only closed set) as
+    /// `definition missing required`, which reads as "the spec is
+    /// wrong" rather than "your check is wrong". Pin the distinction.
+    /// The empty-suffix boundary is pinned by the shared substrate
+    /// primitive's [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_condition_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for garbage in [
+            "condition-",
+            "condition-jobAttested",
+            "condition-CLOSEDLOOPAUTH",
+            "condition-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// UNION pin — `condition-<kind>` unions preconditions ∪
+    /// postconditions so a kind that appears on preconditions ONLY
+    /// resolves through the same tag as one on postconditions.
+    /// A regression that dropped the pre-condition arm of the OR
+    /// (probing only postconditions) silently reclassifies every
+    /// pre-only boundary predicate as absent — the pre-lift ephemeral
+    /// arm's post-only shape must NOT be re-inherited at the point-
+    /// domain surface. Pin the semantic split so a future callsite
+    /// that adds a `precondition-<kind>` / `postcondition-<kind>`
+    /// finer-grained tag family lands additively without ambiguity
+    /// on the coarse-grained `condition-<kind>` union answer.
+    #[test]
+    fn evaluate_point_require_tag_unions_pre_and_post_conditions_for_condition_prefix() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.boundary
+            .preconditions
+            .push(condition_with(ConditionKind::KustomizationHealthy));
+        spec.boundary
+            .postconditions
+            .push(condition_with(ConditionKind::ClosedLoopAuth));
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "condition-KustomizationHealthy"),
+            Ok(true),
+            "pre-only kind must resolve through the union",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "condition-ClosedLoopAuth"),
+            Ok(true),
+            "post-only kind must resolve through the union",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "condition-PromQL"),
+            Ok(false),
+            "an absent kind must return false even with populated halves",
         );
     }
 

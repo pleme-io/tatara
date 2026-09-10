@@ -20,6 +20,63 @@ pub struct Boundary {
     pub timeout: Option<String>,
 }
 
+impl Boundary {
+    /// True iff at least one [`Condition`] in
+    /// `preconditions ∪ postconditions` carries the given
+    /// [`ConditionKind`] — the ONE substrate primitive that owns the
+    /// (closed-set discriminator, boundary-condition presence) probe on
+    /// this typed surface.
+    ///
+    /// # Semantics
+    ///
+    /// The two condition vectors are unioned: a caller asking "does this
+    /// spec name a `ClosedLoopAuth` predicate anywhere" doesn't care
+    /// whether the operator authored it on the pre- or post-condition
+    /// side. A boundary with the given kind on ONLY preconditions returns
+    /// `true`; a boundary with the given kind on ONLY postconditions
+    /// returns `true`; a boundary with neither returns `false`.
+    ///
+    /// # Sibling to [`crate::intent::Intent::has`] + [`crate::lifetime::Lifetime::has`]
+    ///
+    /// Same shape, same axis, third instance in the workspace-wide
+    /// closed-set-driven presence-probe algebra. `Intent::has` +
+    /// `Lifetime::has` publish the same `(&self, K) -> bool` signature
+    /// where `K` is the discriminator's `Kind` (auto-derived through
+    /// `#[derive(DeriveClosedSet)]`). A future normalization at that
+    /// probe shape (a widened return carrying the matching Condition
+    /// ref, a debug-build assertion on pre/post drift, a fleet-wide
+    /// warn on redundant duplicates) lands at ONE site per surface
+    /// and every downstream `<xxx>-<kind>` require-tag family +
+    /// closed-set audit dispatcher picks it up mechanically.
+    ///
+    /// # Compounding
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// with the closed-set `FromStr` autoderived on [`ConditionKind`]
+    /// through the `strip_and_classify_prefixed_kind` substrate to
+    /// publish a `condition-<kind>` prefix family byte-for-byte
+    /// symmetrical with `intent-<kind>` + `lifetime-<kind>`. A future
+    /// [`ConditionKind`] variant added to `ALL` reaches every downstream
+    /// (require-tag classifier, coherence check, editor completion
+    /// provider) through the SAME closed-set walk with no per-caller
+    /// edit.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the presence-probe body lives at ONE substrate site so
+    /// every downstream `condition-<kind>` requires-tag surface,
+    /// closed-set audit dispatcher, and future variant addition binds
+    /// through the SAME shape). THEORY.md §VI.1 (generation over
+    /// composition — a ninth [`ConditionKind`] variant lands at ONE
+    /// `ALL` entry + ONE `as_str` arm and the presence probe picks it
+    /// up mechanically without further per-consumer edits).
+    #[must_use]
+    pub fn has_condition_kind(&self, kind: ConditionKind) -> bool {
+        self.preconditions.iter().any(|c| c.kind == kind)
+            || self.postconditions.iter().any(|c| c.kind == kind)
+    }
+}
+
 /// A single boundary predicate.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -466,5 +523,117 @@ mod tests {
         assert_eq!(K, Some(FluxResource::Kustomization));
         assert_eq!(H, Some(FluxResource::HelmRelease));
         assert_eq!(P, None);
+    }
+
+    // ── Boundary::has_condition_kind substrate pins ──────────────────
+    //
+    // Fail-before-pass-after granularity: `Boundary::has_condition_kind`
+    // did not exist before this commit — the (preconditions +
+    // postconditions .iter().any(|c| c.kind == K)) union-probe shape
+    // lived hand-authored inline at the ephemeral require-tag surface
+    // (`spec.postconditions.iter().any(|c| matches!(c.kind, K))`, sans
+    // the pre-condition side). The lift places the closed-set-driven
+    // presence probe on ONE substrate site so the point-domain
+    // `condition-<kind>` prefix family in `tatara-check` composes it
+    // through `strip_and_classify_prefixed_kind` byte-for-byte
+    // symmetrical with `intent-<kind>` (via `Intent::has`) +
+    // `lifetime-<kind>` (via `Lifetime::has`) — third instance in the
+    // workspace closed-set-driven presence-probe algebra.
+
+    fn condition_with(kind: ConditionKind) -> Condition {
+        Condition {
+            kind,
+            params: json!({}),
+        }
+    }
+
+    /// EMPTY-BOUNDARY pin — a default [`Boundary`] (no preconditions,
+    /// no postconditions) returns `false` for EVERY [`ConditionKind`].
+    /// Sweep `ConditionKind::ALL` so a new variant added without a
+    /// matching arm in the presence probe surfaces at rustc's
+    /// exhaustiveness gate on the ALL literal (arity forced by
+    /// `[Self; 8]`) rather than as a silent false-positive at every
+    /// downstream `condition-<kind>` require-tag callsite.
+    #[test]
+    fn has_condition_kind_returns_false_on_empty_boundary_for_every_kind() {
+        let b = Boundary::default();
+        for kind in ConditionKind::ALL {
+            assert!(
+                !b.has_condition_kind(kind),
+                "default boundary must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// POSTCONDITION-only pin — a boundary that carries the kind on
+    /// ONLY postconditions returns `true` for that kind, `false` for
+    /// every other variant. Sweep the ALL × ALL cross so a regression
+    /// that (a) hard-coded the arm to a single kind (silently
+    /// returning true for every populated boundary regardless of
+    /// which kind was queried), (b) skipped the postcondition side of
+    /// the union (silently returning false when the kind lived
+    /// post-only), or (c) matched on Condition::params instead of
+    /// Condition::kind fails HERE at the substrate primitive.
+    #[test]
+    fn has_condition_kind_reads_postconditions_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            b.postconditions.push(condition_with(populated));
+            for query in ConditionKind::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    b.has_condition_kind(query),
+                    expected,
+                    "postcondition populated={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// PRECONDITION-only pin — mirrors the postcondition sweep on the
+    /// other half of the union. Locks the union semantics on both
+    /// halves separately so a regression that dropped the
+    /// pre-condition side of the OR fails here even though the
+    /// postcondition-side pin above passes.
+    #[test]
+    fn has_condition_kind_reads_preconditions_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            b.preconditions.push(condition_with(populated));
+            for query in ConditionKind::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    b.has_condition_kind(query),
+                    expected,
+                    "precondition populated={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// UNION pin — a kind that appears on preconditions returns
+    /// `true` even when postconditions carries a DIFFERENT kind, and
+    /// vice versa. Pins the OR-composition of the two halves so a
+    /// regression that collapsed the union to an intersection (AND)
+    /// silently reclassifies pre-only or post-only kinds as absent.
+    #[test]
+    fn has_condition_kind_unions_pre_and_post_condition_arms() {
+        let mut b = Boundary::default();
+        b.preconditions
+            .push(condition_with(ConditionKind::KustomizationHealthy));
+        b.postconditions
+            .push(condition_with(ConditionKind::ClosedLoopAuth));
+        assert!(
+            b.has_condition_kind(ConditionKind::KustomizationHealthy),
+            "pre-only kind must resolve through the union",
+        );
+        assert!(
+            b.has_condition_kind(ConditionKind::ClosedLoopAuth),
+            "post-only kind must resolve through the union",
+        );
+        assert!(
+            !b.has_condition_kind(ConditionKind::PromQL),
+            "an absent kind must return false even with populated halves",
+        );
     }
 }

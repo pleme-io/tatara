@@ -549,6 +549,131 @@ impl Classification {
     pub fn has_horizon_kind(&self, kind: HorizonKind) -> bool {
         self.horizon.kind == kind
     }
+
+    /// Closed-set-driven presence probe — does this [`Classification`]
+    /// carry the given [`OptimizationDirection`] discriminator on its
+    /// [`Self::horizon`]`.direction` slot (with the substrate
+    /// `Option::unwrap_or_default` treating `None` as the closed set's
+    /// `#[default] Minimize`)? The ONE substrate primitive that owns
+    /// the `(Classification, OptimizationDirection) -> bool` nested-
+    /// struct-Option-scalar-carrier walk shape.
+    ///
+    /// # Second occupant on the nested-struct-scalar-child corner —
+    /// the Option-hop co-tenant
+    ///
+    /// Peer of [`Self::has_horizon_kind`] on the (required-parent ×
+    /// nested-struct-scalar-child) corner opened by that method — same
+    /// two-hop composition through the nested defaulted [`Horizon`]
+    /// intermediary, but the inner scalar slot is `direction:
+    /// Option<OptimizationDirection>` (an `Option`-hop past the same
+    /// nested [`Horizon`]) rather than a bare scalar. The corner
+    /// therefore admits BOTH direct nested-scalar shapes ([`Horizon`]
+    /// carries `kind: HorizonKind` directly, [`Self::has_horizon_kind`]
+    /// walks it) AND Option-nested-scalar shapes ([`Horizon`] carries
+    /// `direction: Option<OptimizationDirection>`, this method walks
+    /// it through `Option::unwrap_or_default`), pinning the corner as
+    /// a proven-repeatable primitive shape rather than a single-
+    /// example curiosity. Every prior scalar-carrier peer on
+    /// [`Classification`] (`has_point_type`, `has_substrate`,
+    /// `has_calm`, `has_data_classification`) reads a closed-set
+    /// discriminator DIRECTLY off a scalar `Classification` slot; this
+    /// method (like [`Self::has_horizon_kind`]) threads through the
+    /// nested [`Horizon`] intermediary, and additionally traverses the
+    /// `Option`-slot with `unwrap_or_default` so the operator's
+    /// `:requires (optimization-direction-Minimize)` on an unadorned
+    /// baseline still answers `true` on the closed set's default arm.
+    ///
+    /// # Semantics — VARIANT match on the Option-defaulted nested
+    /// scalar, not POPULATED Option
+    ///
+    /// `has_optimization_direction(kind)` returns `true` iff
+    /// `self.horizon.direction.unwrap_or_default() == kind`.
+    /// [`OptimizationDirection`] carries `#[default] Minimize` via
+    /// the derived [`Default`] impl, so a Process filled through
+    /// [`Horizon::bounded`] (which leaves `direction: None`) or
+    /// through `Horizon::default()` (same shape, `direction: None`)
+    /// answers `true` on [`OptimizationDirection::Minimize`] and
+    /// `false` on [`OptimizationDirection::Maximize`]. This mirrors
+    /// the default-arm short-circuit contract every other closed-set-
+    /// defaulted-child probe on [`Classification`] publishes
+    /// (`has_calm`, `has_data_classification`, `has_horizon_kind`) —
+    /// the `Option`-hop is soft-mapped to the closed set's default
+    /// arm rather than surfaced as a distinct presence axis. A
+    /// regression that flipped [`OptimizationDirection`]'s
+    /// `#[default]` off `Minimize` (which would silently invert every
+    /// unadorned `Asymptotic` Process's rate-window evaluator
+    /// polarity — see the [`OptimizationDirection::Minimize`] variant
+    /// docstring) fails at this probe's default-arm tests before
+    /// drifting through every downstream consumer.
+    ///
+    /// # Semantics rationale — Option-hop as default vs presence
+    ///
+    /// The `direction: Option<OptimizationDirection>` slot on
+    /// [`Horizon`] is documented as "Asymptotic only" — a `Bounded`
+    /// horizon has no meaningful direction so the operator leaves
+    /// it `None`. Yet the closed set carries `#[default] Minimize`,
+    /// so a bare `Bounded` Process's optimization direction reads
+    /// as `Minimize` at every consumer downstream via
+    /// [`Option::unwrap_or_default`]. That default IS the substrate's
+    /// operator-facing answer for "what direction would this Process
+    /// optimize toward if it became Asymptotic without further
+    /// annotation?", and a `:requires (optimization-direction-
+    /// Minimize)` audit at the checks.lisp surface correctly matches
+    /// every unadorned Process — matching the corner-property contract
+    /// every other defaulted-child probe publishes. An operator who
+    /// wants a strict presence axis (`is direction *actually* set?`)
+    /// gets that answer through a distinct future primitive
+    /// (`has_optimization_direction_set`) that would read the
+    /// `is_some` bit alone — orthogonal to this variant-equality
+    /// probe. This method commits to the variant-equality
+    /// interpretation so the corner-property contract stays uniform
+    /// with the four scalar-carrier peers.
+    ///
+    /// # Compounding
+    ///
+    /// This method POPULATES the (required-parent × nested-struct-
+    /// scalar-child) corner at its SECOND substrate primitive after
+    /// [`Self::has_horizon_kind`] opened it — pinning the corner as
+    /// a proven-repeatable primitive shape rather than a single-
+    /// example curiosity, and DEMONSTRATING that the corner admits
+    /// both direct-scalar and Option-scalar traversals through the
+    /// same nested-struct intermediary via the closed set's default.
+    /// A future co-tenant on this corner (a peer probe on another
+    /// nested-struct's scalar or Option-scalar discriminator, e.g.
+    /// a hypothetical `has_backend_port_family` reaching
+    /// `spec.routing.as_ref().and_then(|r| r.backend.tls_issuer.as_ref()).is_some()`
+    /// or a nested-struct-scalar discriminator on
+    /// `spec.encapsulates.<some-inner>.kind`) lands as ONE peer
+    /// inherent method with the same two-hop `self.<outer>.<inner>`
+    /// walk (with or without an Option-hop threading through the
+    /// closed set's `Default`) and routes through the same
+    /// `strip_and_classify_prefixed_kind::<K, _>` shape in
+    /// `tatara-check`. A future [`OptimizationDirection`] variant
+    /// (a hypothetical `Stabilize` sentinel for "drive toward a
+    /// target value", pre-flagged on the closed set's `ALL`
+    /// docstring) reaches every downstream through ONE `ALL` entry
+    /// + one `as_str` arm + one `prefers_lower` arm + one
+    /// `is_improvement` arm on the closed set with the probe body
+    /// untouched.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the nested-struct-Option-scalar-carrier
+    /// presence-probe body lives at ONE substrate site so every
+    /// downstream (`optimization-direction-<kind>` require-tag family
+    /// in `tatara-check`, future audit dispatchers walking
+    /// [`OptimizationDirection::ALL`], future variant additions on
+    /// [`OptimizationDirection`]) binds through the SAME
+    /// `has(kind)` shape rather than restating the
+    /// `classification.horizon.direction.unwrap_or_default() == kind`
+    /// closure body at each callsite. THEORY.md §VI.1 — generation
+    /// over composition; a future [`OptimizationDirection`] variant
+    /// lands at ONE `ALL` entry + ONE `as_str` arm on the closed set
+    /// and the probe picks it up mechanically without further
+    /// per-consumer edits.
+    #[must_use]
+    pub fn has_optimization_direction(&self, kind: OptimizationDirection) -> bool {
+        self.horizon.direction.unwrap_or_default() == kind
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -3763,5 +3888,184 @@ mod tests {
         assert!(!c.has_calm(CalmClassification::Monotone));
         assert!(!c.has_data_classification(DataClassification::Internal));
         assert!(!c.has_horizon_kind(HorizonKind::Bounded));
+    }
+
+    // ── nested-struct-Option-scalar-carrier presence probe on Classification × OptimizationDirection ──
+    //
+    // Fail-before-pass-after granularity:
+    // [`Classification::has_optimization_direction`] did not exist
+    // before this commit — every consumer of the
+    // `(Classification, OptimizationDirection) -> bool` two-hop
+    // `self.horizon.direction.unwrap_or_default() == kind` probe
+    // shape would have to restate the nested-struct-Option field
+    // walk at its own callsite. Post-lift the shape lives at ONE
+    // substrate owner and every downstream (the
+    // `optimization-direction-<kind>` require-tag family in
+    // `tatara-check`, future audit dispatchers walking
+    // [`OptimizationDirection::ALL`], any future CRD-facing nested-
+    // struct-Option-scalar discriminator on `ProcessSpec`) binds
+    // through the SAME `has(kind)` shape the six prior presence
+    // probes on [`Classification`] plus its cousins on
+    // [`crate::spec::SignalPolicy`] and
+    // [`crate::encapsulates::EncapsulatesSpec`] publish. SECOND
+    // occupant on the (required-parent × nested-struct-scalar-
+    // child) corner of the presence-probe algebra — the FIRST
+    // occupant [`Classification::has_horizon_kind`] read the nested
+    // scalar `horizon.kind: HorizonKind` DIRECTLY; this probe adds
+    // the `Option`-hop through `direction: Option<OptimizationDirection>`
+    // via `Option::unwrap_or_default`, pinning the corner as a
+    // proven-repeatable primitive shape rather than a single-example
+    // curiosity.
+
+    /// DIAGONAL — for every [`OptimizationDirection`] variant, a
+    /// [`Classification`] whose `horizon.direction` field is set to
+    /// `Some(that variant)` returns `true` from
+    /// `has_optimization_direction` on that same variant AND
+    /// `false` on every other variant. Sweep the
+    /// [`OptimizationDirection::ALL`] × ALL cross so a regression
+    /// that hard-coded the arm to a single variant (silently
+    /// returning `true` on every populated classification regardless
+    /// of query kind) or wired the equality to a fixed unrelated
+    /// field (a stray probe on `classification.point_type` /
+    /// `classification.substrate` / `classification.calm` /
+    /// `classification.data_classification` /
+    /// `classification.horizon.kind`, or a direct probe on the
+    /// nested [`Horizon`] struct that ignored the `direction` arm)
+    /// fails HERE at the substrate primitive before landing at the
+    /// operator-facing checks.lisp surface. The `Option`-hop
+    /// distinguishes this method from the direct-nested-scalar
+    /// peer [`Classification::has_horizon_kind`]: the probe walks
+    /// `self.horizon.direction.unwrap_or_default()` not
+    /// `self.horizon.kind`, so a regression that mis-routed the
+    /// field walk (a stray `self.horizon.kind == kind` that could
+    /// not typecheck, or a stray `self.horizon == kind` that also
+    /// could not typecheck) fails at the compiler before the
+    /// runtime diagonal even runs.
+    #[test]
+    fn classification_has_optimization_direction_returns_true_iff_variant_matches() {
+        for populated in OptimizationDirection::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon {
+                    kind: HorizonKind::Asymptotic,
+                    direction: Some(populated),
+                    ..Horizon::default()
+                },
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            for query in OptimizationDirection::ALL {
+                assert_eq!(
+                    c.has_optimization_direction(query),
+                    query == populated,
+                    "horizon.direction=Some({populated:?}): query {query:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `horizon: Horizon::default()` whose `direction` field defaults
+    /// to `None`. Under [`Option::unwrap_or_default`] the probe
+    /// answers as if the field were `OptimizationDirection::default()`
+    /// = [`OptimizationDirection::Minimize`] via `#[default]`, so
+    /// `has_optimization_direction` returns `true` on
+    /// [`OptimizationDirection::Minimize`] and `false` on
+    /// [`OptimizationDirection::Maximize`]. Pins the composition of
+    /// the substrate's baseline-constructor primitive with the
+    /// EIGHTH presence-probe peer AND the closed-set-default
+    /// correspondence documented on [`OptimizationDirection`] —
+    /// a regression that flipped `OptimizationDirection::default()`
+    /// off `Minimize` (which would silently invert every unadorned
+    /// `Asymptotic` Process's rate-window evaluator polarity), or
+    /// wired `has_optimization_direction` to a fixed variant answer,
+    /// or crossed the wires through the wrong nested struct or the
+    /// wrong Option-slot, fails here at ONE narrow site before
+    /// drifting across every unadorned ephemeral env
+    /// (`default_ephemeral_class`) and every downstream test fixture
+    /// that keys assertions on the shape. SECOND occupant on the
+    /// (required-parent × nested-struct-scalar-child) corner —
+    /// locks the corner's Option-hop default-arm short-circuit
+    /// property at ONE narrow site (the Option `None` folds onto
+    /// the closed set's `#[default]` via `unwrap_or_default`,
+    /// mirroring the direct-nested-scalar's default-arm short-
+    /// circuit through the nested struct's own default).
+    #[test]
+    fn classification_gate_compute_has_optimization_direction_minimize_only() {
+        let c = Classification::gate_compute();
+        for kind in OptimizationDirection::ALL {
+            let expected = kind == OptimizationDirection::Minimize;
+            assert_eq!(
+                c.has_optimization_direction(kind),
+                expected,
+                "gate_compute (horizon.direction=None ⇒ default Minimize) must return {expected} for {kind:?}",
+            );
+        }
+    }
+
+    /// SIX-AXIS INDEPENDENCE — the SIX presence-probe co-tenants on
+    /// the [`Classification`] parent
+    /// ([`Classification::has_point_type`] plus
+    /// [`Classification::has_substrate`] on the (required-parent ×
+    /// required-scalar-child) corner AND
+    /// [`Classification::has_calm`] plus
+    /// [`Classification::has_data_classification`] on the (required-
+    /// parent × defaulted-scalar-child) corner AND
+    /// [`Classification::has_horizon_kind`] plus
+    /// [`Classification::has_optimization_direction`] on the
+    /// (required-parent × nested-struct-scalar-child) corner) probe
+    /// distinct slots on the SAME parent, so a carrier with
+    /// `point_type: Fork` AND `substrate: Storage` AND
+    /// `calm: NonMonotone` AND `data_classification: Pii` AND
+    /// `horizon.kind: Asymptotic` AND
+    /// `horizon.direction: Some(Maximize)` answers `true` on all six
+    /// fine tags simultaneously and `false` on every off-diagonal
+    /// probe of any axis. Pins the six probes' independence at ONE
+    /// narrow site — a regression that collapsed any of the six
+    /// onto another's field (a stray probe of
+    /// `has_optimization_direction` reading `self.point_type` /
+    /// `self.substrate` / `self.calm` /
+    /// `self.data_classification` / `self.horizon.kind`, or of any
+    /// prior probe reading through `self.horizon.direction`) would
+    /// fail HERE before landing at any consumer. The audit
+    /// `every Fork-topology Storage-plane NonMonotone-CALM
+    /// Pii-classification Asymptotic-horizon Maximize-direction
+    /// point declares a rate-window healthy-threshold metric and a
+    /// throughput-oriented SLO` composes this exact six-axis
+    /// conjunction on the six classification-axis discriminators of
+    /// the six-axis classification lattice — populates the six-way
+    /// corner-coverage contract on [`Classification`], now
+    /// straddling THREE distinct corners of the (parent-shape ×
+    /// child-shape) algebra with TWO co-tenants each on the
+    /// nested-struct-child corner: direct-nested-scalar
+    /// (`has_horizon_kind`) and Option-nested-scalar
+    /// (`has_optimization_direction`).
+    #[test]
+    fn classification_six_presence_probes_are_independent() {
+        let c = Classification {
+            point_type: ConvergencePointType::Fork,
+            substrate: SubstrateType::Storage,
+            horizon: Horizon {
+                kind: HorizonKind::Asymptotic,
+                direction: Some(OptimizationDirection::Maximize),
+                ..Horizon::default()
+            },
+            calm: CalmClassification::NonMonotone,
+            data_classification: DataClassification::Pii,
+        };
+        assert!(c.has_point_type(ConvergencePointType::Fork));
+        assert!(c.has_substrate(SubstrateType::Storage));
+        assert!(c.has_calm(CalmClassification::NonMonotone));
+        assert!(c.has_data_classification(DataClassification::Pii));
+        assert!(c.has_horizon_kind(HorizonKind::Asymptotic));
+        assert!(c.has_optimization_direction(OptimizationDirection::Maximize));
+        assert!(!c.has_point_type(ConvergencePointType::Gate));
+        assert!(!c.has_substrate(SubstrateType::Compute));
+        assert!(!c.has_calm(CalmClassification::Monotone));
+        assert!(!c.has_data_classification(DataClassification::Internal));
+        assert!(!c.has_horizon_kind(HorizonKind::Bounded));
+        assert!(!c.has_optimization_direction(OptimizationDirection::Minimize));
     }
 }

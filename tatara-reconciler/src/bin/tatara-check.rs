@@ -17,7 +17,7 @@ use tatara_process::classification::{
     OptimizationDirection, SubstrateType,
 };
 use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
-use tatara_process::encapsulates::EncapsulationMode;
+use tatara_process::encapsulates::{EncapsulationMode, EncapsulationTarget};
 use tatara_process::export::{
     ArtifactKind, ChannelKind, ExportSpecSliceExt, ExportTrigger, ReportFormat,
 };
@@ -1089,6 +1089,49 @@ struct UnknownRequireTag;
 ///   as true (the *declared* intent); the reconciler's claim
 ///   arbitration decides the actual emission downstream at
 ///   `render_routing`.
+/// - `encapsulation-target-<kind>` — [`EncapsulationTarget`] closed
+///   set →
+///   [`tatara_process::encapsulates::EncapsulationKind::has`] (a
+///   tagged-union presence probe on
+///   `spec.encapsulates.as_ref().is_some_and(|e| e.kind.has(kind))`,
+///   walking through the parent `Option<EncapsulatesSpec>` gate, the
+///   required intermediate struct field `kind`, and finally the
+///   tagged-union carrier [`EncapsulationKind`]'s three Option-slot
+///   sub-fields). The operator's `:requires
+///   (encapsulation-target-existingHelmRelease)` pins that a Process
+///   wraps a pre-existing HelmRelease specifically, `:requires
+///   (encapsulation-target-existingKustomization)` pins a
+///   Flux-Kustomization wrap, and `:requires
+///   (encapsulation-target-bareWorkload)` pins a bare-Deployment /
+///   StatefulSet / DaemonSet wrap. TWENTIETH closed-set-driven
+///   prefix family in the point-domain require-tag vocabulary and
+///   FIRST occupant on a FRESH (Option-parent × required-struct ×
+///   tagged-union-child) corner of the presence-probe algebra —
+///   distinct from every prior tagged-union family: `intent-<kind>`
+///   + `lifetime-<kind>` walk REQUIRED-parent × tagged-union
+///   children with no Option gate above the tagged union;
+///   `channel-<kind>` + `artifact-<kind>` walk Option-parent × slice
+///   × per-slot tagged-union with the slice level intermediating
+///   before the tagged-union probe. `encapsulation-target-<kind>`
+///   walks Option-parent × REQUIRED-struct × tagged-union child,
+///   closing the last unpopulated corner where the Option gate sits
+///   directly above a tagged-union carrier through a required
+///   intermediate struct field, no slice / no defaulted-scalar
+///   bridge. Orthogonal axis to the peer `encapsulation-mode-<kind>`
+///   family on the SAME [`EncapsulatesSpec`] parent: this family
+///   discriminates WHICH state shape (Helm / Kustomization / bare),
+///   `encapsulation-mode-<kind>` discriminates HOW the reconciler
+///   relates to that state (Manage / Adopt / Observe). An absent
+///   `spec.encapsulates` short-circuits to `false` for EVERY kind
+///   (the Option-parent gate fires); a populated `encapsulates` with
+///   an all-`None` [`EncapsulationKind`] (spec-invalid but the
+///   classifier tolerates it) short-circuits to `false` via the
+///   tagged-union sweep's empty-slot arm. Coexists with every prior
+///   family — an `encapsulation-target-existingHelmRelease`
+///   conjunction with `encapsulation-mode-Adopt` reads directly at
+///   the checks.lisp surface as "every Adopt-mode Process wrapping a
+///   HelmRelease preserves the release name," a common fleet-wide
+///   safety property.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -1101,23 +1144,26 @@ struct UnknownRequireTag;
 /// `ExportTrigger` / `ChannelKind` / `ReportFormat` / `ArtifactKind` /
 /// `EncapsulationMode` / `ConvergencePointType` / `SubstrateType` /
 /// `CalmClassification` / `DataClassification` / `HorizonKind` /
-/// `OptimizationDirection` / `TeardownPolicy` / `RoutingForm` variant
-/// lands at ONE `ALL` entry on its parent's closed set — no per-caller
-/// edit here. A future new prefix family (e.g. a `phase-<kind>` for
+/// `OptimizationDirection` / `TeardownPolicy` / `RoutingForm` /
+/// `EncapsulationTarget` variant lands at ONE `ALL` entry on its
+/// parent's closed set — no per-caller edit here. A future new prefix
+/// family (e.g. a `phase-<kind>` for
 /// [`tatara_process::phase::ProcessPhase`], a hypothetical
 /// `max-concurrent-tier-<kind>` reaching through
 /// `spec.lifetime.resolved_ephemeral().map(|e|
 /// tier_of(e.max_concurrent))`, a third co-tenant on the
 /// (Option-parent × defaulted-scalar-child) corner now doubly
 /// populated by `teardown-policy-<kind>` (stored child) and
-/// `routing-form-<kind>` (derived child), or another co-tenant on the
-/// (required-parent × nested-struct-scalar-child) corner doubly
-/// populated by `horizon-<kind>` + `optimization-direction-<kind>`)
-/// lands as ONE more `if let Some(res) =
-/// strip_and_classify_prefixed_kind::<NewKind, _>(tag, "prefix-", |k|
-/// spec.<field>.has(k)) { return res; }` branch that reads the same
-/// three-step (strip_prefix + parse + has) shape all nineteen existing
-/// families publish.
+/// `routing-form-<kind>` (derived child), a co-tenant on the
+/// (Option-parent × required-struct × tagged-union-child) corner
+/// newly opened by `encapsulation-target-<kind>`, or another
+/// co-tenant on the (required-parent × nested-struct-scalar-child)
+/// corner doubly populated by `horizon-<kind>` +
+/// `optimization-direction-<kind>`) lands as ONE more `if let
+/// Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(tag,
+/// "prefix-", |k| spec.<field>.has(k)) { return res; }` branch that
+/// reads the same three-step (strip_prefix + parse + has) shape all
+/// twenty existing families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
@@ -1196,7 +1242,13 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_true_on_default_routing_form_for_instance_only`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_routing_form_suffix`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_routing_form_prefix`],
-/// and [`tests::evaluate_point_require_tag_routing_form_coexists_with_lifetime_ephemeral_and_teardown_policy`].
+/// [`tests::evaluate_point_require_tag_routing_form_coexists_with_lifetime_ephemeral_and_teardown_policy`],
+/// [`tests::evaluate_point_require_tag_returns_true_iff_encapsulation_target_matches_slot_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_absent_encapsulates_for_every_target`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_empty_encapsulation_kind_for_every_target`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_encapsulation_target_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_encapsulation_target_prefix`],
+/// and [`tests::evaluate_point_require_tag_encapsulation_target_and_mode_coexist_orthogonally`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -1338,6 +1390,13 @@ fn evaluate_point_require_tag(
     {
         return res;
     }
+    if let Some(res) = strip_and_classify_prefixed_kind::<EncapsulationTarget, _>(
+        tag,
+        "encapsulation-target-",
+        |kind| spec.encapsulates.as_ref().is_some_and(|e| e.kind.has(kind)),
+    ) {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -1351,7 +1410,7 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the nineteen closed-set-driven prefix families in
+/// shape the twenty closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
@@ -1367,7 +1426,8 @@ fn evaluate_point_require_tag(
 /// `horizon-<kind>` on [`HorizonKind`],
 /// `optimization-direction-<kind>` on [`OptimizationDirection`],
 /// `teardown-policy-<kind>` on [`TeardownPolicy`],
-/// `routing-form-<kind>` on [`RoutingForm`]) each
+/// `routing-form-<kind>` on [`RoutingForm`],
+/// `encapsulation-target-<kind>` on [`EncapsulationTarget`]) each
 /// dispatch through past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// threshold.
 ///
@@ -1398,25 +1458,24 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future twentieth closed-set prefix family — a `phase-<kind>`
+/// A future twenty-first closed-set prefix family — a `phase-<kind>`
 /// on [`tatara_process::phase::ProcessPhase`], a hypothetical
 /// `max-concurrent-tier-<kind>` reaching through
 /// `spec.lifetime.resolved_ephemeral().map(|e|
 /// tier_of(e.max_concurrent))`, a third co-tenant on the
 /// (Option-parent × defaulted-scalar-child) corner now doubly
 /// populated by `teardown-policy-<kind>` (stored-child) and
-/// `routing-form-<kind>` (derived-child), a peer probe on a
-/// different Option-parent nested defaulted-scalar field like
-/// `spec.encapsulates.as_ref().map(|e| e.mode)` if a defaulted-scalar
-/// mode axis is added there, or a further co-tenant on the
-/// (required-parent × nested-struct-scalar-child) corner doubly
-/// populated by `horizon-<kind>` + `optimization-direction-<kind>` —
-/// lands as ONE more `if let Some(res) =
-/// strip_and_classify_prefixed_kind::<NewKind, _>(tag, "prefix-", |k|
-/// spec.<field>.has(k)) { return res; }` branch that reads the same
-/// three-step shape the nineteen existing families publish. No
-/// per-caller `strip_prefix + parse + match { Ok(_) => …, Err(_) =>
-/// Err(UnknownRequireTag) }` restatement.
+/// `routing-form-<kind>` (derived-child), a further co-tenant on the
+/// (Option-parent × required-struct × tagged-union-child) corner
+/// opened here by `encapsulation-target-<kind>`, or a further
+/// co-tenant on the (required-parent × nested-struct-scalar-child)
+/// corner doubly populated by `horizon-<kind>` +
+/// `optimization-direction-<kind>` — lands as ONE more `if let
+/// Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(tag,
+/// "prefix-", |k| spec.<field>.has(k)) { return res; }` branch that
+/// reads the same three-step shape the twenty existing families
+/// publish. No per-caller `strip_prefix + parse + match { Ok(_) =>
+/// …, Err(_) => Err(UnknownRequireTag) }` restatement.
 ///
 /// A future diagnostic shift (attaching the offending suffix to
 /// [`UnknownRequireTag`], promoting the sentinel to carry a
@@ -1426,9 +1485,9 @@ fn evaluate_point_require_tag(
 /// construction.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// three-step chain now dispatches NINETEEN closed-set prefix
-/// families past the ≥2 PRIME-DIRECTIVE trigger through ONE
-/// substrate owner. THEORY.md §II.1 invariant 2 — free middle; the
+/// three-step chain now dispatches TWENTY closed-set prefix families
+/// past the ≥2 PRIME-DIRECTIVE trigger through ONE substrate owner.
+/// THEORY.md §II.1 invariant 2 — free middle; the
 /// caller composes the closed-set choice (via the generic `K`) and
 /// the presence probe (via the `probe` closure) independently, so a
 /// regression that drifted one prefix family's strip/parse discipline
@@ -2523,7 +2582,8 @@ mod tests {
     use tatara_process::compliance::{ComplianceBinding, VerificationPhase};
     use tatara_process::crd::ProcessSpec;
     use tatara_process::encapsulates::{
-        BareWorkload, EncapsulatesSpec, EncapsulationKind, EncapsulationMode,
+        BareWorkload, EncapsulatesSpec, EncapsulationKind, EncapsulationMode, EncapsulationTarget,
+        ExistingHelmRelease, ExistingKustomization,
     };
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::export::{
@@ -7055,6 +7115,286 @@ mod tests {
             evaluate_point_require_tag(&spec, "routing-form-instance"),
             Ok(false),
             "off-diagonal `routing-form-instance` must be false: the routing declares Stable",
+        );
+    }
+
+    // ── encapsulation-target-<kind> prefix family (evaluate_point_require_tag) ─
+    //
+    // Fail-before-pass-after granularity: the `encapsulation-target-<kind>`
+    // prefix family did not exist before this commit — the point-domain
+    // require-tag vocabulary carried the nineteen prior closed-set-driven
+    // families but had no way to discriminate WHICH pre-existing state
+    // shape a Process wraps (an `existingHelmRelease`, an
+    // `existingKustomization`, or a `bareWorkload`). The peer
+    // `encapsulation-mode-<kind>` family discriminates HOW the reconciler
+    // relates to that state (Manage/Adopt/Observe) — orthogonal to the
+    // WHICH axis this twentieth family opens. Routes through
+    // [`EncapsulationKind::has`] — the tagged-union presence-probe body
+    // generated by the workspace-wide `declare_tagged_union_impls!`
+    // macro (peer of [`crate::intent::Intent::has`],
+    // [`crate::lifetime::Lifetime::has`],
+    // [`crate::export::ArtifactSource::has`], and
+    // [`crate::export::VectorChannel::has`]).
+    //
+    // FIRST occupant on a FRESH corner of the (parent-shape ×
+    // child-shape) axis: an Option-parent (`spec.encapsulates:
+    // Option<EncapsulatesSpec>`, `None` on a greenfield Process) whose
+    // populated inner carries a REQUIRED tagged-union carrier
+    // (`e.kind: EncapsulationKind`, three Option-slot slots that must
+    // resolve to exactly one populated variant). Distinct from every
+    // prior tagged-union prefix family:
+    // - `intent-<kind>` + `lifetime-<kind>` walk REQUIRED-parent
+    //   (`spec.intent: Intent`, `spec.lifetime: Lifetime`) × tagged-
+    //   union children — no Option gate above the tagged union.
+    // - `channel-<kind>` + `artifact-<kind>` walk Option-parent
+    //   (`spec.lifetime.resolved_ephemeral()`) × slice × per-slot
+    //   tagged-union — the slice level intermediates before the
+    //   tagged-union probe.
+    // `encapsulation-target-<kind>` walks Option-parent × REQUIRED-
+    // struct × tagged-union child, closing the last unpopulated corner
+    // where the Option gate sits directly above a tagged-union carrier
+    // through a required intermediate struct field, no slice / no
+    // defaulted-scalar bridge.
+
+    /// Fixture: a minimal [`EncapsulatesSpec`] with a chosen
+    /// [`EncapsulationTarget`] slot populated on its
+    /// [`EncapsulationKind`] payload and a fixed [`EncapsulationMode`]
+    /// so `evaluate_point_require_tag` reads the tagged-union axis in
+    /// isolation. The [`EncapsulationMode`] slot is orthogonal to the
+    /// target axis this family probes; it stays at [`EncapsulationMode::Manage`]
+    /// (the substrate default) so no drift on the peer scalar-carrier
+    /// axis reaches these pins.
+    fn encapsulates_with_target(target: EncapsulationTarget) -> EncapsulatesSpec {
+        let kind = match target {
+            EncapsulationTarget::ExistingHelmRelease => EncapsulationKind {
+                existing_helm_release: Some(ExistingHelmRelease {
+                    namespace: "ns".into(),
+                    name: "hr".into(),
+                    release_name: "rel".into(),
+                }),
+                ..EncapsulationKind::default()
+            },
+            EncapsulationTarget::ExistingKustomization => EncapsulationKind {
+                existing_kustomization: Some(ExistingKustomization {
+                    namespace: "ns".into(),
+                    name: "ks".into(),
+                }),
+                ..EncapsulationKind::default()
+            },
+            EncapsulationTarget::BareWorkload => EncapsulationKind {
+                bare_workload: Some(BareWorkload {
+                    namespace: "ns".into(),
+                    selector: std::collections::BTreeMap::from([("app".into(), "x".into())]),
+                }),
+                ..EncapsulationKind::default()
+            },
+        };
+        EncapsulatesSpec {
+            kind,
+            mode: EncapsulationMode::default(),
+        }
+    }
+
+    /// POPULATED-slot pin — `encapsulation-target-<kind>` dispatches
+    /// through the autoderived [`EncapsulationTarget`] `FromStr` + the
+    /// substrate tagged-union `has` primitive on
+    /// [`EncapsulationKind`], returning `true` only when the resolved
+    /// [`EncapsulatesSpec`] on `spec.encapsulates` carries the queried
+    /// target slot populated. Sweep the
+    /// [`EncapsulationTarget::ALL`] × ALL cross so a regression that
+    /// hard-coded the arm to a single variant, or wired the closure to
+    /// a fixed unrelated field (a stray probe on `e.mode` — the
+    /// scalar-carrier peer axis — instead of `e.kind`), fails HERE at
+    /// the classifier before landing at the operator-facing
+    /// checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_encapsulation_target_matches_slot_per_kind() {
+        for populated in EncapsulationTarget::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.encapsulates = Some(encapsulates_with_target(populated));
+            for query in EncapsulationTarget::ALL {
+                let tag = format!("encapsulation-target-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "encapsulation target={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// ABSENT-PARENT pin — a default (`encapsulates: None`)
+    /// [`ProcessSpec`] returns `false` for every
+    /// `encapsulation-target-<kind>` tag because the parent
+    /// `Option<EncapsulatesSpec>` gate on
+    /// `spec.encapsulates.as_ref().is_some_and(…)` short-circuits the
+    /// probe before the tagged-union sweep runs. Byte-for-byte
+    /// symmetric with the peer `encapsulation-mode-<kind>` absent-
+    /// parent pin — both families share the SAME Option-parent gate.
+    /// A regression that dropped the parent gate (probing an absent
+    /// `encapsulates` slot by unwrapping into a default
+    /// [`EncapsulationKind`] whose tagged-union carrier resolves as
+    /// empty) would still return `false` here (default kind has no
+    /// slot populated), so this pin composes with the empty-kind pin
+    /// below to lock the two independent short-circuits (parent-gate
+    /// AND tagged-union-empty) distinctly.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_absent_encapsulates_for_every_target() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert!(
+            spec.encapsulates.is_none(),
+            "gate_compute_defaults baseline must be greenfield (encapsulates: None)",
+        );
+        for kind in EncapsulationTarget::ALL {
+            let tag = format!("encapsulation-target-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "absent encapsulates must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// EMPTY-KIND pin — a Process with `encapsulates: Some({kind:
+    /// default, …})` (a spec-invalid shape the CRD resolver rejects,
+    /// but the classifier must handle without panicking) returns
+    /// `false` for every `encapsulation-target-<kind>` tag because
+    /// none of [`EncapsulationKind`]'s three Option slots is
+    /// populated. Locks the SECOND short-circuit path distinct from
+    /// the parent-gate — the tagged-union `has` body sweeps
+    /// [`EncapsulationTarget::ALL`] × slot-selection and never fires
+    /// on an all-`None` kind. Complements the ABSENT-PARENT pin: a
+    /// regression that collapsed the two short-circuits into one (e.g.
+    /// treating a populated-but-empty `encapsulates` as absent, or an
+    /// absent parent as an all-slots-empty populated one) would still
+    /// pass one of the two pins but fail this one.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_empty_encapsulation_kind_for_every_target() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.encapsulates = Some(EncapsulatesSpec {
+            kind: EncapsulationKind::default(),
+            mode: EncapsulationMode::default(),
+        });
+        for kind in EncapsulationTarget::ALL {
+            let tag = format!("encapsulation-target-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "empty EncapsulationKind must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `encapsulation-target-<garbage>`
+    /// classifies as [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`EncapsulationTarget`] labels are
+    /// the camelCase wire-format keys (`existingHelmRelease`,
+    /// `existingKustomization`, `bareWorkload`) — matching the serde
+    /// `rename_all = "camelCase"` field names on
+    /// [`EncapsulationKind`] verbatim — so PascalCased / snake_cased /
+    /// case-drifted spellings are UNKNOWN suffixes. Distinct case-
+    /// sensitivity axis from the peer `encapsulation-mode-<kind>`
+    /// family (whose canonical labels are PascalCase to match
+    /// [`EncapsulationMode`]'s serde `rename_all = "PascalCase"`
+    /// output): the wire form of the discriminator drives the
+    /// canonical label, not a workspace-wide convention.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_encapsulation_target_suffix() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.encapsulates = Some(encapsulates_with_target(EncapsulationTarget::BareWorkload));
+        for garbage in [
+            "encapsulation-target-ExistingHelmRelease",
+            "encapsulation-target-existing_helm_release",
+            "encapsulation-target-EXISTINGHELMRELEASE",
+            "encapsulation-target-helmRelease",
+            "encapsulation-target-kustomization",
+            "encapsulation-target-Manage",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-prefix pin — `encapsulation-target-` (the prefix alone,
+    /// empty suffix) classifies as [`UnknownRequireTag`] via the
+    /// shared `strip_and_classify_prefixed_kind` primitive's empty-
+    /// suffix arm (pinned generically by
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]).
+    /// This site pins the family's SPECIFIC bare-prefix boundary so a
+    /// regression that special-cased `encapsulation-target-` to fall
+    /// through to the fixed-tag match (silently classifying it as
+    /// unknown VIA the tail rather than VIA the prefix parse) reads
+    /// the same `Err(UnknownRequireTag)` result but through a
+    /// different code path — this pin locks the intended path.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_encapsulation_target_prefix() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.encapsulates = Some(encapsulates_with_target(EncapsulationTarget::BareWorkload));
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "encapsulation-target-"),
+            Err(UnknownRequireTag),
+            "bare `encapsulation-target-` prefix must classify as UnknownRequireTag",
+        );
+    }
+
+    /// ORTHOGONAL-AXIS COEXISTENCE pin — a Process with
+    /// `encapsulates: Some({ kind: {existingHelmRelease: Some(…)},
+    /// mode: Adopt })` MUST simultaneously satisfy the two ORTHOGONAL
+    /// probes on its encapsulation surface:
+    /// `encapsulation-target-existingHelmRelease` (the twentieth
+    /// family — WHICH state shape) AND
+    /// `encapsulation-mode-Adopt` (the eleventh family — HOW the
+    /// reconciler relates to that state). The two axes are compiled
+    /// from independent closed sets on independent fields of the SAME
+    /// [`EncapsulatesSpec`] — a regression that collapsed either
+    /// probe onto the other's field (a stray probe of
+    /// `encapsulation-target-<kind>` against `e.mode`, or of
+    /// `encapsulation-mode-<kind>` against `e.kind`) would fail HERE.
+    /// The audit `every Adopt-mode HelmRelease-encapsulating Process
+    /// preserves the release name` reads as this exact two-way
+    /// conjunction at the checks.lisp surface — precisely the fleet-
+    /// wide safety property the [`EncapsulationMode::Adopt`] +
+    /// [`EncapsulationTarget::ExistingHelmRelease`] intersection is
+    /// designed to name.
+    #[test]
+    fn evaluate_point_require_tag_encapsulation_target_and_mode_coexist_orthogonally() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.encapsulates = Some(EncapsulatesSpec {
+            kind: EncapsulationKind {
+                existing_helm_release: Some(ExistingHelmRelease {
+                    namespace: "ns".into(),
+                    name: "hr".into(),
+                    release_name: "rel".into(),
+                }),
+                ..EncapsulationKind::default()
+            },
+            mode: EncapsulationMode::Adopt,
+        });
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "encapsulation-target-existingHelmRelease"),
+            Ok(true),
+            "fine `encapsulation-target-existingHelmRelease` must be true when the kind names it",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "encapsulation-mode-Adopt"),
+            Ok(true),
+            "peer `encapsulation-mode-Adopt` must be true when the mode names it",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "encapsulation-target-bareWorkload"),
+            Ok(false),
+            "off-diagonal `encapsulation-target-bareWorkload` must be false: the kind names existingHelmRelease",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "encapsulation-mode-Manage"),
+            Ok(false),
+            "off-diagonal `encapsulation-mode-Manage` must be false: the mode names Adopt",
         );
     }
 

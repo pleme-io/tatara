@@ -1561,8 +1561,8 @@ where
 ///
 /// # Vocabulary
 ///
-/// One closed-set-driven prefix family dispatches through the
-/// autoderived `FromStr` + the substrate presence probe on its
+/// Two closed-set-driven prefix families dispatch through the
+/// autoderived `FromStr` + the substrate presence probe on their
 /// discriminator's parent:
 ///
 /// - `condition-<kind>` — [`ConditionKind`] closed set →
@@ -1578,6 +1578,29 @@ where
 ///   primitive
 ///   [`tatara_process::boundary::ConditionSliceExt::has_kind`]. First
 ///   closed-set prefix family in the ephemeral require-tag vocabulary.
+///
+/// - `teardown-policy-<kind>` — [`TeardownPolicy`] closed set →
+///   [`tatara_process::ephemeral::EphemeralSpec::has_teardown_policy`]
+///   (an inherent presence probe that reads
+///   [`tatara_process::ephemeral::EphemeralSpec::teardown`] as a
+///   direct scalar `==` on the sugar-surface required field). Peer of
+///   the point surface's `teardown-policy-<kind>` family via
+///   [`tatara_process::lifetime::EphemeralLifetime::has_teardown_policy`]
+///   — both surfaces publish identical scalar `==` semantics; this
+///   ephemeral peer's probe body has no Option-parent hop because
+///   [`EphemeralSpec`] carries `teardown` directly (not through the
+///   `Lifetime::resolved_ephemeral()` gate the point surface routes
+///   through). FIRST occupant on the (required-scalar-child) corner
+///   of the ephemeral surface's presence-probe algebra — distinct
+///   from the `condition-<kind>` slice-child family above.
+///   Overrides the fixed `teardown` arm below (which reads always
+///   `Ok(true)`): the coarse `teardown` tag still pins "the
+///   [`TeardownPolicy`] slot has a typed default; there is no absent
+///   state to detect", while `teardown-policy-<kind>` pins WHICH
+///   variant the operator declared. Both tags coexist: a default
+///   ephemeral (`teardown = Always` via `#[default]`) satisfies
+///   `teardown` AND `teardown-policy-Always`, and fails
+///   `teardown-policy-OnAttested` / `-OnFailed` / `-Never`.
 ///
 /// Every other tag is a fixed match on an [`EphemeralSpec`] slot; the
 /// remaining sugar-surface knobs (`aplicacao`, `ttl`, `teardown`,
@@ -1627,7 +1650,12 @@ where
 /// [`tests::evaluate_ephemeral_require_tag_returns_true_on_populated_condition_slot_per_kind`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_slots_for_every_condition_kind`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_condition_suffix`],
-/// and [`tests::evaluate_ephemeral_require_tag_unions_pre_and_post_conditions_for_condition_prefix`].
+/// [`tests::evaluate_ephemeral_require_tag_unions_pre_and_post_conditions_for_condition_prefix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_iff_teardown_policy_matches_slot_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_on_default_ephemeral_teardown_policy_for_always_only`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_teardown_policy_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_teardown_policy_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_teardown_policy_coexists_with_fixed_teardown_tag`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -1635,6 +1663,13 @@ fn evaluate_ephemeral_require_tag(
     if let Some(res) =
         strip_and_classify_prefixed_kind::<ConditionKind, _>(tag, "condition-", |kind| {
             spec.has_condition_kind(kind)
+        })
+    {
+        return res;
+    }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<TeardownPolicy, _>(tag, "teardown-policy-", |kind| {
+            spec.has_teardown_policy(kind)
         })
     {
         return res;
@@ -8558,6 +8593,197 @@ mod tests {
             !spec.has_condition_kind(ConditionKind::PromQL),
             "an absent kind must return false even with populated halves",
         );
+    }
+
+    // ── ephemeral teardown-policy-<kind> prefix family pins ──────────
+    //
+    // Fail-before-pass-after granularity: the ephemeral surface's
+    // `teardown-policy-<kind>` prefix family + the
+    // `tatara_process::ephemeral::EphemeralSpec::has_teardown_policy`
+    // inherent method did not exist before this commit — the ephemeral
+    // require-tag vocabulary carried only the coarse `teardown`
+    // fixed-arm (which reads always `Ok(true)` because
+    // [`TeardownPolicy`] is a typed enum with `Default::default() =
+    // Always`), so an operator authoring `:requires
+    // (teardown-policy-OnAttested)` in a `(lisp-compiles … :domain
+    // ephemeral)` check would classify as `UnknownRequireTag`. The
+    // lift adds the SECOND closed-set-driven prefix family in the
+    // ephemeral require-tag vocabulary (byte-for-byte symmetrical with
+    // the point surface's `teardown-policy-<kind>` family), routing
+    // through the newly-opened
+    // [`tatara_process::ephemeral::EphemeralSpec::has_teardown_policy`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`.
+    // FIRST occupant on the (required-scalar-child) corner for the
+    // ephemeral surface — no Option-parent hop because
+    // [`EphemeralSpec::teardown`] is a required, defaulted scalar
+    // (contrast the point surface's Option-parent hop through
+    // [`tatara_process::lifetime::Lifetime::resolved_ephemeral`]).
+
+    /// POPULATED-slot pin — `teardown-policy-<kind>` dispatches
+    /// through the autoderived [`TeardownPolicy`] `FromStr` + the
+    /// substrate
+    /// [`tatara_process::ephemeral::EphemeralSpec::has_teardown_policy`]
+    /// primitive, returning `true` only when the ephemeral spec's
+    /// stored `teardown` slot matches the queried variant. Sweep the
+    /// [`TeardownPolicy::ALL`] × ALL cross so a regression that hard-
+    /// coded the arm to a single variant or wired the closure to a
+    /// fixed unrelated field (a stray probe on `ttl` /
+    /// `max_concurrent` / `exports`) fails HERE at the ephemeral
+    /// classifier before landing at the operator-facing checks.lisp
+    /// surface. Byte-for-byte peer of
+    /// [`evaluate_point_require_tag_returns_true_on_populated_teardown_policy_slot_per_kind`]
+    /// on the point surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_iff_teardown_policy_matches_slot_per_kind() {
+        for populated in TeardownPolicy::ALL {
+            let mut spec = ephemeral_fixture();
+            spec.teardown = populated;
+            for query in TeardownPolicy::ALL {
+                let tag = format!("teardown-policy-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral teardown={populated:?}: tag {tag:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// DEFAULT-ARM SHORT-CIRCUIT pin — an [`EphemeralSpec`] whose
+    /// `teardown` slot is [`TeardownPolicy::default`] (`Always`)
+    /// answers `true` on `teardown-policy-Always` and `false` on
+    /// every other variant WITHOUT the operator naming the teardown-
+    /// policy axis in the ephemeral spec. This is the characteristic
+    /// behavior of the (required-scalar-child) corner: the scalar
+    /// comparison picks up the closed set's `#[default] Always`
+    /// without an Option-parent hop. Peer of
+    /// [`evaluate_point_require_tag_returns_true_on_default_ephemeral_teardown_policy_for_always_only`]
+    /// on the point surface — the two-surface symmetry means an
+    /// unadorned `(defephemeral … :aplicacao … :ttl "1h")` form and
+    /// an equivalent `(defpoint … :lifetime :ephemeral)` form BOTH
+    /// answer `true` on `teardown-policy-Always` alone, so operator-
+    /// facing check semantics stay consistent across the two
+    /// authoring surfaces.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_default_ephemeral_teardown_policy_for_always_only(
+    ) {
+        let spec = EphemeralSpec {
+            teardown: TeardownPolicy::default(),
+            ..ephemeral_fixture()
+        };
+        for kind in TeardownPolicy::ALL {
+            let tag = format!("teardown-policy-{}", kind.as_str());
+            let expected = kind == TeardownPolicy::Always;
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(expected),
+                "default ephemeral (teardown=Always) baseline: tag {tag:?} must be {expected}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `teardown-policy-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag for ephemeral domain:
+    /// <verbatim>` diagnostic path fires. The canonical
+    /// [`TeardownPolicy`] labels are the PascalCase wire-format keys
+    /// (`Always`, `OnAttested`, `OnFailed`, `Never`) — matching the
+    /// serde `rename_all = "PascalCase"` external-tag form on the
+    /// wire verbatim — so lowercased / all-caps / typo spellings are
+    /// UNKNOWN suffixes. Pin the case-sensitivity axis so a
+    /// regression that ASCIIfolded or lowercased on parse would fail
+    /// HERE. The empty-suffix boundary is pinned by the shared
+    /// substrate primitive's
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_teardown_policy_suffix() {
+        let spec = ephemeral_fixture();
+        for garbage in [
+            "teardown-policy-always",
+            "teardown-policy-ALWAYS",
+            "teardown-policy-onattested",
+            "teardown-policy-OnAtested",
+            "teardown-policy-Bogus",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at
+    /// `teardown-policy-` classifies as [`UnknownRequireTag`],
+    /// mirroring every prior closed-set prefix family. The empty
+    /// suffix hits the substrate primitive's canonical empty-string
+    /// arm rather than short-circuiting to `Ok(true)` on any ephemeral
+    /// (every ephemeral spec carries a defaulted `teardown`, so the
+    /// wrong short-circuit here would return `Ok(true)` universally
+    /// on every ephemeral). Locks the empty-suffix ↔ unknown-suffix
+    /// correspondence at ONE narrow classifier site — a regression
+    /// that special-cased the bare prefix (treating it as a coarse
+    /// "any teardown-policy axis present") would fail HERE. Peer of
+    /// [`evaluate_point_require_tag_returns_unknown_on_bare_teardown_policy_prefix`]
+    /// on the point surface — the two-surface symmetry means the
+    /// bare-prefix rejection carries through both `:domain` slots.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_teardown_policy_prefix() {
+        let spec = ephemeral_fixture();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "teardown-policy-"),
+            Err(UnknownRequireTag),
+            "bare `teardown-policy-` must classify as UnknownRequireTag on an ephemeral spec",
+        );
+    }
+
+    /// COARSE / FINE COEXISTENCE pin — the coarse `teardown` tag
+    /// (which reads always `Ok(true)` because [`TeardownPolicy`] is
+    /// a typed enum with a `Default` impl) coexists orthogonally
+    /// with the fine `teardown-policy-<kind>` tag. On an ephemeral
+    /// spec whose `teardown = OnAttested`, `teardown` reads `Ok(true)`
+    /// AND `teardown-policy-OnAttested` reads `Ok(true)` while every
+    /// off-diagonal `teardown-policy-<other>` reads `Ok(false)`. A
+    /// regression that (a) collapsed the fine family to the coarse
+    /// always-satisfied answer (returning `true` for every kind), (b)
+    /// crossed the wires so the coarse arm read the discriminator, or
+    /// (c) diverged the fine family's default-arm short-circuit from
+    /// the coarse always-satisfied contract, fails HERE. Peer to
+    /// [`evaluate_point_require_tag_teardown_policy_coexists_with_export_when_and_lifetime_ephemeral`]
+    /// on the point surface — this ephemeral pin narrows to the (fine
+    /// family vs coarse fixed tag) coexistence pair the point surface
+    /// has already opened with an additional sibling axis.
+    #[test]
+    fn evaluate_ephemeral_require_tag_teardown_policy_coexists_with_fixed_teardown_tag() {
+        let spec = EphemeralSpec {
+            teardown: TeardownPolicy::OnAttested,
+            ..ephemeral_fixture()
+        };
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "teardown"),
+            Ok(true),
+            "coarse `teardown` tag is always Ok(true) — typed enum has no absent state",
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "teardown-policy-OnAttested"),
+            Ok(true),
+            "fine `teardown-policy-OnAttested` must be true when the ephemeral declares OnAttested",
+        );
+        for off_diagonal in [
+            TeardownPolicy::Always,
+            TeardownPolicy::OnFailed,
+            TeardownPolicy::Never,
+        ] {
+            let tag = format!("teardown-policy-{}", off_diagonal.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(false),
+                "off-diagonal {tag:?} must be false: the ephemeral declares OnAttested",
+            );
+        }
     }
 
     // ── RequireTagDomain trait dispatch pins ─────────────────────────

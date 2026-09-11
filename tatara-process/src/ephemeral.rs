@@ -190,6 +190,91 @@ impl EphemeralSpec {
     pub fn has_condition_kind(&self, kind: ConditionKind) -> bool {
         self.preconditions.has_kind(kind) || self.postconditions.has_kind(kind)
     }
+
+    /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
+    /// `kind` — the substrate primitive that owns the
+    /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
+    /// shape on the sugar-surface type.
+    ///
+    /// # Peer to [`crate::lifetime::EphemeralLifetime::has_teardown_policy`]
+    ///
+    /// [`EphemeralLifetime::has_teardown_policy`] carries the same
+    /// `(&self, TeardownPolicy) -> bool` signature on the point-surface
+    /// carrier ([`ProcessSpec`]'s nested [`crate::lifetime::Lifetime`]
+    /// slot reached through
+    /// [`crate::lifetime::Lifetime::resolved_ephemeral`]); this peer
+    /// composes byte-identical `==` semantics on
+    /// [`EphemeralSpec`]'s direct `teardown: TeardownPolicy` scalar
+    /// slot, so both surfaces' `teardown-policy-<kind>` require-tag
+    /// families ([`crate::lifetime::EphemeralLifetime::has_teardown_policy`]
+    /// on the point surface, this peer on the ephemeral surface) route
+    /// through the SAME scalar `==` shape. A future normalization at
+    /// the probe shape (a widened return carrying a `TerminatePolicy`
+    /// disambiguator, a debug-build assertion on operator-set vs
+    /// defaulted overrides, a fleet-wide warn on `Never` combined with
+    /// short TTLs) lands at ONE site per surface and every downstream
+    /// `teardown-policy-<kind>` require-tag family + closed-set audit
+    /// dispatcher picks it up mechanically.
+    ///
+    /// # Semantics — VARIANT match, not POPULATED slot
+    ///
+    /// [`EphemeralSpec::teardown`] is a required, defaulted scalar
+    /// ([`TeardownPolicy::Always`] via `#[default]`); there is no
+    /// absent state to detect. `has_teardown_policy(kind)` returns
+    /// `true` iff `self.teardown == kind`. On a hand-authored
+    /// [`EphemeralSpec`] that omits `:teardown` from the
+    /// `(defephemeral …)` form (or a Rust builder that reaches
+    /// [`TeardownPolicy::default`]) the probe returns `true` for
+    /// [`TeardownPolicy::Always`] and `false` for every other variant
+    /// — distinct from the Option-slot axis where a default carrier
+    /// returns `false` for EVERY kind. An operator who left
+    /// `:teardown` at the substrate default IS configured for
+    /// `Always`, and a `:requires (teardown-policy-Always)` check
+    /// should pass; only an operator who deliberately overrode the
+    /// policy to `OnAttested` / `OnFailed` / `Never` fails the tag on
+    /// this axis.
+    ///
+    /// # Corner — (required-scalar-child)
+    ///
+    /// Fresh corner on the ephemeral surface's presence-probe algebra:
+    /// [`EphemeralSpec`] has no Option-parent hop between the sugar
+    /// struct and the `teardown` scalar (the point surface reaches
+    /// [`crate::lifetime::EphemeralLifetime::teardown_policy`]
+    /// through the Option-parent `resolved_ephemeral()` gate), so the
+    /// probe body is a bare scalar `==` on a required field. Distinct
+    /// from [`Self::has_condition_kind`] on this same surface, which
+    /// walks a `Vec<Condition>` slice-child.
+    ///
+    /// # Compounding
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// with the closed-set `FromStr` autoderived on [`TeardownPolicy`]
+    /// through the `strip_and_classify_prefixed_kind` substrate to
+    /// publish a `teardown-policy-<kind>` prefix family byte-for-byte
+    /// symmetrical with the point surface's family via
+    /// [`crate::lifetime::EphemeralLifetime::has_teardown_policy`]. A
+    /// future fifth [`TeardownPolicy`] variant added to `ALL` (a
+    /// hypothetical `OnTimeout` for "tear down only on TTL expiry")
+    /// reaches BOTH surfaces' `teardown-policy-<kind>` prefix families
+    /// through the SAME closed-set walk with no per-caller edit — the
+    /// two-surface symmetry means adding a variant on the closed set
+    /// publishes it in lockstep across every downstream consumer.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the scalar-carrier presence-probe body lives
+    /// at ONE substrate site per surface so every downstream
+    /// (`teardown-policy-<kind>` require-tag families on both surfaces
+    /// in tatara-check, closed-set audit dispatchers, future variant
+    /// additions on [`TeardownPolicy`]) binds through the SAME
+    /// `has(kind)` shape rather than restating the `<eph>.teardown ==
+    /// kind` closure body at each call site). THEORY.md §VI.1
+    /// (generation over composition — a future variant lands at ONE
+    /// `ALL` entry + one `as_str` arm on the closed set and the probe
+    /// picks it up mechanically without further per-consumer edits).
+    #[must_use]
+    pub fn has_teardown_policy(&self, kind: TeardownPolicy) -> bool {
+        self.teardown == kind
+    }
 }
 
 impl From<EphemeralSpec> for ProcessSpec {
@@ -686,5 +771,81 @@ mod tests {
         assert!(ps.intent.guest.is_none());
         assert!(ps.intent.aplicacao.is_some());
         assert_eq!(ps.identity.parent.as_deref(), Some("seph.1"));
+    }
+
+    // ── EphemeralSpec::has_teardown_policy substrate pins ────────────
+    //
+    // Fail-before-pass-after granularity:
+    // `EphemeralSpec::has_teardown_policy` did not exist before this
+    // commit — the (`self.teardown == kind`) scalar-carrier probe on
+    // the sugar-surface [`EphemeralSpec`] lived only implicitly via
+    // hand-authored comparisons at potential future call sites, with
+    // no analogue to the peer
+    // [`crate::lifetime::EphemeralLifetime::has_teardown_policy`] on
+    // the point-surface carrier. The lift adds the peer inherent
+    // method on the [`EphemeralSpec`] sugar-surface so both surfaces'
+    // `teardown-policy-<kind>` require-tag families in
+    // `tatara-reconciler::bin::tatara-check` compose against the SAME
+    // scalar `==` shape in lockstep. A regression that (a) hard-coded
+    // the arm to a single kind, (b) inverted the closed-set match
+    // (silently returning `true` on non-matching variants), or (c)
+    // probed the wrong slot (a stray comparison against `ttl` /
+    // `max_concurrent`) fails HERE at the substrate primitive rather
+    // than as silent operator-facing drift at the ephemeral
+    // `teardown-policy-<kind>` require-tag surface.
+
+    /// STORED-slot pin — an ephemeral spec that carries a given
+    /// [`TeardownPolicy`] returns `true` for that kind, `false` for
+    /// every other variant. Sweep the [`TeardownPolicy::ALL`] × ALL
+    /// cross so a regression that hard-coded the arm to a single kind
+    /// or wired the closure to a fixed unrelated field fails HERE at
+    /// the substrate primitive. Byte-for-byte peer of
+    /// [`crate::lifetime::tests::ephemeral_lifetime_has_teardown_policy_returns_true_iff_variant_matches`]
+    /// on the point-surface [`crate::lifetime::EphemeralLifetime`]
+    /// carrier — the two surfaces publish identical `==` scalar
+    /// semantics on their respective `teardown` / `teardown_policy`
+    /// slots.
+    #[test]
+    fn has_teardown_policy_returns_true_iff_ephemeral_teardown_matches_per_kind() {
+        for populated in TeardownPolicy::ALL {
+            let mut spec = empty_ephemeral();
+            spec.teardown = populated;
+            for query in TeardownPolicy::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    spec.has_teardown_policy(query),
+                    expected,
+                    "ephemeral teardown={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// DEFAULT-SLOT pin — an [`EphemeralSpec`] whose `teardown` slot
+    /// is [`TeardownPolicy::default`] (`Always`) returns `true` for
+    /// `Always` and `false` for every other variant. The
+    /// (required-scalar-child) corner has no absent state — a
+    /// hand-authored spec that omits `:teardown` from the
+    /// `(defephemeral …)` form IS configured for `Always`, and this
+    /// pin locks the corner's default-arm short-circuit as identical
+    /// to the (Option-parent × defaulted-scalar-child) corner's
+    /// reachable arm on the point surface (both return `true` on
+    /// `Always` only). Byte-for-byte peer of
+    /// [`crate::lifetime::tests::ephemeral_lifetime_has_teardown_policy_default_probes_always_only`]
+    /// on the point-surface carrier.
+    #[test]
+    fn has_teardown_policy_default_probes_always_only_on_ephemeral() {
+        let spec = EphemeralSpec {
+            teardown: TeardownPolicy::default(),
+            ..empty_ephemeral()
+        };
+        for kind in TeardownPolicy::ALL {
+            let expected = kind == TeardownPolicy::Always;
+            assert_eq!(
+                spec.has_teardown_policy(kind),
+                expected,
+                "default ephemeral (teardown=Always) baseline: query {kind:?} must be {expected}",
+            );
+        }
     }
 }

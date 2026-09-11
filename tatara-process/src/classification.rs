@@ -181,6 +181,87 @@ impl Classification {
     pub fn has_point_type(&self, kind: ConvergencePointType) -> bool {
         self.point_type == kind
     }
+
+    /// Closed-set-driven presence probe — does this [`Classification`]
+    /// carry the given [`SubstrateType`] discriminator on its
+    /// [`Self::substrate`] slot? The ONE substrate primitive that
+    /// owns the `(Classification, SubstrateType) -> bool`
+    /// scalar-carrier walk shape.
+    ///
+    /// # Fourth scalar-carrier peer on the presence-probe axis
+    ///
+    /// Peer of [`crate::spec::SignalPolicy::has_sighup_strategy`],
+    /// [`crate::encapsulates::EncapsulatesSpec::has_mode`], and
+    /// [`Self::has_point_type`] — all four probe a scalar closed-set-
+    /// discriminator field on an inner [`crate::crd::ProcessSpec`]
+    /// struct via a one-line `self.<field> == kind` body. Together
+    /// they compose the SCALAR-CARRIER stratum of the workspace-wide
+    /// closed-set-driven presence-probe algebra (the workspace-wide
+    /// algebra spans three underlying representation kinds — Option-
+    /// slot, slice, scalar — see the
+    /// [`crate::spec::SignalPolicy::has_sighup_strategy`] docstring
+    /// for the full-shape rundown; this method is the fourth scalar-
+    /// carrier instance).
+    ///
+    /// # Semantics — VARIANT match, not POPULATED slot
+    ///
+    /// `has_substrate(kind)` returns `true` iff `self.substrate ==
+    /// kind`. FIRST co-tenant on the (required-parent × required-
+    /// scalar-child) corner of the algebra with [`Self::has_point_type`]
+    /// — both probe REQUIRED, non-Option, NON-DEFAULT slots on the
+    /// same [`Classification`] parent whose two required axes carry
+    /// no [`Default`] impl, so exactly ONE of the eight [`SubstrateType`]
+    /// variants and exactly ONE of the eight [`ConvergencePointType`]
+    /// variants answer `true` per well-formed [`crate::crd::ProcessSpec`],
+    /// with no default-arm short-circuit shortcut. Distinct from the
+    /// two prior scalar-carrier peers on the (parent-shape × child-
+    /// shape) axis: `has_sighup_strategy` lives on a non-Option,
+    /// DEFAULTED parent ([`crate::spec::SignalPolicy`] carries
+    /// `#[derive(Default)]`) with a defaulted scalar child
+    /// ([`crate::signal::SighupStrategy`] defaults to
+    /// [`crate::signal::SighupStrategy::Reconverge`]); `has_mode`
+    /// lives on an OPTION parent (`spec.encapsulates:
+    /// Option<EncapsulatesSpec>`) with a defaulted scalar child
+    /// ([`crate::encapsulates::EncapsulationMode`] defaults to
+    /// [`crate::encapsulates::EncapsulationMode::Manage`]).
+    ///
+    /// This POPULATES the (required-parent × required-scalar-child)
+    /// corner of the workspace-wide closed-set-driven presence-probe
+    /// algebra at its SECOND substrate primitive after
+    /// [`Self::has_point_type`] opened the corner, pinning the corner
+    /// as a proven-repeatable primitive shape rather than a single-
+    /// example curiosity.
+    ///
+    /// # Compounding
+    ///
+    /// A future closed-set-discriminator scalar field on
+    /// [`Classification`] (a peer `has_calm` on [`CalmClassification`],
+    /// `has_data_classification` on [`DataClassification`] — the two
+    /// remaining defaulted-scalar-child classification-axis closed
+    /// sets) lands as ONE peer inherent method with the same one-line
+    /// `self.<field> == kind` body and routes through the same
+    /// `strip_and_classify_prefixed_kind::<K, _>` shape in
+    /// `tatara-check`. A future [`SubstrateType`] variant (a
+    /// hypothetical `Consensus` for governance substrates, `Physical`
+    /// for hardware substrates, `Cache` for ephemeral memoization
+    /// substrates) reaches every downstream through ONE `ALL` entry
+    /// on the closed set with the probe body untouched.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the scalar-carrier presence-probe body lives at ONE
+    /// substrate site so every downstream (`substrate-<kind>`
+    /// require-tag family in `tatara-check`, closed-set audit
+    /// dispatchers, future variant additions on [`SubstrateType`])
+    /// binds through the SAME shape rather than restating the
+    /// `classification.substrate == kind` closure body at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`SubstrateType`] variant lands at ONE `ALL` entry +
+    /// ONE `as_str` arm on the closed set and the probe picks it up
+    /// mechanically without further per-consumer edits.
+    #[must_use]
+    pub fn has_substrate(&self, kind: SubstrateType) -> bool {
+        self.substrate == kind
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -2834,5 +2915,125 @@ mod tests {
                 "gate_compute (point_type=Gate) must return {expected} for {kind:?}",
             );
         }
+    }
+
+    // ── scalar-carrier presence probe on Classification × SubstrateType ──
+    //
+    // Fail-before-pass-after granularity: [`Classification::has_substrate`]
+    // did not exist before this commit — every consumer of the
+    // `(Classification, SubstrateType) -> bool` scalar-carrier probe
+    // shape restated the `classification.substrate == kind` equality
+    // body at its own callsite. Post-lift the shape lives at ONE
+    // substrate owner and every downstream (the `substrate-<kind>`
+    // require-tag family in `tatara-check`, future audit dispatchers
+    // walking [`SubstrateType::ALL`], any future CRD-facing closed-set
+    // discriminator on a required scalar `ProcessSpec` field such as
+    // `has_calm`/`has_data_classification`) binds through the SAME
+    // `has(kind)` shape the Option-slot (`Intent::has`, `Lifetime::has`),
+    // slice-level (`ConditionSliceExt::has_kind`,
+    // `DependsOnSliceExt::has_must_reach`,
+    // `ComplianceBindingSliceExt::has_verification_phase`,
+    // `ExportSpecSliceExt::has_{when,channel_kind,report_format,artifact_kind}`),
+    // and prior scalar-carrier
+    // (`SignalPolicy::has_sighup_strategy`,
+    // `EncapsulatesSpec::has_mode`, `Classification::has_point_type`)
+    // peers publish.
+
+    /// DIAGONAL — for every [`SubstrateType`] variant, a
+    /// [`Classification`] whose `substrate` field is set to that
+    /// variant returns `true` from `has_substrate` on that same
+    /// variant AND `false` on every other variant. Sweep the
+    /// [`SubstrateType::ALL`] × ALL cross so a regression that
+    /// hard-coded the arm to a single variant (silently returning
+    /// `true` on every populated classification regardless of query
+    /// kind) or wired the equality to a fixed unrelated field (a
+    /// stray probe on `classification.point_type`) fails HERE at the
+    /// substrate primitive before landing at the operator-facing
+    /// checks.lisp surface.
+    #[test]
+    fn classification_has_substrate_returns_true_iff_variant_matches() {
+        for populated in SubstrateType::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: populated,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            for query in SubstrateType::ALL {
+                assert_eq!(
+                    c.has_substrate(query),
+                    query == populated,
+                    "substrate={populated:?}: query {query:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `substrate: Compute`, so `has_substrate` returns `true` on
+    /// [`SubstrateType::Compute`] and `false` on every other of the
+    /// eight variants. Pins the composition of the substrate's
+    /// baseline-constructor primitive with the fourth scalar-carrier
+    /// presence probe — a regression that flipped
+    /// `gate_compute().substrate` off `Compute` (or wired
+    /// `has_substrate` to a fixed variant answer, or crossed the
+    /// wires to `point_type`) fails here at ONE narrow site before
+    /// drifting across every unadorned ephemeral env
+    /// (`default_ephemeral_class`) and every downstream test fixture
+    /// that keys assertions on the shape. Byte-symmetric with the
+    /// peer `classification_gate_compute_has_point_type_gate_only`
+    /// pin on the third scalar-carrier — the two co-tenants on the
+    /// (required-parent × required-scalar-child) corner walk their
+    /// own required axis independently.
+    #[test]
+    fn classification_gate_compute_has_substrate_compute_only() {
+        let c = Classification::gate_compute();
+        for kind in SubstrateType::ALL {
+            let expected = kind == SubstrateType::Compute;
+            assert_eq!(
+                c.has_substrate(kind),
+                expected,
+                "gate_compute (substrate=Compute) must return {expected} for {kind:?}",
+            );
+        }
+    }
+
+    /// TWO-AXIS INDEPENDENCE — the two co-tenants on the (required-
+    /// parent × required-scalar-child) corner of the presence-probe
+    /// algebra ([`Classification::has_point_type`] and
+    /// [`Classification::has_substrate`]) probe distinct required
+    /// scalar slots on the SAME [`Classification`] parent, so a
+    /// carrier with `point_type: Fork` AND `substrate: Storage`
+    /// answers `true` on both fine tags simultaneously and `false`
+    /// on every off-diagonal probe of either axis. Pins the two
+    /// probes' independence at ONE narrow site — a regression that
+    /// collapsed either onto the other's field (a stray probe of
+    /// `has_substrate` reading `self.point_type`, or of
+    /// `has_point_type` reading `self.substrate`) would fail HERE
+    /// before landing at any consumer. The audit `every Fork-topology
+    /// Storage-plane point handles SIGHUP by Restart` composes this
+    /// exact two-axis conjunction on the required scalars of the
+    /// six-axis classification lattice.
+    #[test]
+    fn classification_has_point_type_and_has_substrate_are_independent() {
+        let c = Classification {
+            point_type: ConvergencePointType::Fork,
+            substrate: SubstrateType::Storage,
+            horizon: Horizon::default(),
+            calm: CalmClassification::default(),
+            data_classification: DataClassification::default(),
+        };
+        assert!(c.has_point_type(ConvergencePointType::Fork));
+        assert!(c.has_substrate(SubstrateType::Storage));
+        assert!(!c.has_point_type(ConvergencePointType::Gate));
+        assert!(!c.has_substrate(SubstrateType::Compute));
+        // Cross-wiring probe: `has_point_type(Storage-as-if-Point)` and
+        // `has_substrate(Fork-as-if-Substrate)` cannot even typecheck
+        // — the closed-set enums are disjoint types — but a stray
+        // implementation reading the WRONG required field would flip
+        // both diagonal answers off. The four asserts above pin the
+        // independence at ONE narrow site.
     }
 }

@@ -13,7 +13,7 @@ use std::str::FromStr;
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
 use tatara_process::classification::{
-    CalmClassification, ConvergencePointType, DataClassification, HorizonKind,
+    Arity, CalmClassification, ConvergencePointType, DataClassification, HorizonKind,
     OptimizationDirection, SubstrateType,
 };
 use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
@@ -1259,7 +1259,11 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_false_on_non_test_report_source_for_every_report_payload_shape`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_report_payload_shape_suffix`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_report_payload_shape_prefix`],
-/// and [`tests::evaluate_point_require_tag_report_payload_shape_and_report_format_coexist_via_projection`].
+/// [`tests::evaluate_point_require_tag_report_payload_shape_and_report_format_coexist_via_projection`],
+/// [`tests::evaluate_point_require_tag_returns_true_iff_input_arity_matches_projection_per_point_type`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_input_arity_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_input_arity_prefix`],
+/// and [`tests::evaluate_point_require_tag_input_arity_and_point_type_coexist_via_projection`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -1424,6 +1428,11 @@ fn evaluate_point_require_tag(
                 .is_some_and(|e| e.exports.has_report_payload_shape(kind))
         },
     ) {
+        return res;
+    }
+    if let Some(res) = strip_and_classify_prefixed_kind::<Arity, _>(tag, "input-arity-", |kind| {
+        spec.classification.has_input_arity(kind)
+    }) {
         return res;
     }
     match tag {
@@ -2645,7 +2654,7 @@ mod tests {
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
     use tatara_process::classification::{
-        CalmClassification, ConvergencePointType, DataClassification, Horizon, HorizonKind,
+        Arity, CalmClassification, ConvergencePointType, DataClassification, Horizon, HorizonKind,
         OptimizationDirection, SubstrateType,
     };
     use tatara_process::compliance::{ComplianceBinding, VerificationPhase};
@@ -7975,6 +7984,178 @@ mod tests {
             evaluate_point_require_tag(&spec, "report-payload-shape-NdJsonLines"),
             Ok(false),
             "off-diagonal `report-payload-shape-NdJsonLines` must be false: TapV13 does not project to NdJsonLines",
+        );
+    }
+
+    // ── evaluate_point_require_tag input-arity-<kind> pins ──────────
+    //
+    // TWENTY-THIRD closed-set-driven prefix family in the point-domain
+    // require-tag vocabulary. Fail-before-pass-after: the
+    // `input-arity-<kind>` prefix arm did not exist before this commit
+    // — the derived-typed-projection walk through
+    // `spec.classification.point_type.input_arity() == K` was not
+    // spelled anywhere in the classifier's dispatch. The lift routes
+    // the shape through the `strip_and_classify_prefixed_kind::<Arity,
+    // _>` substrate primitive, byte-for-byte symmetric with the
+    // twenty-two pre-existing prefix families AND with the twelfth
+    // family (`point-type-<kind>`) with which it shares the SAME
+    // `self.point_type` scalar carrier on [`Classification`]. The
+    // distinction between the two on that shared carrier: twelfth
+    // compares the raw 8-arm [`ConvergencePointType`] closed set;
+    // twenty-third compares the derived 2-arm [`Arity`] reached
+    // through the typed projection
+    // [`ConvergencePointType::input_arity`] — a many-to-one collapse
+    // (`Transform | Fork | Broadcast | Observe → One`, `Join | Gate
+    // | Select | Reduce → Many`). The primitive is
+    // [`tatara_process::classification::Classification::has_input_arity`],
+    // published as the THIRD substrate method on the (required-parent
+    // × nested-struct-scalar-child) corner of [`Classification`]
+    // alongside `has_horizon_kind` + `has_optimization_direction`, and
+    // the FIRST derived-typed-projection occupant on that corner.
+
+    /// PROJECTION-TRUTH-TABLE pin — `input-arity-<kind>` dispatches
+    /// through the autoderived [`Arity`] `FromStr` + the substrate
+    /// [`tatara_process::classification::Classification::has_input_arity`]
+    /// primitive, returning `true` only when the resolved
+    /// [`ConvergencePointType`] projects (through
+    /// [`ConvergencePointType::input_arity`]) to this arity. Sweep the
+    /// [`ConvergencePointType::ALL`] × [`Arity::ALL`] cross so a
+    /// regression that (a) probed [`ConvergencePointType`] directly
+    /// (dropping the `.input_arity()` call, silently answering `true`
+    /// on the populated slot only when the query happens to name the
+    /// raw variant), (b) inverted the projection (`One ↔ Many`), (c)
+    /// crossed the wires with the sibling
+    /// [`ConvergencePointType::output_arity`] projection (which
+    /// disagrees on the fan-out arms `Fork | Broadcast`), (d)
+    /// hard-coded the arm to a single arity (silently returning
+    /// `true` for every populated classification regardless of query
+    /// kind), or (e) wired the closure to a fixed unrelated field
+    /// fails HERE at the classifier before landing at the operator-
+    /// facing checks.lisp surface. The projection's many-to-one shape
+    /// is pinned SYMMETRICALLY on both sides of the cross: `Transform`,
+    /// `Fork`, `Broadcast`, `Observe` populated arms answer `true`
+    /// only for `Arity::One`; `Join`, `Gate`, `Select`, `Reduce`
+    /// populated arms answer `true` only for `Arity::Many`.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_input_arity_matches_projection_per_point_type() {
+        for populated in ConvergencePointType::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.point_type = populated;
+            let expected_arity = populated.input_arity();
+            for query in Arity::ALL {
+                let tag = format!("input-arity-{}", query.as_str());
+                let expected = query == expected_arity;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "point_type={populated:?} → input_arity={expected_arity:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `input-arity-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`Arity`] labels are PascalCase
+    /// (`One`, `Many`) — matching [`Arity::as_str`] byte-for-byte —
+    /// so snake_cased / lowerCamelCased / kebab-case / cross-axis-
+    /// leaked spellings are UNKNOWN suffixes. Pins the case-sensitivity
+    /// axis AND the axis boundary (raw [`ConvergencePointType`]
+    /// identifiers like `Fork` live on the twelfth family and MUST
+    /// NOT resolve here through the shared `self.point_type` carrier).
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_input_arity_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for garbage in [
+            "input-arity-one",
+            "input-arity-many",
+            "input-arity-ONE",
+            "input-arity-MANY",
+            "input-arity-Fork",
+            "input-arity-Gate",
+            "input-arity-Zero",
+            "input-arity-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-prefix pin — `input-arity-` (the prefix alone, empty
+    /// suffix) classifies as [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive's empty-suffix
+    /// arm (pinned generically by
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]).
+    /// This site pins the family's SPECIFIC bare-prefix boundary so a
+    /// regression that special-cased `input-arity-` to fall through
+    /// to the fixed-tag match (silently classifying it as unknown VIA
+    /// the tail rather than VIA the prefix parse) reads the same
+    /// `Err(UnknownRequireTag)` result but through a different code
+    /// path — this pin locks the intended path.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_input_arity_prefix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "input-arity-"),
+            Err(UnknownRequireTag),
+            "bare `input-arity-` prefix must classify as UnknownRequireTag",
+        );
+    }
+
+    /// SAME-CARRIER PROJECTION-COEXISTENCE pin — a Process with
+    /// `classification.point_type = ConvergencePointType::Fork` MUST
+    /// simultaneously satisfy BOTH `point-type-Fork` (the twelfth
+    /// family, raw 8-arm [`ConvergencePointType`] discriminator on the
+    /// SAME `self.point_type` scalar carrier) AND `input-arity-One`
+    /// (the twenty-third family, derived 2-arm [`Arity`] reached
+    /// through the typed projection
+    /// [`ConvergencePointType::input_arity`]) AND simultaneously fail
+    /// each off-diagonal probe (`point-type-Gate`, `input-arity-Many`).
+    /// Locks the semantic split between the two probes on the SAME
+    /// `self.point_type` scalar carrier — the second two-family
+    /// same-carrier projection-coexistence conjunction in the point-
+    /// domain require-tag vocabulary (the first, on the nested-Option
+    /// `Option<TestReportSource>` carrier, is
+    /// `report-format-<kind>` × `report-payload-shape-<kind>`). A
+    /// regression that (a) collapsed the twenty-third family to the
+    /// twelfth (silently answering `true` for `input-arity-Fork`, an
+    /// out-of-vocabulary Arity), (b) collapsed the twelfth family to
+    /// the twenty-third (silently answering `true` for
+    /// `point-type-One`, an out-of-vocabulary ConvergencePointType),
+    /// or (c) swapped the projection (`Fork → Many` instead of `Fork
+    /// → One`) fails HERE at ONE narrow site. The audit `every Fork-
+    /// topology point is a single-input fan-out` reads as this exact
+    /// two-way conjunction at the checks.lisp surface — the fleet-
+    /// wide DAG-composition property the (`Fork`, `One`) projection
+    /// composition is designed to name.
+    #[test]
+    fn evaluate_point_require_tag_input_arity_and_point_type_coexist_via_projection() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.classification.point_type = ConvergencePointType::Fork;
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "point-type-Fork"),
+            Ok(true),
+            "fine `point-type-Fork` must be true when the classification declares that variant",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "input-arity-One"),
+            Ok(true),
+            "peer `input-arity-One` must be true: Fork projects to input_arity=One",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "point-type-Gate"),
+            Ok(false),
+            "off-diagonal `point-type-Gate` must be false: the point_type is Fork",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "input-arity-Many"),
+            Ok(false),
+            "off-diagonal `input-arity-Many` must be false: Fork does not project to Many",
         );
     }
 

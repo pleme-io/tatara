@@ -674,6 +674,108 @@ impl Classification {
     pub fn has_optimization_direction(&self, kind: OptimizationDirection) -> bool {
         self.horizon.direction.unwrap_or_default() == kind
     }
+
+    /// Closed-set-driven presence probe — does this [`Classification`]
+    /// carry a [`ConvergencePointType`] whose typed input-edge
+    /// cardinality projection ([`ConvergencePointType::input_arity`])
+    /// matches the given [`Arity`] discriminator? The ONE substrate
+    /// primitive that owns the `(Classification, Arity) -> bool`
+    /// derived-typed-projection walk shape.
+    ///
+    /// # Third occupant on the (required-parent × nested-struct-scalar-child) corner — first via a derived-typed-projection
+    ///
+    /// Peer of [`Self::has_horizon_kind`] and
+    /// [`Self::has_optimization_direction`] on the (required-parent ×
+    /// nested-struct-scalar-child) corner. Distinct from the two on
+    /// ONE dimension: those two read a raw discriminator directly off
+    /// the nested [`Horizon`] slot (`self.horizon.kind` /
+    /// `self.horizon.direction.unwrap_or_default()`) so the child's
+    /// closed set IS the field's type; this probe threads through the
+    /// closed-set typed projection [`ConvergencePointType::input_arity`]
+    /// (a `const fn` many-to-one collapse `Transform | Fork |
+    /// Broadcast | Observe → One`, `Join | Gate | Select | Reduce →
+    /// Many`) so the child's closed set is REACHED THROUGH a typed
+    /// projection layer, not read raw off a scalar. Byte-for-byte
+    /// symmetric with the derived-typed-projection precedent set by
+    /// [`crate::export::ExportSpecSliceExt::has_report_payload_shape`]
+    /// on the (Option-parent × Vec-child × nested-Option-carrier ×
+    /// derived-typed-projection) corner — that peer routes through
+    /// [`crate::export::ReportFormat::payload_shape`] the same way
+    /// this method routes through [`ConvergencePointType::input_arity`].
+    /// FIRST occupant of the derived-typed-projection variant on the
+    /// (required-parent × nested-struct-scalar-child) corner —
+    /// widening the corner from "raw discriminator only" to "raw
+    /// discriminator OR typed projection over the child" and pinning
+    /// the corner as a proven-repeatable primitive shape rather than a
+    /// direct-field-equality curiosity.
+    ///
+    /// # Semantics — VARIANT match on the projected image, not on the source
+    ///
+    /// `has_input_arity(kind)` returns `true` iff
+    /// `self.point_type.input_arity() == kind`. [`Arity`] carries no
+    /// `Default` impl (the `Arity::ALL` closed set is a bare 2-arm
+    /// enum with no `#[default]`), so exactly ONE of the two arms
+    /// answers `true` per well-formed [`crate::crd::ProcessSpec`],
+    /// with no default-arm short-circuit shortcut. The many-to-one
+    /// projection shape means the answer is invariant under intra-
+    /// bucket point-type swaps (`Transform ↔ Fork ↔ Broadcast ↔
+    /// Observe` all keep `input-arity-One = true`) and flips at
+    /// bucket boundaries (`Transform ↔ Join` flips `input-arity-One`
+    /// from `true` to `false`). A regression that (a) probed
+    /// [`ConvergencePointType`] directly (dropping the
+    /// `.input_arity()` call), (b) inverted the projection (`One ↔
+    /// Many`), or (c) crossed the wires with the sibling
+    /// [`ConvergencePointType::output_arity`] projection (which
+    /// disagrees on the fan-out arms `Fork | Broadcast → Many` vs.
+    /// `input_arity`'s `Fork | Broadcast → One`) fails at this probe's
+    /// substrate site before drifting through every downstream
+    /// consumer.
+    ///
+    /// # Compounding
+    ///
+    /// This method POPULATES the (required-parent × nested-struct-
+    /// scalar-child) corner at its THIRD substrate primitive after
+    /// [`Self::has_horizon_kind`] opened it (direct-nested-scalar) and
+    /// [`Self::has_optimization_direction`] populated it
+    /// (Option-nested-scalar). Together the three demonstrate the
+    /// corner admits three traversal shapes through the SAME
+    /// two-hop `self.<field>.<projection>` walk: direct-scalar,
+    /// Option-scalar-with-default, and derived-typed-projection. A
+    /// future co-tenant reading a projected value off the same
+    /// [`ConvergencePointType`] (a peer `has_output_arity` reading
+    /// `self.point_type.output_arity() == kind` — the natural fourth
+    /// occupant, opening the pair for DAG-composition axis coverage;
+    /// a hypothetical `has_topology_bucket` reading `.is_preserving()`
+    /// / `.is_diffusive()` / `.is_convergent()`) lands as ONE peer
+    /// inherent method with the same one-line
+    /// `self.point_type.<projection>() == kind` body and routes
+    /// through the same `strip_and_classify_prefixed_kind::<K, _>`
+    /// shape in `tatara-check`. A future [`ConvergencePointType`]
+    /// variant (a hypothetical `Demux` for `One → Many` or `Mux` for
+    /// `Many → One`) reaches every downstream through ONE `ALL`
+    /// entry + one `as_str` arm + one `input_arity` arm + one
+    /// `output_arity` arm on the closed set with THIS probe body
+    /// untouched — the many-to-one projection means the bucket
+    /// membership shift lands exactly at the projection's own site.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-typed-projection presence-probe
+    /// body lives at ONE substrate site so every downstream
+    /// (`input-arity-<kind>` require-tag family in `tatara-check`,
+    /// future DAG-composition validators, future variant additions
+    /// on [`ConvergencePointType`]) binds through the SAME
+    /// `has(kind)` shape rather than restating the
+    /// `classification.point_type.input_arity() == kind` closure body
+    /// at each callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future [`Arity`] variant (a hypothetical `Zero`
+    /// for sinks) lands at ONE `ALL` entry + ONE `as_str` arm on the
+    /// closed set + ONE arm on each `input_arity`/`output_arity`
+    /// projection and the probe picks it up mechanically without
+    /// further per-consumer edits.
+    #[must_use]
+    pub fn has_input_arity(&self, kind: Arity) -> bool {
+        self.point_type.input_arity() == kind
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -4067,5 +4169,153 @@ mod tests {
         assert!(!c.has_data_classification(DataClassification::Internal));
         assert!(!c.has_horizon_kind(HorizonKind::Bounded));
         assert!(!c.has_optimization_direction(OptimizationDirection::Minimize));
+    }
+
+    // ── derived-typed-projection presence probe on Classification × Arity ──
+    //
+    // Fail-before-pass-after granularity:
+    // [`Classification::has_input_arity`] did not exist before this
+    // commit — every consumer of the `(Classification, Arity) -> bool`
+    // two-hop `self.point_type.input_arity() == kind` probe shape
+    // would have to restate the derived-typed-projection walk at its
+    // own callsite. Post-lift the shape lives at ONE substrate owner
+    // and every downstream (the `input-arity-<kind>` require-tag
+    // family in `tatara-check`, future DAG-composition validators
+    // walking [`Arity::ALL`], any future consumer keying on the
+    // input-edge cardinality of a Process's convergence point) binds
+    // through the SAME `has(kind)` shape the two prior nested-struct-
+    // scalar-child peers on [`Classification`]
+    // ([`Classification::has_horizon_kind`] and
+    // [`Classification::has_optimization_direction`]) publish. FIRST
+    // occupant of the DERIVED-TYPED-PROJECTION variant on the
+    // (required-parent × nested-struct-scalar-child) corner — widening
+    // the corner from "raw discriminator only" to "raw discriminator
+    // OR typed projection over the child", mirroring the derived-typed-
+    // projection precedent
+    // [`crate::export::ExportSpecSliceExt::has_report_payload_shape`]
+    // set on the (Option-parent × Vec-child × nested-Option-carrier ×
+    // derived-typed-projection) corner.
+
+    /// PROJECTION-TRUTH-TABLE — for every [`ConvergencePointType`]
+    /// variant, `has_input_arity` on a [`Classification`] whose
+    /// `point_type` field is set to that variant returns `true` on
+    /// EXACTLY the [`Arity`] variant that
+    /// [`ConvergencePointType::input_arity`] projects to (and `false`
+    /// on every other variant). Sweep the
+    /// [`ConvergencePointType::ALL`] × [`Arity::ALL`] cross so a
+    /// regression that (a) probed [`ConvergencePointType`] directly
+    /// (dropping the `.input_arity()` call, silently answering `true`
+    /// on the populated slot only when the query happens to name the
+    /// same variant), (b) inverted the projection (`One ↔ Many`), (c)
+    /// crossed the wires with the sibling
+    /// [`ConvergencePointType::output_arity`] projection (which
+    /// disagrees on the fan-out arms), (d) hard-coded the arm to a
+    /// single [`Arity`] (silently returning `true` for every
+    /// populated classification regardless of query kind), or (e)
+    /// wired the equality to a fixed unrelated field fails HERE at
+    /// the substrate primitive before landing at the operator-facing
+    /// checks.lisp surface. The projection's many-to-one shape is
+    /// pinned SYMMETRICALLY on both sides of the cross: `Transform`,
+    /// `Fork`, `Broadcast`, `Observe` populated arms answer `true`
+    /// only for `Arity::One`; `Join`, `Gate`, `Select`, `Reduce`
+    /// populated arms answer `true` only for `Arity::Many`.
+    #[test]
+    fn classification_has_input_arity_returns_true_iff_projection_matches_per_kind() {
+        for populated in ConvergencePointType::ALL {
+            let c = Classification {
+                point_type: populated,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            let expected_arity = populated.input_arity();
+            for query in Arity::ALL {
+                assert_eq!(
+                    c.has_input_arity(query),
+                    query == expected_arity,
+                    "point_type={populated:?} → input_arity={expected_arity:?}: query {query:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `point_type: ConvergencePointType::Gate`, and
+    /// [`ConvergencePointType::input_arity`] projects `Gate → Many`,
+    /// so `has_input_arity` returns `true` on [`Arity::Many`] and
+    /// `false` on [`Arity::One`]. Pins the composition of the
+    /// substrate's baseline-constructor primitive with this
+    /// presence-probe peer and the sibling-projection correspondence
+    /// (which pins `Gate` to the fan-in `Many` bucket at ONE
+    /// projection site) — a regression that flipped `Gate`'s
+    /// `input_arity` bucket (silently mis-classifying every Gate as a
+    /// `One`-input point at every downstream DAG-composition
+    /// validator + this require-tag family), or that wired
+    /// `has_input_arity` to a fixed arity answer, or that crossed the
+    /// wires with `output_arity` (which sends `Gate → One`, the
+    /// opposite bucket) fails here at ONE narrow site before drifting
+    /// across every downstream fixture that keys assertions on the
+    /// shape. FIRST derived-typed-projection occupant on the
+    /// (required-parent × nested-struct-scalar-child) corner — locks
+    /// the corner's characteristic "projection propagates through a
+    /// bucket collapse consistently" property at ONE narrow site.
+    #[test]
+    fn classification_gate_compute_has_input_arity_many_only() {
+        let c = Classification::gate_compute();
+        for kind in Arity::ALL {
+            let expected = kind == Arity::Many;
+            assert_eq!(
+                c.has_input_arity(kind),
+                expected,
+                "gate_compute (point_type=Gate → input_arity=Many) must return {expected} for {kind:?}",
+            );
+        }
+    }
+
+    /// SIBLING-INDEPENDENCE — the peer scalar-carrier
+    /// [`Classification::has_point_type`] and the peer derived-typed-
+    /// projection [`Classification::has_input_arity`] read the SAME
+    /// underlying slot (`self.point_type`) but through different
+    /// closed sets ([`ConvergencePointType::ALL`] vs.
+    /// [`Arity::ALL`]) — the arity probe is a many-to-one collapse of
+    /// the point-type probe through
+    /// [`ConvergencePointType::input_arity`]. A carrier with
+    /// `point_type: Fork` MUST simultaneously answer
+    /// `has_point_type(Fork) = true` AND
+    /// `has_input_arity(One) = true` (Fork's input_arity projection),
+    /// AND simultaneously answer
+    /// `has_point_type(Broadcast) = false` (different variant, same
+    /// bucket) AND `has_input_arity(Many) = false` (opposite bucket).
+    /// Pins the projection-composition contract at ONE narrow site —
+    /// a regression that (a) collapsed `has_input_arity` onto
+    /// `has_point_type` (silently answering `true` only when the
+    /// query names the raw point type, an out-of-vocabulary Arity
+    /// query), (b) collapsed `has_point_type` onto `has_input_arity`
+    /// (silently answering `true` for every point-type in the same
+    /// arity bucket), or (c) swapped the projection direction fails
+    /// HERE at the substrate before landing at any consumer. Peer of
+    /// the [`crate::export::ExportSpecSliceExt`]'s
+    /// SAME-CARRIER PROJECTION-COEXISTENCE pins on the
+    /// `Option<TestReportSource>` nested-Option carrier
+    /// (`has_report_format` vs. `has_report_payload_shape`) — the
+    /// same "one carrier, two probes at different projection depths"
+    /// contract pinned on the (required-parent × nested-struct-
+    /// scalar-child) corner rather than on the (Option-parent ×
+    /// Vec-child × nested-Option-carrier) corner.
+    #[test]
+    fn classification_has_input_arity_and_has_point_type_coexist_via_projection() {
+        let c = Classification {
+            point_type: ConvergencePointType::Fork,
+            substrate: SubstrateType::Compute,
+            horizon: Horizon::default(),
+            calm: CalmClassification::default(),
+            data_classification: DataClassification::default(),
+        };
+        assert!(c.has_point_type(ConvergencePointType::Fork));
+        assert!(c.has_input_arity(Arity::One));
+        assert!(!c.has_point_type(ConvergencePointType::Broadcast));
+        assert!(!c.has_input_arity(Arity::Many));
     }
 }

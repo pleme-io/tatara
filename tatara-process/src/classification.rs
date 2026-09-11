@@ -428,13 +428,16 @@ impl Classification {
     /// axes on [`Classification`] ([`Self::has_point_type`],
     /// [`Self::has_substrate`], [`Self::has_calm`], and
     /// [`Self::has_data_classification`]) — the six-axis classification
-    /// lattice now publishes ALL FOUR of its scalar-carrier presence
+    /// lattice publishes ALL FOUR of its scalar-carrier presence
     /// probes at ONE substrate site each. The remaining two axes
     /// (`horizon` — a nested struct threading [`HorizonKind`] through
     /// `horizon.kind`; the sixth axis is variant-dependent on the
     /// [`HorizonKind::Asymptotic`] arm) live on nested-struct-scalar
     /// slots rather than the direct-scalar corner the four current
-    /// peers span. A future [`DataClassification`] variant (a
+    /// peers span — the [`Self::has_horizon_kind`] peer opens that
+    /// fresh (required-parent × nested-struct-scalar-child) corner
+    /// with the same `has(kind)` shape composed through one struct
+    /// hop. A future [`DataClassification`] variant (a
     /// hypothetical seventh variant beyond `Public / Internal /
     /// Confidential / Pii / Phi / Pci` — say a `TradeSecret` bucket
     /// for competitive-sensitive data, or an `Anonymized` bucket for
@@ -458,6 +461,93 @@ impl Classification {
     #[must_use]
     pub fn has_data_classification(&self, kind: DataClassification) -> bool {
         self.data_classification == kind
+    }
+
+    /// Closed-set-driven presence probe — does this [`Classification`]
+    /// carry the given [`HorizonKind`] discriminator on its
+    /// [`Self::horizon`]`.kind` slot? The ONE substrate primitive that
+    /// owns the `(Classification, HorizonKind) -> bool` nested-struct-
+    /// scalar-carrier walk shape.
+    ///
+    /// # Seventh peer on the presence-probe axis — first on a fresh corner
+    ///
+    /// Peer of [`crate::spec::SignalPolicy::has_sighup_strategy`],
+    /// [`crate::encapsulates::EncapsulatesSpec::has_mode`],
+    /// [`Self::has_point_type`], [`Self::has_substrate`],
+    /// [`Self::has_calm`], and [`Self::has_data_classification`] on the
+    /// workspace-wide closed-set-driven presence-probe algebra — the
+    /// four scalar-carrier peers on [`Classification`] all read a
+    /// closed-set discriminator DIRECTLY off a scalar `Classification`
+    /// slot (`point_type`, `substrate`, `calm`, `data_classification`).
+    /// `has_horizon_kind` instead threads through a NESTED-STRUCT
+    /// intermediary ([`Horizon`], the defaulted nested struct owning
+    /// the `horizon` axis on the six-axis classification lattice) to
+    /// reach a scalar [`HorizonKind`] discriminator on
+    /// `horizon.kind`. This OPENS the (required-parent × nested-
+    /// struct-scalar-child) corner of the algebra at its FIRST
+    /// substrate primitive — a fresh corner distinct from all four
+    /// corner-property-exhaustive scalar-carrier peers on
+    /// [`Classification`].
+    ///
+    /// # Semantics — VARIANT match on the nested scalar, not POPULATED nested struct
+    ///
+    /// `has_horizon_kind(kind)` returns `true` iff
+    /// `self.horizon.kind == kind`. The nested [`Horizon`] struct
+    /// carries [`Default`] via `#[derive(Default)]` and its `kind`
+    /// field defaults to [`HorizonKind::Bounded`] via `#[default]`, so
+    /// a [`Classification`] filled via `..Default::default()` on the
+    /// `horizon` axis reads `true` on the default kind
+    /// [`HorizonKind::Bounded`] and `false` on
+    /// [`HorizonKind::Asymptotic`]. The default-arm short-circuit is
+    /// therefore present at this corner too — but through the extra
+    /// struct hop the peer scalar-carrier peers on the defaulted-
+    /// child corner (`has_calm`, `has_data_classification`) walk
+    /// directly. A regression that dropped `#[default]` on
+    /// [`HorizonKind`], or that replaced `Horizon::default()` in
+    /// [`Classification::gate_compute`] with an explicit non-`Bounded`
+    /// kind, surfaces at this primitive's tests before drifting
+    /// through every unadorned Process's baseline horizon answer.
+    ///
+    /// # Compounding
+    ///
+    /// This method OPENS the (required-parent × nested-struct-scalar-
+    /// child) corner of the workspace-wide closed-set-driven
+    /// presence-probe algebra, distinct from the four corner-property-
+    /// exhaustive scalar-carrier peers on [`Classification`]
+    /// ([`Self::has_point_type`], [`Self::has_substrate`],
+    /// [`Self::has_calm`], [`Self::has_data_classification`]) whose
+    /// bodies read a closed-set discriminator directly off a scalar
+    /// slot. A future co-tenant on this fresh corner (a peer probe on
+    /// another nested-struct's scalar discriminator, e.g. a
+    /// hypothetical `has_optimization_direction` reaching
+    /// `spec.classification.horizon.direction.unwrap_or_default()`, or
+    /// a nested-struct-scalar discriminator on a different `ProcessSpec`
+    /// field's inner struct) lands as ONE peer inherent method with
+    /// the same two-hop `self.<outer>.<inner> == kind` body and routes
+    /// through the same `strip_and_classify_prefixed_kind::<K, _>`
+    /// shape in `tatara-check`. A future [`HorizonKind`] variant (a
+    /// hypothetical `Periodic` sentinel for "terminates on each
+    /// window boundary then re-arms", pre-flagged on the closed set's
+    /// `ALL` docstring) reaches every downstream through ONE `ALL`
+    /// entry + one `as_str` arm + one `terminates` arm + one
+    /// `requires_metric_axes` arm on the closed set with the probe
+    /// body untouched.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the nested-struct-scalar-carrier presence-
+    /// probe body lives at ONE substrate site so every downstream
+    /// (`horizon-<kind>` require-tag family in `tatara-check`, future
+    /// audit dispatchers walking [`HorizonKind::ALL`], future variant
+    /// additions on [`HorizonKind`]) binds through the SAME
+    /// `has(kind)` shape rather than restating the
+    /// `classification.horizon.kind == kind` closure body at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`HorizonKind`] variant lands at ONE `ALL` entry + ONE
+    /// `as_str` arm on the closed set and the probe picks it up
+    /// mechanically without further per-consumer edits.
+    #[must_use]
+    pub fn has_horizon_kind(&self, kind: HorizonKind) -> bool {
+        self.horizon.kind == kind
     }
 }
 
@@ -3511,5 +3601,167 @@ mod tests {
         assert!(!c.has_data_classification(DataClassification::Internal));
         assert!(!c.has_data_classification(DataClassification::Public));
         assert!(!c.has_data_classification(DataClassification::Phi));
+    }
+
+    // ── nested-struct-scalar-carrier presence probe on Classification × HorizonKind ──
+    //
+    // Fail-before-pass-after granularity:
+    // [`Classification::has_horizon_kind`] did not exist before this
+    // commit — every consumer of the `(Classification, HorizonKind) ->
+    // bool` two-hop `self.horizon.kind == kind` probe shape would have
+    // to restate the nested-struct field walk at its own callsite.
+    // Post-lift the shape lives at ONE substrate owner and every
+    // downstream (the `horizon-<kind>` require-tag family in
+    // `tatara-check`, future audit dispatchers walking
+    // [`HorizonKind::ALL`], any future CRD-facing nested-struct-scalar
+    // discriminator on `ProcessSpec`) binds through the SAME
+    // `has(kind)` shape the four prior scalar-carrier peers on
+    // [`Classification`] ([`Classification::has_point_type`],
+    // [`Classification::has_substrate`], [`Classification::has_calm`],
+    // [`Classification::has_data_classification`]) plus
+    // [`crate::spec::SignalPolicy::has_sighup_strategy`] and
+    // [`crate::encapsulates::EncapsulatesSpec::has_mode`] publish.
+    // FIRST occupant on the (required-parent × nested-struct-scalar-
+    // child) corner of the presence-probe algebra — a fresh corner
+    // distinct from the four corner-property-exhaustive scalar-carrier
+    // peers on [`Classification`] (whose bodies read a closed-set
+    // discriminator directly off a scalar slot without an intermediate
+    // struct hop).
+
+    /// DIAGONAL — for every [`HorizonKind`] variant, a
+    /// [`Classification`] whose `horizon.kind` field is set to that
+    /// variant returns `true` from `has_horizon_kind` on that same
+    /// variant AND `false` on every other variant. Sweep the
+    /// [`HorizonKind::ALL`] × ALL cross so a regression that
+    /// hard-coded the arm to a single variant (silently returning
+    /// `true` on every populated classification regardless of query
+    /// kind) or wired the equality to a fixed unrelated field (a
+    /// stray probe on `classification.point_type` /
+    /// `classification.substrate` / `classification.calm` /
+    /// `classification.data_classification`, or a direct probe on the
+    /// nested [`Horizon`] struct that ignored the discriminator arm)
+    /// fails HERE at the substrate primitive before landing at the
+    /// operator-facing checks.lisp surface. The nested-struct hop
+    /// distinguishes this corner from the four scalar-carrier peers:
+    /// the probe walks `self.horizon.kind` not `self.<field>`, so a
+    /// regression that mis-routed the field walk (a stray
+    /// `self.horizon == kind` that could not typecheck, or a stray
+    /// `self.horizon.direction == kind` that would trip a different
+    /// closed-set discriminator) fails at the compiler before the
+    /// runtime diagonal even runs.
+    #[test]
+    fn classification_has_horizon_kind_returns_true_iff_variant_matches() {
+        for populated in HorizonKind::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon {
+                    kind: populated,
+                    ..Horizon::default()
+                },
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            for query in HorizonKind::ALL {
+                assert_eq!(
+                    c.has_horizon_kind(query),
+                    query == populated,
+                    "horizon.kind={populated:?}: query {query:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `horizon: Horizon::default()` whose `kind` field defaults to
+    /// [`HorizonKind::Bounded`] via `#[default]`, so `has_horizon_kind`
+    /// returns `true` on [`HorizonKind::Bounded`] and `false` on
+    /// [`HorizonKind::Asymptotic`]. Pins the composition of the
+    /// substrate's baseline-constructor primitive with the SEVENTH
+    /// presence-probe peer AND the sibling-default correspondence
+    /// documented on [`Classification::gate_compute`] (which pins the
+    /// three defaulted axes to the sibling closed-set defaults
+    /// `HorizonKind::Bounded` / `CalmClassification::Monotone` /
+    /// `DataClassification::Internal`) — a regression that flipped
+    /// `Horizon::default().kind` off `Bounded` (or promoted
+    /// `Asymptotic` to `#[default]` on [`HorizonKind`], or wired
+    /// `has_horizon_kind` to a fixed variant answer, or crossed the
+    /// wires through the wrong nested struct) fails here at ONE
+    /// narrow site before drifting across every unadorned ephemeral
+    /// env (`default_ephemeral_class`) and every downstream test
+    /// fixture that keys assertions on the shape. FIRST occupant on
+    /// the (required-parent × nested-struct-scalar-child) corner —
+    /// locks the corner's characteristic "default-arm short-circuit
+    /// reaches through the nested struct's own default" property at
+    /// ONE narrow site.
+    #[test]
+    fn classification_gate_compute_has_horizon_kind_bounded_only() {
+        let c = Classification::gate_compute();
+        for kind in HorizonKind::ALL {
+            let expected = kind == HorizonKind::Bounded;
+            assert_eq!(
+                c.has_horizon_kind(kind),
+                expected,
+                "gate_compute (horizon.kind=Bounded) must return {expected} for {kind:?}",
+            );
+        }
+    }
+
+    /// FIVE-AXIS INDEPENDENCE — the FIVE presence-probe co-tenants on
+    /// the [`Classification`] parent
+    /// ([`Classification::has_point_type`] plus
+    /// [`Classification::has_substrate`] on the (required-parent ×
+    /// required-scalar-child) corner AND
+    /// [`Classification::has_calm`] plus
+    /// [`Classification::has_data_classification`] on the (required-
+    /// parent × defaulted-scalar-child) corner AND
+    /// [`Classification::has_horizon_kind`] on the fresh (required-
+    /// parent × nested-struct-scalar-child) corner) probe distinct
+    /// slots on the SAME parent, so a carrier with `point_type: Fork`
+    /// AND `substrate: Storage` AND `calm: NonMonotone` AND
+    /// `data_classification: Pii` AND `horizon.kind: Asymptotic`
+    /// answers `true` on all five fine tags simultaneously and
+    /// `false` on every off-diagonal probe of any axis. Pins the five
+    /// probes' independence at ONE narrow site — a regression that
+    /// collapsed any of the five onto another's field (a stray probe
+    /// of `has_horizon_kind` reading `self.point_type` /
+    /// `self.substrate` / `self.calm` / `self.data_classification`,
+    /// or of any prior probe reading through `self.horizon.kind`)
+    /// would fail HERE before landing at any consumer. The audit
+    /// `every Fork-topology Storage-plane NonMonotone-CALM
+    /// Pii-classification Asymptotic-horizon point declares a
+    /// Raft-guarded write path AND a downstream PII-scrub sink AND a
+    /// rate-window healthy-threshold metric` composes this exact
+    /// five-axis conjunction on the five classification-axis
+    /// discriminators of the six-axis classification lattice — opens
+    /// the five-way corner-coverage contract on [`Classification`],
+    /// straddling THREE distinct corners of the (parent-shape ×
+    /// child-shape) algebra (the required-child corner
+    /// `has_point_type` + `has_substrate` share, the defaulted-child
+    /// corner `has_calm` + `has_data_classification` share, and the
+    /// nested-struct-child corner `has_horizon_kind` opens).
+    #[test]
+    fn classification_five_presence_probes_are_independent() {
+        let c = Classification {
+            point_type: ConvergencePointType::Fork,
+            substrate: SubstrateType::Storage,
+            horizon: Horizon {
+                kind: HorizonKind::Asymptotic,
+                ..Horizon::default()
+            },
+            calm: CalmClassification::NonMonotone,
+            data_classification: DataClassification::Pii,
+        };
+        assert!(c.has_point_type(ConvergencePointType::Fork));
+        assert!(c.has_substrate(SubstrateType::Storage));
+        assert!(c.has_calm(CalmClassification::NonMonotone));
+        assert!(c.has_data_classification(DataClassification::Pii));
+        assert!(c.has_horizon_kind(HorizonKind::Asymptotic));
+        assert!(!c.has_point_type(ConvergencePointType::Gate));
+        assert!(!c.has_substrate(SubstrateType::Compute));
+        assert!(!c.has_calm(CalmClassification::Monotone));
+        assert!(!c.has_data_classification(DataClassification::Internal));
+        assert!(!c.has_horizon_kind(HorizonKind::Bounded));
     }
 }

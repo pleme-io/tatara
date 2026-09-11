@@ -23,6 +23,7 @@ use tatara_process::export::{
 };
 use tatara_process::intent::IntentKind;
 use tatara_process::lifetime::{LifetimeKind, TeardownPolicy};
+use tatara_process::routing::RoutingForm;
 use tatara_process::signal::SighupStrategy;
 use tatara_process::spec::{DependsOnSliceExt, MustReachPhase};
 use tatara_reconciler::known_crd::KnownCrd;
@@ -1044,6 +1045,50 @@ struct UnknownRequireTag;
 ///   sibling on the SAME resolved-ephemeral Option-parent), etc. reads
 ///   directly at the checks.lisp surface as the three-axis probe of
 ///   the point's ephemeral lifetime shape.
+/// - `routing-form-<kind>` — [`RoutingForm`] closed set →
+///   [`tatara_process::routing::RoutingSpec::has_form`] (a derived-
+///   scalar-carrier variant-equality probe on
+///   `spec.routing.as_ref().is_some_and(|r| r.form() == kind)`, where
+///   `RoutingSpec::form()` composes through the ONE substrate
+///   projection [`RoutingForm::from_is_stable`] over the
+///   `stable_name_claim` bool). The operator's `:requires
+///   (routing-form-stable)` pins that a Process declares intent to
+///   hold the ProcessTable claim for `(cluster, app)` and emit the
+///   unprefixed `${app}.${cluster}.${loc}.${domain}` FQDN, `:requires
+///   (routing-form-instance)` pins the default per-instance FQDN
+///   shape (`${app}.${eph_id}.${cluster}.${loc}.${domain}`), and the
+///   reconciler's `render_routing` reads the SAME closed-set
+///   discriminator when stamping the [`crate::annotations::ROUTING_FORM`]
+///   annotation / label on every emitted routing edge. NINETEENTH
+///   closed-set-driven prefix family in the point-domain require-tag
+///   vocabulary and SECOND occupant on the (Option-parent × defaulted-
+///   scalar-child) corner opened by `teardown-policy-<kind>` — the
+///   parent-shape half is Option-typed (`spec.routing` is
+///   `Option<RoutingSpec>`, `None` on an in-cluster-only Process),
+///   and the child-shape half is a defaulted scalar
+///   ([`RoutingForm::Instance`] via `#[serde(default)]` on
+///   `stable_name_claim: bool` composed through
+///   [`RoutingForm::from_is_stable`]). Distinct from `teardown-policy-<kind>`
+///   in that the child is DERIVED from a raw bool through
+///   [`RoutingForm::from_is_stable`], not stored as-is — a first
+///   demonstration that the (Option-parent × defaulted-scalar-child)
+///   corner admits both stored-child and derived-child traversals
+///   through the SAME `has(kind)` shape. An absent `spec.routing`
+///   short-circuits to `false` for EVERY kind (the Option-parent gate
+///   fires), while a `RoutingSpec` with `stable_name_claim: false`
+///   (the serde default) reads `true` on `routing-form-instance` and
+///   `false` on `routing-form-stable` (the derived defaulted-scalar
+///   child publishes `RoutingForm::from_is_stable(false) = Instance`).
+///   Coexists with every prior family — a `routing-form-stable`
+///   conjunction with `lifetime-ephemeral` reads directly as "an
+///   ephemeral Process that declares intent to hold the stable-name
+///   claim," a common posture for canary previews of a stable-name
+///   Process. Semantics — DECLARED intent, not RESOLVED emission: a
+///   `stable_name_claim: true` spec that loses the ProcessTable claim
+///   to a higher-priority peer still reads `routing-form-stable`
+///   as true (the *declared* intent); the reconciler's claim
+///   arbitration decides the actual emission downstream at
+///   `render_routing`.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -1056,24 +1101,23 @@ struct UnknownRequireTag;
 /// `ExportTrigger` / `ChannelKind` / `ReportFormat` / `ArtifactKind` /
 /// `EncapsulationMode` / `ConvergencePointType` / `SubstrateType` /
 /// `CalmClassification` / `DataClassification` / `HorizonKind` /
-/// `OptimizationDirection` / `TeardownPolicy` variant lands at ONE
-/// `ALL` entry on its parent's closed set — no per-caller edit here.
-/// A future new prefix family (e.g. a `phase-<kind>` for
+/// `OptimizationDirection` / `TeardownPolicy` / `RoutingForm` variant
+/// lands at ONE `ALL` entry on its parent's closed set — no per-caller
+/// edit here. A future new prefix family (e.g. a `phase-<kind>` for
 /// [`tatara_process::phase::ProcessPhase`], a hypothetical
-/// `routing-form-<kind>` for a closed-set discriminator on
-/// `spec.routing`, a second co-tenant on the (Option-parent ×
-/// defaulted-scalar-child) corner now singly populated by
-/// `teardown-policy-<kind>` — say a hypothetical `max-concurrent-tier-
-/// <kind>` reaching through `spec.lifetime.resolved_ephemeral()
-///     .map(|e| tier_of(e.max_concurrent))`, or a peer probe on
-/// another Option-parent nested-scalar defaulted field — or another
-/// co-tenant on the (required-parent × nested-struct-scalar-child)
-/// corner doubly populated by `horizon-<kind>` +
-/// `optimization-direction-<kind>`) lands as ONE more `if let
-/// Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(tag,
-/// "prefix-", |k| spec.<field>.has(k)) { return res; }` branch that
-/// reads the same three-step (strip_prefix + parse + has) shape all
-/// eighteen existing families publish.
+/// `max-concurrent-tier-<kind>` reaching through
+/// `spec.lifetime.resolved_ephemeral().map(|e|
+/// tier_of(e.max_concurrent))`, a third co-tenant on the
+/// (Option-parent × defaulted-scalar-child) corner now doubly
+/// populated by `teardown-policy-<kind>` (stored child) and
+/// `routing-form-<kind>` (derived child), or another co-tenant on the
+/// (required-parent × nested-struct-scalar-child) corner doubly
+/// populated by `horizon-<kind>` + `optimization-direction-<kind>`)
+/// lands as ONE more `if let Some(res) =
+/// strip_and_classify_prefixed_kind::<NewKind, _>(tag, "prefix-", |k|
+/// spec.<field>.has(k)) { return res; }` branch that reads the same
+/// three-step (strip_prefix + parse + has) shape all nineteen existing
+/// families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
@@ -1146,7 +1190,13 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_true_on_default_ephemeral_teardown_policy_for_always_only`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_teardown_policy_suffix`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_teardown_policy_prefix`],
-/// and [`tests::evaluate_point_require_tag_teardown_policy_coexists_with_export_when_and_lifetime_ephemeral`].
+/// [`tests::evaluate_point_require_tag_teardown_policy_coexists_with_export_when_and_lifetime_ephemeral`],
+/// [`tests::evaluate_point_require_tag_returns_true_iff_routing_form_matches_variant_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_absent_routing_for_every_routing_form_kind`],
+/// [`tests::evaluate_point_require_tag_returns_true_on_default_routing_form_for_instance_only`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_routing_form_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_routing_form_prefix`],
+/// and [`tests::evaluate_point_require_tag_routing_form_coexists_with_lifetime_ephemeral_and_teardown_policy`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -1281,6 +1331,13 @@ fn evaluate_point_require_tag(
     {
         return res;
     }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<RoutingForm, _>(tag, "routing-form-", |kind| {
+            spec.routing.as_ref().is_some_and(|r| r.has_form(kind))
+        })
+    {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -1294,7 +1351,7 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the eighteen closed-set-driven prefix families in
+/// shape the nineteen closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
@@ -1309,7 +1366,8 @@ fn evaluate_point_require_tag(
 /// `data-classification-<kind>` on [`DataClassification`],
 /// `horizon-<kind>` on [`HorizonKind`],
 /// `optimization-direction-<kind>` on [`OptimizationDirection`],
-/// `teardown-policy-<kind>` on [`TeardownPolicy`]) each
+/// `teardown-policy-<kind>` on [`TeardownPolicy`],
+/// `routing-form-<kind>` on [`RoutingForm`]) each
 /// dispatch through past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// threshold.
 ///
@@ -1340,23 +1398,23 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future nineteenth closed-set prefix family — a `phase-<kind>`
+/// A future twentieth closed-set prefix family — a `phase-<kind>`
 /// on [`tatara_process::phase::ProcessPhase`], a hypothetical
-/// `routing-form-<kind>` on `spec.routing.as_ref().map(|r| r.form)`,
-/// a second co-tenant on the (Option-parent × defaulted-scalar-child)
-/// corner now singly populated by `teardown-policy-<kind>` (e.g. a
-/// hypothetical `max-concurrent-tier-<kind>` reaching through
+/// `max-concurrent-tier-<kind>` reaching through
 /// `spec.lifetime.resolved_ephemeral().map(|e|
-/// tier_of(e.max_concurrent))`, or a peer probe on a different
-/// Option-parent nested defaulted-scalar field like
+/// tier_of(e.max_concurrent))`, a third co-tenant on the
+/// (Option-parent × defaulted-scalar-child) corner now doubly
+/// populated by `teardown-policy-<kind>` (stored-child) and
+/// `routing-form-<kind>` (derived-child), a peer probe on a
+/// different Option-parent nested defaulted-scalar field like
 /// `spec.encapsulates.as_ref().map(|e| e.mode)` if a defaulted-scalar
-/// mode axis is added there), or a further co-tenant on the
+/// mode axis is added there, or a further co-tenant on the
 /// (required-parent × nested-struct-scalar-child) corner doubly
 /// populated by `horizon-<kind>` + `optimization-direction-<kind>` —
 /// lands as ONE more `if let Some(res) =
 /// strip_and_classify_prefixed_kind::<NewKind, _>(tag, "prefix-", |k|
 /// spec.<field>.has(k)) { return res; }` branch that reads the same
-/// three-step shape the eighteen existing families publish. No
+/// three-step shape the nineteen existing families publish. No
 /// per-caller `strip_prefix + parse + match { Ok(_) => …, Err(_) =>
 /// Err(UnknownRequireTag) }` restatement.
 ///
@@ -1368,7 +1426,7 @@ fn evaluate_point_require_tag(
 /// construction.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// three-step chain now dispatches EIGHTEEN closed-set prefix
+/// three-step chain now dispatches NINETEEN closed-set prefix
 /// families past the ≥2 PRIME-DIRECTIVE trigger through ONE
 /// substrate owner. THEORY.md §II.1 invariant 2 — free middle; the
 /// caller composes the closed-set choice (via the generic `K`) and
@@ -2475,6 +2533,7 @@ mod tests {
     };
     use tatara_process::intent::{AplicacaoIntent, IntentKind};
     use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind, TeardownPolicy};
+    use tatara_process::routing::{RoutingBackend, RoutingForm, RoutingHostname, RoutingSpec};
     use tatara_process::signal::SighupStrategy;
     use tatara_process::spec::MustReachPhase;
 
@@ -6723,6 +6782,279 @@ mod tests {
             evaluate_point_require_tag(&spec, "teardown-policy-Never"),
             Ok(false),
             "off-diagonal `teardown-policy-Never` must be false: the ephemeral declares OnAttested",
+        );
+    }
+
+    // ── routing-form-<kind> prefix family (evaluate_point_require_tag) ─
+    //
+    // Fail-before-pass-after granularity: the `routing-form-<kind>`
+    // prefix family did not exist before this commit — the point-domain
+    // require-tag vocabulary carried the eighteen prior closed-set-
+    // driven families but had no way to distinguish which
+    // [`RoutingForm`] a Process declares intent for — the "hold the
+    // ProcessTable claim, emit the unprefixed `${app}.${cluster}` FQDN"
+    // stable-name posture vs the default per-instance
+    // `${app}.${eph_id}.${cluster}` FQDN. The lift adds the NINETEENTH
+    // closed-set-driven prefix family symmetrical with the eighteen
+    // prior ones, routing through the newly-opened
+    // [`tatara_process::routing::RoutingSpec::has_form`] substrate
+    // primitive via `strip_and_classify_prefixed_kind`. SECOND occupant
+    // on the (Option-parent × defaulted-scalar-child) corner of the
+    // (parent-shape × child-shape) presence-probe algebra opened by
+    // `teardown-policy-<kind>` — the parent-shape half is Option-typed
+    // (`spec.routing` is `Option<RoutingSpec>`, `None` on an in-cluster-
+    // only Process); the child-shape half is a defaulted scalar
+    // ([`RoutingForm::Instance`] via [`RoutingForm::from_is_stable`]
+    // over the `#[serde(default)]` false bool `stable_name_claim`).
+    // Distinct from `teardown-policy-<kind>` in that the child is
+    // DERIVED from a raw bool through the ONE substrate composer
+    // [`RoutingForm::from_is_stable`], not stored as-is — the (Option-
+    // parent × defaulted-scalar-child) corner now admits BOTH
+    // stored-child (`teardown-policy-<kind>`) and derived-child
+    // (`routing-form-<kind>`) traversals through the SAME `has(kind)`
+    // shape.
+
+    /// POPULATED-slot pin — `routing-form-<kind>` dispatches through
+    /// the autoderived [`RoutingForm`] `FromStr` + the substrate
+    /// [`tatara_process::routing::RoutingSpec::has_form`] primitive,
+    /// returning `true` only when the resolved routing spec's derived
+    /// [`RoutingForm`] matches the queried variant. Sweep the
+    /// [`RoutingForm::ALL`] × ALL cross so a regression that (a) hard-
+    /// coded the arm to a single variant (silently returning `true`
+    /// on every populated routing spec regardless of query kind), (b)
+    /// dropped the composition through [`RoutingForm::from_is_stable`]
+    /// (drifting from every other consumer of the `stable_name_claim
+    /// → RoutingForm` projection), or (c) wired the closure to an
+    /// unrelated field (a stray probe on `priority` /
+    /// `hostnames.len()`) fails HERE at the classifier before landing
+    /// at the operator-facing checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_routing_form_matches_variant_per_kind() {
+        for is_stable in [true, false] {
+            let populated = RoutingForm::from_is_stable(is_stable);
+            let spec = ProcessSpec {
+                routing: Some(RoutingSpec {
+                    hostnames: vec![RoutingHostname::content_hashed("api")],
+                    backend: RoutingBackend::plain("svc", 80),
+                    stable_name_claim: is_stable,
+                    priority: 0,
+                }),
+                ..ProcessSpec::gate_compute_defaults()
+            };
+            for query in RoutingForm::ALL {
+                let tag = format!("routing-form-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "stable_name_claim={is_stable} populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// OPTION-PARENT SHORT-CIRCUIT pin — a default (`routing: None`)
+    /// [`ProcessSpec`] returns `false` for every `routing-form-<kind>`
+    /// tag because the `spec.routing.as_ref()` gate short-circuits the
+    /// walk. Locks the Option-parent silencing contract
+    /// (`spec.routing.as_ref().is_some_and(|r| r.has_form(k))`) so a
+    /// regression that dropped the Option gate (probing an absent
+    /// routing slot as if it carried the defaulted `Instance` form)
+    /// would return `true` on `routing-form-instance` here for every
+    /// Process. Splits the two corners of the (Option-parent ×
+    /// defaulted-scalar-child) shape from the OTHER side: the
+    /// Option-parent arm silences EVERY kind (including the closed-
+    /// set's default), while the reachable-default-child arm honors
+    /// the default (see the DEFAULT-ARM pin below). The two pins
+    /// bracket the corner semantics from both sides.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_absent_routing_for_every_routing_form_kind() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert!(spec.routing.is_none());
+        for kind in RoutingForm::ALL {
+            let tag = format!("routing-form-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "absent routing must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// DEFAULT-ARM SHORT-CIRCUIT pin — a Process whose `routing` slot
+    /// is a [`RoutingSpec`] with `stable_name_claim` at its
+    /// `#[serde(default)]` (bool default = `false`) answers `true` on
+    /// `routing-form-instance` and `false` on every other variant
+    /// WITHOUT the operator naming the routing-form axis. This is the
+    /// characteristic behavior of the (Option-parent × defaulted-
+    /// scalar-child) corner reachable arm — traversed through a
+    /// DERIVED child (via [`RoutingForm::from_is_stable`]) rather than
+    /// the stored child `has_teardown_policy` walks. The Option-parent
+    /// gate DOES fire (`spec.routing.as_ref()` returns `Some(&_)`), the
+    /// derived scalar comparison then picks up the closed set's
+    /// derived default (`from_is_stable(false) = Instance`). Peer to
+    /// [`evaluate_point_require_tag_returns_true_on_default_ephemeral_teardown_policy_for_always_only`]
+    /// on the SAME corner — that pin walks the STORED-child arm; this
+    /// pin walks the DERIVED-child arm; the corner admits both
+    /// traversals through the SAME `has(kind)` shape.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_default_routing_form_for_instance_only() {
+        let spec = ProcessSpec {
+            routing: Some(RoutingSpec {
+                hostnames: vec![RoutingHostname::content_hashed("api")],
+                backend: RoutingBackend::plain("svc", 80),
+                stable_name_claim: bool::default(),
+                priority: 0,
+            }),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        for kind in RoutingForm::ALL {
+            let tag = format!("routing-form-{}", kind.as_str());
+            let expected = kind == RoutingForm::Instance;
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(expected),
+                "default routing (stable_name_claim=false → Instance) baseline: tag {tag:?} must be {expected}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `routing-form-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`RoutingForm`] labels are the
+    /// lower-case wire-format keys (`stable`, `instance`) — matching
+    /// the [`crate::annotations::ROUTING_FORM`] annotation / label
+    /// values the reconciler stamps verbatim — so PascalCase / typo
+    /// spellings are UNKNOWN suffixes. Pin the case-sensitivity axis
+    /// so a regression that ASCIIfolded or Pascal-cased on parse
+    /// would fail HERE. The empty-suffix boundary is pinned by the
+    /// shared substrate primitive's
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_routing_form_suffix() {
+        let spec = ProcessSpec {
+            routing: Some(RoutingSpec {
+                hostnames: vec![RoutingHostname::content_hashed("api")],
+                backend: RoutingBackend::plain("svc", 80),
+                stable_name_claim: true,
+                priority: 0,
+            }),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        for garbage in [
+            "routing-form-Stable",
+            "routing-form-STABLE",
+            "routing-form-Instance",
+            "routing-form-stble",
+            "routing-form-Gateway",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at `routing-form-`
+    /// classifies as [`UnknownRequireTag`], mirroring every prior
+    /// closed-set prefix family. The empty suffix hits the substrate
+    /// primitive's canonical empty-string arm rather than short-
+    /// circuiting to `Ok(true)` on any populated routing (which would
+    /// silently read as "any routing axis present" for every Process
+    /// with a routing slot). Locks the empty-suffix ↔ unknown-suffix
+    /// correspondence at ONE narrow classifier site for the nineteenth
+    /// family so a regression that special-cased the bare prefix
+    /// would fail HERE. On the absent-routing side the same bare
+    /// prefix is ALSO unknown — the substrate primitive rejects the
+    /// empty suffix before the Option-parent gate fires — pinning the
+    /// (Option-parent × defaulted-scalar-child) corner's empty-suffix
+    /// contract as independent of the parent-arm branch.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_routing_form_prefix() {
+        let routed_spec = ProcessSpec {
+            routing: Some(RoutingSpec {
+                hostnames: vec![RoutingHostname::content_hashed("api")],
+                backend: RoutingBackend::plain("svc", 80),
+                stable_name_claim: true,
+                priority: 0,
+            }),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        assert_eq!(
+            evaluate_point_require_tag(&routed_spec, "routing-form-"),
+            Err(UnknownRequireTag),
+            "bare `routing-form-` must classify as UnknownRequireTag on a routed spec",
+        );
+        let unrouted_spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&unrouted_spec, "routing-form-"),
+            Err(UnknownRequireTag),
+            "bare `routing-form-` must classify as UnknownRequireTag on an unrouted spec",
+        );
+    }
+
+    /// COEXISTENCE pin — a Process with an ephemeral lifetime whose
+    /// `teardown_policy = OnAttested` AND a routing spec with
+    /// `stable_name_claim = true` (a canary-of-a-stable-name preview
+    /// posture) MUST simultaneously satisfy the fine
+    /// `routing-form-stable` prefix tag (this family), the sibling
+    /// `teardown-policy-OnAttested` prefix tag (the EIGHTEENTH family
+    /// on the SAME (Option-parent × defaulted-scalar-child) corner,
+    /// stored-child arm), the coarse `lifetime-ephemeral` presence
+    /// probe, AND simultaneously fail the off-diagonal
+    /// `routing-form-instance` probe. Locks the semantic split
+    /// between the three surfaces at ONE narrow site so a regression
+    /// that (a) collapsed `routing-form-<kind>` to the coarse
+    /// `lifetime-ephemeral` fixed answer, (b) crossed the wires
+    /// between `routing-form-<kind>` and `teardown-policy-<kind>`
+    /// (probing the wrong Option-parent for a routing-form query),
+    /// or (c) drifted the derived-child arm to match the stored-child
+    /// projection, fails HERE. The two corners of the (Option-parent
+    /// × defaulted-scalar-child) shape — stored-child on
+    /// `resolved_ephemeral()`, derived-child on `routing.as_ref()` —
+    /// read distinct Option-parents through the same
+    /// `strip_and_classify_prefixed_kind` shape; this pin verifies
+    /// they read distinct slots through distinct parents without
+    /// cross-talk.
+    #[test]
+    fn evaluate_point_require_tag_routing_form_coexists_with_lifetime_ephemeral_and_teardown_policy(
+    ) {
+        let spec = ProcessSpec {
+            lifetime: Lifetime::ephemeral(EphemeralLifetime {
+                teardown_policy: TeardownPolicy::OnAttested,
+                ..EphemeralLifetime::default()
+            }),
+            routing: Some(RoutingSpec {
+                hostnames: vec![RoutingHostname::content_hashed("api")],
+                backend: RoutingBackend::plain("svc", 80),
+                stable_name_claim: true,
+                priority: 0,
+            }),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "lifetime-ephemeral"),
+            Ok(true),
+            "coarse `lifetime-ephemeral` must be true on an ephemeral Process",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "teardown-policy-OnAttested"),
+            Ok(true),
+            "sibling `teardown-policy-OnAttested` must be true when the ephemeral declares OnAttested",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "routing-form-stable"),
+            Ok(true),
+            "fine `routing-form-stable` must be true when stable_name_claim is set",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "routing-form-instance"),
+            Ok(false),
+            "off-diagonal `routing-form-instance` must be false: the routing declares Stable",
         );
     }
 

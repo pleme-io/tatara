@@ -141,6 +141,127 @@ impl RoutingSpec {
     pub fn emitted_fqdn_count(&self, claim_held: bool) -> usize {
         self.hostnames.len() * if claim_held { 2 } else { 1 }
     }
+
+    /// Declared routing form for this Process — the typed projection
+    /// over the [`Self::stable_name_claim`] bool through the ONE
+    /// substrate composer [`RoutingForm::from_is_stable`]. Every
+    /// downstream axis (the [`crate::annotations::ROUTING_FORM`]
+    /// annotation / label the reconciler stamps, the
+    /// `routing-form-<kind>` require-tag prefix family in
+    /// `tatara-check`, any future audit dispatcher walking
+    /// [`RoutingForm::ALL`]) reads THIS ONE projection so a shift
+    /// in how "which routing form does this spec declare intent
+    /// for" is derived lands at ONE site.
+    ///
+    /// Semantics — DECLARED intent, not RESOLVED emission: this is
+    /// what the operator authored on the spec. The reconciler still
+    /// gates on the ProcessTable claim before emitting the stable
+    /// FQDN form — a `stable_name_claim: true` spec that loses the
+    /// claim to a higher-priority peer still `form() == Stable` at
+    /// this site (the *declared* intent), even though the
+    /// runtime-effective emission is `Instance` on that reconcile
+    /// tick. The `routing-form-<kind>` require-tag is intentionally
+    /// a spec-shape probe, not a runtime-status probe, so it stays
+    /// pinned to this projection.
+    ///
+    /// Peer to [`crate::classification::Classification::horizon_kind`] /
+    /// [`crate::classification::Classification::optimization_direction`]
+    /// on the "typed projection over a stored field on ONE spec
+    /// slot → closed-set discriminator" axis — both hide the raw
+    /// wire-form field behind ONE typed projection so a future
+    /// normalization (widening [`Self::stable_name_claim`] into a
+    /// typed enum with a third variant, canonicalizing across a
+    /// new `Gateway` form) lands at THIS ONE site and every
+    /// downstream consumer inherits the upgrade mechanically.
+    #[must_use]
+    pub const fn form(&self) -> RoutingForm {
+        RoutingForm::from_is_stable(self.stable_name_claim)
+    }
+
+    /// Scalar-carrier presence probe on the derived
+    /// [`Self::form`] projection — `true` iff this routing spec's
+    /// declared [`RoutingForm`] (as read through
+    /// [`RoutingForm::from_is_stable`] over the `stable_name_claim`
+    /// bool) matches the queried variant.
+    ///
+    /// The one-line collapse of the
+    /// `<r>.form() == kind` closure body lifted to ONE substrate
+    /// owner past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold —
+    /// the nineteenth closed-set-driven prefix family in
+    /// [`tatara-check`]'s point-domain require-tag classifier
+    /// (`routing-form-<kind>`) is the first workspace-wide consumer.
+    /// The shape is a peer of
+    /// [`crate::lifetime::EphemeralLifetime::has_teardown_policy`] on
+    /// the SAME (Option-parent × defaulted-scalar-child) corner of
+    /// the workspace-wide presence-probe algebra: the parent is
+    /// `Option<RoutingSpec>` on [`crate::crd::ProcessSpec::routing`]
+    /// (None short-circuits every kind), and the child is a scalar
+    /// derived from a `#[serde(default)]` bool (`stable_name_claim:
+    /// false` by default → `RoutingForm::Instance` by default).
+    ///
+    /// # Sibling scalar-carrier probes
+    ///
+    /// * [`crate::spec::SignalPolicy::has_sighup_strategy`] — required
+    ///   parent × defaulted scalar child (stored).
+    /// * [`crate::classification::Classification::has_calm`] /
+    ///   [`crate::classification::Classification::has_data_classification`]
+    ///   — required parent × defaulted scalar child (stored).
+    /// * [`crate::classification::Classification::has_horizon_kind`] /
+    ///   [`crate::classification::Classification::has_optimization_direction`]
+    ///   — required parent × nested-struct-scalar-child (stored).
+    /// * [`crate::lifetime::EphemeralLifetime::has_teardown_policy`]
+    ///   — Option parent × defaulted-scalar-child (stored).
+    /// * THIS — Option parent (`Option<RoutingSpec>` on
+    ///   [`crate::crd::ProcessSpec::routing`]) × defaulted-scalar-child
+    ///   ([`RoutingForm`] DERIVED from the defaulted-false bool
+    ///   `stable_name_claim`). Second occupant on the
+    ///   (Option-parent × defaulted-scalar-child) corner, and the
+    ///   FIRST occupant whose child is *derived* rather than
+    ///   *stored* — the shape composes through the ONE
+    ///   [`RoutingForm::from_is_stable`] projection so a future
+    ///   widening of the underlying `stable_name_claim` bool into a
+    ///   typed enum lands at [`RoutingForm::from_is_stable`] alone
+    ///   and every `has_form` consumer inherits the upgrade
+    ///   mechanically.
+    ///
+    /// # Semantics — DECLARED form, not RESOLVED emission
+    ///
+    /// `has_form(kind)` returns `true` iff `self.form() == kind`.
+    /// See [`Self::form`] for the "declared intent" vs
+    /// "runtime-effective emission" distinction — the probe is a
+    /// spec-shape probe, not a runtime-status probe, so a
+    /// `stable_name_claim: true` spec that loses the ProcessTable
+    /// claim still reads `has_form(Stable) == true` at this site.
+    /// The reconciler-side "actually emit stable FQDNs" gate lives
+    /// downstream at claim arbitration, not here.
+    ///
+    /// # Compounding
+    ///
+    /// A future third [`RoutingForm`] variant added to `ALL` (a
+    /// hypothetical `Gateway` for a future Gateway-API `HTTPRoute`
+    /// edge, distinct from both the per-instance and stable-claim
+    /// FQDN shapes) reaches this probe through ONE `ALL` entry +
+    /// one `as_str` arm + one `from_is_stable` widening alone, no
+    /// per-caller edit at the `routing-form-<kind>` require-tag
+    /// classifier and no per-consumer restatement of the
+    /// `spec.routing.as_ref().is_some_and(|r| r.form() == kind)`
+    /// closure body.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the scalar-carrier presence-probe body
+    /// lives at ONE substrate site so every downstream
+    /// (`routing-form-<kind>` require-tag family in tatara-check,
+    /// closed-set audit dispatchers, future variant additions on
+    /// [`RoutingForm`]) binds through the SAME `has(kind)` shape.
+    /// THEORY.md §VI.1 — generation over composition; a future
+    /// variant lands at ONE `ALL` entry + one `as_str` arm + one
+    /// `from_is_stable` widening on the closed set and the probe
+    /// picks it up mechanically without further per-consumer
+    /// edits.
+    #[must_use]
+    pub fn has_form(&self, kind: RoutingForm) -> bool {
+        self.form() == kind
+    }
 }
 
 impl RoutingHostname {
@@ -386,7 +507,8 @@ impl RoutingBackend {
 /// `NetworkPolicy` edge) sourcing the axis through
 /// [`RoutingForm::from_is_stable`] + [`RoutingForm::as_str`]
 /// cannot drift from the two existing edges' spellings.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, tatara_closed_set::DeriveClosedSet)]
+#[closed_set(via = "as_str", display, generate_unknown)]
 pub enum RoutingForm {
     /// Emitted iff `RoutingSpec.stable_name_claim = true` AND
     /// this Process currently holds the ProcessTable claim for
@@ -399,6 +521,26 @@ pub enum RoutingForm {
 }
 
 impl RoutingForm {
+    /// The closed set of routing forms — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad the
+    /// `#[derive(DeriveClosedSet)]` line generates and the typed
+    /// `from_is_stable` composer over `RoutingSpec.stable_name_claim`.
+    /// Adding a third variant (a hypothetical `Gateway` for a future
+    /// Gateway-API `HTTPRoute` edge, distinct from both the per-instance
+    /// and stable-claim FQDN shapes) lands at one `ALL` entry + one
+    /// `as_str` arm + one `from_is_stable` widening — exhaustively
+    /// checked by the compiler (the `[Self; 2]` array literal forces
+    /// the arity).
+    ///
+    /// Sibling closed-set lifts on the same `ProcessSpec` axis:
+    /// [`super::intent::IntentKind::ALL`], [`super::lifetime::LifetimeKind::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::signal::ProcessSignal::ALL`],
+    /// [`crate::signal::SighupStrategy::ALL`],
+    /// [`crate::lifetime::TeardownPolicy::ALL`].
+    pub const ALL: [Self; 2] = [Self::Stable, Self::Instance];
+
     /// Wire-form byte-shape stamped into the
     /// [`ROUTING_FORM`][crate::annotations::ROUTING_FORM]
     /// annotation / label. The reconciler's stable-form filter
@@ -425,6 +567,17 @@ impl RoutingForm {
         }
     }
 }
+
+// `impl fmt::Display for RoutingForm` + `impl FromStr for RoutingForm`
+// + `impl tatara_lisp::ClosedSet for RoutingForm` + `pub struct
+// UnknownRoutingForm(pub String)` are generated by
+// `#[derive(tatara_closed_set::DeriveClosedSet)]` +
+// `#[closed_set(via = "as_str", display, generate_unknown)]` on the
+// enum declaration above. The inherent `as_str` projection stays
+// load-bearing — the byte-shape stamped into every routing edge's
+// [`crate::annotations::ROUTING_FORM`] annotation + label — while the
+// trait method `label` gives generic consumers a STABLE name across
+// the workspace-wide closed-set implementors.
 
 #[cfg(test)]
 mod tests {
@@ -922,6 +1075,239 @@ mod tests {
             let form = RoutingForm::from_is_stable(is_stable);
             let expected = if is_stable { "stable" } else { "instance" };
             assert_eq!(form.as_str(), expected);
+        }
+    }
+
+    // ─── RoutingForm closed-set algebra (ALL × as_str × FromStr ×
+    //    Display) ────────────────────────────────────────────────
+    //
+    // The `#[derive(DeriveClosedSet)]` line auto-emits Display,
+    // FromStr, and the `tatara_closed_set::ClosedSet` trait impl.
+    // Pin the workspace-wide well-formedness triad here so a
+    // regression that (a) drifted a variant's `as_str` label, (b)
+    // dropped a variant from `ALL`, or (c) allowed the empty
+    // string to parse would fail HERE at ONE narrow site.
+
+    /// Structural well-formedness of [`RoutingForm`] as a
+    /// [`tatara_closed_set::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through `label ↔
+    /// parse_label`, labels are pairwise distinct, `""` is outside
+    /// the closed set) at ONE call site. `FromStr` delegates to
+    /// `<Self as tatara_closed_set::ClosedSet>::parse_label`, so this
+    /// helper exercises the same code path the require-tag classifier
+    /// hits when parsing a `routing-form-<kind>` suffix.
+    #[test]
+    fn routing_form_is_well_formed_closed_set() {
+        tatara_closed_set::assert_closed_set_well_formed::<RoutingForm>();
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future
+    /// callers (notably the require-tag classifier's error path)
+    /// reach for either projection without drift.
+    #[test]
+    fn routing_form_display_matches_as_str() {
+        crate::tagged_union::assert_display_matches_label::<RoutingForm>();
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — capitalized (`Stable` / `Instance` do not
+    /// match the lowercase `as_str` labels), typo, unrelated — and
+    /// the error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized
+    /// form. The empty-input arm is pinned by
+    /// [`routing_form_is_well_formed_closed_set`] via the
+    /// `tatara_closed_set::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownRoutingForm`] newtype,
+    /// which the trait's `make_unknown` can't see.
+    #[test]
+    fn unknown_routing_form_errors() {
+        use std::str::FromStr;
+        for bad in ["Stable", "Instance", "STABLE", "instances", "Gateway"] {
+            let err = RoutingForm::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// `ALL` and the [`Self::from_is_stable`] composer agree on the
+    /// two-variant partition — walking every `RoutingForm` variant
+    /// finds a bool that composes back to it via `from_is_stable`,
+    /// and walking every bool composes to a variant in `ALL`. Locks
+    /// the (bool × RoutingForm) round-trip so a regression that
+    /// dropped a variant from `ALL` or drifted the `from_is_stable`
+    /// mapping fails HERE.
+    #[test]
+    fn routing_form_all_partitions_both_stable_name_claim_bool_arms() {
+        assert_eq!(RoutingForm::ALL.len(), 2);
+        for is_stable in [true, false] {
+            let form = RoutingForm::from_is_stable(is_stable);
+            assert!(
+                RoutingForm::ALL.contains(&form),
+                "from_is_stable({is_stable}) => {form:?} must be in RoutingForm::ALL",
+            );
+        }
+        assert_eq!(RoutingForm::from_is_stable(true), RoutingForm::Stable);
+        assert_eq!(RoutingForm::from_is_stable(false), RoutingForm::Instance);
+    }
+
+    // ─── RoutingSpec::form + has_form substrate pins ─────────────
+    //
+    // Fail-before-pass-after granularity: [`RoutingSpec::form`] and
+    // [`RoutingSpec::has_form`] did not exist before this commit —
+    // every consumer of the `(RoutingSpec, RoutingForm) -> bool`
+    // scalar-carrier probe shape restated the
+    // `RoutingForm::from_is_stable(r.stable_name_claim) == kind`
+    // closure body at its own callsite (or, equivalently, the raw
+    // `r.stable_name_claim` bool + the `if is_stable { … } else { … }`
+    // ternary that pre-dates [`RoutingForm::from_is_stable`]).
+    // Post-lift the shape lives at ONE substrate owner and every
+    // downstream (the `routing-form-<kind>` require-tag family in
+    // `tatara-check`, future audit dispatchers walking
+    // [`RoutingForm::ALL`], any future CRD-facing closed-set
+    // discriminator derived from `spec.routing`) binds through the
+    // SAME `has(kind)` shape the Option-slot (Intent::has,
+    // Lifetime::has), slice-level (ExportSpecSliceExt::has_when +
+    // peers), required-parent scalar-carrier
+    // (SignalPolicy::has_sighup_strategy), and Option-parent
+    // defaulted-scalar-child stored-carrier
+    // (EphemeralLifetime::has_teardown_policy) primitives publish.
+
+    #[test]
+    fn form_projects_stable_when_stable_name_claim_is_true() {
+        let r = RoutingSpec {
+            hostnames: vec![RoutingHostname::content_hashed("api")],
+            backend: RoutingBackend::plain("svc", 80),
+            stable_name_claim: true,
+            priority: 0,
+        };
+        assert_eq!(r.form(), RoutingForm::Stable);
+    }
+
+    #[test]
+    fn form_projects_instance_when_stable_name_claim_is_false() {
+        let r = RoutingSpec {
+            hostnames: vec![RoutingHostname::content_hashed("api")],
+            backend: RoutingBackend::plain("svc", 80),
+            stable_name_claim: false,
+            priority: 0,
+        };
+        assert_eq!(r.form(), RoutingForm::Instance);
+    }
+
+    #[test]
+    fn form_composes_through_the_one_from_is_stable_projection() {
+        // The projection MUST delegate to
+        // [`RoutingForm::from_is_stable`] byte-identically — a
+        // regression that hard-coded the mapping at
+        // `RoutingSpec::form` (inverting the ternary, defaulting to
+        // Stable, etc.) would drift from every other consumer of
+        // `from_is_stable`. Sweep both bool arms and pin the
+        // through-projection at ONE narrow site.
+        for is_stable in [true, false] {
+            let r = RoutingSpec {
+                hostnames: vec![RoutingHostname::content_hashed("api")],
+                backend: RoutingBackend::plain("svc", 80),
+                stable_name_claim: is_stable,
+                priority: 0,
+            };
+            assert_eq!(
+                r.form(),
+                RoutingForm::from_is_stable(is_stable),
+                "form() must delegate to from_is_stable({is_stable})",
+            );
+        }
+    }
+
+    #[test]
+    fn has_form_returns_true_on_diagonal_and_false_off_diagonal_across_all_kinds() {
+        // DIAGONAL + OFF-DIAGONAL pin — sweep the (populated bool,
+        // query kind) cross and verify variant-equality on the
+        // diagonal, non-equality off it. Locks the scalar-comparison
+        // semantics so a regression that (a) hard-coded the arm to
+        // `true` (silently confirming every kind on every routing
+        // spec), (b) inverted the comparison, or (c) wired the
+        // closure to an unrelated field (a stray probe on `priority`
+        // / `hostnames.len()`) fails HERE.
+        for is_stable in [true, false] {
+            let r = RoutingSpec {
+                hostnames: vec![RoutingHostname::content_hashed("api")],
+                backend: RoutingBackend::plain("svc", 80),
+                stable_name_claim: is_stable,
+                priority: 0,
+            };
+            let populated = RoutingForm::from_is_stable(is_stable);
+            for query in RoutingForm::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    r.has_form(query),
+                    expected,
+                    "stable_name_claim={is_stable} populated={populated:?}: has_form({query:?}) drift",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn has_form_default_arm_is_instance() {
+        // DEFAULT-ARM SHORT-CIRCUIT pin — a RoutingSpec whose
+        // `stable_name_claim` slot is at its `#[serde(default)]`
+        // (bool default = `false`) answers `true` on
+        // `RoutingForm::Instance` and `false` on every other variant
+        // WITHOUT the operator naming the axis. The
+        // `#[serde(default)]` on `stable_name_claim` composes
+        // through the ONE `from_is_stable(false) = Instance`
+        // projection at THIS scalar-carrier probe. Locks the
+        // (Option-parent-adjacent × defaulted-scalar-child) corner's
+        // default-arm short-circuit shape at ONE narrow site so a
+        // regression that (a) drifted the bool default to `true`
+        // (silently promoting every unadorned routing spec to
+        // Stable), (b) drifted the `from_is_stable(false)` arm to
+        // `Stable` (inverting the closed-set default), or (c) wired
+        // the has_form arm to a fixed answer would fail HERE.
+        let r = RoutingSpec {
+            hostnames: vec![RoutingHostname::content_hashed("api")],
+            backend: RoutingBackend::plain("svc", 80),
+            stable_name_claim: bool::default(),
+            priority: 0,
+        };
+        for kind in RoutingForm::ALL {
+            let expected = kind == RoutingForm::Instance;
+            assert_eq!(
+                r.has_form(kind),
+                expected,
+                "default (stable_name_claim=false) baseline: has_form({kind:?}) must be {expected}",
+            );
+        }
+    }
+
+    #[test]
+    fn has_form_coexists_with_has_hostnames() {
+        // COEXISTENCE pin — the routing-form axis is orthogonal to
+        // the hostname-presence axis: `has_form(<kind>)` is a
+        // spec-shape probe on the derived `RoutingForm`; the
+        // (independent) `has_hostnames` probe walks the
+        // `Vec<RoutingHostname>` slice. Locks the two axes at ONE
+        // site so a regression that crossed the wires (probing
+        // `hostnames.is_empty()` for a routing-form query, or
+        // vice-versa) fails HERE.
+        for is_stable in [true, false] {
+            let r_with_hostnames = RoutingSpec {
+                hostnames: vec![RoutingHostname::content_hashed("api")],
+                backend: RoutingBackend::plain("svc", 80),
+                stable_name_claim: is_stable,
+                priority: 0,
+            };
+            let r_empty = RoutingSpec {
+                hostnames: vec![],
+                backend: RoutingBackend::plain("svc", 80),
+                stable_name_claim: is_stable,
+                priority: 0,
+            };
+            let form = RoutingForm::from_is_stable(is_stable);
+            assert!(r_with_hostnames.has_hostnames());
+            assert!(!r_empty.has_hostnames());
+            assert!(r_with_hostnames.has_form(form));
+            assert!(r_empty.has_form(form));
         }
     }
 

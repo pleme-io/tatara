@@ -1197,6 +1197,50 @@ pub trait ExportSpecSliceExt {
     /// `false` for every `has_report_format(k)` kind because the
     /// `test_report` slot is empty.
     fn has_artifact_kind(&self, kind: ArtifactKind) -> bool;
+
+    /// True iff at least one [`ExportSpec`] in this slice carries an
+    /// [`ArtifactSource`] with a populated [`TestReportSource`] whose
+    /// [`ReportFormat::payload_shape`] projection lowers to the given
+    /// [`ReportPayloadShape`]. Composes the closed-set
+    /// [`ReportFormat::payload_shape`] typed projection with the same
+    /// `.iter().any(|e| …)` walk shape [`Self::has_when`] +
+    /// [`Self::has_channel_kind`] + [`Self::has_report_format`] +
+    /// [`Self::has_artifact_kind`] publish, opening a FIFTH closed-set-
+    /// driven presence probe on the SAME `&[ExportSpec]` slice — the
+    /// SECOND probe on this trait whose closure reads a NESTED-Option
+    /// scalar past `ArtifactSource::test_report` (peer of
+    /// [`Self::has_report_format`] on the SAME carrier), distinct on
+    /// ONE dimension: [`Self::has_report_format`] compares the raw
+    /// [`ReportFormat`] discriminator (a 4-arm closed set) directly,
+    /// while this probe compares the DERIVED [`ReportPayloadShape`]
+    /// (a 2-arm closed set) reached through the typed projection
+    /// [`ReportFormat::payload_shape`] — the projection is many-to-one
+    /// ([`ReportFormat::NdJson`] alone lowers to
+    /// [`ReportPayloadShape::NdJsonLines`]; [`ReportFormat::Junit`] +
+    /// [`ReportFormat::TapV13`] + [`ReportFormat::Raw`] all lower to
+    /// [`ReportPayloadShape::OpaqueBytes`]), so
+    /// `has_report_payload_shape(OpaqueBytes)` answers `true` on THREE
+    /// distinct [`ReportFormat`] variants and
+    /// `has_report_payload_shape(NdJsonLines)` answers `true` on ONE.
+    ///
+    /// Callers whose invariant is "does any test-report export lower
+    /// to THIS payload shape at the export-worker embed site"
+    /// (require-tag classifier `report-payload-shape-<kind>`, a
+    /// coherence check like "every ephemeral test-report export
+    /// lowers to `NdJsonLines` so shinryu can splice the events",
+    /// editor completion listing which payload shapes the operator's
+    /// exports resolve to) reach this ONE primitive rather than
+    /// restating the
+    /// `e.source.test_report.as_ref().is_some_and(|tr|
+    /// tr.format.payload_shape() == K)` three-step chain at each
+    /// callsite.
+    ///
+    /// A future `ReportFormat` variant that lowers to a new
+    /// `ReportPayloadShape` reaches THIS primitive through the ONE
+    /// [`ReportFormat::payload_shape`] arm alone — no per-consumer
+    /// edit at this walk or at any downstream `report-payload-shape-
+    /// <kind>` callsite.
+    fn has_report_payload_shape(&self, kind: ReportPayloadShape) -> bool;
 }
 
 impl ExportSpecSliceExt for [ExportSpec] {
@@ -1219,6 +1263,15 @@ impl ExportSpecSliceExt for [ExportSpec] {
 
     fn has_artifact_kind(&self, kind: ArtifactKind) -> bool {
         self.iter().any(|e| kind.select(&e.source).is_some())
+    }
+
+    fn has_report_payload_shape(&self, kind: ReportPayloadShape) -> bool {
+        self.iter().any(|e| {
+            e.source
+                .test_report
+                .as_ref()
+                .is_some_and(|tr| tr.format.payload_shape() == kind)
+        })
     }
 }
 
@@ -2986,6 +3039,159 @@ mod tests {
             assert!(
                 !slice.has_artifact_kind(absent),
                 "artifact kind absent from the slice must resolve false: {absent:?}",
+            );
+        }
+    }
+
+    // ── ExportSpecSliceExt::has_report_payload_shape substrate pins ────
+    //
+    // Fail-before-pass-after granularity: `has_report_payload_shape`
+    // did not exist before this commit — the `(&[ExportSpec],
+    // ReportPayloadShape) -> bool` walk shape was not spelled anywhere
+    // in the workspace on the derived `source.test_report.format
+    // .payload_shape()` projection. The lift opens the FIFTH method on
+    // the slice-level `ExportSpecSliceExt` (peer of `has_when` +
+    // `has_channel_kind` + `has_report_format` + `has_artifact_kind`
+    // on the SAME slice), composing the SAME inner `.as_ref()
+    // .is_some_and` gate on the `Option<TestReportSource>` field that
+    // `has_report_format` uses with a DERIVED closed-set equality on
+    // the [`ReportFormat::payload_shape`] projection — the SECOND
+    // probe on this trait whose closure reads a NESTED-Option scalar
+    // past `test_report`, distinct on ONE dimension from
+    // `has_report_format`: it compares the many-to-one DERIVED
+    // [`ReportPayloadShape`] discriminator reached through the typed
+    // projection rather than the raw [`ReportFormat`] discriminator.
+    // The projection compresses the 4-arm [`ReportFormat`] closed set
+    // to the 2-arm [`ReportPayloadShape`] closed set:
+    // [`ReportFormat::NdJson`] alone → [`ReportPayloadShape
+    // ::NdJsonLines`]; every other format → [`ReportPayloadShape
+    // ::OpaqueBytes`].
+
+    /// EMPTY-SLICE pin — an empty `&[ExportSpec]` returns `false` for
+    /// EVERY [`ReportPayloadShape`]. Sweep [`ReportPayloadShape::ALL`]
+    /// so a new variant added without matching visits in the
+    /// surrounding substrate reaches rustc's exhaustiveness gate on
+    /// the `ALL` literal (arity forced by `[Self; 2]`) rather than as
+    /// a silent false-positive at every downstream callsite composing
+    /// this primitive.
+    #[test]
+    fn export_spec_slice_has_report_payload_shape_returns_false_on_empty_slice_for_every_kind() {
+        let empty: &[ExportSpec] = &[];
+        for kind in ReportPayloadShape::ALL {
+            assert!(
+                !empty.has_report_payload_shape(kind),
+                "empty slice must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// PROJECTION-TRUTH-TABLE pin — sweep [`ReportFormat::ALL`] as the
+    /// populated slot and [`ReportPayloadShape::ALL`] as the query,
+    /// asserting the walk answers `true` iff `populated.payload_shape()
+    /// == query`. Locks the derived-projection contract byte-for-byte:
+    /// a regression that (a) probed [`ReportFormat`] directly (dropping
+    /// the `.payload_shape()` call, silently answering `true` on the
+    /// populated slot only when the query happens to match its raw
+    /// format), (b) inverted the projection (`OpaqueBytes ↔ NdJsonLines`),
+    /// or (c) collapsed the many-to-one projection to identity fails
+    /// HERE at the substrate primitive rather than at each downstream
+    /// `report-payload-shape-<kind>` callsite. The `Junit`,
+    /// `TapV13`, and `Raw` populated arms MUST answer `true` only for
+    /// [`ReportPayloadShape::OpaqueBytes`]; the `NdJson` arm MUST
+    /// answer `true` only for [`ReportPayloadShape::NdJsonLines`] —
+    /// the projection's many-to-one shape is pinned SYMMETRICALLY on
+    /// both sides of the cross.
+    #[test]
+    fn export_spec_slice_has_report_payload_shape_reads_projection_per_format() {
+        for populated in ReportFormat::ALL {
+            let slice = [export_with_report_format(populated)];
+            let expected_shape = populated.payload_shape();
+            for query in ReportPayloadShape::ALL {
+                let expected = query == expected_shape;
+                assert_eq!(
+                    slice.has_report_payload_shape(query),
+                    expected,
+                    "populated={populated:?} → shape={expected_shape:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// MULTI-ENTRY pin — a slice with multiple entries returns `true`
+    /// for every [`ReportPayloadShape`] whose projected format appears
+    /// at any position (existential quantifier over the slice), `false`
+    /// for shapes that appear at no position. Two `OpaqueBytes`-
+    /// lowering formats at different positions ([`ReportFormat::Junit`]
+    /// and [`ReportFormat::TapV13`]) both projecting to the SAME
+    /// [`ReportPayloadShape::OpaqueBytes`] MUST answer `true` for
+    /// `OpaqueBytes` and `false` for `NdJsonLines` because neither
+    /// entry's projection lowers to `NdJsonLines`. Locks the `any`
+    /// semantics AND the many-to-one projection semantics together
+    /// — a regression that collapsed to `first`-only probing OR
+    /// dropped the projection (comparing the raw format `Junit ==
+    /// NdJsonLines`) fails HERE even though the per-format
+    /// PROJECTION-TRUTH-TABLE pin above passes.
+    #[test]
+    fn export_spec_slice_has_report_payload_shape_scans_beyond_the_first_position() {
+        let slice = [
+            export_with_report_format(ReportFormat::Junit),
+            export_with_report_format(ReportFormat::TapV13),
+        ];
+        assert!(
+            slice.has_report_payload_shape(ReportPayloadShape::OpaqueBytes),
+            "two OpaqueBytes-lowering formats must both project to OpaqueBytes",
+        );
+        assert!(
+            !slice.has_report_payload_shape(ReportPayloadShape::NdJsonLines),
+            "no NdJson entries must yield NdJsonLines=false even at second position",
+        );
+        let mixed = [
+            export_with_report_format(ReportFormat::Raw),
+            export_with_report_format(ReportFormat::NdJson),
+        ];
+        for kind in ReportPayloadShape::ALL {
+            assert!(
+                mixed.has_report_payload_shape(kind),
+                "mixed slice with both shapes must resolve true for every shape: {kind:?}",
+            );
+        }
+    }
+
+    /// NESTED-OPTION-COLLAPSE pin — an export whose `source` carries
+    /// NO `test_report` slot (a `receipts`-only source) contributes
+    /// `false` for EVERY [`ReportPayloadShape`] kind, INCLUDING the
+    /// projection of the default [`ReportFormat::Raw`] (which lowers
+    /// to [`ReportPayloadShape::OpaqueBytes`]) that a naive
+    /// `unwrap_or_default().payload_shape()` chain would spuriously
+    /// match. Locks the outer nested-`Option` short-circuit contract
+    /// so a regression that dropped the `.as_ref().is_some_and(…)`
+    /// gate (e.g. rewriting to
+    /// `e.source.test_report.map_or(ReportFormat::default(), |tr|
+    /// tr.format).payload_shape() == kind`, which returns `true` for
+    /// every non-test-report export when `kind == OpaqueBytes`) fails
+    /// HERE at ONE narrow substrate site rather than at every
+    /// downstream `report-payload-shape-OpaqueBytes` classifier
+    /// callsite. Sweeps [`ReportPayloadShape::ALL`] so the contract
+    /// is pinned symmetrically across every shape the closed set names.
+    #[test]
+    fn export_spec_slice_has_report_payload_shape_returns_false_on_non_test_report_source() {
+        let receipts_only = ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::default(),
+            experiment_id_override: None,
+        };
+        let slice = [receipts_only];
+        for kind in ReportPayloadShape::ALL {
+            assert!(
+                !slice.has_report_payload_shape(kind),
+                "receipts-only export must return false for every payload shape: {kind:?}",
             );
         }
     }

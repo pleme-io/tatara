@@ -19,7 +19,7 @@ use tatara_process::classification::{
 use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
 use tatara_process::encapsulates::{EncapsulationMode, EncapsulationTarget};
 use tatara_process::export::{
-    ArtifactKind, ChannelKind, ExportSpecSliceExt, ExportTrigger, ReportFormat,
+    ArtifactKind, ChannelKind, ExportSpecSliceExt, ExportTrigger, ReportFormat, ReportPayloadShape,
 };
 use tatara_process::intent::{IntentKind, WorkloadKind};
 use tatara_process::lifetime::{LifetimeKind, TeardownPolicy};
@@ -1253,7 +1253,13 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_false_on_non_container_intent_for_every_workload_kind`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_workload_kind_suffix`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_workload_kind_prefix`],
-/// and [`tests::evaluate_point_require_tag_workload_kind_and_intent_container_coexist_orthogonally`].
+/// [`tests::evaluate_point_require_tag_workload_kind_and_intent_container_coexist_orthogonally`],
+/// [`tests::evaluate_point_require_tag_returns_true_iff_report_payload_shape_matches_projection_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_absent_ephemeral_for_every_report_payload_shape`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_non_test_report_source_for_every_report_payload_shape`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_report_payload_shape_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_report_payload_shape_prefix`],
+/// and [`tests::evaluate_point_require_tag_report_payload_shape_and_report_format_coexist_via_projection`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -1407,6 +1413,17 @@ fn evaluate_point_require_tag(
             spec.intent.has_workload_kind(kind)
         })
     {
+        return res;
+    }
+    if let Some(res) = strip_and_classify_prefixed_kind::<ReportPayloadShape, _>(
+        tag,
+        "report-payload-shape-",
+        |kind| {
+            spec.lifetime
+                .resolved_ephemeral()
+                .is_some_and(|e| e.exports.has_report_payload_shape(kind))
+        },
+    ) {
         return res;
     }
     match tag {
@@ -2605,8 +2622,8 @@ mod tests {
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::export::{
         ArtifactKind, ArtifactSource, ChannelKind, ExportSpec, ExportTrigger, HttpEventChannel,
-        NatsSubjectChannel, ProcessSnapshotSource, ReceiptsSource, ReportFormat, RunMarkerSource,
-        StdoutChannel, TestReportSource, VectorChannel,
+        NatsSubjectChannel, ProcessSnapshotSource, ReceiptsSource, ReportFormat,
+        ReportPayloadShape, RunMarkerSource, StdoutChannel, TestReportSource, VectorChannel,
     };
     use tatara_process::intent::{AplicacaoIntent, ContainerIntent, IntentKind, WorkloadKind};
     use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind, TeardownPolicy};
@@ -7686,6 +7703,243 @@ mod tests {
             evaluate_point_require_tag(&spec, "workload-kind-Deployment"),
             Ok(false),
             "off-diagonal `workload-kind-Deployment` must be false: the workload kind is Job",
+        );
+    }
+
+    // ── evaluate_point_require_tag report-payload-shape-<kind> pins ────
+    //
+    // TWENTY-SECOND closed-set-driven prefix family in the point-domain
+    // require-tag vocabulary. Fail-before-pass-after: the
+    // `report-payload-shape-<kind>` prefix arm did not exist before
+    // this commit — the derived-projection walk through
+    // `resolved_ephemeral().is_some_and(|e| e.exports.iter().any(|x|
+    // x.source.test_report.as_ref().is_some_and(|tr|
+    // tr.format.payload_shape() == K)))` was not spelled anywhere in
+    // the classifier's dispatch. The lift routes the shape through the
+    // `strip_and_classify_prefixed_kind::<ReportPayloadShape, _>`
+    // substrate primitive, byte-for-byte symmetric with the twenty-one
+    // pre-existing prefix families AND with the ninth family
+    // (`report-format-<kind>`) with which it shares the SAME
+    // `Option<TestReportSource>` nested-Option carrier. The distinction
+    // between the two on that shared carrier: ninth compares the raw
+    // 4-arm [`ReportFormat`] closed set at
+    // `test_report.format`; twenty-second compares the derived 2-arm
+    // [`ReportPayloadShape`] reached through the typed projection
+    // [`ReportFormat::payload_shape`] — a many-to-one collapse
+    // (`Junit | TapV13 | Raw → OpaqueBytes`; `NdJson → NdJsonLines`).
+    // The primitive is
+    // [`tatara_process::export::ExportSpecSliceExt::has_report_payload_shape`],
+    // published as the FIFTH substrate method on
+    // [`ExportSpecSliceExt`] alongside `has_when` + `has_channel_kind`
+    // + `has_report_format` + `has_artifact_kind`.
+
+    /// POPULATED-slot pin — `report-payload-shape-<kind>` dispatches
+    /// through the autoderived [`ReportPayloadShape`] `FromStr` + the
+    /// substrate
+    /// [`tatara_process::export::ExportSpecSliceExt::has_report_payload_shape`]
+    /// primitive, returning `true` only when the resolved ephemeral
+    /// lifetime carries at least one export whose
+    /// `source.test_report.format.payload_shape()` matches this shape.
+    /// Sweep the [`ReportFormat::ALL`] × [`ReportPayloadShape::ALL`]
+    /// cross so a regression that (a) probed [`ReportFormat`]
+    /// directly (dropping the `.payload_shape()` call, silently
+    /// answering `true` on the populated slot only when the query
+    /// happens to match the raw format's identifier), (b) inverted
+    /// the projection (`OpaqueBytes ↔ NdJsonLines`), (c) hard-coded
+    /// the arm to a single shape (silently returning `true` for every
+    /// populated export vector regardless of query shape), or (d)
+    /// wired the closure to a fixed unrelated field fails HERE at the
+    /// classifier before landing at the operator-facing checks.lisp
+    /// surface. The projection's many-to-one shape is pinned
+    /// SYMMETRICALLY on both sides of the cross: `Junit`, `TapV13`,
+    /// `Raw` populated arms answer `true` only for `OpaqueBytes`;
+    /// `NdJson` populated arm answers `true` only for `NdJsonLines`.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_report_payload_shape_matches_projection_per_kind(
+    ) {
+        for populated in ReportFormat::ALL {
+            let spec = ephemeral_spec_with_exports(vec![export_with_report_format(populated)]);
+            let expected_shape = populated.payload_shape();
+            for query in ReportPayloadShape::ALL {
+                let tag = format!("report-payload-shape-{}", query.as_str());
+                let expected = query == expected_shape;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "format={populated:?} → shape={expected_shape:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// PERMANENT-lifetime pin — a default (`Permanent`) [`ProcessSpec`]
+    /// returns `false` for every `report-payload-shape-<kind>` tag
+    /// because the `resolved_ephemeral` gate on the parent
+    /// [`Lifetime`] short-circuits the walk. Byte-for-byte symmetric
+    /// with the peer permanent-lifetime pins on the seventh
+    /// (`export-when-<kind>`), eighth (`channel-<kind>`), ninth
+    /// (`report-format-<kind>`), and tenth (`artifact-<kind>`)
+    /// families — all five share the SAME parent gate, so a
+    /// regression that dropped or narrowed the gate on
+    /// `report-payload-shape-<kind>` (probing an absent `exports` slot
+    /// as if it were the empty vector, or worse routing through the
+    /// permanent-side default `EphemeralLifetime`) fails HERE for
+    /// every payload shape and the peer tests still pass — the
+    /// quintet pins the contract from five sides of the closed-set
+    /// axis.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_absent_ephemeral_for_every_report_payload_shape()
+    {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in ReportPayloadShape::ALL {
+            let tag = format!("report-payload-shape-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "permanent lifetime must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// NESTED-OPTION-COLLAPSE pin — an ephemeral [`ProcessSpec`] whose
+    /// `exports` vector carries a non-`test_report` export (a
+    /// receipts-only source) returns `false` for EVERY
+    /// `report-payload-shape-<kind>` tag INCLUDING the
+    /// [`ReportPayloadShape::OpaqueBytes`] that is the projection of
+    /// the default [`ReportFormat::Raw`] a naive
+    /// `unwrap_or_default().payload_shape()` chain would spuriously
+    /// match. Locks the outer nested-`Option` short-circuit contract
+    /// so a regression that dropped the `.as_ref().is_some_and(…)`
+    /// gate on the substrate primitive fails HERE at ONE narrow
+    /// classifier site. Sweeps [`ReportPayloadShape::ALL`] so the
+    /// collapse contract is pinned symmetrically across every shape
+    /// the closed set names.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_non_test_report_source_for_every_report_payload_shape(
+    ) {
+        let receipts_only = ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::default(),
+            experiment_id_override: None,
+        };
+        let spec = ephemeral_spec_with_exports(vec![receipts_only]);
+        for kind in ReportPayloadShape::ALL {
+            let tag = format!("report-payload-shape-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "receipts-only export must return false for {tag:?} (including OpaqueBytes)",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `report-payload-shape-<garbage>`
+    /// classifies as [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`ReportPayloadShape`] labels are
+    /// PascalCase (`NdJsonLines`, `OpaqueBytes`) — matching
+    /// [`ReportPayloadShape::as_str`] byte-for-byte — so snake_cased
+    /// / lowerCamelCased / kebab-case / cross-axis-leaked spellings
+    /// are UNKNOWN suffixes. Pins the case-sensitivity axis AND the
+    /// axis boundary (raw [`ReportFormat`] identifiers like `NdJson`
+    /// live on the ninth family and MUST NOT resolve here).
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_report_payload_shape_suffix() {
+        let spec = ephemeral_spec_with_exports(vec![]);
+        for garbage in [
+            "report-payload-shape-ndjsonlines",
+            "report-payload-shape-nd-json-lines",
+            "report-payload-shape-opaque_bytes",
+            "report-payload-shape-OPAQUEBYTES",
+            "report-payload-shape-NdJson",
+            "report-payload-shape-Raw",
+            "report-payload-shape-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-prefix pin — `report-payload-shape-` (the prefix alone,
+    /// empty suffix) classifies as [`UnknownRequireTag`] via the
+    /// shared `strip_and_classify_prefixed_kind` primitive's
+    /// empty-suffix arm (pinned generically by
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]).
+    /// This site pins the family's SPECIFIC bare-prefix boundary so a
+    /// regression that special-cased `report-payload-shape-` to fall
+    /// through to the fixed-tag match (silently classifying it as
+    /// unknown VIA the tail rather than VIA the prefix parse) reads
+    /// the same `Err(UnknownRequireTag)` result but through a
+    /// different code path — this pin locks the intended path.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_report_payload_shape_prefix() {
+        let spec = ephemeral_spec_with_exports(vec![]);
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "report-payload-shape-"),
+            Err(UnknownRequireTag),
+            "bare `report-payload-shape-` prefix must classify as UnknownRequireTag",
+        );
+    }
+
+    /// SAME-CARRIER PROJECTION-COEXISTENCE pin — a Process with a
+    /// SINGLE ephemeral export whose `source.test_report.format` is
+    /// [`ReportFormat::TapV13`] MUST simultaneously satisfy BOTH
+    /// `report-format-TapV13` (the ninth family, raw 4-arm
+    /// [`ReportFormat`] discriminator on the SAME nested-Option
+    /// carrier) AND `report-payload-shape-OpaqueBytes` (the
+    /// twenty-second family, derived 2-arm [`ReportPayloadShape`]
+    /// reached through the typed projection
+    /// [`ReportFormat::payload_shape`]) AND simultaneously fail each
+    /// off-diagonal probe (`report-format-Junit`,
+    /// `report-payload-shape-NdJsonLines`). Locks the semantic split
+    /// between the two probes on the SAME `Option<TestReportSource>`
+    /// carrier — the first two-family conjunction routed through the
+    /// same nested-Option slot in the point-domain require-tag
+    /// vocabulary. A regression that (a) collapsed the twenty-second
+    /// family to the ninth (silently answering `true` for
+    /// `report-payload-shape-TapV13`, an out-of-vocabulary shape),
+    /// (b) collapsed the ninth family to the twenty-second (silently
+    /// answering `true` for `report-format-OpaqueBytes`, an
+    /// out-of-vocabulary format), or (c) swapped the projection
+    /// (`Junit → NdJsonLines`) fails HERE at ONE narrow site. The
+    /// audit `every TAP report ships as OpaqueBytes to shinryu` reads
+    /// as this exact two-way conjunction at the checks.lisp surface —
+    /// the fleet-wide safety property the (`TapV13`, `OpaqueBytes`)
+    /// projection composition is designed to name.
+    #[test]
+    fn evaluate_point_require_tag_report_payload_shape_and_report_format_coexist_via_projection() {
+        let export = export_with_report_format(ReportFormat::TapV13);
+        let spec = ephemeral_spec_with_exports(vec![export]);
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "report-format-TapV13"),
+            Ok(true),
+            "fine `report-format-TapV13` must be true when the export declares that format",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "report-payload-shape-OpaqueBytes"),
+            Ok(true),
+            "peer `report-payload-shape-OpaqueBytes` must be true: TapV13 projects to OpaqueBytes",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "report-format-Junit"),
+            Ok(false),
+            "off-diagonal `report-format-Junit` must be false: the format is TapV13",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "report-payload-shape-NdJsonLines"),
+            Ok(false),
+            "off-diagonal `report-payload-shape-NdJsonLines` must be false: TapV13 does not project to NdJsonLines",
         );
     }
 

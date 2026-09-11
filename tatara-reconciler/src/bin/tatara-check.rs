@@ -12,7 +12,9 @@ use std::str::FromStr;
 
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
-use tatara_process::classification::{CalmClassification, ConvergencePointType, SubstrateType};
+use tatara_process::classification::{
+    CalmClassification, ConvergencePointType, DataClassification, SubstrateType,
+};
 use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
 use tatara_process::encapsulates::EncapsulationMode;
 use tatara_process::export::{
@@ -879,6 +881,58 @@ struct UnknownRequireTag;
 ///   the checks.lisp surface as the three-axis probe of the point's
 ///   TWO required + ONE defaulted classification axes on ONE
 ///   ProcessSpec.
+/// - `data-classification-<kind>` — [`DataClassification`] closed set
+///   → [`tatara_process::classification::Classification::has_data_classification`]
+///   (a scalar-carrier variant-equality probe on
+///   `spec.classification.data_classification`, so the operator's
+///   `:requires (data-classification-Pii)` pins that a Process's
+///   data-sensitivity axis names PII (regulated data ⇒ implies
+///   access control), `:requires (data-classification-Public)` pins
+///   freely-distributable data, `:requires
+///   (data-classification-Internal)` pins access-controlled but
+///   non-regulated data, and the reconciler's future dispatch
+///   between per-classification compliance overlays reads the probe
+///   as the typed image of the sensitivity axis itself. Fifteenth
+///   closed-set-driven prefix family in the point-domain require-tag
+///   vocabulary and SIXTH instance on the scalar-carrier axis of
+///   the presence-probe algebra (sibling to `sighup-<kind>` on
+///   [`tatara_process::spec::SignalPolicy::has_sighup_strategy`],
+///   `encapsulation-mode-<kind>` on
+///   [`tatara_process::encapsulates::EncapsulatesSpec::has_mode`],
+///   `point-type-<kind>` on
+///   [`tatara_process::classification::Classification::has_point_type`],
+///   `substrate-<kind>` on
+///   [`tatara_process::classification::Classification::has_substrate`],
+///   and `calm-<kind>` on
+///   [`tatara_process::classification::Classification::has_calm`]).
+///   SECOND occupant on the (required-parent × defaulted-scalar-
+///   child) corner alongside `calm-<kind>` — both probe a defaulted
+///   scalar child ([`DataClassification`] defaults to
+///   [`DataClassification::Internal`] via `#[default]`, sibling to
+///   [`CalmClassification::Monotone`]'s `#[default]`) on the same
+///   required [`tatara_process::classification::Classification`]
+///   parent, so a bare `Classification` filled via
+///   `..Default::default()` on the `data_classification` axis reads
+///   `true` on the default variant
+///   ([`DataClassification::Internal`]) and `false` on every other,
+///   and the default-arm short-circuit is present (the operator can
+///   DECLINE to name the data-classification axis and the spec
+///   still answers `true` on the default variant). This POPULATES
+///   the (required-parent × defaulted-scalar-child) corner at its
+///   SECOND substrate primitive after `calm-<kind>` opened it —
+///   pinning the corner as a proven-repeatable primitive shape
+///   rather than a single-example curiosity AND closing the four-
+///   scalar-carrier corner-coverage contract on the six-axis
+///   classification lattice (all four scalar closed-set
+///   discriminator axes on [`tatara_process::classification::Classification`]
+///   now publish independent presence probes through the same
+///   shape: two on the required-child corner, two on the defaulted-
+///   child corner). Coexists with every prior family — a
+///   `data-classification-Pii` conjunction with `point-type-Fork`,
+///   `substrate-Storage`, `calm-NonMonotone`, `sighup-Restart`, etc.
+///   reads directly at the checks.lisp surface as the four-axis
+///   probe of the point's TWO required + TWO defaulted
+///   classification axes on ONE ProcessSpec.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -890,13 +944,15 @@ struct UnknownRequireTag;
 /// `MustReachPhase` / `SighupStrategy` / `VerificationPhase` /
 /// `ExportTrigger` / `ChannelKind` / `ReportFormat` / `ArtifactKind` /
 /// `EncapsulationMode` / `ConvergencePointType` / `SubstrateType` /
-/// `CalmClassification` variant lands at ONE `ALL` entry on its
-/// parent's closed set — no per-caller edit here. A future new
-/// prefix family (e.g. `data-classification-<kind>` for
-/// [`tatara_process::classification::DataClassification`] — the
-/// remaining classification-axis closed set on a defaulted-scalar-
-/// child slot, a co-tenant on the (required-parent × defaulted-
-/// scalar-child) corner `calm-<kind>` opened; a `signal-<kind>` for
+/// `CalmClassification` / `DataClassification` variant lands at ONE
+/// `ALL` entry on its parent's closed set — no per-caller edit here.
+/// A future new prefix family (e.g. `horizon-<kind>` for
+/// [`tatara_process::classification::HorizonKind`] — a nested-struct-
+/// scalar probe on `spec.classification.horizon.kind`, opening the
+/// (required-parent × nested-struct-scalar-child) corner distinct
+/// from the four corner-property-exhaustive scalar-carrier axes on
+/// [`tatara_process::classification::Classification`] the fifteen
+/// current families span; a `signal-<kind>` for
 /// [`tatara_process::signal::ProcessSignal`], a `phase-<kind>` for
 /// [`tatara_process::phase::ProcessPhase`], a hypothetical
 /// `routing-form-<kind>` for a closed-set discriminator on
@@ -904,7 +960,7 @@ struct UnknownRequireTag;
 /// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind,
 /// _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res; }`
 /// branch that reads the same three-step (strip_prefix + parse +
-/// has) shape all fourteen existing families publish.
+/// has) shape all fifteen existing families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
@@ -956,7 +1012,12 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_true_on_default_calm_for_monotone_only`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_calm_suffix`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_calm_prefix`],
-/// and [`tests::evaluate_point_require_tag_calm_coexists_with_prior_classification_axes`].
+/// [`tests::evaluate_point_require_tag_calm_coexists_with_prior_classification_axes`],
+/// [`tests::evaluate_point_require_tag_returns_true_iff_data_classification_matches_variant_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_true_on_default_data_classification_for_internal_only`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_data_classification_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_data_classification_prefix`],
+/// and [`tests::evaluate_point_require_tag_data_classification_coexists_with_prior_classification_axes`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -1063,6 +1124,13 @@ fn evaluate_point_require_tag(
     {
         return res;
     }
+    if let Some(res) = strip_and_classify_prefixed_kind::<DataClassification, _>(
+        tag,
+        "data-classification-",
+        |kind| spec.classification.has_data_classification(kind),
+    ) {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -1076,7 +1144,7 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the fourteen closed-set-driven prefix families in
+/// shape the fifteen closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
@@ -1087,7 +1155,8 @@ fn evaluate_point_require_tag(
 /// [`ArtifactKind`], `encapsulation-mode-<kind>` on
 /// [`EncapsulationMode`], `point-type-<kind>` on
 /// [`ConvergencePointType`], `substrate-<kind>` on
-/// [`SubstrateType`], `calm-<kind>` on [`CalmClassification`]) each
+/// [`SubstrateType`], `calm-<kind>` on [`CalmClassification`],
+/// `data-classification-<kind>` on [`DataClassification`]) each
 /// dispatch through past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// threshold.
 ///
@@ -1118,20 +1187,20 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future fifteenth closed-set prefix family — `data-classification-<kind>`
-/// on [`tatara_process::classification::DataClassification`] (the
-/// natural next co-tenant on the (required-parent × defaulted-
-/// scalar-child) corner `calm-<kind>` opened; `DataClassification`
-/// defaults to [`tatara_process::classification::DataClassification::Internal`]
-/// via `#[default]` and sits on the same required
-/// [`tatara_process::classification::Classification`] parent),
+/// A future sixteenth closed-set prefix family — `horizon-<kind>`
+/// on [`tatara_process::classification::HorizonKind`] (a nested-
+/// struct-scalar probe on `spec.classification.horizon.kind`,
+/// opening the (required-parent × nested-struct-scalar-child)
+/// corner distinct from the four scalar-carrier probes now
+/// corner-property-exhaustive on the direct-scalar axes of
+/// [`tatara_process::classification::Classification`]),
 /// `signal-<kind>` on [`tatara_process::signal::ProcessSignal`],
 /// `phase-<kind>` on [`tatara_process::phase::ProcessPhase`], a
 /// hypothetical `routing-form-<kind>` on
 /// `spec.routing.as_ref().map(|r| r.form)` — lands as ONE more
 /// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind,
 /// _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res; }` branch
-/// that reads the same three-step shape the fourteen existing
+/// that reads the same three-step shape the fifteen existing
 /// families publish. No per-caller `strip_prefix + parse + match {
 /// Ok(_) => …, Err(_) => Err(UnknownRequireTag) }` restatement.
 ///
@@ -1143,7 +1212,7 @@ fn evaluate_point_require_tag(
 /// construction.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// three-step chain now dispatches FOURTEEN closed-set prefix families
+/// three-step chain now dispatches FIFTEEN closed-set prefix families
 /// past the ≥2 PRIME-DIRECTIVE trigger through ONE substrate owner.
 /// THEORY.md §II.1 invariant 2 — free middle; the caller composes the
 /// closed-set choice (via the generic `K`) and the presence probe
@@ -2233,7 +2302,9 @@ mod tests {
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
-    use tatara_process::classification::{CalmClassification, ConvergencePointType, SubstrateType};
+    use tatara_process::classification::{
+        CalmClassification, ConvergencePointType, DataClassification, SubstrateType,
+    };
     use tatara_process::compliance::{ComplianceBinding, VerificationPhase};
     use tatara_process::crd::ProcessSpec;
     use tatara_process::encapsulates::{
@@ -5441,6 +5512,244 @@ mod tests {
             evaluate_point_require_tag(&spec, "calm-Monotone"),
             Ok(false),
             "off-diagonal `calm-Monotone` must be false: the classification declares NonMonotone",
+        );
+    }
+
+    // ── evaluate_point_require_tag / data-classification-<kind> substrate pins ──
+    //
+    // Fail-before-pass-after granularity: the `data-classification-<kind>`
+    // prefix family did not exist before this commit — a `:requires
+    // (data-classification-Pii)` entry at the checks.lisp surface
+    // classified as `UnknownRequireTag`. Post-lift the fifteen closed-
+    // set-driven prefix families in `evaluate_point_require_tag`
+    // include the classification-axis scalar-carrier probe on
+    // `spec.classification.data_classification`, so a regression that
+    // (a) dropped the arm, (b) wired the closure to a fixed unrelated
+    // field (a stray probe on `spec.classification.point_type`,
+    // `spec.classification.substrate`, `spec.classification.calm`, or
+    // `spec.intent`), or (c) misspelled the prefix key fails HERE at
+    // ONE narrow classifier site before propagating to the operator-
+    // facing checks.lisp surface. SECOND occupant on the (required-
+    // parent × defaulted-scalar-child) corner of the presence-probe
+    // algebra after `calm-<kind>` opened it — closes the four-scalar-
+    // carrier corner-coverage contract on the six-axis classification
+    // lattice at the classifier surface (its two required-scalar-
+    // child slots AND its two defaulted-scalar-child slots all
+    // publish independent presence probes through the classifier).
+
+    /// POPULATED-slot pin — `data-classification-<kind>` dispatches
+    /// through the autoderived [`DataClassification`] `FromStr` + the
+    /// substrate
+    /// [`tatara_process::classification::Classification::has_data_classification`]
+    /// primitive, returning `true` only when
+    /// `spec.classification.data_classification` matches the queried
+    /// variant. Sweep the [`DataClassification::ALL`] × ALL cross so
+    /// a regression that hard-coded the arm to a single variant, or
+    /// wired the closure to a fixed unrelated field (a stray probe on
+    /// `spec.classification.point_type` /
+    /// `spec.classification.substrate` /
+    /// `spec.classification.calm` or `spec.intent`) fails HERE at the
+    /// classifier before landing at the operator-facing checks.lisp
+    /// surface. The four-axis independence from `point-type-<kind>` +
+    /// `substrate-<kind>` + `calm-<kind>` is pinned at
+    /// [`evaluate_point_require_tag_data_classification_coexists_with_prior_classification_axes`].
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_data_classification_matches_variant_per_kind() {
+        for populated in DataClassification::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.data_classification = populated;
+            for query in DataClassification::ALL {
+                let tag = format!("data-classification-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "data_classification={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// DEFAULT-ARM SHORT-CIRCUIT pin — a Process built through
+    /// `ProcessSpec::gate_compute_defaults` (which carries
+    /// `data_classification: DataClassification::default()` =
+    /// [`DataClassification::Internal`] via `#[default]`) answers
+    /// `true` on `data-classification-Internal` and `false` on every
+    /// other `data-classification-<kind>` (`Public`, `Confidential`,
+    /// `Pii`, `Phi`, `Pci`) WITHOUT the operator naming the
+    /// data-classification axis on the ProcessSpec. This is the
+    /// characteristic behavior of the (required-parent × DEFAULTED-
+    /// scalar-child) corner: the default-arm short-circuit is
+    /// present (the operator can DECLINE to name the axis and the
+    /// spec still answers `true` on the default variant). Locks the
+    /// corner-property contract at ONE narrow classifier site for
+    /// the SECOND occupant of the corner: a regression that promoted
+    /// a different [`DataClassification`] variant to `#[default]`
+    /// (or wired the arm to a fixed variant answer) would fail HERE
+    /// before drifting through every unadorned Process's baseline
+    /// data-classification answer. Peer to
+    /// [`evaluate_point_require_tag_returns_true_on_default_calm_for_monotone_only`]
+    /// on the corner's FIRST occupant — the two peers pin the same
+    /// default-arm short-circuit shape on two distinct defaulted-
+    /// scalar-child slots of the SAME [`tatara_process::classification::Classification`]
+    /// parent.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_default_data_classification_for_internal_only() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in DataClassification::ALL {
+            let tag = format!("data-classification-{}", kind.as_str());
+            let expected = kind == DataClassification::Internal;
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(expected),
+                "default (data_classification=Internal) baseline: tag {tag:?} must be {expected}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `data-classification-<garbage>`
+    /// classifies as [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`DataClassification`] labels are
+    /// the PascalCase wire-format keys (`Public`, `Internal`,
+    /// `Confidential`, `Pii`, `Phi`, `Pci`) — matching the serde
+    /// `rename_all = "PascalCase"` external-tag form on the wire
+    /// verbatim — so lowercased / all-caps / typo spellings are
+    /// UNKNOWN suffixes. Pin the case-sensitivity axis so a
+    /// regression that ASCIIfolded or lowercased on parse would fail
+    /// HERE. The empty-suffix boundary is pinned by the shared
+    /// substrate primitive's
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_data_classification_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for garbage in [
+            "data-classification-public",
+            "data-classification-INTERNAL",
+            "data-classification-PII",
+            "data-classification-TradeSecret",
+            "data-classification-Bogus",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at
+    /// `data-classification-` classifies as [`UnknownRequireTag`],
+    /// mirroring every prior closed-set prefix family. The empty
+    /// suffix hits the substrate primitive's canonical empty-string
+    /// arm rather than short-circuiting to `Ok(true)` on any
+    /// populated `data_classification` slot (which would silently
+    /// read as "any data-classification axis present" for every
+    /// Process — every Process has a `data_classification` slot
+    /// filled via the `#[serde(default)]` on the field, so the
+    /// wrong short-circuit here would return `Ok(true)`
+    /// universally). Locks the empty-suffix ↔ unknown-suffix
+    /// correspondence at ONE narrow classifier site for the
+    /// fifteenth family so a regression that special-cased the bare
+    /// prefix (treating it as "any data-classification populated")
+    /// would fail HERE. Byte-symmetric with the peer
+    /// `evaluate_point_require_tag_returns_unknown_on_bare_calm_prefix`
+    /// on the fourteenth family — the two corner co-tenants walk the
+    /// same empty-suffix contract on the (required-parent ×
+    /// defaulted-scalar-child) corner.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_data_classification_prefix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "data-classification-"),
+            Err(UnknownRequireTag),
+            "bare `data-classification-` must classify as UnknownRequireTag",
+        );
+    }
+
+    /// FOUR-AXIS INDEPENDENCE pin — a Process with
+    /// `spec.classification.point_type = Fork` AND
+    /// `spec.classification.substrate = Storage` AND
+    /// `spec.classification.calm = NonMonotone` AND
+    /// `spec.classification.data_classification = Pii` MUST satisfy
+    /// the four fine tags (`point-type-Fork` from the twelfth
+    /// family, `substrate-Storage` from the thirteenth,
+    /// `calm-NonMonotone` from the fourteenth,
+    /// `data-classification-Pii` from the fifteenth) simultaneously
+    /// AND fail each off-diagonal probe (`point-type-Gate`,
+    /// `substrate-Compute`, `calm-Monotone`,
+    /// `data-classification-Internal`). Locks the FIFTEENTH family's
+    /// independence from the TWELFTH + THIRTEENTH + FOURTEENTH at
+    /// ONE narrow site — the four co-tenants on the
+    /// [`tatara_process::classification::Classification`] parent
+    /// probe DISTINCT scalar slots on the SAME parent AND straddle
+    /// TWO distinct corners of the (parent-shape × child-shape)
+    /// algebra (the required-child corner `point-type-<kind>` +
+    /// `substrate-<kind>` share, and the defaulted-child corner
+    /// `calm-<kind>` + `data-classification-<kind>` share). A
+    /// regression that crossed the wires (a stray probe of
+    /// `data-classification-<kind>` against
+    /// `spec.classification.point_type` /
+    /// `spec.classification.substrate` /
+    /// `spec.classification.calm`, or of any prior classification
+    /// probe against `spec.classification.data_classification`) would
+    /// fail HERE. The audit `every Fork-topology Storage-plane
+    /// NonMonotone-CALM Pii-classification point declares a
+    /// Raft-guarded write path AND a downstream PII-scrub sink`
+    /// reads as this exact four-way conjunction of the two required
+    /// plus two defaulted classification-axis scalars at the
+    /// checks.lisp surface — closes the four-scalar-carrier
+    /// corner-coverage contract on
+    /// [`tatara_process::classification::Classification`] at the
+    /// classifier boundary.
+    #[test]
+    fn evaluate_point_require_tag_data_classification_coexists_with_prior_classification_axes() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.classification.point_type = ConvergencePointType::Fork;
+        spec.classification.substrate = SubstrateType::Storage;
+        spec.classification.calm = CalmClassification::NonMonotone;
+        spec.classification.data_classification = DataClassification::Pii;
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "point-type-Fork"),
+            Ok(true),
+            "fine `point-type-Fork` must be true when the classification declares Fork",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "substrate-Storage"),
+            Ok(true),
+            "fine `substrate-Storage` must be true when the classification declares Storage",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "calm-NonMonotone"),
+            Ok(true),
+            "fine `calm-NonMonotone` must be true when the classification declares NonMonotone",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "data-classification-Pii"),
+            Ok(true),
+            "fine `data-classification-Pii` must be true when the classification declares Pii",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "point-type-Gate"),
+            Ok(false),
+            "off-diagonal `point-type-Gate` must be false: the classification declares Fork",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "substrate-Compute"),
+            Ok(false),
+            "off-diagonal `substrate-Compute` must be false: the classification declares Storage",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "calm-Monotone"),
+            Ok(false),
+            "off-diagonal `calm-Monotone` must be false: the classification declares NonMonotone",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "data-classification-Internal"),
+            Ok(false),
+            "off-diagonal `data-classification-Internal` must be false: the classification declares Pii",
         );
     }
 

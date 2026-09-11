@@ -368,6 +368,97 @@ impl Classification {
     pub fn has_calm(&self, kind: CalmClassification) -> bool {
         self.calm == kind
     }
+
+    /// Closed-set-driven presence probe — does this [`Classification`]
+    /// carry the given [`DataClassification`] discriminator on its
+    /// [`Self::data_classification`] slot? The ONE substrate primitive
+    /// that owns the `(Classification, DataClassification) -> bool`
+    /// scalar-carrier walk shape.
+    ///
+    /// # Sixth scalar-carrier peer on the presence-probe axis
+    ///
+    /// Peer of [`crate::spec::SignalPolicy::has_sighup_strategy`],
+    /// [`crate::encapsulates::EncapsulatesSpec::has_mode`],
+    /// [`Self::has_point_type`], [`Self::has_substrate`], and
+    /// [`Self::has_calm`] — all six probe a scalar closed-set-
+    /// discriminator field on an inner [`crate::crd::ProcessSpec`]
+    /// struct via a one-line `self.<field> == kind` body. Together
+    /// they compose the SCALAR-CARRIER stratum of the workspace-wide
+    /// closed-set-driven presence-probe algebra (the workspace-wide
+    /// algebra spans three underlying representation kinds — Option-
+    /// slot, slice, scalar — see the
+    /// [`crate::spec::SignalPolicy::has_sighup_strategy`] docstring
+    /// for the full-shape rundown; this method is the sixth scalar-
+    /// carrier instance).
+    ///
+    /// # Semantics — VARIANT match, not POPULATED slot
+    ///
+    /// `has_data_classification(kind)` returns `true` iff
+    /// `self.data_classification == kind`. SECOND co-tenant on the
+    /// (required-parent × defaulted-scalar-child) corner of the
+    /// algebra alongside [`Self::has_calm`] — both probe REQUIRED,
+    /// non-Option, NON-DEFAULT [`Classification`] parent slots with
+    /// a DEFAULTED scalar child ([`DataClassification`] defaults to
+    /// [`DataClassification::Internal`] via `#[default]`, sibling to
+    /// [`CalmClassification::Monotone`]'s `#[default]`), so exactly
+    /// ONE of the six [`DataClassification`] variants answers `true`
+    /// per spec AND the default-arm short-circuit is present (a
+    /// `Classification` filled via `..Default::default()` on the
+    /// `data_classification` axis reads `true` on the default
+    /// variant [`DataClassification::Internal`] and `false` on every
+    /// other).
+    ///
+    /// This POPULATES the (required-parent × defaulted-scalar-child)
+    /// corner of the workspace-wide closed-set-driven presence-probe
+    /// algebra at its SECOND substrate primitive after
+    /// [`Self::has_calm`] opened the corner, pinning the corner as a
+    /// proven-repeatable primitive shape rather than a single-example
+    /// curiosity. The corner-property contract ("bare
+    /// [`Classification`] reads `true` on the default variant")
+    /// now walks TWO independent defaulted-scalar-child slots on the
+    /// SAME [`Classification`] parent — a regression that promoted
+    /// a different [`DataClassification`] variant to `#[default]`
+    /// (or wired the arm to a fixed variant answer) fails HERE at
+    /// ONE narrow substrate site before drifting through every
+    /// unadorned Process's baseline data-classification answer.
+    ///
+    /// # Compounding
+    ///
+    /// This method exhausts the four scalar closed-set-discriminator
+    /// axes on [`Classification`] ([`Self::has_point_type`],
+    /// [`Self::has_substrate`], [`Self::has_calm`], and
+    /// [`Self::has_data_classification`]) — the six-axis classification
+    /// lattice now publishes ALL FOUR of its scalar-carrier presence
+    /// probes at ONE substrate site each. The remaining two axes
+    /// (`horizon` — a nested struct threading [`HorizonKind`] through
+    /// `horizon.kind`; the sixth axis is variant-dependent on the
+    /// [`HorizonKind::Asymptotic`] arm) live on nested-struct-scalar
+    /// slots rather than the direct-scalar corner the four current
+    /// peers span. A future [`DataClassification`] variant (a
+    /// hypothetical seventh variant beyond `Public / Internal /
+    /// Confidential / Pii / Phi / Pci` — say a `TradeSecret` bucket
+    /// for competitive-sensitive data, or an `Anonymized` bucket for
+    /// pseudonymized-PII whose regulatory posture differs) reaches
+    /// every downstream through ONE `ALL` entry on the closed set +
+    /// ONE `as_str` arm + ONE `sensitivity_rank` arm + one arm per
+    /// predicate with the probe body untouched.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the scalar-carrier presence-probe body
+    /// lives at ONE substrate site so every downstream
+    /// (`data-classification-<kind>` require-tag family in
+    /// `tatara-check`, closed-set audit dispatchers, future variant
+    /// additions on [`DataClassification`]) binds through the SAME
+    /// shape rather than restating the
+    /// `classification.data_classification == kind` closure body at
+    /// each callsite. THEORY.md §VI.1 — generation over composition;
+    /// a future [`DataClassification`] variant lands at ONE `ALL`
+    /// entry + ONE `as_str` arm on the closed set and the probe
+    /// picks it up mechanically without further per-consumer edits.
+    #[must_use]
+    pub fn has_data_classification(&self, kind: DataClassification) -> bool {
+        self.data_classification == kind
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -3272,5 +3363,153 @@ mod tests {
         assert!(!c.has_point_type(ConvergencePointType::Gate));
         assert!(!c.has_substrate(SubstrateType::Compute));
         assert!(!c.has_calm(CalmClassification::Monotone));
+    }
+
+    // ── scalar-carrier presence probe on Classification × DataClassification ──
+    //
+    // Fail-before-pass-after granularity:
+    // [`Classification::has_data_classification`] did not exist before
+    // this commit — every consumer of the
+    // `(Classification, DataClassification) -> bool` scalar-carrier
+    // probe shape would have to restate the
+    // `classification.data_classification == kind` equality body at
+    // its own callsite. Post-lift the shape lives at ONE substrate
+    // owner and every downstream (the `data-classification-<kind>`
+    // require-tag family in `tatara-check`, future audit dispatchers
+    // walking [`DataClassification::ALL`], any future CRD-facing
+    // closed-set discriminator on a defaulted scalar `ProcessSpec`
+    // field) binds through the SAME `has(kind)` shape the four prior
+    // scalar-carrier peers on [`Classification`]
+    // ([`Classification::has_point_type`],
+    // [`Classification::has_substrate`],
+    // [`Classification::has_calm`]) plus
+    // [`crate::spec::SignalPolicy::has_sighup_strategy`] and
+    // [`crate::encapsulates::EncapsulatesSpec::has_mode`] publish.
+    // SECOND occupant on the (required-parent × defaulted-scalar-
+    // child) corner of the presence-probe algebra after
+    // [`Classification::has_calm`] opened it — pins the corner as a
+    // proven-repeatable primitive shape rather than a single-example
+    // curiosity and closes the four-scalar-carrier corner-coverage
+    // contract on the six-axis classification lattice.
+
+    /// DIAGONAL — for every [`DataClassification`] variant, a
+    /// [`Classification`] whose `data_classification` field is set to
+    /// that variant returns `true` from `has_data_classification` on
+    /// that same variant AND `false` on every other variant. Sweep
+    /// the [`DataClassification::ALL`] × ALL cross so a regression
+    /// that hard-coded the arm to a single variant (silently returning
+    /// `true` on every populated classification regardless of query
+    /// kind) or wired the equality to a fixed unrelated field (a
+    /// stray probe on `classification.point_type` /
+    /// `classification.substrate` / `classification.calm`) fails HERE
+    /// at the substrate primitive before landing at the operator-
+    /// facing checks.lisp surface.
+    #[test]
+    fn classification_has_data_classification_returns_true_iff_variant_matches() {
+        for populated in DataClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: populated,
+            };
+            for query in DataClassification::ALL {
+                assert_eq!(
+                    c.has_data_classification(query),
+                    query == populated,
+                    "data_classification={populated:?}: query {query:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `data_classification: DataClassification::default()` which is
+    /// [`DataClassification::Internal`] via `#[default]`, so
+    /// `has_data_classification` returns `true` on
+    /// [`DataClassification::Internal`] and `false` on every other
+    /// variant ([`DataClassification::Public`],
+    /// [`DataClassification::Confidential`],
+    /// [`DataClassification::Pii`], [`DataClassification::Phi`],
+    /// [`DataClassification::Pci`]). Pins the composition of the
+    /// substrate's baseline-constructor primitive with the SIXTH
+    /// scalar-carrier presence probe AND the sibling-default
+    /// correspondence documented on [`Classification::gate_compute`]
+    /// (which pins the three defaulted axes to the sibling closed-set
+    /// defaults `HorizonKind::Bounded` / `CalmClassification::Monotone`
+    /// / `DataClassification::Internal`) — a regression that flipped
+    /// `gate_compute().data_classification` off `Internal` (or
+    /// promoted a different variant to `#[default]` on the closed
+    /// set, or wired `has_data_classification` to a fixed variant
+    /// answer, or crossed the wires to `point_type` / `substrate` /
+    /// `calm`) fails here at ONE narrow site before drifting across
+    /// every unadorned ephemeral env (`default_ephemeral_class`) and
+    /// every downstream test fixture that keys assertions on the
+    /// shape. SECOND occupant on the (required-parent × defaulted-
+    /// scalar-child) corner — pins the corner's characteristic
+    /// "default-arm short-circuit" property on its second occupant
+    /// (peer to `classification_gate_compute_has_calm_monotone_only`
+    /// which pins the same shape on the corner's first occupant).
+    #[test]
+    fn classification_gate_compute_has_data_classification_internal_only() {
+        let c = Classification::gate_compute();
+        for kind in DataClassification::ALL {
+            let expected = kind == DataClassification::Internal;
+            assert_eq!(
+                c.has_data_classification(kind),
+                expected,
+                "gate_compute (data_classification=Internal) must return {expected} for {kind:?}",
+            );
+        }
+    }
+
+    /// FOUR-AXIS INDEPENDENCE — the four scalar-carrier co-tenants
+    /// on the [`Classification`] parent
+    /// ([`Classification::has_point_type`] plus
+    /// [`Classification::has_substrate`] on the (required-parent ×
+    /// required-scalar-child) corner AND [`Classification::has_calm`]
+    /// plus [`Classification::has_data_classification`] on the
+    /// (required-parent × defaulted-scalar-child) corner) probe
+    /// distinct scalar slots on the SAME parent, so a carrier with
+    /// `point_type: Fork` AND `substrate: Storage` AND
+    /// `calm: NonMonotone` AND `data_classification: Pii` answers
+    /// `true` on all four fine tags simultaneously and `false` on
+    /// every off-diagonal probe of any axis. Pins the four probes'
+    /// independence at ONE narrow site — a regression that collapsed
+    /// any of the four onto another's field (a stray probe of
+    /// `has_data_classification` reading `self.point_type` /
+    /// `self.substrate` / `self.calm`, or of any prior probe reading
+    /// `self.data_classification`) would fail HERE before landing at
+    /// any consumer. The audit `every Fork-topology Storage-plane
+    /// NonMonotone-CALM Pii-classification point declares a
+    /// Raft-guarded write path AND a downstream PII-scrub sink`
+    /// composes this exact four-axis conjunction on the required +
+    /// defaulted scalars of the six-axis classification lattice.
+    /// Closes the four-scalar-carrier corner-coverage contract on
+    /// [`Classification`] — its two required-scalar-child slots
+    /// (`point_type`, `substrate`) AND its two defaulted-scalar-
+    /// child slots (`calm`, `data_classification`) all publish
+    /// independent presence probes through the same shape.
+    #[test]
+    fn classification_four_scalar_carrier_probes_are_independent() {
+        let c = Classification {
+            point_type: ConvergencePointType::Fork,
+            substrate: SubstrateType::Storage,
+            horizon: Horizon::default(),
+            calm: CalmClassification::NonMonotone,
+            data_classification: DataClassification::Pii,
+        };
+        assert!(c.has_point_type(ConvergencePointType::Fork));
+        assert!(c.has_substrate(SubstrateType::Storage));
+        assert!(c.has_calm(CalmClassification::NonMonotone));
+        assert!(c.has_data_classification(DataClassification::Pii));
+        assert!(!c.has_point_type(ConvergencePointType::Gate));
+        assert!(!c.has_substrate(SubstrateType::Compute));
+        assert!(!c.has_calm(CalmClassification::Monotone));
+        assert!(!c.has_data_classification(DataClassification::Internal));
+        assert!(!c.has_data_classification(DataClassification::Public));
+        assert!(!c.has_data_classification(DataClassification::Phi));
     }
 }

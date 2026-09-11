@@ -12,7 +12,7 @@ use std::str::FromStr;
 
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
-use tatara_process::classification::{ConvergencePointType, SubstrateType};
+use tatara_process::classification::{CalmClassification, ConvergencePointType, SubstrateType};
 use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
 use tatara_process::encapsulates::EncapsulationMode;
 use tatara_process::export::{
@@ -829,6 +829,56 @@ struct UnknownRequireTag;
 ///   independent-axis probe of the point's TWO required
 ///   classification axes against every optional/defaulted axis on
 ///   ONE ProcessSpec.
+/// - `calm-<kind>` — [`CalmClassification`] closed set →
+///   [`tatara_process::classification::Classification::has_calm`]
+///   (a scalar-carrier variant-equality probe on
+///   `spec.classification.calm`, so the operator's `:requires
+///   (calm-Monotone)` pins that a Process's CALM axis names a
+///   monotone operation (Hellerstein's theorem ⇒ distributable
+///   without coordination), `:requires (calm-NonMonotone)` pins a
+///   coordination-requiring operation, and the reconciler's future
+///   dispatch between Raft writes and gossip propagation reads the
+///   probe as the typed image of the theorem itself. Fourteenth
+///   closed-set-driven prefix family in the point-domain
+///   require-tag vocabulary and FIFTH instance on the scalar-carrier
+///   axis of the presence-probe algebra (sibling to `sighup-<kind>`
+///   on [`tatara_process::spec::SignalPolicy::has_sighup_strategy`],
+///   `encapsulation-mode-<kind>` on
+///   [`tatara_process::encapsulates::EncapsulatesSpec::has_mode`],
+///   `point-type-<kind>` on
+///   [`tatara_process::classification::Classification::has_point_type`],
+///   and `substrate-<kind>` on
+///   [`tatara_process::classification::Classification::has_substrate`]).
+///   FIRST occupant on a FRESH corner of the (parent-shape ×
+///   child-shape) axis: the required non-Option non-Default
+///   [`tatara_process::classification::Classification`] parent
+///   combined with a DEFAULTED scalar child
+///   ([`CalmClassification`] defaults to
+///   [`CalmClassification::Monotone`] via `#[default]`). Distinct
+///   from every prior scalar-carrier peer on the (parent-shape ×
+///   child-shape) axis: `sighup-<kind>` lives on a defaulted
+///   non-Option parent with a defaulted child (a bare `SignalPolicy`
+///   reads `true` on the default variant); `encapsulation-mode-<kind>`
+///   lives on an Option parent with a defaulted child (a bare `None`
+///   parent reads `false` on every variant); `point-type-<kind>` +
+///   `substrate-<kind>` both live on the required parent with a
+///   REQUIRED child (an operator must name the variant deliberately
+///   to answer `true`). `calm-<kind>` lives on the required parent
+///   with a DEFAULTED child — a bare `Classification` filled via
+///   `..Default::default()` on the defaulted axes reads `true` for
+///   the default variant ([`CalmClassification::Monotone`]) and
+///   `false` for the other, and the default-arm short-circuit is
+///   present (the operator can DECLINE to name the CALM axis and
+///   the spec still answers `true` on the default variant). This
+///   OPENS the (required-parent × defaulted-scalar-child) corner of
+///   the workspace-wide presence-probe algebra at its first
+///   substrate primitive — a corner distinct from all four prior
+///   scalar-carrier corners. Coexists with every prior family — a
+///   `calm-NonMonotone` conjunction with `point-type-Fork`,
+///   `substrate-Storage`, `sighup-Restart`, etc. reads directly at
+///   the checks.lisp surface as the three-axis probe of the point's
+///   TWO required + ONE defaulted classification axes on ONE
+///   ProcessSpec.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -839,21 +889,22 @@ struct UnknownRequireTag;
 /// A future new `IntentKind` / `LifetimeKind` / `ConditionKind` /
 /// `MustReachPhase` / `SighupStrategy` / `VerificationPhase` /
 /// `ExportTrigger` / `ChannelKind` / `ReportFormat` / `ArtifactKind` /
-/// `EncapsulationMode` / `ConvergencePointType` / `SubstrateType`
-/// variant lands at ONE `ALL` entry on its parent's closed set — no
-/// per-caller edit here. A future new prefix family (e.g.
-/// `calm-<kind>` for
-/// [`tatara_process::classification::CalmClassification`],
-/// `data-classification-<kind>` for
-/// [`tatara_process::classification::DataClassification`], a
-/// `signal-<kind>` for [`tatara_process::signal::ProcessSignal`], a
-/// `phase-<kind>` for [`tatara_process::phase::ProcessPhase`], a
-/// hypothetical `routing-form-<kind>` for a closed-set discriminator
-/// on `spec.routing`) lands as ONE more
+/// `EncapsulationMode` / `ConvergencePointType` / `SubstrateType` /
+/// `CalmClassification` variant lands at ONE `ALL` entry on its
+/// parent's closed set — no per-caller edit here. A future new
+/// prefix family (e.g. `data-classification-<kind>` for
+/// [`tatara_process::classification::DataClassification`] — the
+/// remaining classification-axis closed set on a defaulted-scalar-
+/// child slot, a co-tenant on the (required-parent × defaulted-
+/// scalar-child) corner `calm-<kind>` opened; a `signal-<kind>` for
+/// [`tatara_process::signal::ProcessSignal`], a `phase-<kind>` for
+/// [`tatara_process::phase::ProcessPhase`], a hypothetical
+/// `routing-form-<kind>` for a closed-set discriminator on
+/// `spec.routing`) lands as ONE more
 /// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind,
 /// _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res; }`
 /// branch that reads the same three-step (strip_prefix + parse +
-/// has) shape all thirteen existing families publish.
+/// has) shape all fourteen existing families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
@@ -900,7 +951,12 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_true_iff_substrate_matches_variant_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_substrate_suffix`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_substrate_prefix`],
-/// and [`tests::evaluate_point_require_tag_substrate_coexists_with_point_type`].
+/// [`tests::evaluate_point_require_tag_substrate_coexists_with_point_type`],
+/// [`tests::evaluate_point_require_tag_returns_true_iff_calm_matches_variant_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_true_on_default_calm_for_monotone_only`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_calm_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_calm_prefix`],
+/// and [`tests::evaluate_point_require_tag_calm_coexists_with_prior_classification_axes`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -1000,6 +1056,13 @@ fn evaluate_point_require_tag(
     {
         return res;
     }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<CalmClassification, _>(tag, "calm-", |kind| {
+            spec.classification.has_calm(kind)
+        })
+    {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -1013,7 +1076,7 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the thirteen closed-set-driven prefix families in
+/// shape the fourteen closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
@@ -1024,8 +1087,9 @@ fn evaluate_point_require_tag(
 /// [`ArtifactKind`], `encapsulation-mode-<kind>` on
 /// [`EncapsulationMode`], `point-type-<kind>` on
 /// [`ConvergencePointType`], `substrate-<kind>` on
-/// [`SubstrateType`]) each dispatch through past the ★★
-/// PRIME-DIRECTIVE ≥ 2 duplication threshold.
+/// [`SubstrateType`], `calm-<kind>` on [`CalmClassification`]) each
+/// dispatch through past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold.
 ///
 /// # Return shape
 ///
@@ -1054,17 +1118,20 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future fourteenth closed-set prefix family — `calm-<kind>`
-/// on [`tatara_process::classification::CalmClassification`],
-/// `data-classification-<kind>` on
-/// [`tatara_process::classification::DataClassification`],
+/// A future fifteenth closed-set prefix family — `data-classification-<kind>`
+/// on [`tatara_process::classification::DataClassification`] (the
+/// natural next co-tenant on the (required-parent × defaulted-
+/// scalar-child) corner `calm-<kind>` opened; `DataClassification`
+/// defaults to [`tatara_process::classification::DataClassification::Internal`]
+/// via `#[default]` and sits on the same required
+/// [`tatara_process::classification::Classification`] parent),
 /// `signal-<kind>` on [`tatara_process::signal::ProcessSignal`],
 /// `phase-<kind>` on [`tatara_process::phase::ProcessPhase`], a
 /// hypothetical `routing-form-<kind>` on
 /// `spec.routing.as_ref().map(|r| r.form)` — lands as ONE more
 /// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind,
 /// _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res; }` branch
-/// that reads the same three-step shape the thirteen existing
+/// that reads the same three-step shape the fourteen existing
 /// families publish. No per-caller `strip_prefix + parse + match {
 /// Ok(_) => …, Err(_) => Err(UnknownRequireTag) }` restatement.
 ///
@@ -1076,7 +1143,7 @@ fn evaluate_point_require_tag(
 /// construction.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// three-step chain now dispatches THIRTEEN closed-set prefix families
+/// three-step chain now dispatches FOURTEEN closed-set prefix families
 /// past the ≥2 PRIME-DIRECTIVE trigger through ONE substrate owner.
 /// THEORY.md §II.1 invariant 2 — free middle; the caller composes the
 /// closed-set choice (via the generic `K`) and the presence probe
@@ -2166,7 +2233,7 @@ mod tests {
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
-    use tatara_process::classification::{ConvergencePointType, SubstrateType};
+    use tatara_process::classification::{CalmClassification, ConvergencePointType, SubstrateType};
     use tatara_process::compliance::{ComplianceBinding, VerificationPhase};
     use tatara_process::crd::ProcessSpec;
     use tatara_process::encapsulates::{
@@ -5155,6 +5222,225 @@ mod tests {
             evaluate_point_require_tag(&spec, "substrate-Compute"),
             Ok(false),
             "off-diagonal `substrate-Compute` must be false: the classification declares Storage",
+        );
+    }
+
+    // ── evaluate_point_require_tag / calm-<kind> substrate pins ──────
+    //
+    // Fail-before-pass-after granularity: the `calm-<kind>` prefix
+    // family did not exist before this commit — a `:requires
+    // (calm-Monotone)` entry at the checks.lisp surface classified as
+    // `UnknownRequireTag`. Post-lift the fourteen closed-set-driven
+    // prefix families in `evaluate_point_require_tag` include the
+    // classification-axis scalar-carrier probe on
+    // `spec.classification.calm`, so a regression that (a) dropped the
+    // arm, (b) wired the closure to a fixed unrelated field (a stray
+    // probe on `spec.classification.point_type`,
+    // `spec.classification.substrate`, or `spec.intent`), or (c)
+    // misspelled the prefix key fails HERE at ONE narrow classifier
+    // site before propagating to the operator-facing checks.lisp
+    // surface. FIRST occupant on the (required-parent × defaulted-
+    // scalar-child) corner of the presence-probe algebra — a fresh
+    // corner distinct from the (required-parent × required-scalar-
+    // child) corner `point-type-<kind>` + `substrate-<kind>` share:
+    // the [`CalmClassification`] child carries `#[default]` on
+    // [`CalmClassification::Monotone`], so a `Classification` filled
+    // via `..Default::default()` on the CALM axis answers `true` on
+    // the default variant (whereas a bare `Classification` on the
+    // required-child corner would have to name the variant
+    // deliberately to answer `true`).
+
+    /// POPULATED-slot pin — `calm-<kind>` dispatches through the
+    /// autoderived [`CalmClassification`] `FromStr` + the substrate
+    /// [`tatara_process::classification::Classification::has_calm`]
+    /// primitive, returning `true` only when
+    /// `spec.classification.calm` matches the queried variant. Sweep
+    /// the [`CalmClassification::ALL`] × ALL cross so a regression
+    /// that hard-coded the arm to a single variant, or wired the
+    /// closure to a fixed unrelated field (a stray probe on
+    /// `spec.classification.point_type`,
+    /// `spec.classification.substrate`, or `spec.intent`) fails HERE
+    /// at the classifier before landing at the operator-facing
+    /// checks.lisp surface. The three-axis independence from
+    /// `point-type-<kind>` + `substrate-<kind>` is pinned at
+    /// [`evaluate_point_require_tag_calm_coexists_with_prior_classification_axes`].
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_calm_matches_variant_per_kind() {
+        for populated in CalmClassification::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.calm = populated;
+            for query in CalmClassification::ALL {
+                let tag = format!("calm-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "calm={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// DEFAULT-ARM SHORT-CIRCUIT pin — a Process built through
+    /// `ProcessSpec::gate_compute_defaults` (which carries
+    /// `calm: CalmClassification::default()` =
+    /// [`CalmClassification::Monotone`] via `#[default]`) answers
+    /// `true` on `calm-Monotone` and `false` on `calm-NonMonotone`
+    /// WITHOUT the operator naming the CALM axis on the ProcessSpec.
+    /// This is the characteristic behavior of the (required-parent ×
+    /// DEFAULTED-scalar-child) corner: the default-arm short-circuit
+    /// is present (the operator can DECLINE to name the CALM axis
+    /// and the spec still answers `true` on the default variant),
+    /// distinct from the peer (required-parent × required-scalar-
+    /// child) corner where an operator MUST name the variant
+    /// deliberately to answer `true`. Locks the corner-property
+    /// contract at ONE narrow classifier site: a regression that
+    /// promoted [`CalmClassification::NonMonotone`] to `#[default]`
+    /// (or wired the arm to a fixed variant answer) would fail HERE
+    /// before drifting through every unadorned Process's baseline
+    /// CALM answer. Peer to
+    /// [`evaluate_point_require_tag_returns_true_on_default_signals_for_sighup_reconverge_only`]
+    /// on the fifth scalar-carrier family (which pins the same
+    /// default-arm short-circuit shape on the defaulted-parent ×
+    /// defaulted-child corner) — the two corners share the "bare
+    /// spec reads `true` on the default variant" contract but on
+    /// distinct parent shapes.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_default_calm_for_monotone_only() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in CalmClassification::ALL {
+            let tag = format!("calm-{}", kind.as_str());
+            let expected = kind == CalmClassification::Monotone;
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(expected),
+                "default (calm=Monotone) baseline: tag {tag:?} must be {expected}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `calm-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`CalmClassification`] labels are
+    /// the PascalCase wire-format keys (`Monotone`, `NonMonotone`) —
+    /// matching the serde `rename_all = "PascalCase"` external-tag
+    /// form on the wire verbatim — so lowercased / all-caps / typo
+    /// spellings are UNKNOWN suffixes. Pin the case-sensitivity axis
+    /// so a regression that ASCIIfolded or lowercased on parse would
+    /// fail HERE. The empty-suffix boundary is pinned by the shared
+    /// substrate primitive's
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_calm_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for garbage in [
+            "calm-monotone",
+            "calm-NONMONOTONE",
+            "calm-Nonmonotone",
+            "calm-ConditionallyMonotone",
+            "calm-Bogus",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at `calm-`
+    /// classifies as [`UnknownRequireTag`], mirroring every prior
+    /// closed-set prefix family. The empty suffix hits the substrate
+    /// primitive's canonical empty-string arm rather than short-
+    /// circuiting to `Ok(true)` on any populated `calm` slot (which
+    /// would silently read as "any CALM axis present" for every
+    /// Process — every Process has a CALM slot filled via the
+    /// `#[serde(default)]` on the field, so the wrong short-circuit
+    /// here would return `Ok(true)` universally). Locks the empty-
+    /// suffix ↔ unknown-suffix correspondence at ONE narrow
+    /// classifier site for the fourteenth family so a regression
+    /// that special-cased the bare prefix (treating it as "any calm
+    /// populated") would fail HERE. Byte-symmetric with the peer
+    /// `evaluate_point_require_tag_returns_unknown_on_bare_substrate_prefix`
+    /// pin on the thirteenth family and the
+    /// `evaluate_point_require_tag_returns_unknown_on_bare_point_type_prefix`
+    /// pin on the twelfth — the three co-tenants on the
+    /// [`tatara_process::classification::Classification`] parent walk
+    /// the same empty-suffix contract across two distinct corners of
+    /// the (parent-shape × child-shape) algebra.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_calm_prefix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "calm-"),
+            Err(UnknownRequireTag),
+            "bare `calm-` must classify as UnknownRequireTag",
+        );
+    }
+
+    /// THREE-AXIS INDEPENDENCE pin — a Process with
+    /// `spec.classification.point_type = Fork` AND
+    /// `spec.classification.substrate = Storage` AND
+    /// `spec.classification.calm = NonMonotone` MUST satisfy the
+    /// three fine tags (`point-type-Fork` from the twelfth family,
+    /// `substrate-Storage` from the thirteenth,
+    /// `calm-NonMonotone` from the fourteenth) simultaneously AND
+    /// fail each off-diagonal probe (`point-type-Gate`,
+    /// `substrate-Compute`, `calm-Monotone`). Locks the FOURTEENTH
+    /// family's independence from the TWELFTH + THIRTEENTH at ONE
+    /// narrow site — the three co-tenants on the
+    /// [`tatara_process::classification::Classification`] parent
+    /// probe DISTINCT scalar slots on the SAME parent AND straddle
+    /// TWO distinct corners of the (parent-shape × child-shape)
+    /// algebra (the required-child corner `point-type-<kind>` +
+    /// `substrate-<kind>` share, and the defaulted-child corner
+    /// `calm-<kind>` opens). A regression that crossed the wires (a
+    /// stray probe of `calm-<kind>` against
+    /// `spec.classification.point_type` or
+    /// `spec.classification.substrate`, or of either required-axis
+    /// probe against `spec.classification.calm`) would fail HERE.
+    /// The audit `every Fork-topology Storage-plane NonMonotone-CALM
+    /// point declares a Raft-guarded write path` reads as this exact
+    /// three-way conjunction of the two required + one defaulted
+    /// classification-axis scalars at the checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_calm_coexists_with_prior_classification_axes() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.classification.point_type = ConvergencePointType::Fork;
+        spec.classification.substrate = SubstrateType::Storage;
+        spec.classification.calm = CalmClassification::NonMonotone;
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "point-type-Fork"),
+            Ok(true),
+            "fine `point-type-Fork` must be true when the classification declares Fork",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "substrate-Storage"),
+            Ok(true),
+            "fine `substrate-Storage` must be true when the classification declares Storage",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "calm-NonMonotone"),
+            Ok(true),
+            "fine `calm-NonMonotone` must be true when the classification declares NonMonotone",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "point-type-Gate"),
+            Ok(false),
+            "off-diagonal `point-type-Gate` must be false: the classification declares Fork",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "substrate-Compute"),
+            Ok(false),
+            "off-diagonal `substrate-Compute` must be false: the classification declares Storage",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "calm-Monotone"),
+            Ok(false),
+            "off-diagonal `calm-Monotone` must be false: the classification declares NonMonotone",
         );
     }
 

@@ -262,6 +262,112 @@ impl Classification {
     pub fn has_substrate(&self, kind: SubstrateType) -> bool {
         self.substrate == kind
     }
+
+    /// Closed-set-driven presence probe — does this [`Classification`]
+    /// carry the given [`CalmClassification`] discriminator on its
+    /// [`Self::calm`] slot? The ONE substrate primitive that owns the
+    /// `(Classification, CalmClassification) -> bool` scalar-carrier
+    /// walk shape.
+    ///
+    /// # Fifth scalar-carrier peer on the presence-probe axis
+    ///
+    /// Peer of [`crate::spec::SignalPolicy::has_sighup_strategy`],
+    /// [`crate::encapsulates::EncapsulatesSpec::has_mode`],
+    /// [`Self::has_point_type`], and [`Self::has_substrate`] — all
+    /// five probe a scalar closed-set-discriminator field on an inner
+    /// [`crate::crd::ProcessSpec`] struct via a one-line
+    /// `self.<field> == kind` body. Together they compose the
+    /// SCALAR-CARRIER stratum of the workspace-wide closed-set-driven
+    /// presence-probe algebra (the workspace-wide algebra spans three
+    /// underlying representation kinds — Option-slot, slice, scalar
+    /// — see the [`crate::spec::SignalPolicy::has_sighup_strategy`]
+    /// docstring for the full-shape rundown; this method is the
+    /// fifth scalar-carrier instance).
+    ///
+    /// # Semantics — VARIANT match, not POPULATED slot
+    ///
+    /// `has_calm(kind)` returns `true` iff `self.calm == kind`. FIRST
+    /// occupant on a FRESH corner of the (parent-shape × child-shape)
+    /// axis: a REQUIRED, non-Option, NON-DEFAULT parent
+    /// ([`Classification`] has no `impl Default` because its two
+    /// required axes `point_type`/`substrate` carry no default)
+    /// combined with a DEFAULTED scalar child
+    /// ([`CalmClassification`] defaults to
+    /// [`CalmClassification::Monotone`] via `#[default]`). Distinct
+    /// from every prior scalar-carrier peer on the (parent-shape ×
+    /// child-shape) axis:
+    ///
+    /// * [`crate::spec::SignalPolicy::has_sighup_strategy`] lives on
+    ///   a non-Option, DEFAULTED parent
+    ///   ([`crate::spec::SignalPolicy`] carries `#[derive(Default)]`)
+    ///   with a defaulted scalar child
+    ///   ([`crate::signal::SighupStrategy`] defaults to
+    ///   [`crate::signal::SighupStrategy::Reconverge`]) — a bare
+    ///   `SignalPolicy` reads `true` on the default variant only.
+    /// * [`crate::encapsulates::EncapsulatesSpec::has_mode`] lives on
+    ///   an OPTION parent (`spec.encapsulates:
+    ///   Option<EncapsulatesSpec>`) with a defaulted scalar child
+    ///   ([`crate::encapsulates::EncapsulationMode`] defaults to
+    ///   [`crate::encapsulates::EncapsulationMode::Manage`]) — a
+    ///   bare `None` parent reads `false` for every variant.
+    /// * [`Self::has_point_type`] + [`Self::has_substrate`] both live
+    ///   on the REQUIRED, non-Option, NON-DEFAULT [`Classification`]
+    ///   parent with a NON-DEFAULT scalar child — every well-formed
+    ///   [`crate::crd::ProcessSpec`] carries a `Classification` whose
+    ///   corresponding slot was deliberately chosen by the operator,
+    ///   so exactly ONE of the eight variants answers `true` per
+    ///   spec.
+    /// * `has_calm` lives on the REQUIRED, non-Option, NON-DEFAULT
+    ///   [`Classification`] parent with a DEFAULTED scalar child
+    ///   ([`CalmClassification::Monotone`] is the [`Default`] via
+    ///   `#[default]`) — a bare `Classification` filled via
+    ///   `..Default::default()` on the defaulted axes reads `true`
+    ///   for the default variant ([`CalmClassification::Monotone`])
+    ///   and `false` for every other. Exactly ONE of the two variants
+    ///   answers `true` per spec, and the default-arm short-circuit
+    ///   is present (the operator can DECLINE to name the CALM axis
+    ///   and the spec still answers `true` on the default variant).
+    ///
+    /// This OPENS the (required-parent × defaulted-scalar-child)
+    /// corner of the workspace-wide closed-set-driven presence-probe
+    /// algebra at its first substrate primitive — a corner distinct
+    /// from all four prior scalar-carrier peers (which sit on the
+    /// three prior corners: defaulted-parent × defaulted-child,
+    /// Option-parent × defaulted-child, required-parent ×
+    /// required-child).
+    ///
+    /// # Compounding
+    ///
+    /// A future closed-set-discriminator scalar field on
+    /// [`Classification`] whose child carries `#[derive(Default)]`
+    /// (a peer `has_data_classification` on [`DataClassification`],
+    /// whose default is [`DataClassification::Internal`] via
+    /// `#[default]` — the remaining classification-axis closed set
+    /// on a defaulted-scalar-child slot) lands as ONE peer inherent
+    /// method with the same one-line `self.<field> == kind` body and
+    /// routes through the same `strip_and_classify_prefixed_kind::<K,
+    /// _>` shape in `tatara-check`. A future [`CalmClassification`]
+    /// variant (a hypothetical `ConditionallyMonotone` for ops that
+    /// are monotone under a witness, like CRDT joins under a fixed
+    /// schema) reaches every downstream through ONE `ALL` entry on
+    /// the closed set with the probe body untouched.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the scalar-carrier presence-probe body
+    /// lives at ONE substrate site so every downstream
+    /// (`calm-<kind>` require-tag family in `tatara-check`,
+    /// closed-set audit dispatchers, future variant additions on
+    /// [`CalmClassification`]) binds through the SAME shape rather
+    /// than restating the `classification.calm == kind` closure body
+    /// at each callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future [`CalmClassification`] variant lands at
+    /// ONE `ALL` entry + ONE `as_str` arm on the closed set and the
+    /// probe picks it up mechanically without further per-consumer
+    /// edits.
+    #[must_use]
+    pub fn has_calm(&self, kind: CalmClassification) -> bool {
+        self.calm == kind
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -3035,5 +3141,136 @@ mod tests {
         // implementation reading the WRONG required field would flip
         // both diagonal answers off. The four asserts above pin the
         // independence at ONE narrow site.
+    }
+
+    // ── scalar-carrier presence probe on Classification × CalmClassification ──
+    //
+    // Fail-before-pass-after granularity: [`Classification::has_calm`]
+    // did not exist before this commit — every consumer of the
+    // `(Classification, CalmClassification) -> bool` scalar-carrier
+    // probe shape restated the `classification.calm == kind` equality
+    // body at its own callsite. Post-lift the shape lives at ONE
+    // substrate owner and every downstream (the `calm-<kind>`
+    // require-tag family in `tatara-check`, future audit dispatchers
+    // walking [`CalmClassification::ALL`], any future CRD-facing
+    // closed-set discriminator on a defaulted scalar `ProcessSpec`
+    // field such as `has_data_classification`) binds through the SAME
+    // `has(kind)` shape the Option-slot (`Intent::has`, `Lifetime::has`),
+    // slice-level (`ConditionSliceExt::has_kind`,
+    // `DependsOnSliceExt::has_must_reach`,
+    // `ComplianceBindingSliceExt::has_verification_phase`,
+    // `ExportSpecSliceExt::has_{when,channel_kind,report_format,artifact_kind}`),
+    // and prior scalar-carrier
+    // (`SignalPolicy::has_sighup_strategy`,
+    // `EncapsulatesSpec::has_mode`, `Classification::has_point_type`,
+    // `Classification::has_substrate`) peers publish. FIRST occupant
+    // on the (required-parent × defaulted-scalar-child) corner of the
+    // presence-probe algebra — a fresh corner distinct from all four
+    // prior scalar-carrier peers.
+
+    /// DIAGONAL — for every [`CalmClassification`] variant, a
+    /// [`Classification`] whose `calm` field is set to that variant
+    /// returns `true` from `has_calm` on that same variant AND
+    /// `false` on every other variant. Sweep the
+    /// [`CalmClassification::ALL`] × ALL cross so a regression that
+    /// hard-coded the arm to a single variant (silently returning
+    /// `true` on every populated classification regardless of query
+    /// kind) or wired the equality to a fixed unrelated field (a
+    /// stray probe on `classification.point_type` or
+    /// `classification.substrate`) fails HERE at the substrate
+    /// primitive before landing at the operator-facing checks.lisp
+    /// surface.
+    #[test]
+    fn classification_has_calm_returns_true_iff_variant_matches() {
+        for populated in CalmClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: populated,
+                data_classification: DataClassification::default(),
+            };
+            for query in CalmClassification::ALL {
+                assert_eq!(
+                    c.has_calm(query),
+                    query == populated,
+                    "calm={populated:?}: query {query:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `calm: CalmClassification::default()` which is
+    /// [`CalmClassification::Monotone`] via `#[default]`, so
+    /// `has_calm` returns `true` on [`CalmClassification::Monotone`]
+    /// and `false` on [`CalmClassification::NonMonotone`]. Pins the
+    /// composition of the substrate's baseline-constructor primitive
+    /// with the FIFTH scalar-carrier presence probe AND the sibling-
+    /// default correspondence documented on [`Classification::gate_compute`]
+    /// (which pins the three defaulted axes to the sibling closed-set
+    /// defaults `HorizonKind::Bounded` / `CalmClassification::Monotone`
+    /// / `DataClassification::Internal`) — a regression that flipped
+    /// `gate_compute().calm` off `Monotone` (or promoted a different
+    /// variant to `#[default]` on the closed set, or wired `has_calm`
+    /// to a fixed variant answer, or crossed the wires to
+    /// `point_type` / `substrate`) fails here at ONE narrow site
+    /// before drifting across every unadorned ephemeral env
+    /// (`default_ephemeral_class`) and every downstream test fixture
+    /// that keys assertions on the shape. FIRST occupant on the
+    /// (required-parent × defaulted-scalar-child) corner — locks the
+    /// corner's characteristic "default-arm short-circuit" property
+    /// at ONE narrow classifier site: a bare classification answers
+    /// `true` on the default variant (distinct from the
+    /// required-child corner peers, where a bare classification must
+    /// name a variant deliberately to answer `true`).
+    #[test]
+    fn classification_gate_compute_has_calm_monotone_only() {
+        let c = Classification::gate_compute();
+        for kind in CalmClassification::ALL {
+            let expected = kind == CalmClassification::Monotone;
+            assert_eq!(
+                c.has_calm(kind),
+                expected,
+                "gate_compute (calm=Monotone) must return {expected} for {kind:?}",
+            );
+        }
+    }
+
+    /// THREE-AXIS INDEPENDENCE — the three co-tenants on the
+    /// [`Classification`] parent
+    /// ([`Classification::has_point_type`] +
+    /// [`Classification::has_substrate`] on the (required-parent ×
+    /// required-scalar-child) corner AND [`Classification::has_calm`]
+    /// on the fresh (required-parent × defaulted-scalar-child)
+    /// corner) probe distinct scalar slots on the SAME parent, so a
+    /// carrier with `point_type: Fork` AND `substrate: Storage` AND
+    /// `calm: NonMonotone` answers `true` on all three fine tags
+    /// simultaneously and `false` on every off-diagonal probe of any
+    /// axis. Pins the three probes' independence at ONE narrow site
+    /// — a regression that collapsed any of the three onto another's
+    /// field (a stray probe of `has_calm` reading `self.point_type`
+    /// or `self.substrate`, or of either required-axis probe reading
+    /// `self.calm`) would fail HERE before landing at any consumer.
+    /// The audit `every Fork-topology Storage-plane NonMonotone-CALM
+    /// point declares a Raft-guarded write path` composes this exact
+    /// three-axis conjunction on the required + defaulted scalars of
+    /// the six-axis classification lattice.
+    #[test]
+    fn classification_has_point_type_and_has_substrate_and_has_calm_are_independent() {
+        let c = Classification {
+            point_type: ConvergencePointType::Fork,
+            substrate: SubstrateType::Storage,
+            horizon: Horizon::default(),
+            calm: CalmClassification::NonMonotone,
+            data_classification: DataClassification::default(),
+        };
+        assert!(c.has_point_type(ConvergencePointType::Fork));
+        assert!(c.has_substrate(SubstrateType::Storage));
+        assert!(c.has_calm(CalmClassification::NonMonotone));
+        assert!(!c.has_point_type(ConvergencePointType::Gate));
+        assert!(!c.has_substrate(SubstrateType::Compute));
+        assert!(!c.has_calm(CalmClassification::Monotone));
     }
 }

@@ -101,6 +101,86 @@ impl Classification {
             data_classification: DataClassification::default(),
         }
     }
+
+    /// Closed-set-driven presence probe — does this [`Classification`]
+    /// carry the given [`ConvergencePointType`] discriminator on its
+    /// [`Self::point_type`] slot? The ONE substrate primitive that owns
+    /// the `(Classification, ConvergencePointType) -> bool`
+    /// scalar-carrier walk shape.
+    ///
+    /// # Third scalar-carrier peer on the presence-probe axis
+    ///
+    /// Peer of [`crate::spec::SignalPolicy::has_sighup_strategy`] and
+    /// [`crate::encapsulates::EncapsulatesSpec::has_mode`] — all three
+    /// probe a scalar closed-set-discriminator field on an inner
+    /// [`crate::crd::ProcessSpec`] struct via a one-line
+    /// `self.<field> == kind` body. Together they compose the
+    /// SCALAR-CARRIER stratum of the workspace-wide closed-set-driven
+    /// presence-probe algebra (the workspace-wide algebra spans three
+    /// underlying representation kinds — Option-slot, slice, scalar —
+    /// see the [`crate::spec::SignalPolicy::has_sighup_strategy`]
+    /// docstring for the full-shape rundown; this method is the third
+    /// scalar-carrier instance).
+    ///
+    /// # Semantics — VARIANT match, not POPULATED slot
+    ///
+    /// `has_point_type(kind)` returns `true` iff `self.point_type ==
+    /// kind`. Distinct from BOTH prior scalar-carrier peers on the
+    /// (parent-shape × child-shape) axis:
+    ///
+    /// * [`crate::spec::SignalPolicy::has_sighup_strategy`] lives on a
+    ///   non-Option, DEFAULTED parent (`SignalPolicy: Default`) with a
+    ///   defaulted scalar child (`SighupStrategy: Default =
+    ///   Reconverge`) — a default carrier reads `true` for the default
+    ///   variant only.
+    /// * [`crate::encapsulates::EncapsulatesSpec::has_mode`] lives on
+    ///   an OPTION parent (`spec.encapsulates:
+    ///   Option<EncapsulatesSpec>`) with a defaulted scalar child
+    ///   (`EncapsulationMode: Default = Manage`) — a bare `None`
+    ///   parent reads `false` for every variant.
+    /// * `has_point_type` lives on a REQUIRED, non-Option, NON-DEFAULT
+    ///   parent ([`Classification`] has no `impl Default`) with a
+    ///   NON-DEFAULT scalar child ([`ConvergencePointType`] has no
+    ///   `impl Default`) — every well-formed [`crate::crd::ProcessSpec`]
+    ///   carries a `Classification` whose `point_type` slot is
+    ///   deliberately chosen by the operator, so the probe returns
+    ///   `true` on exactly ONE variant per spec and `false` on the
+    ///   other seven, with no default-arm short-circuit shortcut.
+    ///
+    /// This closes the (required-parent × required-scalar-child) corner
+    /// of the workspace-wide closed-set-driven presence-probe algebra
+    /// at its first substrate primitive.
+    ///
+    /// # Compounding
+    ///
+    /// A future closed-set-discriminator scalar field on
+    /// [`Classification`] (a peer `has_substrate`, `has_calm`,
+    /// `has_data_classification` — the four remaining
+    /// classification-axis closed sets) lands as ONE peer inherent
+    /// method with the same one-line `self.<field> == kind` body and
+    /// routes through the same `strip_and_classify_prefixed_kind::<K,
+    /// _>` shape in `tatara-check`. A future
+    /// [`ConvergencePointType`] variant (a hypothetical `Demux` /
+    /// `Mux` / `Pipeline` for finer topology carving) reaches every
+    /// downstream through ONE `ALL` entry on the closed set with the
+    /// probe body untouched.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the scalar-carrier presence-probe body lives at ONE
+    /// substrate site so every downstream (`point-type-<kind>`
+    /// require-tag family in `tatara-check`, closed-set audit
+    /// dispatchers, future variant additions on
+    /// [`ConvergencePointType`]) binds through the SAME shape rather
+    /// than restating the `classification.point_type == kind` closure
+    /// body at each callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future [`ConvergencePointType`] variant lands at
+    /// ONE `ALL` entry + ONE `as_str` arm on the closed set and the
+    /// probe picks it up mechanically without further per-consumer
+    /// edits.
+    #[must_use]
+    pub fn has_point_type(&self, kind: ConvergencePointType) -> bool {
+        self.point_type == kind
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -2678,5 +2758,81 @@ mod tests {
         assert!(asymp.metric.is_some());
         assert!(asymp.direction.is_some());
         assert!(asymp.healthy_rate_threshold.is_some());
+    }
+
+    // ── scalar-carrier presence probe on Classification × ConvergencePointType ──
+    //
+    // Fail-before-pass-after granularity: [`Classification::has_point_type`]
+    // did not exist before this commit — every consumer of the
+    // `(Classification, ConvergencePointType) -> bool` scalar-carrier
+    // probe shape restated the `classification.point_type == kind`
+    // equality body at its own callsite. Post-lift the shape lives at
+    // ONE substrate owner and every downstream (the `point-type-<kind>`
+    // require-tag family in `tatara-check`, future audit dispatchers
+    // walking [`ConvergencePointType::ALL`], any future CRD-facing
+    // closed-set discriminator on a required scalar `ProcessSpec` field
+    // such as `has_substrate`/`has_calm`/`has_data_classification`)
+    // binds through the SAME `has(kind)` shape the Option-slot
+    // (`Intent::has`, `Lifetime::has`), slice-level
+    // (`ConditionSliceExt::has_kind`, `DependsOnSliceExt::has_must_reach`,
+    // `ComplianceBindingSliceExt::has_verification_phase`,
+    // `ExportSpecSliceExt::has_{when,channel_kind,report_format,artifact_kind}`),
+    // and prior scalar-carrier
+    // (`SignalPolicy::has_sighup_strategy`,
+    // `EncapsulatesSpec::has_mode`) peers publish.
+
+    /// DIAGONAL — for every [`ConvergencePointType`] variant, a
+    /// [`Classification`] whose `point_type` field is set to that
+    /// variant returns `true` from `has_point_type` on that same
+    /// variant AND `false` on every other variant. Sweep the
+    /// [`ConvergencePointType::ALL`] × ALL cross so a regression that
+    /// hard-coded the arm to a single variant (silently returning
+    /// `true` on every populated classification regardless of query
+    /// kind) or wired the equality to a fixed unrelated field fails
+    /// HERE at the substrate primitive before landing at the
+    /// operator-facing checks.lisp surface.
+    #[test]
+    fn classification_has_point_type_returns_true_iff_variant_matches() {
+        for populated in ConvergencePointType::ALL {
+            let c = Classification {
+                point_type: populated,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            for query in ConvergencePointType::ALL {
+                assert_eq!(
+                    c.has_point_type(query),
+                    query == populated,
+                    "point_type={populated:?}: query {query:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `point_type: Gate`, so `has_point_type` returns `true` on
+    /// [`ConvergencePointType::Gate`] and `false` on every other of
+    /// the eight variants. Pins the composition of the substrate's
+    /// baseline-constructor primitive with the scalar-carrier
+    /// presence probe — a regression that flipped
+    /// `gate_compute().point_type` off `Gate` (or wired
+    /// `has_point_type` to a fixed variant answer) fails here at ONE
+    /// narrow site before drifting across every unadorned ephemeral
+    /// env (`default_ephemeral_class`) and every downstream test
+    /// fixture that keys assertions on the shape.
+    #[test]
+    fn classification_gate_compute_has_point_type_gate_only() {
+        let c = Classification::gate_compute();
+        for kind in ConvergencePointType::ALL {
+            let expected = kind == ConvergencePointType::Gate;
+            assert_eq!(
+                c.has_point_type(kind),
+                expected,
+                "gate_compute (point_type=Gate) must return {expected} for {kind:?}",
+            );
+        }
     }
 }

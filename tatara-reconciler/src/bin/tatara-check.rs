@@ -12,6 +12,7 @@ use std::str::FromStr;
 
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
+use tatara_process::classification::ConvergencePointType;
 use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
 use tatara_process::encapsulates::EncapsulationMode;
 use tatara_process::export::{
@@ -529,7 +530,7 @@ struct UnknownRequireTag;
 ///
 /// # Vocabulary
 ///
-/// Eleven closed-set-driven prefix families dispatch through the
+/// Twelve closed-set-driven prefix families dispatch through the
 /// autoderived `FromStr` + the substrate presence probe on their
 /// respective parent:
 ///
@@ -745,6 +746,47 @@ struct UnknownRequireTag;
 ///   coarse `encapsulates` fixed tag (not present today; would pin
 ///   "does the spec wrap ANY pre-existing state" without touching the
 ///   mode axis); the two answers are distinct.
+/// - `point-type-<kind>` — [`ConvergencePointType`] closed set →
+///   [`tatara_process::classification::Classification::has_point_type`]
+///   (a scalar-carrier variant-equality probe on
+///   `spec.classification.point_type`, so the operator's `:requires
+///   (point-type-Gate)` pins that a Process names a `Gate` barrier
+///   point on the six-axis classification lattice, `:requires
+///   (point-type-Fork)` pins fan-out topology, `:requires
+///   (point-type-Join)` pins fan-in topology, and so on across the
+///   eight typed topology buckets. Twelfth closed-set-driven prefix
+///   family in the point-domain require-tag vocabulary and THIRD
+///   instance on the scalar-carrier axis of the presence-probe
+///   algebra (sibling to `sighup-<kind>` on
+///   [`tatara_process::spec::SignalPolicy::has_sighup_strategy`] and
+///   `encapsulation-mode-<kind>` on
+///   [`tatara_process::encapsulates::EncapsulatesSpec::has_mode`]).
+///   Distinct from BOTH prior scalar-carrier peers on the
+///   (parent-shape × child-shape) axis: `sighup-<kind>` lives on a
+///   defaulted non-Option parent with a defaulted scalar child so a
+///   substrate-default carrier reads `true` on the default variant;
+///   `encapsulation-mode-<kind>` lives on an Option parent with a
+///   defaulted scalar child so a bare `None` parent reads `false` on
+///   every variant. `point-type-<kind>` lives on a REQUIRED,
+///   non-Option, NON-DEFAULT parent
+///   ([`tatara_process::classification::Classification`] has no
+///   `impl Default` because its two required axes `point_type`
+///   /`substrate` carry no default) with a NON-DEFAULT scalar child
+///   ([`ConvergencePointType`] has no `impl Default`) — every
+///   well-formed [`tatara_process::crd::ProcessSpec`] carries a
+///   `Classification` whose `point_type` slot was deliberately chosen
+///   by the operator, so exactly ONE of the eight `point-type-<kind>`
+///   probes returns `true` and the other seven return `false`, with
+///   no default-arm short-circuit that the two prior scalar-carrier
+///   axes both publish. This closes the (required-parent ×
+///   required-scalar-child) corner of the workspace-wide presence-
+///   probe algebra at its first substrate primitive. Coexists with
+///   every prior family — a `point-type-Gate` conjunction with
+///   `sighup-Reconverge`, `encapsulation-mode-Manage`,
+///   `condition-KustomizationHealthy`, etc. reads directly at the
+///   checks.lisp surface as the four-way probe of the point's
+///   topology axis, signal axis, encapsulation axis, and boundary
+///   axis on ONE ProcessSpec.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -755,17 +797,21 @@ struct UnknownRequireTag;
 /// A future new `IntentKind` / `LifetimeKind` / `ConditionKind` /
 /// `MustReachPhase` / `SighupStrategy` / `VerificationPhase` /
 /// `ExportTrigger` / `ChannelKind` / `ReportFormat` / `ArtifactKind` /
-/// `EncapsulationMode` variant lands at ONE `ALL` entry on its
-/// parent's closed set — no per-caller edit here. A future new prefix
-/// family (e.g. `signal-<kind>` for
-/// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` for
-/// [`tatara_process::phase::ProcessPhase`], a hypothetical
-/// `routing-form-<kind>` for a closed-set discriminator on
-/// `spec.routing`) lands as ONE more
+/// `EncapsulationMode` / `ConvergencePointType` variant lands at ONE
+/// `ALL` entry on its parent's closed set — no per-caller edit here.
+/// A future new prefix family (e.g. `substrate-<kind>` for
+/// [`tatara_process::classification::SubstrateType`], `calm-<kind>`
+/// for [`tatara_process::classification::CalmClassification`],
+/// `data-classification-<kind>` for
+/// [`tatara_process::classification::DataClassification`], a
+/// `signal-<kind>` for [`tatara_process::signal::ProcessSignal`], a
+/// `phase-<kind>` for [`tatara_process::phase::ProcessPhase`], a
+/// hypothetical `routing-form-<kind>` for a closed-set discriminator
+/// on `spec.routing`) lands as ONE more
 /// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind,
 /// _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res; }`
 /// branch that reads the same three-step (strip_prefix + parse +
-/// has) shape all ten existing families publish.
+/// has) shape all twelve existing families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
@@ -804,7 +850,11 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_true_iff_encapsulation_mode_matches_variant_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_absent_encapsulates_for_every_mode`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_encapsulation_mode_suffix`],
-/// and [`tests::evaluate_point_require_tag_encapsulation_mode_and_sighup_scalar_carriers_coexist`].
+/// [`tests::evaluate_point_require_tag_encapsulation_mode_and_sighup_scalar_carriers_coexist`],
+/// [`tests::evaluate_point_require_tag_returns_true_iff_point_type_matches_variant_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_point_type_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_point_type_prefix`],
+/// and [`tests::evaluate_point_require_tag_point_type_coexists_with_prior_scalar_carriers`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -890,6 +940,13 @@ fn evaluate_point_require_tag(
     ) {
         return res;
     }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<ConvergencePointType, _>(tag, "point-type-", |kind| {
+            spec.classification.has_point_type(kind)
+        })
+    {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -903,7 +960,7 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the eleven closed-set-driven prefix families in
+/// shape the twelve closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
@@ -912,7 +969,8 @@ fn evaluate_point_require_tag(
 /// [`ExportTrigger`], `channel-<kind>` on [`ChannelKind`],
 /// `report-format-<kind>` on [`ReportFormat`], `artifact-<kind>` on
 /// [`ArtifactKind`], `encapsulation-mode-<kind>` on
-/// [`EncapsulationMode`]) each dispatch through past the ★★
+/// [`EncapsulationMode`], `point-type-<kind>` on
+/// [`ConvergencePointType`]) each dispatch through past the ★★
 /// PRIME-DIRECTIVE ≥ 2 duplication threshold.
 ///
 /// # Return shape
@@ -942,16 +1000,20 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future twelfth closed-set prefix family — `signal-<kind>` on
-/// [`tatara_process::signal::ProcessSignal`], `phase-<kind>` on
-/// [`tatara_process::phase::ProcessPhase`], a hypothetical
-/// `routing-form-<kind>` on `spec.routing.as_ref().map(|r| r.form)` —
-/// lands as ONE more `if let Some(res) =
-/// strip_and_classify_prefixed_kind::<NewKind, _>(tag, "prefix-", |k|
-/// spec.<field>.has(k)) { return res; }` branch that reads the same
-/// three-step shape the eleven existing families publish. No per-caller
-/// `strip_prefix + parse + match { Ok(_) => …, Err(_) =>
-/// Err(UnknownRequireTag) }` restatement.
+/// A future thirteenth closed-set prefix family — `substrate-<kind>`
+/// on [`tatara_process::classification::SubstrateType`], `calm-<kind>`
+/// on [`tatara_process::classification::CalmClassification`],
+/// `data-classification-<kind>` on
+/// [`tatara_process::classification::DataClassification`],
+/// `signal-<kind>` on [`tatara_process::signal::ProcessSignal`],
+/// `phase-<kind>` on [`tatara_process::phase::ProcessPhase`], a
+/// hypothetical `routing-form-<kind>` on
+/// `spec.routing.as_ref().map(|r| r.form)` — lands as ONE more
+/// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind,
+/// _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res; }` branch
+/// that reads the same three-step shape the twelve existing families
+/// publish. No per-caller `strip_prefix + parse + match { Ok(_) => …,
+/// Err(_) => Err(UnknownRequireTag) }` restatement.
 ///
 /// A future diagnostic shift (attaching the offending suffix to
 /// [`UnknownRequireTag`], promoting the sentinel to carry a
@@ -961,7 +1023,7 @@ fn evaluate_point_require_tag(
 /// construction.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// three-step chain now dispatches ELEVEN closed-set prefix families
+/// three-step chain now dispatches TWELVE closed-set prefix families
 /// past the ≥2 PRIME-DIRECTIVE trigger through ONE substrate owner.
 /// THEORY.md §II.1 invariant 2 — free middle; the caller composes the
 /// closed-set choice (via the generic `K`) and the presence probe
@@ -2051,6 +2113,7 @@ mod tests {
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
+    use tatara_process::classification::ConvergencePointType;
     use tatara_process::compliance::{ComplianceBinding, VerificationPhase};
     use tatara_process::crd::ProcessSpec;
     use tatara_process::encapsulates::{
@@ -4727,6 +4790,162 @@ mod tests {
             evaluate_point_require_tag(&spec, "encapsulation-mode-Observe"),
             Ok(false),
             "off-diagonal `encapsulation-mode-Observe` must be false: the spec declares Adopt",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "encapsulation-mode-Manage"),
+            Ok(false),
+            "off-diagonal `encapsulation-mode-Manage` must be false: the spec declares Adopt",
+        );
+    }
+
+    // ── evaluate_point_require_tag / point-type-<kind> substrate pins ──
+    //
+    // Fail-before-pass-after granularity: the `point-type-<kind>` prefix
+    // family did not exist before this commit — a `:requires
+    // (point-type-Gate)` entry at the checks.lisp surface classified as
+    // `UnknownRequireTag`. Post-lift the twelve closed-set-driven prefix
+    // families in `evaluate_point_require_tag` include the classification-
+    // axis scalar-carrier probe on `spec.classification.point_type`, so a
+    // regression that (a) dropped the arm, (b) wired the closure to a
+    // fixed unrelated field (a stray probe on `spec.classification
+    // .substrate` or `spec.intent`), or (c) misspelled the prefix key
+    // fails HERE at ONE narrow classifier site before propagating to
+    // the operator-facing checks.lisp surface.
+
+    /// POPULATED-slot pin — `point-type-<kind>` dispatches through the
+    /// autoderived [`ConvergencePointType`] `FromStr` + the substrate
+    /// [`tatara_process::classification::Classification::has_point_type`]
+    /// primitive, returning `true` only when
+    /// `spec.classification.point_type` matches the queried variant.
+    /// Sweep the [`ConvergencePointType::ALL`] × ALL cross so a
+    /// regression that hard-coded the arm to a single variant, or wired
+    /// the closure to a fixed unrelated field (a stray probe on
+    /// `spec.classification.substrate` or `spec.intent`) fails HERE at
+    /// the classifier before landing at the operator-facing checks.lisp
+    /// surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_point_type_matches_variant_per_kind() {
+        for populated in ConvergencePointType::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.point_type = populated;
+            for query in ConvergencePointType::ALL {
+                let tag = format!("point-type-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "point_type={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `point-type-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`ConvergencePointType`] labels are
+    /// the PascalCase wire-format keys (`Transform`, `Fork`, `Join`,
+    /// `Gate`, `Select`, `Broadcast`, `Reduce`, `Observe`) — matching
+    /// the serde `rename_all = "PascalCase"` external-tag form on the
+    /// wire verbatim — so lowercased / all-caps / typo spellings are
+    /// UNKNOWN suffixes. Pin the case-sensitivity axis so a regression
+    /// that ASCIIfolded or lowercased on parse would fail HERE. The
+    /// empty-suffix boundary is pinned by the shared substrate
+    /// primitive's
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_point_type_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for garbage in [
+            "point-type-gate",
+            "point-type-FORK",
+            "point-type-Joined",
+            "point-type-Sink",
+            "point-type-Bogus",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at `point-type-`
+    /// classifies as [`UnknownRequireTag`], mirroring every prior
+    /// closed-set prefix family. The empty suffix hits the substrate
+    /// primitive's canonical empty-string arm rather than short-
+    /// circuiting to `Ok(true)` on any populated `point_type` slot.
+    /// Locks the empty-suffix ↔ unknown-suffix correspondence at ONE
+    /// narrow classifier site for the twelfth family so a regression
+    /// that special-cased the bare prefix (treating it as "any
+    /// point-type populated") would fail HERE. Byte-symmetric with
+    /// the peer `evaluate_point_require_tag_returns_unknown_on_bare_lifetime_prefix`
+    /// pin on the second family.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_point_type_prefix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "point-type-"),
+            Err(UnknownRequireTag),
+            "bare `point-type-` must classify as UnknownRequireTag",
+        );
+    }
+
+    /// SCALAR-CARRIER THREE-WAY COEXISTENCE pin — a Process with
+    /// `spec.classification.point_type = Fork`, `spec.signals
+    /// .sighup_strategy = Restart`, AND
+    /// `spec.encapsulates = Some({ mode: Adopt, … })` MUST satisfy the
+    /// three fine scalar-carrier tags (`point-type-Fork` from the
+    /// twelfth family, `sighup-Restart` from the fifth,
+    /// `encapsulation-mode-Adopt` from the eleventh) simultaneously
+    /// AND fail each off-diagonal probe (`point-type-Gate`,
+    /// `sighup-Reconverge`, `encapsulation-mode-Manage`). Locks the
+    /// THIRD scalar-carrier peer's independence from the FIRST + SECOND
+    /// at ONE narrow site — the three peers walk THREE distinct parent
+    /// shapes ([`tatara_process::classification::Classification`]
+    /// required non-Option non-Default vs
+    /// [`tatara_process::spec::SignalPolicy`] non-Option Default vs
+    /// [`tatara_process::encapsulates::EncapsulatesSpec`] Option
+    /// Default), so a regression that collapsed any of the three onto
+    /// another's field (a stray probe of `point-type-<kind>` against
+    /// `spec.intent`, of `sighup-<kind>` against `spec.classification`,
+    /// or of `encapsulation-mode-<kind>` against `spec.signals`) would
+    /// fail HERE. The audit `every Fork-topology Adopt-mode Process
+    /// handles SIGHUP by Restart` reads as this exact three-way
+    /// conjunction at the checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_point_type_coexists_with_prior_scalar_carriers() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.classification.point_type = ConvergencePointType::Fork;
+        spec.signals.sighup_strategy = SighupStrategy::Restart;
+        spec.encapsulates = Some(encapsulates_with_mode(EncapsulationMode::Adopt));
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "point-type-Fork"),
+            Ok(true),
+            "fine `point-type-Fork` must be true when the classification declares Fork",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-Restart"),
+            Ok(true),
+            "fine `sighup-Restart` must be true when the policy declares Restart",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "encapsulation-mode-Adopt"),
+            Ok(true),
+            "fine `encapsulation-mode-Adopt` must be true when the spec declares Adopt",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "point-type-Gate"),
+            Ok(false),
+            "off-diagonal `point-type-Gate` must be false: the classification declares Fork",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-Reconverge"),
+            Ok(false),
+            "off-diagonal `sighup-Reconverge` must be false: the policy declares Restart",
         );
         assert_eq!(
             evaluate_point_require_tag(&spec, "encapsulation-mode-Manage"),

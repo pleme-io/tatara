@@ -574,6 +574,80 @@ impl EphemeralLifetime {
     ) -> impl Iterator<Item = &ExportSpec> + '_ {
         self.exports.iter().filter(move |e| e.when.fires_on(phase))
     }
+
+    /// Scalar-carrier presence probe on the defaulted `teardown_policy`
+    /// slot — `true` iff this ephemeral lifetime carries the queried
+    /// [`TeardownPolicy`] variant. The one-line collapse of the
+    /// `<eph>.teardown_policy == kind` closure body lifted to ONE
+    /// substrate owner past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// threshold — the eighteenth closed-set-driven prefix family in
+    /// [`tatara-check`]'s point-domain require-tag classifier
+    /// (`teardown-policy-<kind>`) is the first workspace-wide consumer,
+    /// but the shape is a peer of [`crate::spec::SignalPolicy::has_sighup_strategy`]
+    /// on the SAME `(defaulted-scalar-field, closed-set-discriminator) → bool`
+    /// axis with the parent reached through the compound
+    /// [`Lifetime::resolved_ephemeral`] Option-hop.
+    ///
+    /// # Sibling scalar-carrier probes
+    ///
+    /// * [`crate::spec::SignalPolicy::has_sighup_strategy`] — required
+    ///   parent × defaulted scalar child (`SignalPolicy` is always
+    ///   present on `ProcessSpec`; `sighup_strategy` defaults to
+    ///   `SighupStrategy::Reconverge`).
+    /// * [`crate::classification::Classification::has_calm`] and
+    ///   [`crate::classification::Classification::has_data_classification`]
+    ///   — required parent × defaulted scalar child on the six-axis
+    ///   classification lattice.
+    /// * THIS — Option parent (`resolved_ephemeral()` may return `None`
+    ///   on a `Permanent` lifetime or an ambiguous `Lifetime`) ×
+    ///   defaulted scalar child ([`TeardownPolicy`] defaults to
+    ///   `Always`). Opens the (Option-parent × defaulted-scalar-child)
+    ///   corner of the presence-probe algebra, distinct from the
+    ///   (Option-parent × slice-child) corner already populated by
+    ///   [`crate::export::ExportSpecSliceExt::has_when`] and its three
+    ///   slice-level siblings on the SAME `Vec<ExportSpec>` slot.
+    ///
+    /// # Semantics — VARIANT match, not POPULATED slot
+    ///
+    /// `has_teardown_policy(kind)` returns `true` iff
+    /// `self.teardown_policy == kind`. On an
+    /// [`EphemeralLifetime::default`]
+    /// (`teardown_policy: TeardownPolicy::default() = Always`) the
+    /// probe returns `true` for [`TeardownPolicy::Always`] and `false`
+    /// for every other variant — distinct from the Option-slot axis
+    /// where a default carrier returns `false` for EVERY kind. An
+    /// operator who left `:lifetime :ephemeral :teardown-policy` at
+    /// the substrate default IS configured for `Always`, and a
+    /// `:requires (teardown-policy-Always)` check should pass; only an
+    /// operator who deliberately overrode the policy to `OnAttested` /
+    /// `OnFailed` / `Never` fails the tag on this axis.
+    ///
+    /// # Compounding
+    ///
+    /// A future fifth [`TeardownPolicy`] variant added to `ALL` (a
+    /// hypothetical `OnTimeout` for "tear down only on TTL expiry",
+    /// pre-flagged on the closed set's `ALL` docstring) reaches this
+    /// probe through ONE `ALL` entry + one `as_str` arm + one
+    /// `should_teardown_on` arm alone, no per-caller edit at the
+    /// `teardown-policy-<kind>` require-tag classifier and no per-
+    /// consumer restatement of the `self.teardown_policy == kind`
+    /// closure body.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the scalar-carrier presence-probe body lives
+    /// at ONE substrate site so every downstream (`teardown-policy-<kind>`
+    /// require-tag family in tatara-check, closed-set audit
+    /// dispatchers, future variant additions on [`TeardownPolicy`])
+    /// binds through the SAME `has(kind)` shape rather than restating
+    /// the `<eph>.teardown_policy == kind` closure body at each call
+    /// site. THEORY.md §VI.1 — generation over composition; a future
+    /// variant lands at ONE `ALL` entry + one `as_str` arm on the
+    /// closed set and the probe picks it up mechanically without
+    /// further per-consumer edits.
+    #[must_use]
+    pub fn has_teardown_policy(&self, kind: TeardownPolicy) -> bool {
+        self.teardown_policy == kind
+    }
 }
 
 impl Default for EphemeralLifetime {
@@ -999,6 +1073,74 @@ mod tests {
                 policy.should_teardown_on_failed(),
                 policy.should_teardown_on(ProcessPhase::Failed),
                 "Failed delegate drift for {policy:?}",
+            );
+        }
+    }
+
+    // ── scalar-carrier presence probe on EphemeralLifetime ×
+    //    TeardownPolicy ──
+    //
+    // Fail-before-pass-after granularity:
+    // [`EphemeralLifetime::has_teardown_policy`] did not exist before
+    // this commit — every consumer of the
+    // `(EphemeralLifetime, TeardownPolicy) -> bool` scalar-carrier
+    // probe shape restated the `<eph>.teardown_policy == kind` closure
+    // body at its own call site. Post-lift the shape lives at ONE
+    // substrate owner and every downstream (the `teardown-policy-<kind>`
+    // require-tag family in `tatara-check`, future audit dispatchers
+    // walking [`TeardownPolicy::ALL`], any future CRD-facing closed-set
+    // discriminator on a defaulted-scalar `EphemeralLifetime` field)
+    // binds through the SAME `has(kind)` shape the Option-slot
+    // (`Intent::has`, `Lifetime::has`), slice-level
+    // (`ExportSpecSliceExt::has_when` + peers), and required-parent
+    // scalar-carrier (`SignalPolicy::has_sighup_strategy`) primitives
+    // publish.
+
+    /// DIAGONAL — for every [`TeardownPolicy`] variant, an
+    /// [`EphemeralLifetime`] whose `teardown_policy` field is set to
+    /// that variant returns `true` from `has_teardown_policy` on that
+    /// same variant AND `false` on every other variant. Sweep the
+    /// [`TeardownPolicy::ALL`] × ALL cross so a regression that
+    /// hard-coded the arm to a single variant (silently returning
+    /// `true` on every populated ephemeral regardless of query kind)
+    /// or wired the equality to a fixed unrelated field fails HERE at
+    /// the substrate primitive before landing at the operator-facing
+    /// checks.lisp surface.
+    #[test]
+    fn ephemeral_lifetime_has_teardown_policy_returns_true_iff_variant_matches() {
+        for populated in TeardownPolicy::ALL {
+            let eph = EphemeralLifetime {
+                teardown_policy: populated,
+                ..EphemeralLifetime::default()
+            };
+            for query in TeardownPolicy::ALL {
+                assert_eq!(
+                    eph.has_teardown_policy(query),
+                    query == populated,
+                    "teardown_policy={populated:?}: query {query:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// DEFAULT — an [`EphemeralLifetime::default`] carries
+    /// `teardown_policy: TeardownPolicy::default() = Always`, so the
+    /// scalar-carrier probe returns `true` on [`TeardownPolicy::Always`]
+    /// and `false` on every other variant. Distinct from the
+    /// Option-slot axis where a default carrier returns `false` for
+    /// EVERY kind — pins the scalar-vs-option semantic split at ONE
+    /// narrow substrate site so a regression that rewired the probe to
+    /// Option-slot semantics (returning `false` on the default) fails
+    /// here.
+    #[test]
+    fn ephemeral_lifetime_has_teardown_policy_default_probes_always_only() {
+        let eph = EphemeralLifetime::default();
+        for kind in TeardownPolicy::ALL {
+            let expected = kind == TeardownPolicy::Always;
+            assert_eq!(
+                eph.has_teardown_policy(kind),
+                expected,
+                "default ephemeral (teardown_policy=Always) must return {expected} for {kind:?}",
             );
         }
     }

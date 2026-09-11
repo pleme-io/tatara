@@ -22,7 +22,7 @@ use tatara_process::export::{
     ArtifactKind, ChannelKind, ExportSpecSliceExt, ExportTrigger, ReportFormat,
 };
 use tatara_process::intent::IntentKind;
-use tatara_process::lifetime::LifetimeKind;
+use tatara_process::lifetime::{LifetimeKind, TeardownPolicy};
 use tatara_process::signal::SighupStrategy;
 use tatara_process::spec::{DependsOnSliceExt, MustReachPhase};
 use tatara_reconciler::known_crd::KnownCrd;
@@ -1009,6 +1009,41 @@ struct UnknownRequireTag;
 ///   + TWO nested-struct-scalar classification axes on ONE
 ///   ProcessSpec — closing the SIX-axis corner-coverage contract
 ///   on the six-dimensional classification lattice.
+/// - `teardown-policy-<kind>` — [`TeardownPolicy`] closed set →
+///   [`tatara_process::lifetime::EphemeralLifetime::has_teardown_policy`]
+///   (a defaulted-scalar-carrier variant-equality probe on
+///   `spec.lifetime.resolved_ephemeral()
+///     .is_some_and(|e| e.teardown_policy == kind)`, so the operator's
+///   `:requires (teardown-policy-OnAttested)` pins that an ephemeral
+///   Process auto-terminates only on `Attested` (leave `Failed`
+///   Processes for forensic inspection), `:requires
+///   (teardown-policy-OnFailed)` pins the symmetric "leave `Attested`
+///   running until TTL / manual SIGTERM" posture, `:requires
+///   (teardown-policy-Never)` pins the TTL-only lifetime, and the
+///   reconciler's `lifetime_clock::evaluate` reads the SAME closed-set
+///   discriminator when firing `AutoTerminate::Now`. EIGHTEENTH
+///   closed-set-driven prefix family in the point-domain require-tag
+///   vocabulary and FIRST occupant on the (Option-parent ×
+///   defaulted-scalar-child) corner of the (parent-shape × child-
+///   shape) presence-probe algebra — distinct from every prior corner:
+///   the parent-shape half is Option-typed (`resolved_ephemeral()`
+///   returns `None` on a `Permanent` lifetime or an ambiguous
+///   `Lifetime`); the child-shape half is a defaulted scalar
+///   ([`TeardownPolicy::Always`] via `#[default]`). A `Permanent`
+///   lifetime short-circuits to `false` for EVERY kind (the Option-
+///   parent gate fires), while an [`EphemeralLifetime::default`] reads
+///   `true` on `teardown-policy-Always` and `false` on every other
+///   variant (the defaulted scalar child publishes the closed set's
+///   default). The dual short-circuit pins the (Option-parent ×
+///   defaulted-scalar-child) corner as a distinct primitive shape:
+///   the Option-parent arm silences EVERY kind, while the reachable-
+///   default-child arm honors the closed set's own `#[default]`.
+///   Coexists with every prior lifetime-adjacent family — a
+///   `teardown-policy-OnAttested` conjunction with `lifetime-ephemeral`
+///   (coarse `Lifetime` variant), `export-when-OnAttested` (slice-level
+///   sibling on the SAME resolved-ephemeral Option-parent), etc. reads
+///   directly at the checks.lisp surface as the three-axis probe of
+///   the point's ephemeral lifetime shape.
 ///
 /// Every other tag is a fixed match on a non-closed-set spec field —
 /// `depends-on`, `boundary-pre`, `boundary-post`, `compliance`,
@@ -1021,22 +1056,24 @@ struct UnknownRequireTag;
 /// `ExportTrigger` / `ChannelKind` / `ReportFormat` / `ArtifactKind` /
 /// `EncapsulationMode` / `ConvergencePointType` / `SubstrateType` /
 /// `CalmClassification` / `DataClassification` / `HorizonKind` /
-/// `OptimizationDirection` variant lands at ONE `ALL` entry on its
-/// parent's closed set — no per-caller edit here. A future new
-/// prefix family (e.g. a `signal-<kind>` for
-/// [`tatara_process::signal::ProcessSignal`], a `phase-<kind>` for
+/// `OptimizationDirection` / `TeardownPolicy` variant lands at ONE
+/// `ALL` entry on its parent's closed set — no per-caller edit here.
+/// A future new prefix family (e.g. a `phase-<kind>` for
 /// [`tatara_process::phase::ProcessPhase`], a hypothetical
 /// `routing-form-<kind>` for a closed-set discriminator on
-/// `spec.routing`, or another co-tenant on the (required-parent ×
-/// nested-struct-scalar-child) corner now doubly populated by
-/// `horizon-<kind>` + `optimization-direction-<kind>` — a peer probe
-/// on another nested-struct's scalar or Option-scalar discriminator
-/// like a hypothetical `has_backend_port_family` reaching through
-/// `spec.routing.as_ref().map(|r| &r.backend)`) lands as ONE more
-/// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind,
-/// _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res; }`
-/// branch that reads the same three-step (strip_prefix + parse +
-/// has) shape all seventeen existing families publish.
+/// `spec.routing`, a second co-tenant on the (Option-parent ×
+/// defaulted-scalar-child) corner now singly populated by
+/// `teardown-policy-<kind>` — say a hypothetical `max-concurrent-tier-
+/// <kind>` reaching through `spec.lifetime.resolved_ephemeral()
+///     .map(|e| tier_of(e.max_concurrent))`, or a peer probe on
+/// another Option-parent nested-scalar defaulted field — or another
+/// co-tenant on the (required-parent × nested-struct-scalar-child)
+/// corner doubly populated by `horizon-<kind>` +
+/// `optimization-direction-<kind>`) lands as ONE more `if let
+/// Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(tag,
+/// "prefix-", |k| spec.<field>.has(k)) { return res; }` branch that
+/// reads the same three-step (strip_prefix + parse + has) shape all
+/// eighteen existing families publish.
 ///
 /// Pinned by [`tests::evaluate_point_require_tag_returns_true_on_populated_lifetime_slot_per_kind`],
 /// [`tests::evaluate_point_require_tag_returns_false_on_default_lifetime_for_every_kind`],
@@ -1103,7 +1140,13 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_true_on_default_optimization_direction_for_minimize_only`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_optimization_direction_suffix`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_optimization_direction_prefix`],
-/// and [`tests::evaluate_point_require_tag_optimization_direction_coexists_with_prior_classification_axes`].
+/// [`tests::evaluate_point_require_tag_optimization_direction_coexists_with_prior_classification_axes`],
+/// [`tests::evaluate_point_require_tag_returns_true_on_populated_teardown_policy_slot_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_teardown_policy_kind`],
+/// [`tests::evaluate_point_require_tag_returns_true_on_default_ephemeral_teardown_policy_for_always_only`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_teardown_policy_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_teardown_policy_prefix`],
+/// and [`tests::evaluate_point_require_tag_teardown_policy_coexists_with_export_when_and_lifetime_ephemeral`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -1229,6 +1272,15 @@ fn evaluate_point_require_tag(
     ) {
         return res;
     }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<TeardownPolicy, _>(tag, "teardown-policy-", |kind| {
+            spec.lifetime
+                .resolved_ephemeral()
+                .is_some_and(|e| e.has_teardown_policy(kind))
+        })
+    {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -1242,7 +1294,7 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the seventeen closed-set-driven prefix families in
+/// shape the eighteen closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
@@ -1256,7 +1308,8 @@ fn evaluate_point_require_tag(
 /// [`SubstrateType`], `calm-<kind>` on [`CalmClassification`],
 /// `data-classification-<kind>` on [`DataClassification`],
 /// `horizon-<kind>` on [`HorizonKind`],
-/// `optimization-direction-<kind>` on [`OptimizationDirection`]) each
+/// `optimization-direction-<kind>` on [`OptimizationDirection`],
+/// `teardown-policy-<kind>` on [`TeardownPolicy`]) each
 /// dispatch through past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// threshold.
 ///
@@ -1287,23 +1340,25 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future eighteenth closed-set prefix family — a `signal-<kind>`
-/// on [`tatara_process::signal::ProcessSignal`], a `phase-<kind>`
+/// A future nineteenth closed-set prefix family — a `phase-<kind>`
 /// on [`tatara_process::phase::ProcessPhase`], a hypothetical
 /// `routing-form-<kind>` on `spec.routing.as_ref().map(|r| r.form)`,
-/// or a further co-tenant on the (required-parent × nested-struct-
-/// scalar-child) corner now doubly populated by `horizon-<kind>` +
-/// `optimization-direction-<kind>` (e.g. a third nested-struct
-/// intermediary threading a closed-set discriminator on some other
-/// `ProcessSpec` inner struct, or a peer Option-hop probe on a
-/// different nested-Option-scalar field like
-/// `spec.routing.as_ref().and_then(|r| r.backend.tls_issuer_family)`)
-/// — lands as ONE more
-/// `if let Some(res) = strip_and_classify_prefixed_kind::<NewKind,
-/// _>(tag, "prefix-", |k| spec.<field>.has(k)) { return res; }` branch
-/// that reads the same three-step shape the seventeen existing
-/// families publish. No per-caller `strip_prefix + parse + match {
-/// Ok(_) => …, Err(_) => Err(UnknownRequireTag) }` restatement.
+/// a second co-tenant on the (Option-parent × defaulted-scalar-child)
+/// corner now singly populated by `teardown-policy-<kind>` (e.g. a
+/// hypothetical `max-concurrent-tier-<kind>` reaching through
+/// `spec.lifetime.resolved_ephemeral().map(|e|
+/// tier_of(e.max_concurrent))`, or a peer probe on a different
+/// Option-parent nested defaulted-scalar field like
+/// `spec.encapsulates.as_ref().map(|e| e.mode)` if a defaulted-scalar
+/// mode axis is added there), or a further co-tenant on the
+/// (required-parent × nested-struct-scalar-child) corner doubly
+/// populated by `horizon-<kind>` + `optimization-direction-<kind>` —
+/// lands as ONE more `if let Some(res) =
+/// strip_and_classify_prefixed_kind::<NewKind, _>(tag, "prefix-", |k|
+/// spec.<field>.has(k)) { return res; }` branch that reads the same
+/// three-step shape the eighteen existing families publish. No
+/// per-caller `strip_prefix + parse + match { Ok(_) => …, Err(_) =>
+/// Err(UnknownRequireTag) }` restatement.
 ///
 /// A future diagnostic shift (attaching the offending suffix to
 /// [`UnknownRequireTag`], promoting the sentinel to carry a
@@ -1313,7 +1368,7 @@ fn evaluate_point_require_tag(
 /// construction.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// three-step chain now dispatches SEVENTEEN closed-set prefix
+/// three-step chain now dispatches EIGHTEEN closed-set prefix
 /// families past the ≥2 PRIME-DIRECTIVE trigger through ONE
 /// substrate owner. THEORY.md §II.1 invariant 2 — free middle; the
 /// caller composes the closed-set choice (via the generic `K`) and
@@ -6404,6 +6459,270 @@ mod tests {
             evaluate_point_require_tag(&spec, "optimization-direction-Minimize"),
             Ok(false),
             "off-diagonal `optimization-direction-Minimize` must be false: the classification declares Maximize",
+        );
+    }
+
+    // ── teardown-policy-<kind> prefix family (evaluate_point_require_tag) ─
+    //
+    // Fail-before-pass-after granularity: the `teardown-policy-<kind>`
+    // prefix family did not exist before this commit — the point-domain
+    // require-tag vocabulary carried the seventeen prior closed-set-
+    // driven families but had no way to distinguish which
+    // [`TeardownPolicy`] variant an ephemeral Process declares — the
+    // "SIGTERM on Attested only" posture (leave `Failed` for forensic
+    // inspection) vs the "SIGTERM on both" default vs the "TTL-only,
+    // never auto-SIGTERM" opt-out. The lift adds the EIGHTEENTH
+    // closed-set-driven prefix family symmetrical with the seventeen
+    // prior ones, routing through the newly-opened
+    // [`tatara_process::lifetime::EphemeralLifetime::has_teardown_policy`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`. FIRST
+    // occupant on the (Option-parent × defaulted-scalar-child) corner
+    // of the (parent-shape × child-shape) presence-probe algebra — the
+    // parent-shape half is Option-typed (`resolved_ephemeral()` returns
+    // `None` on a `Permanent` lifetime or an ambiguous `Lifetime`); the
+    // child-shape half is a defaulted scalar
+    // ([`TeardownPolicy::Always`] via `#[default]`), distinct from
+    // every prior corner. The dual short-circuit — Option-parent
+    // silences EVERY kind while the reachable-default-child arm honors
+    // the closed set's own `#[default]` — pins the corner as a
+    // proven-repeatable primitive shape rather than a single-example
+    // curiosity.
+
+    /// POPULATED-slot pin — `teardown-policy-<kind>` dispatches through
+    /// the autoderived [`TeardownPolicy`] `FromStr` + the substrate
+    /// [`tatara_process::lifetime::EphemeralLifetime::has_teardown_policy`]
+    /// primitive, returning `true` only when the resolved ephemeral
+    /// lifetime's `teardown_policy` field matches the queried variant.
+    /// Sweep the [`TeardownPolicy::ALL`] × ALL cross so a regression
+    /// that hard-coded the arm to a single variant (silently returning
+    /// `true` on every populated ephemeral regardless of query kind)
+    /// or wired the closure to a fixed unrelated field (a stray probe
+    /// on `ttl` / `max_concurrent` / `exports`) fails HERE at the
+    /// classifier before landing at the operator-facing checks.lisp
+    /// surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_populated_teardown_policy_slot_per_kind() {
+        for populated in TeardownPolicy::ALL {
+            let spec = ProcessSpec {
+                lifetime: Lifetime::ephemeral(EphemeralLifetime {
+                    teardown_policy: populated,
+                    ..EphemeralLifetime::default()
+                }),
+                ..ProcessSpec::gate_compute_defaults()
+            };
+            for query in TeardownPolicy::ALL {
+                let tag = format!("teardown-policy-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "teardown_policy={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// PERMANENT-lifetime pin — a default (`Permanent`) [`ProcessSpec`]
+    /// returns `false` for every `teardown-policy-<kind>` tag because
+    /// the `resolved_ephemeral` gate on the parent [`Lifetime`] short-
+    /// circuits the walk. Locks the Option-parent silencing contract
+    /// (`resolved_ephemeral().is_some_and(|e| e.has_teardown_policy(k))`)
+    /// so a regression that dropped the ephemeral gate (probing an
+    /// absent `teardown_policy` slot as if it were the closed set's
+    /// default) would return `true` on
+    /// `teardown-policy-Always` here for every Process — the two
+    /// corners (unreachable-parent vs reachable-default-child) both
+    /// answer `false` on non-Always kinds but through different arms
+    /// of the closed-set-driven projection, and the Always-arm splits
+    /// them: this pin returns `false` for EVERY kind including
+    /// `Always`, while the default-ephemeral pin below returns `true`
+    /// on `Always` alone. The pair pins the semantics from both sides.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_teardown_policy_kind(
+    ) {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in TeardownPolicy::ALL {
+            let tag = format!("teardown-policy-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "permanent lifetime must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// DEFAULT-ARM SHORT-CIRCUIT pin — a Process whose lifetime is
+    /// [`EphemeralLifetime::default`] (`teardown_policy:
+    /// TeardownPolicy::default() = Always`) answers `true` on
+    /// `teardown-policy-Always` and `false` on every other variant
+    /// WITHOUT the operator naming the teardown-policy axis in the
+    /// ephemeral spec. This is the characteristic behavior of the
+    /// (Option-parent × defaulted-scalar-child) corner reachable arm:
+    /// the resolved-ephemeral gate DOES fire (the parent projection
+    /// returns `Some(&EphemeralLifetime)`), the scalar comparison then
+    /// picks up the closed set's `#[default] Always`. Peer to
+    /// [`evaluate_point_require_tag_returns_true_on_default_calm_for_monotone_only`]
+    /// on the (required-parent × defaulted-scalar-child) corner —
+    /// this pin walks the same default-arm short-circuit shape
+    /// THROUGH the Option-parent hop. Locks the corner-property
+    /// contract at ONE narrow classifier site: a regression that
+    /// promoted [`TeardownPolicy::OnAttested`] to `#[default]` (or
+    /// wired the arm to a fixed variant answer, or dropped the direct
+    /// scalar comparison in favor of a `.map(...).unwrap_or(false)`
+    /// which would silently invert the corner's default-arm short-
+    /// circuit shape) would fail HERE before drifting through every
+    /// unadorned ephemeral Process's baseline teardown answer.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_default_ephemeral_teardown_policy_for_always_only(
+    ) {
+        let spec = ProcessSpec {
+            lifetime: Lifetime::ephemeral(EphemeralLifetime::default()),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        for kind in TeardownPolicy::ALL {
+            let tag = format!("teardown-policy-{}", kind.as_str());
+            let expected = kind == TeardownPolicy::Always;
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(expected),
+                "default ephemeral (teardown_policy=Always) baseline: tag {tag:?} must be {expected}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `teardown-policy-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`TeardownPolicy`] labels are the
+    /// PascalCase wire-format keys (`Always`, `OnAttested`,
+    /// `OnFailed`, `Never`) — matching the serde `rename_all =
+    /// "PascalCase"` external-tag form on the wire verbatim — so
+    /// lowercased / all-caps / typo spellings are UNKNOWN suffixes.
+    /// Pin the case-sensitivity axis so a regression that ASCIIfolded
+    /// or lowercased on parse would fail HERE. The empty-suffix
+    /// boundary is pinned by the shared substrate primitive's
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_teardown_policy_suffix() {
+        let spec = ProcessSpec {
+            lifetime: Lifetime::ephemeral(EphemeralLifetime::default()),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        for garbage in [
+            "teardown-policy-always",
+            "teardown-policy-ALWAYS",
+            "teardown-policy-onattested",
+            "teardown-policy-OnAtested",
+            "teardown-policy-Bogus",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at
+    /// `teardown-policy-` classifies as [`UnknownRequireTag`],
+    /// mirroring every prior closed-set prefix family. The empty
+    /// suffix hits the substrate primitive's canonical empty-string
+    /// arm rather than short-circuiting to `Ok(true)` on any populated
+    /// ephemeral (which would silently read as "any teardown-policy
+    /// axis present" for every ephemeral Process — every ephemeral
+    /// spec carries a defaulted teardown_policy, so the wrong short-
+    /// circuit here would return `Ok(true)` universally on every
+    /// ephemeral). Locks the empty-suffix ↔ unknown-suffix
+    /// correspondence at ONE narrow classifier site for the eighteenth
+    /// family so a regression that special-cased the bare prefix
+    /// (treating it as "any resolved-ephemeral") would fail HERE. On
+    /// the permanent-lifetime side the same bare prefix is ALSO
+    /// unknown — the substrate primitive rejects the empty suffix
+    /// before the ephemeral gate fires — pinning the (Option-parent ×
+    /// defaulted-scalar-child) corner's empty-suffix contract as
+    /// independent of the parent-arm branch.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_teardown_policy_prefix() {
+        let ephemeral_spec = ProcessSpec {
+            lifetime: Lifetime::ephemeral(EphemeralLifetime::default()),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        assert_eq!(
+            evaluate_point_require_tag(&ephemeral_spec, "teardown-policy-"),
+            Err(UnknownRequireTag),
+            "bare `teardown-policy-` must classify as UnknownRequireTag on an ephemeral spec",
+        );
+        let permanent_spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&permanent_spec, "teardown-policy-"),
+            Err(UnknownRequireTag),
+            "bare `teardown-policy-` must classify as UnknownRequireTag on a permanent spec",
+        );
+    }
+
+    /// COARSE / FINE / SIBLING COEXISTENCE pin — a Process with an
+    /// ephemeral lifetime whose `teardown_policy = OnAttested` AND at
+    /// least one export at `OnAttested` MUST satisfy the coarse
+    /// `lifetime-ephemeral` presence probe, the fine
+    /// `teardown-policy-OnAttested` prefix tag (this family), the
+    /// sibling `export-when-OnAttested` prefix tag (the SEVENTH family
+    /// on the SAME resolved-ephemeral Option-parent, one axis over on
+    /// the slice-child arm) AND simultaneously fail the off-diagonal
+    /// `teardown-policy-Always` / `teardown-policy-OnFailed` /
+    /// `teardown-policy-Never` probes. Locks the semantic split
+    /// between the three surfaces at ONE narrow site so a regression
+    /// that (a) collapsed `teardown-policy-<kind>` to the coarse
+    /// `lifetime-ephemeral` fixed answer (returning `true` for every
+    /// kind on any ephemeral Process), (b) crossed the wires between
+    /// `teardown-policy-<kind>` and `export-when-<kind>` (probing the
+    /// `exports` slice for a teardown-policy query), or (c) drifted
+    /// the `lifetime-ephemeral` arm to match on teardown-policy kind,
+    /// fails HERE. The three arms of the resolved-ephemeral projection
+    /// — coarse presence, scalar-child kind, slice-child kind — all
+    /// share the SAME Option-parent gate; this pin verifies they read
+    /// distinct slots through it.
+    #[test]
+    fn evaluate_point_require_tag_teardown_policy_coexists_with_export_when_and_lifetime_ephemeral()
+    {
+        let spec = ProcessSpec {
+            lifetime: Lifetime::ephemeral(EphemeralLifetime {
+                teardown_policy: TeardownPolicy::OnAttested,
+                exports: vec![export_at(ExportTrigger::OnAttested)],
+                ..EphemeralLifetime::default()
+            }),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "lifetime-ephemeral"),
+            Ok(true),
+            "coarse `lifetime-ephemeral` must be true on an ephemeral Process",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "teardown-policy-OnAttested"),
+            Ok(true),
+            "fine `teardown-policy-OnAttested` must be true when the ephemeral declares OnAttested",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "export-when-OnAttested"),
+            Ok(true),
+            "sibling `export-when-OnAttested` must be true when a matching export is present",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "teardown-policy-Always"),
+            Ok(false),
+            "off-diagonal `teardown-policy-Always` must be false: the ephemeral declares OnAttested",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "teardown-policy-OnFailed"),
+            Ok(false),
+            "off-diagonal `teardown-policy-OnFailed` must be false: the ephemeral declares OnAttested",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "teardown-policy-Never"),
+            Ok(false),
+            "off-diagonal `teardown-policy-Never` must be false: the ephemeral declares OnAttested",
         );
     }
 

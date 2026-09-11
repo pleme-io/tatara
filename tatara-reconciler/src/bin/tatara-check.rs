@@ -21,7 +21,7 @@ use tatara_process::encapsulates::{EncapsulationMode, EncapsulationTarget};
 use tatara_process::export::{
     ArtifactKind, ChannelKind, ExportSpecSliceExt, ExportTrigger, ReportFormat,
 };
-use tatara_process::intent::IntentKind;
+use tatara_process::intent::{IntentKind, WorkloadKind};
 use tatara_process::lifetime::{LifetimeKind, TeardownPolicy};
 use tatara_process::routing::RoutingForm;
 use tatara_process::signal::SighupStrategy;
@@ -1248,7 +1248,12 @@ struct UnknownRequireTag;
 /// [`tests::evaluate_point_require_tag_returns_false_on_empty_encapsulation_kind_for_every_target`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_encapsulation_target_suffix`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_encapsulation_target_prefix`],
-/// and [`tests::evaluate_point_require_tag_encapsulation_target_and_mode_coexist_orthogonally`].
+/// [`tests::evaluate_point_require_tag_encapsulation_target_and_mode_coexist_orthogonally`],
+/// [`tests::evaluate_point_require_tag_returns_true_iff_workload_kind_matches_container_per_kind`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_non_container_intent_for_every_workload_kind`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_workload_kind_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_workload_kind_prefix`],
+/// and [`tests::evaluate_point_require_tag_workload_kind_and_intent_container_coexist_orthogonally`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -1397,6 +1402,13 @@ fn evaluate_point_require_tag(
     ) {
         return res;
     }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<WorkloadKind, _>(tag, "workload-kind-", |kind| {
+            spec.intent.has_workload_kind(kind)
+        })
+    {
+        return res;
+    }
     match tag {
         "depends-on" => Ok(!spec.depends_on.is_empty()),
         "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
@@ -1410,7 +1422,7 @@ fn evaluate_point_require_tag(
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
 /// `K` and hand the parsed kind to `probe` — the ONE substrate owner
 /// of the `strip_prefix + parse::<K> + Ok/Err mapping` three-step
-/// shape the twenty closed-set-driven prefix families in
+/// shape the twenty-one closed-set-driven prefix families in
 /// [`evaluate_point_require_tag`] (`intent-<kind>` on [`IntentKind`],
 /// `lifetime-<kind>` on [`LifetimeKind`], `condition-<kind>` on
 /// [`ConditionKind`], `must-reach-<kind>` on [`MustReachPhase`],
@@ -1427,9 +1439,9 @@ fn evaluate_point_require_tag(
 /// `optimization-direction-<kind>` on [`OptimizationDirection`],
 /// `teardown-policy-<kind>` on [`TeardownPolicy`],
 /// `routing-form-<kind>` on [`RoutingForm`],
-/// `encapsulation-target-<kind>` on [`EncapsulationTarget`]) each
-/// dispatch through past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-/// threshold.
+/// `encapsulation-target-<kind>` on [`EncapsulationTarget`],
+/// `workload-kind-<kind>` on [`WorkloadKind`]) each dispatch
+/// through past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
 ///
 /// # Return shape
 ///
@@ -1458,7 +1470,7 @@ fn evaluate_point_require_tag(
 ///
 /// # Compounding
 ///
-/// A future twenty-first closed-set prefix family — a `phase-<kind>`
+/// A future twenty-second closed-set prefix family — a `phase-<kind>`
 /// on [`tatara_process::phase::ProcessPhase`], a hypothetical
 /// `max-concurrent-tier-<kind>` reaching through
 /// `spec.lifetime.resolved_ephemeral().map(|e|
@@ -1467,15 +1479,20 @@ fn evaluate_point_require_tag(
 /// populated by `teardown-policy-<kind>` (stored-child) and
 /// `routing-form-<kind>` (derived-child), a further co-tenant on the
 /// (Option-parent × required-struct × tagged-union-child) corner
-/// opened here by `encapsulation-target-<kind>`, or a further
-/// co-tenant on the (required-parent × nested-struct-scalar-child)
-/// corner doubly populated by `horizon-<kind>` +
-/// `optimization-direction-<kind>` — lands as ONE more `if let
-/// Some(res) = strip_and_classify_prefixed_kind::<NewKind, _>(tag,
-/// "prefix-", |k| spec.<field>.has(k)) { return res; }` branch that
-/// reads the same three-step shape the twenty existing families
-/// publish. No per-caller `strip_prefix + parse + match { Ok(_) =>
-/// …, Err(_) => Err(UnknownRequireTag) }` restatement.
+/// populated by `encapsulation-target-<kind>`, a further co-tenant
+/// on the (required-parent × nested-struct-scalar-child) corner
+/// doubly populated by `horizon-<kind>` +
+/// `optimization-direction-<kind>`, or a further co-tenant on the
+/// (Required-parent × Option-variant-inner × required-scalar-child)
+/// corner opened here by `workload-kind-<kind>` (a hypothetical
+/// `spec.intent.aplicacao_profile_family()` probe over a canonical
+/// [`tatara_process::intent::AplicacaoIntent::profile`] closed set)
+/// — lands as ONE more `if let Some(res) =
+/// strip_and_classify_prefixed_kind::<NewKind, _>(tag, "prefix-",
+/// |k| spec.<field>.has(k)) { return res; }` branch that reads the
+/// same three-step shape the twenty-one existing families publish.
+/// No per-caller `strip_prefix + parse + match { Ok(_) => …, Err(_)
+/// => Err(UnknownRequireTag) }` restatement.
 ///
 /// A future diagnostic shift (attaching the offending suffix to
 /// [`UnknownRequireTag`], promoting the sentinel to carry a
@@ -1485,9 +1502,9 @@ fn evaluate_point_require_tag(
 /// construction.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// three-step chain now dispatches TWENTY closed-set prefix families
-/// past the ≥2 PRIME-DIRECTIVE trigger through ONE substrate owner.
-/// THEORY.md §II.1 invariant 2 — free middle; the
+/// three-step chain now dispatches TWENTY-ONE closed-set prefix
+/// families past the ≥2 PRIME-DIRECTIVE trigger through ONE
+/// substrate owner. THEORY.md §II.1 invariant 2 — free middle; the
 /// caller composes the closed-set choice (via the generic `K`) and
 /// the presence probe (via the `probe` closure) independently, so a
 /// regression that drifted one prefix family's strip/parse discipline
@@ -2591,7 +2608,7 @@ mod tests {
         NatsSubjectChannel, ProcessSnapshotSource, ReceiptsSource, ReportFormat, RunMarkerSource,
         StdoutChannel, TestReportSource, VectorChannel,
     };
-    use tatara_process::intent::{AplicacaoIntent, IntentKind};
+    use tatara_process::intent::{AplicacaoIntent, ContainerIntent, IntentKind, WorkloadKind};
     use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind, TeardownPolicy};
     use tatara_process::routing::{RoutingBackend, RoutingForm, RoutingHostname, RoutingSpec};
     use tatara_process::signal::SighupStrategy;
@@ -7395,6 +7412,280 @@ mod tests {
             evaluate_point_require_tag(&spec, "encapsulation-mode-Manage"),
             Ok(false),
             "off-diagonal `encapsulation-mode-Manage` must be false: the mode names Adopt",
+        );
+    }
+
+    // ── workload-kind-<kind> require-tag classifier pins ─────────────
+    //
+    // Fail-before-pass-after granularity: TWENTY-FIRST closed-set
+    // prefix family in the point-domain require-tag vocabulary and
+    // FIRST occupant on a FRESH (Required-parent × Option-variant-
+    // inner × required-scalar-child) corner of the presence-probe
+    // algebra. Prior tagged-union prefix families addressed the
+    // variant itself (`intent-<kind>` + `lifetime-<kind>` walk
+    // Required-parent × tagged-union; `channel-<kind>` +
+    // `artifact-<kind>` walk Option-parent × slice × per-slot
+    // tagged-union; `encapsulation-target-<kind>` walks Option-parent
+    // × required-struct × tagged-union). This family walks THROUGH a
+    // specific tagged-union variant to a scalar field on THAT
+    // variant's payload — the Option-hop through
+    // [`Intent::container`] gates the inner
+    // [`ContainerIntent::workload_kind`] comparison against
+    // [`WorkloadKind::ALL`].
+    //
+    // Sweep coverage: (a) POPULATED-CONTAINER pin over
+    // [`WorkloadKind::ALL`] × ALL cross so a regression that
+    // hard-coded the arm to a single variant or wired the closure to
+    // `c.image` / `c.replicas` (peer scalar-carrier fields on
+    // [`ContainerIntent`]) fails HERE. (b) NON-CONTAINER pin over
+    // [`IntentKind::ALL`] × [`WorkloadKind::ALL`] cross so a
+    // regression that dropped the `is_some_and` gate and
+    // unconditionally probed a defaulted [`WorkloadKind::Deployment`]
+    // (silently returning `true` for `workload-kind-Deployment` on a
+    // Nix / Flux / Lisp / Aplicacao / Guest intent) fails HERE.
+    // (c) UNKNOWN-suffix pin against PascalCased / snake_cased /
+    // cross-axis-leaked spellings locks case-sensitivity to
+    // [`WorkloadKind::as_str`]'s PascalCase serde output.
+    // (d) BARE-prefix pin locks the empty-suffix arm at the family
+    // boundary. (e) ORTHOGONAL-AXIS COEXISTENCE pin locks the
+    // twenty-first family against the first family
+    // (`intent-<kind>`) on the SAME [`Intent`] parent — a Process
+    // with `intent.container: Some({workload_kind: Job})` MUST
+    // satisfy BOTH `intent-container` AND `workload-kind-Job`
+    // simultaneously, and fail each off-diagonal probe.
+
+    fn container_intent_with_workload(kind: WorkloadKind) -> ContainerIntent {
+        ContainerIntent {
+            image: "ghcr.io/x:1".into(),
+            replicas: Some(1),
+            command: vec![],
+            args: vec![],
+            env: std::collections::BTreeMap::new(),
+            workload_kind: kind,
+        }
+    }
+
+    /// POPULATED-CONTAINER pin — a Process with
+    /// `intent.container: Some({workload_kind: K, ..})` satisfies
+    /// `workload-kind-<K.as_str>` and fails
+    /// `workload-kind-<other>` for every other `WorkloadKind` in
+    /// [`WorkloadKind::ALL`]. Threads the closed-set-driven prefix
+    /// family through the substrate primitive
+    /// [`Intent::has_workload_kind`], which composes the
+    /// `self.container.as_ref().is_some_and(|c| c.workload_kind ==
+    /// kind)` shape at ONE substrate site. Sweep the
+    /// [`WorkloadKind::ALL`] × ALL cross so a regression that hard-
+    /// coded the arm to a single variant, or wired the closure to a
+    /// peer scalar-carrier field on [`ContainerIntent`] (a stray
+    /// probe on `c.image` / `c.replicas` instead of `c.workload_kind`),
+    /// fails HERE at the classifier before landing at the operator-
+    /// facing checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_workload_kind_matches_container_per_kind() {
+        for populated in WorkloadKind::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.intent = tatara_process::intent::Intent {
+                container: Some(container_intent_with_workload(populated)),
+                ..tatara_process::intent::Intent::default()
+            };
+            for query in WorkloadKind::ALL {
+                let tag = format!("workload-kind-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "workload kind={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// NON-CONTAINER pin — every non-Container [`IntentKind`]
+    /// variant returns `false` for every `workload-kind-<kind>` tag
+    /// because the Option-hop through
+    /// [`Intent::container`] on
+    /// `self.container.as_ref().is_some_and(...)` short-circuits the
+    /// probe before the inner scalar comparison runs. Locks the
+    /// second short-circuit path distinct from the container-populated
+    /// case — a regression that dropped the `is_some_and` and
+    /// unconditionally returned the default
+    /// `WorkloadKind::Deployment == kind` comparison would silently
+    /// return `true` for `workload-kind-Deployment` on a Nix / Flux
+    /// / Lisp / Aplicacao / Guest intent and fail HERE. Sweep
+    /// [`IntentKind::ALL`] × [`WorkloadKind::ALL`] so the coverage
+    /// picks up a future seventh non-Container intent variant
+    /// mechanically.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_non_container_intent_for_every_workload_kind() {
+        for populated in IntentKind::ALL {
+            if matches!(populated, IntentKind::Container) {
+                continue;
+            }
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            // Populate exactly the non-Container slot named by `populated`.
+            spec.intent = match populated {
+                IntentKind::Nix => tatara_process::intent::Intent {
+                    nix: Some(tatara_process::intent::NixIntent {
+                        flake_ref: "github:a/b".into(),
+                        attribute: "x".into(),
+                        system: None,
+                        attic_cache: None,
+                        extra_args: vec![],
+                        delegate_to_nix_build: false,
+                    }),
+                    ..tatara_process::intent::Intent::default()
+                },
+                IntentKind::Flux => tatara_process::intent::Intent {
+                    flux: Some(tatara_process::intent::FluxIntent {
+                        git_repository: "g".into(),
+                        path: "p".into(),
+                        git_repository_namespace: None,
+                        target_namespace: None,
+                        decrypt_sops: true,
+                        helm_chart: None,
+                        helm_values: None,
+                    }),
+                    ..tatara_process::intent::Intent::default()
+                },
+                IntentKind::Lisp => tatara_process::intent::Intent {
+                    lisp: Some(tatara_process::intent::LispIntent {
+                        source: "()".into(),
+                        reader: "tatara-lisp".into(),
+                        version: "v1".into(),
+                        bindings: std::collections::BTreeMap::new(),
+                    }),
+                    ..tatara_process::intent::Intent::default()
+                },
+                IntentKind::Aplicacao => tatara_process::intent::Intent {
+                    aplicacao: Some(AplicacaoIntent::chart_only("oci://ghcr.io/x", "1")),
+                    ..tatara_process::intent::Intent::default()
+                },
+                IntentKind::Guest => tatara_process::intent::Intent {
+                    guest: Some(tatara_process::intent::GuestIntent {
+                        spec: serde_json::json!({"name": "g"}),
+                        state_dir: None,
+                        allow_remote_build: None,
+                    }),
+                    ..tatara_process::intent::Intent::default()
+                },
+                IntentKind::Container => unreachable!("filtered above"),
+            };
+            for kind in WorkloadKind::ALL {
+                let tag = format!("workload-kind-{}", kind.as_str());
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(false),
+                    "non-Container intent {populated:?} must return false for {tag:?}",
+                );
+            }
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `workload-kind-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`WorkloadKind`] labels are the
+    /// PascalCase wire-format keys (`Deployment`, `StatefulSet`,
+    /// `DaemonSet`, `Job`, `CronJob`) — matching the serde
+    /// `rename_all = "PascalCase"` output verbatim AND the K8s
+    /// manifest `kind:` field — so snake_cased / lowerCamelCased /
+    /// case-drifted spellings are UNKNOWN suffixes. Locks the
+    /// case-sensitivity axis, byte-for-byte symmetrical with every
+    /// PascalCase-projecting peer family.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_workload_kind_suffix() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.intent = tatara_process::intent::Intent {
+            container: Some(container_intent_with_workload(WorkloadKind::Deployment)),
+            ..tatara_process::intent::Intent::default()
+        };
+        for garbage in [
+            "workload-kind-deployment",
+            "workload-kind-DEPLOYMENT",
+            "workload-kind-statefulset",
+            "workload-kind-daemon_set",
+            "workload-kind-cron-job",
+            "workload-kind-job ",
+            "workload-kind-Container",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-prefix pin — `workload-kind-` (the prefix alone, empty
+    /// suffix) classifies as [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive's empty-suffix
+    /// arm (pinned generically by
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]).
+    /// This site pins the family's SPECIFIC bare-prefix boundary so
+    /// a regression that special-cased `workload-kind-` to fall
+    /// through to the fixed-tag match (silently classifying it as
+    /// unknown VIA the tail rather than VIA the prefix parse) reads
+    /// the same `Err(UnknownRequireTag)` result but through a
+    /// different code path — this pin locks the intended path.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_workload_kind_prefix() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.intent = tatara_process::intent::Intent {
+            container: Some(container_intent_with_workload(WorkloadKind::Deployment)),
+            ..tatara_process::intent::Intent::default()
+        };
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "workload-kind-"),
+            Err(UnknownRequireTag),
+            "bare `workload-kind-` prefix must classify as UnknownRequireTag",
+        );
+    }
+
+    /// ORTHOGONAL-AXIS COEXISTENCE pin — a Process with
+    /// `intent.container: Some({workload_kind: Job})` MUST
+    /// simultaneously satisfy the two ORTHOGONAL probes on its
+    /// intent surface:
+    /// `intent-container` (the first family — WHICH intent variant)
+    /// AND `workload-kind-Job` (the twenty-first family —
+    /// specifically a Job-shaped container). The two axes are
+    /// compiled from independent closed sets ([`IntentKind`] on the
+    /// tagged-union axis, [`WorkloadKind`] on the container-
+    /// workload-kind axis) — a regression that collapsed either
+    /// probe onto the other's field (a stray probe of
+    /// `workload-kind-<kind>` against [`Intent::has`], or of
+    /// `intent-<kind>` against [`Intent::has_workload_kind`]) would
+    /// fail HERE. The audit `every Job-shaped Container Process
+    /// carries a completion-count postcondition` reads as this exact
+    /// two-way conjunction at the checks.lisp surface — the fleet-
+    /// wide safety property the ([`IntentKind::Container`] +
+    /// [`WorkloadKind::Job`]) intersection is designed to name.
+    #[test]
+    fn evaluate_point_require_tag_workload_kind_and_intent_container_coexist_orthogonally() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.intent = tatara_process::intent::Intent {
+            container: Some(container_intent_with_workload(WorkloadKind::Job)),
+            ..tatara_process::intent::Intent::default()
+        };
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "intent-container"),
+            Ok(true),
+            "fine `intent-container` must be true when the intent is Container",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "workload-kind-Job"),
+            Ok(true),
+            "peer `workload-kind-Job` must be true when the workload kind is Job",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "intent-nix"),
+            Ok(false),
+            "off-diagonal `intent-nix` must be false: the intent is Container",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "workload-kind-Deployment"),
+            Ok(false),
+            "off-diagonal `workload-kind-Deployment` must be false: the workload kind is Job",
         );
     }
 

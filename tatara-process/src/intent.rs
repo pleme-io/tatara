@@ -207,6 +207,117 @@ crate::declare_tagged_union_impls! {
     kind_list = INTENT_KIND_LIST,
 }
 
+impl Intent {
+    /// Presence probe over the container-intent workload-kind axis —
+    /// `true` iff the [`IntentKind::Container`] slot is populated AND
+    /// its [`ContainerIntent::workload_kind`] equals `kind`.
+    ///
+    /// # Peer to `Intent::has` on a different composition axis
+    ///
+    /// [`Intent::has`] (macro-generated via
+    /// [`crate::declare_tagged_union_impls!`]) addresses the *outer*
+    /// closed set [`IntentKind`] — "which of the six tagged-union
+    /// slots is populated". This method addresses a *nested* closed
+    /// set [`WorkloadKind`] living on the required
+    /// [`ContainerIntent::workload_kind`] field inside the optional
+    /// [`Intent::container`] slot — "given that the intent IS a
+    /// container, which K8s workload kind (Deployment / StatefulSet /
+    /// DaemonSet / Job / CronJob) does it render into". The two axes
+    /// are orthogonal: an operator can ask both
+    /// `intent-container` (this intent variant is a container) AND
+    /// `workload-kind-Job` (specifically a Job-shaped container)
+    /// against the SAME [`ProcessSpec`], and each answers
+    /// independently. Every non-Container intent variant returns
+    /// `false` for every [`WorkloadKind`] here — the Option-hop
+    /// through `self.container` gates the inner scalar comparison so
+    /// a `Nix` / `Flux` / `Lisp` / `Aplicacao` / `Guest` intent has
+    /// no workload-kind axis to inhabit.
+    ///
+    /// # Fresh (Required-parent × Option-variant-inner × required-scalar-child) corner
+    ///
+    /// The presence-probe algebra the workspace publishes across
+    /// tatara-process spans a (parent-shape × child-shape) taxonomy.
+    /// Prior probes cover:
+    /// * Required-parent × tagged-union-child ([`Intent::has`],
+    ///   [`crate::lifetime::Lifetime::has`]) — the outer variant is
+    ///   the discriminator.
+    /// * Required-parent × required-struct × tagged-union-child
+    ///   ([`crate::boundary::Boundary::has_condition_kind`]) — a
+    ///   slice-level walk over required-parent's inner slice.
+    /// * Required-parent × nested-struct-scalar-child
+    ///   ([`crate::classification::Classification::has_horizon_kind`],
+    ///   [`crate::classification::Classification::has_optimization_direction`]).
+    /// * Option-parent × slice-child (`spec.lifetime.resolved_ephemeral()
+    ///   .is_some_and(|e| e.exports.has_when(kind))` on the four
+    ///   export-facing axes).
+    /// * Option-parent × defaulted-scalar-child
+    ///   ([`crate::lifetime::EphemeralLifetime::has_teardown_policy`],
+    ///   [`crate::routing::RoutingSpec::has_form`]).
+    /// * Option-parent × required-struct × tagged-union-child
+    ///   ([`crate::encapsulates::EncapsulatesSpec::has_mode`] +
+    ///   the `spec.encapsulates.as_ref().is_some_and(|e|
+    ///   e.kind.has(kind))` walk).
+    ///
+    /// This probe opens a FRESH corner: (Required-parent ×
+    /// Option-variant-inner × required-scalar-child). The parent
+    /// [`Intent`] is required on [`crate::crd::ProcessSpec`]; the
+    /// [`Intent::container`] slot is an [`Option<ContainerIntent>`];
+    /// the [`ContainerIntent::workload_kind`] field is a required
+    /// scalar. No prior family reaches THROUGH one specific slot of
+    /// a required-parent tagged-union to a scalar field on that
+    /// slot's payload; every other tagged-union walk addresses the
+    /// variant itself. A future co-tenant on the same corner — a
+    /// hypothetical `spec.intent.aplicacao_profile_family()` probing
+    /// [`AplicacaoIntent::profile`]'s canonicalized family, a
+    /// `spec.intent.lisp_dialect()` probing [`LispIntent::reader`]
+    /// against a closed set of registered dialects — lands as one
+    /// more inherent method here with the same
+    /// `self.<variant>.as_ref().is_some_and(|v| v.<field> == kind)`
+    /// three-step shape.
+    ///
+    /// # Compounding
+    ///
+    /// The `workload-kind-<kind>` require-tag prefix family in
+    /// `tatara-reconciler::bin::tatara-check::evaluate_point_require_tag`
+    /// composes this primitive with the closed-set [`WorkloadKind`]'s
+    /// autoderived `FromStr` through the
+    /// `strip_and_classify_prefixed_kind` substrate to publish the
+    /// TWENTY-FIRST closed-set-driven prefix family byte-for-byte
+    /// symmetrical with the twenty peer families rooted at their own
+    /// `has_<field>` primitives.
+    ///
+    /// A future sixth [`WorkloadKind`] variant added to `ALL` (a
+    /// hypothetical `ReplicaSet` for pre-Deployment replica-set
+    /// direct emission, or a `Pod` for singleton naked-pod
+    /// containers) reaches this probe through ONE `ALL` entry + one
+    /// `as_str` arm + one `api_version` arm + one `is_batch` arm
+    /// with no per-caller edit at the require-tag classifier and no
+    /// per-consumer restatement of the
+    /// `self.container.as_ref().is_some_and(|c| c.workload_kind ==
+    /// kind)` closure body.
+    ///
+    /// # Theory
+    ///
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// the per-container `workload_kind` comparison lives at ONE
+    /// substrate site so every downstream (require-tag classifier,
+    /// coherence check, editor completion, future workload-kind-
+    /// driven audit dispatcher) binds through the SAME
+    /// `has_workload_kind(kind)` shape rather than restating the
+    /// `spec.intent.container.as_ref().is_some_and(...)` closure body
+    /// at each callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future [`WorkloadKind`] variant lands at ONE
+    /// `ALL` entry + one `as_str` arm on the closed set and the
+    /// presence probe picks it up mechanically without further
+    /// per-consumer edits.
+    #[must_use]
+    pub fn has_workload_kind(&self, kind: WorkloadKind) -> bool {
+        self.container
+            .as_ref()
+            .is_some_and(|c| c.workload_kind == kind)
+    }
+}
+
 /// Nix-sourced intent — tatara-engine's nix_eval driver produces resources.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -1004,6 +1115,92 @@ mod tests {
                     intent.has(probed),
                     expected,
                     "Intent::has drift — populated={populated:?} probed={probed:?}",
+                );
+            }
+        }
+    }
+
+    /// CONTAINER-WORKLOAD-KIND PRESENCE CONTRACT: [`Intent::
+    /// has_workload_kind`] returns `true` only when the
+    /// [`IntentKind::Container`] slot is populated AND its
+    /// [`ContainerIntent::workload_kind`] matches the probed
+    /// [`WorkloadKind`]. Every non-Container intent variant returns
+    /// `false` for every [`WorkloadKind`] — the Option-hop through
+    /// `self.container` gates the inner scalar comparison so a
+    /// `Nix` / `Flux` / `Lisp` / `Aplicacao` / `Guest` intent has
+    /// no workload-kind axis to inhabit.
+    ///
+    /// SWEEP: for every populated intent variant, for every
+    /// [`WorkloadKind`]:
+    /// * `IntentKind::Container` + `WorkloadKind::Deployment` (via
+    ///   [`single_slot_intent`]'s [`WorkloadKind::default()`] arm) →
+    ///   `Ok(true)` on `WorkloadKind::Deployment`, `Ok(false)` on
+    ///   every other kind (a regression that wired the closure to
+    ///   `c.image` or hard-coded a single arm fails HERE).
+    /// * Every non-Container variant → `Ok(false)` on every kind
+    ///   (locks the Option-hop gate against a stray unwrap that
+    ///   panics on `Intent::default()`, and against a regression
+    ///   that dropped the `is_some_and` and unconditionally returned
+    ///   the default `WorkloadKind::Deployment == kind` comparison).
+    ///
+    /// The require-tag wire key `workload-kind-<as_str>` composes
+    /// through [`WorkloadKind::as_str`] (auto-derived FromStr) so
+    /// the twenty-first closed-set-driven prefix family in
+    /// `tatara-check` reaches this probe by parsing the suffix and
+    /// dispatching through the SAME `has_workload_kind(kind)` shape.
+    /// A future sixth `WorkloadKind` variant lands as one `ALL`
+    /// entry + one `as_str` arm — this pin catches a regression
+    /// that added the variant without updating the sweep coverage
+    /// (the outer `for` picks up new variants automatically because
+    /// it iterates [`WorkloadKind::ALL`]).
+    #[test]
+    fn intent_has_workload_kind_fires_only_on_container_with_matching_kind() {
+        for populated in IntentKind::ALL {
+            let intent = single_slot_intent(populated);
+            for probed in WorkloadKind::ALL {
+                let expected =
+                    matches!(populated, IntentKind::Container) && probed == WorkloadKind::default();
+                assert_eq!(
+                    intent.has_workload_kind(probed),
+                    expected,
+                    "has_workload_kind drift — populated={populated:?} probed={probed:?}",
+                );
+            }
+        }
+    }
+
+    /// CONTAINER-WORKLOAD-KIND VARIANT-SWEEP CONTRACT: a Container
+    /// intent authored with each [`WorkloadKind`] variant reports
+    /// [`Intent::has_workload_kind`] as `true` on ONLY that variant
+    /// and `false` on every other. Complements the peer above
+    /// ([`intent_has_workload_kind_fires_only_on_container_with_matching_kind`])
+    /// which sweeps the *intent-variant* axis against the default
+    /// workload kind: this sweep pins the *workload-kind* axis
+    /// against the Container intent, so a regression that fixed the
+    /// inner comparator to the default variant (silently
+    /// classifying every Container as `Deployment`) fails HERE. The
+    /// two pins together sweep the full (intent-variant ×
+    /// workload-kind) cross-product on the container corner.
+    #[test]
+    fn intent_has_workload_kind_sweeps_every_workload_kind_on_container() {
+        for populated in WorkloadKind::ALL {
+            let intent = Intent {
+                container: Some(ContainerIntent {
+                    image: "ghcr.io/x:1".into(),
+                    replicas: Some(1),
+                    command: vec![],
+                    args: vec![],
+                    env: BTreeMap::new(),
+                    workload_kind: populated,
+                }),
+                ..Intent::default()
+            };
+            for probed in WorkloadKind::ALL {
+                let expected = probed == populated;
+                assert_eq!(
+                    intent.has_workload_kind(probed),
+                    expected,
+                    "has_workload_kind drift on Container: populated={populated:?} probed={probed:?}",
                 );
             }
         }

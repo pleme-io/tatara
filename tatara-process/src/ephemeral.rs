@@ -28,12 +28,14 @@
 //!                :probeImage "ghcr.io/pleme-io/closed-loop-probe:0.1.0"))))
 //! ```
 
+use std::borrow::Cow;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tatara_lisp::DeriveTataraDomain;
 
 use crate::boundary::{Boundary, Condition, ConditionKind, ConditionSliceExt};
-use crate::classification::Classification;
+use crate::classification::{Classification, ConvergencePointType};
 use crate::crd::ProcessSpec;
 use crate::export::ExportSpec;
 use crate::intent::{AplicacaoIntent, Intent};
@@ -274,6 +276,123 @@ impl EphemeralSpec {
     #[must_use]
     pub fn has_teardown_policy(&self, kind: TeardownPolicy) -> bool {
         self.teardown == kind
+    }
+
+    /// Resolve the operator-authored [`Self::classification`] slot to
+    /// the concrete [`Classification`] the point surface sees, filling
+    /// `None` through the same [`default_ephemeral_class`] baseline the
+    /// `From<EphemeralSpec> for ProcessSpec` lowering uses when the
+    /// operator omits `:classification` from the `(defephemeral …)`
+    /// form. Returns [`Cow::Borrowed`] on the populated arm (zero
+    /// allocation), else [`Cow::Owned`] with the workspace-baseline
+    /// `(Gate, Compute, Bounded, Monotone, Internal)` value the sibling
+    /// primitive [`Classification::gate_compute`] owns.
+    ///
+    /// # ONE substrate primitive for `Option<Classification>` resolution
+    ///
+    /// This is the ONE `EphemeralSpec`-inherent primitive that owns the
+    /// `Option<Classification>` → resolved-[`Classification`] walk.
+    /// Every downstream classification-axis presence probe on the
+    /// [`EphemeralSpec`] surface ([`Self::has_point_type`], and its
+    /// future peers on the six other classification axes —
+    /// `has_substrate`, `has_calm`, `has_data_classification`,
+    /// `has_horizon_kind`, `has_optimization_direction`,
+    /// `has_input_arity`, `has_output_arity`) routes through THIS
+    /// primitive so the "`None` fills through
+    /// [`default_ephemeral_class`]" resolution lives at ONE site rather
+    /// than being restated in each per-axis probe body. A future
+    /// regression on the fill-through (a shift from the `(Gate,
+    /// Compute, …)` baseline to a different `default_ephemeral_class`
+    /// body, a shift from the `Option`-carrier shape to a
+    /// serde-defaulted required-field carrier, an eventual audit hook
+    /// naming the resolved-vs-authored provenance) lands at ONE site
+    /// and every downstream axis-probe on the ephemeral surface picks
+    /// it up mechanically.
+    ///
+    /// # Sibling to the `From<EphemeralSpec>` lowering
+    ///
+    /// The lowering `From<EphemeralSpec> for ProcessSpec` fills
+    /// [`ProcessSpec::classification`] through the SAME
+    /// `.unwrap_or_else(default_ephemeral_class)` walk that this
+    /// primitive owns on the borrow-friendly `Cow` return. Both sites
+    /// resolve the same operator-authored slot through the same default
+    /// so a future two-surface parity contract on the classification
+    /// axes (`point-type-<kind>` on both surfaces, `substrate-<kind>`
+    /// on both surfaces, …) reads identically through the sibling
+    /// point-surface probe [`Classification::has_<axis>`] on the
+    /// lowered `ProcessSpec` and through THIS primitive on the same
+    /// authored [`EphemeralSpec`].
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the `Option<Classification>` resolution body
+    /// lives at ONE substrate primitive on the ephemeral surface so
+    /// every downstream classification-axis probe binds through the
+    /// SAME `resolved_classification()` shape rather than restating
+    /// the `self.classification.as_ref().unwrap_or(&default_…)`
+    /// closure body at each callsite. THEORY.md §VI.1 — generation
+    /// over composition; a future classification-axis peer
+    /// (`has_substrate`, `has_calm`, …) lands as ONE inherent method
+    /// that delegates through the resolver's `has_<axis>(kind)` call
+    /// on the sibling [`Classification`] closed-set primitive with no
+    /// per-axis restatement of the fill-through logic.
+    #[must_use]
+    pub fn resolved_classification(&self) -> Cow<'_, Classification> {
+        match &self.classification {
+            Some(c) => Cow::Borrowed(c),
+            None => Cow::Owned(default_ephemeral_class()),
+        }
+    }
+
+    /// True iff the resolved [`Classification`] carries the given
+    /// [`ConvergencePointType`] on its `point_type` slot — byte-for-
+    /// byte peer of [`Classification::has_point_type`] wrapped through
+    /// the [`Self::resolved_classification`] resolver so an
+    /// operator-omitted `:classification` slot reads as the
+    /// [`default_ephemeral_class`] baseline the sibling
+    /// `From<EphemeralSpec> for ProcessSpec` lowering fills.
+    ///
+    /// # Two-surface parity contract
+    ///
+    /// A given [`EphemeralSpec`] classifies identically through this
+    /// primitive AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.has_point_type(kind)`
+    /// on the lowered `ProcessSpec` — the `Cow<'_, Classification>`
+    /// resolver on this side and the `.unwrap_or_else(...)` fill on
+    /// the lowering side both dereference the same
+    /// `default_ephemeral_class()` value on `None` and the same
+    /// authored value on `Some(_)`. This means the ephemeral-surface
+    /// `point-type-<kind>` `:requires` family in
+    /// `tatara-reconciler::bin::tatara-check` publishes the SAME
+    /// truth on the SAME authored spec as the point-surface family
+    /// on the mechanically-lowered `ProcessSpec`.
+    ///
+    /// # Sibling to the seven other classification axes
+    ///
+    /// FIRST classification-axis peer on the [`EphemeralSpec`]
+    /// surface. Seven future sibling axes on the SAME `Cow`-resolver
+    /// carrier (`has_substrate`, `has_calm`, `has_data_classification`,
+    /// `has_horizon_kind`, `has_optimization_direction`,
+    /// `has_input_arity`, `has_output_arity`) land as one-line
+    /// wrappers around the SAME resolver + the sibling
+    /// [`Classification`] closed-set primitive, so a future variant
+    /// added to [`ConvergencePointType`] (or any of the seven other
+    /// closed sets) reaches BOTH surfaces' `<axis>-<kind>` prefix
+    /// families through the SAME closed-set walk with no per-caller
+    /// edit.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-axis presence-probe body
+    /// composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE closed-set
+    /// primitive ([`Classification::has_point_type`]) so every
+    /// downstream (`point-type-<kind>` require-tag families on both
+    /// surfaces in tatara-check, closed-set audit dispatchers, future
+    /// variant additions on [`ConvergencePointType`]) binds through
+    /// the SAME `has(kind)` shape rather than restating either the
+    /// resolver walk or the closed-set equality at the callsite.
+    #[must_use]
+    pub fn has_point_type(&self, kind: ConvergencePointType) -> bool {
+        self.resolved_classification().has_point_type(kind)
     }
 }
 
@@ -846,6 +965,161 @@ mod tests {
                 expected,
                 "default ephemeral (teardown=Always) baseline: query {kind:?} must be {expected}",
             );
+        }
+    }
+
+    // ── EphemeralSpec::resolved_classification + has_point_type pins ─────
+    //
+    // Fail-before-pass-after granularity: `resolved_classification` and
+    // `has_point_type` did not exist pre-lift on `impl EphemeralSpec` — every
+    // caller wanting the resolved [`Classification`] on the ephemeral
+    // sugar-surface (currently zero; future ephemeral-surface classification-
+    // axis require-tag families in `tatara-reconciler::bin::tatara-check`,
+    // typed audit hooks, documentation generators listing the ephemeral
+    // surface's known require-tag vocabulary) restated the two-line
+    // `self.classification.as_ref().unwrap_or(&default_ephemeral_class())`
+    // resolver body at their site. Post-lift both callers of the resolver
+    // (`Self::has_point_type` and every future classification-axis peer)
+    // route through ONE inherent method that shares the fill-through with
+    // the sibling `From<EphemeralSpec> for ProcessSpec` lowering
+    // byte-for-byte. A regression that (a) inverted the arm (`Some` filled
+    // through the default), (b) drifted the default from the sibling
+    // primitive `Classification::gate_compute()`, or (c) shifted the
+    // `Cow<'_, Classification>` return shape (a stray `.clone()` on the
+    // populated arm) fails HERE at the substrate primitive rather than as
+    // silent operator-facing drift at a future
+    // `point-type-<kind>` ephemeral require-tag surface.
+
+    /// AUTHORED-slot pin — an [`EphemeralSpec`] whose
+    /// [`EphemeralSpec::classification`] slot names a concrete
+    /// [`Classification`] returns [`Cow::Borrowed`] pointing at that
+    /// authored value from [`Self::resolved_classification`]. Pins the
+    /// populated-arm zero-allocation contract: a caller reading past
+    /// the resolver sees the SAME byte address the operator authored,
+    /// so the resolver does not silently clone the authored slot on
+    /// the populated arm.
+    #[test]
+    fn resolved_classification_borrows_authored_slot() {
+        let mut spec = empty_ephemeral();
+        let mut authored = Classification::gate_compute();
+        authored.point_type = ConvergencePointType::Fork;
+        spec.classification = Some(authored.clone());
+        let resolved = spec.resolved_classification();
+        assert!(matches!(resolved, Cow::Borrowed(_)));
+        assert_eq!(&*resolved, &authored);
+    }
+
+    /// ABSENT-slot pin — an [`EphemeralSpec`] whose
+    /// [`EphemeralSpec::classification`] slot is `None` returns
+    /// [`Cow::Owned`] with the SAME value the sibling
+    /// [`default_ephemeral_class`] baseline produces. Pins the
+    /// two-surface parity contract with `From<EphemeralSpec> for
+    /// ProcessSpec`: both sites fill through the SAME baseline on
+    /// `None`, so the ephemeral require-tag surface's future
+    /// `point-type-<kind>` family reads identically on the authored
+    /// spec and on the mechanically lowered `ProcessSpec`.
+    #[test]
+    fn resolved_classification_fills_default_on_absent_slot() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        let resolved = spec.resolved_classification();
+        assert!(matches!(resolved, Cow::Owned(_)));
+        assert_eq!(&*resolved, &default_ephemeral_class());
+    }
+
+    /// AUTHORED-slot VARIANT-MATCH pin — an [`EphemeralSpec`] whose
+    /// [`EphemeralSpec::classification`] slot names a concrete
+    /// [`Classification`] returns `true` from
+    /// [`Self::has_point_type`] on the authored
+    /// [`ConvergencePointType`] slot and `false` for every other
+    /// variant. Sweep the [`ConvergencePointType::ALL`] × ALL cross so
+    /// a regression that hard-coded the arm to a single kind or wired
+    /// the closure to a fixed unrelated slot fails HERE at the
+    /// substrate primitive. Byte-for-byte peer of
+    /// [`crate::classification::tests`]'s point-surface
+    /// [`Classification::has_point_type`] populated-slot sweep on the
+    /// SAME closed-set primitive.
+    #[test]
+    fn has_point_type_returns_true_iff_authored_classification_matches_per_kind() {
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            for query in ConvergencePointType::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    spec.has_point_type(query),
+                    expected,
+                    "ephemeral classification.point_type={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// ABSENT-slot DEFAULT-ARM pin — an [`EphemeralSpec`] whose
+    /// [`EphemeralSpec::classification`] slot is `None` returns
+    /// `true` from [`Self::has_point_type`] on
+    /// [`ConvergencePointType::Gate`] (the `default_ephemeral_class`
+    /// baseline's `point_type`) and `false` on every other variant.
+    /// Pins the (Option-parent × NON-DEFAULT-scalar-child) corner's
+    /// default-arm short-circuit: on the ephemeral sugar surface the
+    /// parent Option is filled through the workspace baseline rather
+    /// than reading `false` on every variant like the encapsulation-
+    /// mode / encapsulation-target / routing-form Option-parent
+    /// corners.
+    #[test]
+    fn has_point_type_probes_gate_only_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        for kind in ConvergencePointType::ALL {
+            let expected = kind == ConvergencePointType::Gate;
+            assert_eq!(
+                spec.has_point_type(kind),
+                expected,
+                "absent classification (defaults to gate_compute): query {kind:?} must be {expected}",
+            );
+        }
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::has_point_type`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>()`
+    /// `.classification.has_point_type(kind)` on the mechanically-
+    /// lowered `ProcessSpec`. Sweeps (`None` classification, `Some(_)`
+    /// classification on every [`ConvergencePointType::ALL`] variant)
+    /// × ALL queries so a future regression on either side of the
+    /// resolver (a shift in the ephemeral resolver's default, a
+    /// shift in the `From<EphemeralSpec>` lowering's fill-through)
+    /// fails HERE at the parity boundary.
+    #[test]
+    fn has_point_type_matches_point_peer_through_lowered_classification() {
+        // Absent classification: both surfaces resolve through the SAME
+        // default and agree on every variant.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        for query in ConvergencePointType::ALL {
+            assert_eq!(
+                eph.has_point_type(query),
+                lowered.classification.has_point_type(query),
+                "None-classification parity drift on query {query:?}",
+            );
+        }
+        // Authored classification: both surfaces read the same authored
+        // value verbatim.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            for query in ConvergencePointType::ALL {
+                assert_eq!(
+                    eph.has_point_type(query),
+                    lowered.classification.has_point_type(query),
+                    "authored classification.point_type={populated:?}: parity drift on query {query:?}",
+                );
+            }
         }
     }
 }

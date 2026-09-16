@@ -1869,7 +1869,12 @@ where
 /// [`tests::evaluate_ephemeral_require_tag_returns_false_on_non_test_report_source_for_every_report_payload_shape`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_report_payload_shape_suffix`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_report_payload_shape_prefix`],
-/// and [`tests::evaluate_ephemeral_require_tag_report_payload_shape_matches_point_peer_through_lowered_exports`].
+/// [`tests::evaluate_ephemeral_require_tag_report_payload_shape_matches_point_peer_through_lowered_exports`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_iff_point_type_matches_authored_classification_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_gate_only`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_point_type_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_point_type_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_point_type_matches_point_peer_through_resolved_classification`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -1919,6 +1924,13 @@ fn evaluate_ephemeral_require_tag(
         "report-payload-shape-",
         |kind| spec.exports.has_report_payload_shape(kind),
     ) {
+        return res;
+    }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<ConvergencePointType, _>(tag, "point-type-", |kind| {
+            spec.has_point_type(kind)
+        })
+    {
         return res;
     }
     match tag {
@@ -2892,8 +2904,8 @@ mod tests {
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
     use tatara_process::classification::{
-        Arity, CalmClassification, ConvergencePointType, DataClassification, Horizon, HorizonKind,
-        OptimizationDirection, SubstrateType,
+        Arity, CalmClassification, Classification, ConvergencePointType, DataClassification,
+        Horizon, HorizonKind, OptimizationDirection, SubstrateType,
     };
     use tatara_process::compliance::{ComplianceBinding, VerificationPhase};
     use tatara_process::crd::ProcessSpec;
@@ -10512,6 +10524,191 @@ mod tests {
                     Ok(expected),
                     "ephemeral answer drifted from expected on {tag:?} populated={populated:?} \
                      shape={expected_shape:?}",
+                );
+            }
+        }
+    }
+
+    // ── evaluate_ephemeral_require_tag / point-type-<kind> pins ──────
+    //
+    // Fail-before-pass-after granularity: the ephemeral surface's
+    // `point-type-<kind>` prefix family did not route pre-lift — the
+    // vocabulary block on `evaluate_ephemeral_require_tag` had no
+    // classification-axis peer to the point surface's twelfth prefix
+    // family. Post-lift the routing dispatches through the ONE
+    // substrate primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::has_point_type`] +
+    // the sibling closed-set-resolver
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`]
+    // — a regression that (a) hard-coded the arm to a single kind, (b)
+    // inverted the resolver's `None` fill-through (`Some(_)` filled
+    // through the default), (c) probed the wrong slot (e.g. `substrate`
+    // instead of `point_type`), or (d) drifted the fill-through default
+    // from the sibling `From<EphemeralSpec>` lowering fails HERE at the
+    // substrate primitives rather than as silent operator-facing drift
+    // at the ephemeral `point-type-<kind>` require-tag surface. FIRST
+    // classification-axis peer on the ephemeral surface — opens the
+    // (Option-parent × required-non-Option-scalar-child × operator-
+    // resolvable-baseline) corner of the ephemeral-surface presence-
+    // probe algebra.
+
+    /// AUTHORED-slot VARIANT-MATCH pin — the ephemeral `point-type-
+    /// <kind>` prefix family dispatches through the autoderived
+    /// [`ConvergencePointType`] `FromStr` + the substrate
+    /// [`tatara_process::ephemeral::EphemeralSpec::has_point_type`] +
+    /// the sibling resolver
+    /// [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`]
+    /// on the operator-authored [`Classification`] slot. Sweeps the
+    /// [`ConvergencePointType::ALL`] × ALL cross so a stray
+    /// hard-coded arm fails HERE. Byte-for-byte peer of the point-
+    /// surface pin
+    /// [`evaluate_point_require_tag_returns_true_iff_point_type_matches_variant_per_kind`]
+    /// on the SAME closed set, routed through the ephemeral sugar
+    /// surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_iff_point_type_matches_authored_classification_per_kind(
+    ) {
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let spec = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            for query in ConvergencePointType::ALL {
+                let tag = format!("point-type-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral classification.point_type={populated:?}: tag {tag:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// ABSENT-slot DEFAULT-ARM pin — an [`EphemeralSpec`] whose
+    /// `:classification` slot is omitted from the `(defephemeral …)`
+    /// form (`None` on the wire) reads as the workspace-baseline
+    /// [`tatara_process::classification::Classification::gate_compute`]
+    /// value through
+    /// [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    /// Pins the (Option-parent × NON-DEFAULT-scalar-child ×
+    /// operator-resolvable-baseline) corner's default-arm short-
+    /// circuit: `point-type-Gate` reads `true`, every other variant
+    /// reads `false`. Distinct from the Option-parent corners on the
+    /// encapsulates axes (`encapsulation-mode-<kind>` /
+    /// `encapsulation-target-<kind>` / `routing-form-<kind>`) which
+    /// return `false` on every variant on their `None`-parent arms:
+    /// the ephemeral classification carrier fills through a resolved
+    /// baseline rather than reading `false` past the missing parent.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_gate_only() {
+        let spec = EphemeralSpec {
+            classification: None,
+            ..ephemeral_fixture()
+        };
+        for kind in ConvergencePointType::ALL {
+            let tag = format!("point-type-{}", kind.as_str());
+            let expected = kind == ConvergencePointType::Gate;
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(expected),
+                "absent ephemeral classification (defaults to gate_compute): tag {tag:?} drifted",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `point-type-<garbage>` classifies as
+    /// [`UnknownRequireTag`] rather than silently returning
+    /// `Ok(false)`. Sweeps case-variants of a known variant name plus
+    /// pure garbage plus cross-axis rejects (raw `SubstrateType` /
+    /// `CalmClassification` / etc. identifiers must NOT resolve here).
+    /// A regression that folded case (`FromStr` gone
+    /// `case_insensitive`) or gained a permissive-fallthrough (e.g.
+    /// unknown suffix routes to `Gate`) would silently reclassify an
+    /// unknown tag as `Ok(_)` and fail HERE.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_point_type_suffix() {
+        let spec = ephemeral_fixture();
+        for tag in [
+            "point-type-gate",
+            "point-type-GATE",
+            "point-type-not-a-kind",
+            "point-type-Compute",     // substrate variant leaking
+            "point-type-NonMonotone", // calm variant leaking
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, tag),
+                Err(UnknownRequireTag),
+                "unknown ephemeral point-type suffix {tag:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-prefix pin — `"point-type-"` (empty suffix) MUST classify
+    /// as [`UnknownRequireTag`] rather than as any variant. Locks the
+    /// suffix-nonempty invariant at the substrate
+    /// `strip_and_classify_prefixed_kind` boundary on the ephemeral
+    /// surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_point_type_prefix() {
+        let spec = ephemeral_fixture();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "point-type-"),
+            Err(UnknownRequireTag),
+            "bare `point-type-` prefix must classify as UnknownRequireTag",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`evaluate_ephemeral_require_tag`] AND
+    /// through [`evaluate_point_require_tag`] on the mechanically-
+    /// lowered `ProcessSpec` via `<eph.clone().into()>`. Sweeps both
+    /// the (`None` classification) baseline arm and every
+    /// [`ConvergencePointType::ALL`] populated arm × every ALL query
+    /// so a future regression on either surface's resolver (an
+    /// ephemeral-side fill-through drift, a point-side scalar-carrier
+    /// probe drift) fails HERE. Byte-for-byte peer of the sibling
+    /// two-surface parity pins on the FIVE slice-child ephemeral
+    /// families — this is the FIRST classification-axis two-surface
+    /// parity pin on the ephemeral surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_point_type_matches_point_peer_through_resolved_classification(
+    ) {
+        // Absent classification baseline — both surfaces resolve
+        // through the SAME `default_ephemeral_class` fill-through and
+        // agree on every variant.
+        let eph = EphemeralSpec {
+            classification: None,
+            ..ephemeral_fixture()
+        };
+        let point: ProcessSpec = eph.clone().into();
+        for query in ConvergencePointType::ALL {
+            let tag = format!("point-type-{}", query.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph, &tag),
+                evaluate_point_require_tag(&point, &tag),
+                "None-classification parity drift on tag {tag:?}",
+            );
+        }
+        // Authored classification arms — the operator's authored value
+        // rides across the `From<EphemeralSpec>` lowering byte-for-
+        // byte, so both surfaces classify identically on every variant.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let eph = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let point: ProcessSpec = eph.clone().into();
+            for query in ConvergencePointType::ALL {
+                let tag = format!("point-type-{}", query.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&eph, &tag),
+                    evaluate_point_require_tag(&point, &tag),
+                    "authored classification.point_type={populated:?}: parity drift on tag {tag:?}",
                 );
             }
         }

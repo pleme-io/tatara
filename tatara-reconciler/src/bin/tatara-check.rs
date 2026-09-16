@@ -1717,6 +1717,39 @@ where
 ///   both surfaces' `report-format-<kind>` families pick it up
 ///   mechanically.
 ///
+/// - `artifact-<kind>` — [`ArtifactKind`] closed set →
+///   [`tatara_process::export::ExportSpecSliceExt::has_artifact_kind`]
+///   on [`EphemeralSpec::exports`] directly. Peer of the point surface's
+///   `artifact-<kind>` family (the tenth closed-set-driven prefix
+///   family on the point surface, which composes the SAME slice-level
+///   `ExportSpecSliceExt::has_artifact_kind` substrate primitive through
+///   the `Lifetime::resolved_ephemeral()` Option-parent gate); this
+///   ephemeral peer routes through the SAME primitive with NO Option-
+///   parent hop (contrast the point-surface routing
+///   `spec.lifetime.resolved_ephemeral().is_some_and(|e| e.exports.has_artifact_kind(kind))`).
+///   The [`From<EphemeralSpec>`] lowering copies `e.exports →
+///   EphemeralLifetime::exports` byte-for-byte (see
+///   [`tatara_process::ephemeral`] `From` impl line 311), so the SAME
+///   slice values reach both surfaces' `artifact-<kind>` families
+///   through the SAME [`ExportSpecSliceExt::has_artifact_kind`] walk —
+///   a future fifth [`ArtifactKind`] variant reaches BOTH surfaces
+///   through the [`ArtifactKind::ALL`] sweep + one `as_str` arm on the
+///   closed set with no per-caller edit. SIXTH closed-set-driven prefix
+///   family in the ephemeral require-tag vocabulary and FOURTH
+///   slice-child occupant routed DIRECTLY through the slice-level
+///   substrate; sibling of `channel-<kind>` in probe shape (outer
+///   tagged-union carrier, `.select(&e.<slot>).is_some()`), distinct
+///   from `report-format-<kind>` on ONE further dimension — this
+///   family reads the OUTER `ArtifactSource` carrier
+///   (`ArtifactKind::from(&ExportSpec::source)`) rather than the
+///   NESTED-Option scalar past it (`source.test_report.format`), so a
+///   receipts-only export answers `true` for `artifact-receipts` but
+///   `false` for every `report-format-<kind>`. Coexists with the three
+///   prior slice-level families on the SAME parent projection:
+///   `artifact-receipts` + `export-when-OnAttested` +
+///   `channel-natsSubject` + `report-format-Junit` independently probe
+///   the four axes on the same `&[ExportSpec]` slice.
+///
 /// Every other tag is a fixed match on an [`EphemeralSpec`] slot; the
 /// remaining sugar-surface knobs (`aplicacao`, `ttl`, `teardown`,
 /// `postconditions`, `preconditions`, `closed-loop-auth`) aren't
@@ -1786,7 +1819,12 @@ where
 /// [`tests::evaluate_ephemeral_require_tag_returns_false_on_non_test_report_source_for_every_report_format_kind`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_report_format_suffix`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_report_format_prefix`],
-/// and [`tests::evaluate_ephemeral_require_tag_report_format_matches_point_peer_through_lowered_exports`].
+/// [`tests::evaluate_ephemeral_require_tag_report_format_matches_point_peer_through_lowered_exports`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_on_populated_artifact_slot_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_artifact_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_artifact_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_artifact_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_artifact_matches_point_peer_through_lowered_exports`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -1820,6 +1858,13 @@ fn evaluate_ephemeral_require_tag(
     if let Some(res) =
         strip_and_classify_prefixed_kind::<ReportFormat, _>(tag, "report-format-", |kind| {
             spec.exports.has_report_format(kind)
+        })
+    {
+        return res;
+    }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<ArtifactKind, _>(tag, "artifact-", |kind| {
+            spec.exports.has_artifact_kind(kind)
         })
     {
         return res;
@@ -9950,6 +9995,195 @@ mod tests {
             let point: ProcessSpec = eph.clone().into();
             for query in ReportFormat::ALL {
                 let tag = format!("report-format-{}", query.as_str());
+                let eph_answer = evaluate_ephemeral_require_tag(&eph, &tag);
+                let point_answer = evaluate_point_require_tag(&point, &tag);
+                assert_eq!(
+                    eph_answer, point_answer,
+                    "two-surface parity broke on {tag:?} for populated={populated:?}: \
+                     eph={eph_answer:?} vs point={point_answer:?}",
+                );
+                let expected = query == populated;
+                assert_eq!(
+                    eph_answer,
+                    Ok(expected),
+                    "ephemeral answer drifted from expected on {tag:?} populated={populated:?}",
+                );
+            }
+        }
+    }
+
+    // ── artifact-<kind> prefix family (ephemeral) ────────────────────
+    //
+    // Fail-before-pass-after granularity: the ephemeral require-tag
+    // vocabulary carried FIVE closed-set-driven prefix families
+    // (`condition-<kind>`, `teardown-policy-<kind>`,
+    // `export-when-<kind>`, `channel-<kind>`, `report-format-<kind>`)
+    // before this commit and had no way to distinguish which ARTIFACT
+    // SOURCE an ephemeral export ships out — a `receipts` chain vs a
+    // `test_report` ConfigMap vs a `process_snapshot` bundle vs a
+    // `run_marker` synthetic event. The lift adds the SIXTH closed-
+    // set-driven prefix family symmetrical with the five prior ones,
+    // routing through the pre-existing
+    // [`tatara_process::export::ExportSpecSliceExt::has_artifact_kind`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`.
+    // FOURTH slice-child occupant routed DIRECTLY through the slice-
+    // level substrate on the ephemeral surface — sibling of
+    // `channel-<kind>` in probe shape (outer tagged-union carrier,
+    // `.select(&e.<slot>).is_some()`), distinct from
+    // `report-format-<kind>` (nested-Option scalar past the outer
+    // carrier). A receipts-only export answers `true` for
+    // `artifact-receipts` but `false` for every `report-format-<kind>`
+    // — the axes commute on the SAME `&[ExportSpec]` slice and the
+    // coexistence pin below locks that split.
+
+    /// POPULATED-slot pin — `artifact-<kind>` dispatches through the
+    /// autoderived [`ArtifactKind`] `FromStr` + the substrate
+    /// [`tatara_process::export::ExportSpecSliceExt::has_artifact_kind`]
+    /// primitive on the ephemeral surface's direct `exports` slice (no
+    /// Option-parent hop), returning `true` only when at least one
+    /// export in the ephemeral spec's `exports` slot carries the
+    /// queried artifact kind on its `source` slot. Sweep the
+    /// [`ArtifactKind::ALL`] × ALL cross so a regression that hard-
+    /// coded the arm to a single kind or wired the closure to a fixed
+    /// unrelated field (a stray probe on `when` / `channel` /
+    /// `source.test_report.format`) fails HERE at the ephemeral
+    /// classifier before landing at the operator-facing checks.lisp
+    /// surface. Byte-for-byte peer of
+    /// [`evaluate_point_require_tag_returns_true_on_populated_artifact_slot_per_kind`]
+    /// on the point surface — the two-surface symmetry means an
+    /// operator can author identical `artifact-<kind>` semantics under
+    /// either `:domain point` or `:domain ephemeral` slot without a
+    /// per-surface behavioral gotcha.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_populated_artifact_slot_per_kind() {
+        for populated in ArtifactKind::ALL {
+            let spec = EphemeralSpec {
+                exports: vec![export_with_artifact(populated)],
+                ..ephemeral_fixture()
+            };
+            for query in ArtifactKind::ALL {
+                let tag = format!("artifact-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral artifact populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-EXPORTS pin — an ephemeral spec whose `exports` vector is
+    /// empty returns `Ok(false)` for every `artifact-<kind>` tag. Locks
+    /// the "reachable-empty-child" corner so a regression that short-
+    /// circuited on presence of the ephemeral surface alone (returning
+    /// `true` for every kind on any ephemeral) or mis-routed the
+    /// closure to a fixed always-true path fails HERE. Distinct from
+    /// the point surface's peer test which pins TWO corners
+    /// (unreachable-parent via permanent lifetime AND reachable-empty-
+    /// child); this ephemeral pin covers only the reachable-empty-
+    /// child corner because [`EphemeralSpec`] has no permanent variant
+    /// to collapse. The default `ephemeral_fixture` (empty
+    /// `exports: vec![]`) is the reachable-empty-child fixture.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_artifact_kind() {
+        let spec = ephemeral_fixture();
+        for kind in ArtifactKind::ALL {
+            let tag = format!("artifact-{}", kind.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(false),
+                "empty ephemeral exports must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `artifact-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag for ephemeral domain:
+    /// <verbatim>` diagnostic path fires. The canonical
+    /// [`ArtifactKind`] labels are camelCase (`receipts`, `testReport`,
+    /// `processSnapshot`, `runMarker`) — matching the serde
+    /// `rename_all = "camelCase"` field names on [`ArtifactSource`]
+    /// verbatim — so PascalCase / snake_case / all-caps spellings are
+    /// UNKNOWN suffixes. Pin the case-sensitivity axis so a regression
+    /// that ASCIIfolded or PascalCased on parse (a hypothetical
+    /// `to_upper_camel` normalization at the tag layer) would fail
+    /// HERE.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_artifact_suffix() {
+        let spec = ephemeral_fixture();
+        for garbage in [
+            "artifact-Receipts",
+            "artifact-test_report",
+            "artifact-RUNMARKER",
+            "artifact-typo",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at `artifact-`
+    /// classifies as [`UnknownRequireTag`], mirroring every prior
+    /// closed-set prefix family on the ephemeral surface. A regression
+    /// that special-cased the bare prefix (treating it as a coarse
+    /// "any artifact axis present") would fail HERE — the empty suffix
+    /// must hit the substrate primitive's canonical empty-string arm
+    /// rather than short-circuiting to `Ok(true)` on any ephemeral that
+    /// carries a non-empty `exports` vector. Locks the empty-suffix ↔
+    /// unknown-suffix correspondence at ONE narrow classifier site.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_artifact_prefix() {
+        let spec = EphemeralSpec {
+            exports: vec![export_with_artifact(ArtifactKind::Receipts)],
+            ..ephemeral_fixture()
+        };
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "artifact-"),
+            Err(UnknownRequireTag),
+            "bare `artifact-` must classify as UnknownRequireTag even with populated exports",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME `exports` slice reaches both
+    /// the ephemeral surface's `evaluate_ephemeral_require_tag`
+    /// classifier AND the point surface's `evaluate_point_require_tag`
+    /// classifier through the SAME
+    /// [`ExportSpecSliceExt::has_artifact_kind`] substrate primitive,
+    /// so the two classifiers publish IDENTICAL answers for every
+    /// [`ArtifactKind`] × every `EphemeralSpec::exports` value. Lowers
+    /// the ephemeral spec to a `ProcessSpec` via the typed
+    /// `From<EphemeralSpec>` bridge (which copies `e.exports →
+    /// EphemeralLifetime::exports` byte-for-byte — see
+    /// [`tatara_process::ephemeral`] `From` impl) and cross-classifies.
+    /// Locks the two-surface symmetry contract on the `artifact-<kind>`
+    /// family — a regression that (a) dropped the ephemeral routing
+    /// arm, (b) inverted the routing (probed a wrong slot), or (c)
+    /// diverged the two surfaces' closure semantics fails HERE at ONE
+    /// narrow site. Byte-for-byte analog of
+    /// [`evaluate_ephemeral_require_tag_channel_matches_point_peer_through_lowered_exports`]
+    /// on the sibling fourth family — both walk the OUTER tagged-union
+    /// carrier of an `ExportSpec` field
+    /// (`ArtifactKind::from(&ExportSpec::source)` vs
+    /// `ChannelKind::from(&VectorChannel)`) — proving the parity
+    /// contract survives on the THIRD outer-tagged-union-carrier
+    /// projection in the workspace slice-level closed-set-driven
+    /// presence-probe algebra.
+    #[test]
+    fn evaluate_ephemeral_require_tag_artifact_matches_point_peer_through_lowered_exports() {
+        for populated in ArtifactKind::ALL {
+            let eph = EphemeralSpec {
+                exports: vec![export_with_artifact(populated)],
+                ..ephemeral_fixture()
+            };
+            let point: ProcessSpec = eph.clone().into();
+            for query in ArtifactKind::ALL {
+                let tag = format!("artifact-{}", query.as_str());
                 let eph_answer = evaluate_ephemeral_require_tag(&eph, &tag);
                 let point_answer = evaluate_point_require_tag(&point, &tag);
                 assert_eq!(

@@ -419,6 +419,83 @@ impl Lifetime {
             LifetimeVariant::Permanent(_) => None,
         }
     }
+
+    /// Declared exports on this Lifetime — the `exports` vec on the
+    /// resolved [`EphemeralLifetime`] variant, or the empty slice
+    /// (`&[]`) when the resolver picks `Permanent`, the default (both
+    /// slots unset → `Permanent`), or the ambiguous corner (both slots
+    /// set → [`LifetimeError::Ambiguous`]).
+    ///
+    /// # Why lift
+    ///
+    /// The point-domain require-tag classifier in
+    /// `tatara-reconciler::bin::tatara-check` composed the SAME
+    /// two-step chain (`spec.lifetime.resolved_ephemeral().is_some_and(
+    /// |e| e.exports.<slice-primitive>(k))`) at SIX consecutive rows in
+    /// [`evaluate_point_require_tag`]'s prefix table
+    /// (`export-when-` → [`ExportSpecSliceExt::has_when`], `channel-`
+    /// → [`ExportSpecSliceExt::has_channel_kind`], `report-format-`
+    /// → [`ExportSpecSliceExt::has_report_format`], `artifact-`
+    /// → [`ExportSpecSliceExt::has_artifact_kind`],
+    /// `report-payload-shape-`
+    /// → [`ExportSpecSliceExt::has_report_payload_shape`],
+    /// `exports-fire-on-`
+    /// → [`ExportSpecSliceExt::has_applicable_at`]). Six restatements
+    /// of the ONE Option-carrier collapse past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication threshold — post-lift ONE substrate primitive
+    /// owns the `(Lifetime → resolved ephemeral → exports slice OR
+    /// empty)` compound projection, and every current + future
+    /// slice-level probe on [`ExportSpec`] plugs into it through the
+    /// SAME [`ExportSpecSliceExt`] trait shape without a bespoke
+    /// Option-arm at the caller.
+    ///
+    /// # Semantics vs. the pre-lift chain
+    ///
+    /// `.is_some_and(|e| e.exports.<f>(k))` returns `false` on the
+    /// three "no ephemeral" outcomes (Permanent, default, Ambiguous)
+    /// AND on the "ephemeral with no matching export" outcome. The
+    /// lifted projection returns `&[]` on the three "no ephemeral"
+    /// outcomes and the actual slice on the Ephemeral outcome; each
+    /// [`ExportSpecSliceExt`] method returns `false` on `&[]` via
+    /// `.iter().any(...)`. The composition is therefore observationally
+    /// equivalent to the pre-lift chain at every callsite.
+    ///
+    /// A future third [`Lifetime`] variant carrying its own `exports`
+    /// slot (or an `Ambiguous` corner promoted to project the
+    /// ephemeral half instead of collapsing to `None`) lands at ONE
+    /// arm here — every downstream `export-*` require-tag family
+    /// picks it up mechanically, with no per-caller edit.
+    ///
+    /// # Peer to [`Self::resolved_ephemeral`]
+    ///
+    /// Both compose against the SAME [`Self::variant`] resolver; this
+    /// primitive is the specialization for the `exports`-only walk
+    /// (skips the `TTL` / `teardown_policy` / `max_concurrent` slots
+    /// the peer projection exposes), returning the slice directly so
+    /// consumers whose call graph terminates on
+    /// [`ExportSpecSliceExt`] compose without an intermediate
+    /// `.is_some_and(...)` step.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the Option-carrier collapse lives at ONE
+    /// substrate site so every downstream `export-<kind>` require-tag
+    /// family binds through the SAME shape). THEORY.md §VI.1
+    /// (generation over composition — a new slice-level probe on
+    /// [`ExportSpec`] reaches this projection through the SAME
+    /// trait-method shape without a bespoke Option-arm at the caller).
+    ///
+    /// Pinned by
+    /// [`tests::ephemeral_exports_returns_empty_slice_on_permanent_default_and_ambiguous_lifetime`],
+    /// [`tests::ephemeral_exports_returns_declared_exports_slice_on_ephemeral_lifetime`],
+    /// and
+    /// [`tests::ephemeral_exports_slice_matches_resolved_ephemeral_exports_pointer_when_present`].
+    #[must_use]
+    pub fn ephemeral_exports(&self) -> &[ExportSpec] {
+        match self.resolved_ephemeral() {
+            Some(e) => e.exports.as_slice(),
+            None => &[],
+        }
+    }
 }
 
 const DEFAULT_PERMANENT: PermanentLifetime = PermanentLifetime {};
@@ -1544,6 +1621,134 @@ mod tests {
         };
         assert_eq!(l.variant().unwrap_err(), LifetimeError::Ambiguous);
         assert!(l.resolved_ephemeral().is_none());
+    }
+
+    /// EMPTY-SLICE CONTRACT on [`Lifetime::ephemeral_exports`]: every
+    /// non-Ephemeral outcome of the [`Lifetime::variant`] resolver
+    /// (Permanent-only, empty-default, Ambiguous-both-slots) projects
+    /// to the empty slice, byte-identical with `&[][..]`. Pin the
+    /// three outcomes explicitly so a future refactor that promoted
+    /// any of them to a non-empty projection (e.g. leaking a stashed
+    /// default `EphemeralLifetime` on the Ambiguous corner) surfaces
+    /// here instead of at every `export-<kind>` require-tag callsite
+    /// as silent presence-flip.
+    #[test]
+    fn ephemeral_exports_returns_empty_slice_on_permanent_default_and_ambiguous_lifetime() {
+        // 1. Empty (both slots None) — resolves to Permanent default.
+        let l = Lifetime::default();
+        assert!(l.ephemeral_exports().is_empty());
+        // Byte-identity with `&[]` — not merely `len() == 0`.
+        let empty: &[crate::export::ExportSpec] = &[];
+        assert_eq!(l.ephemeral_exports().as_ptr(), empty.as_ptr());
+
+        // 2. Permanent-only.
+        let l = Lifetime::permanent();
+        assert!(l.ephemeral_exports().is_empty());
+
+        // 3. Ambiguous (both slots set) — variant() = Err, so the
+        //    resolver's Option collapse yields None and the slice
+        //    projection returns `&[]`. Guards against a future refactor
+        //    that silently promoted the ambiguous corner to project
+        //    the ephemeral half's exports through.
+        let l = Lifetime {
+            permanent: Some(PermanentLifetime {}),
+            ephemeral: Some(EphemeralLifetime {
+                exports: vec![minimal_export_spec()],
+                ..EphemeralLifetime::default()
+            }),
+        };
+        assert_eq!(l.variant().unwrap_err(), LifetimeError::Ambiguous);
+        assert!(
+            l.ephemeral_exports().is_empty(),
+            "ambiguous lifetime must NOT project the ephemeral half's exports",
+        );
+    }
+
+    /// POPULATED-PROJECTION CONTRACT on [`Lifetime::ephemeral_exports`]:
+    /// when the resolver unambiguously projects to `Ephemeral`, the
+    /// returned slice is the ephemeral's `exports` vec by byte-shape
+    /// — length matches, every entry compares equal, and the slice's
+    /// pointer aims into `self.ephemeral.as_ref().unwrap().exports`
+    /// (not into a temporary). Composes with every
+    /// [`ExportSpecSliceExt`] method the caller may drape onto the
+    /// projection.
+    #[test]
+    fn ephemeral_exports_returns_declared_exports_slice_on_ephemeral_lifetime() {
+        use crate::export::ExportTrigger;
+
+        // Empty exports on the Ephemeral arm — projection returns
+        // `&[]` from the ephemeral's own `.exports.as_slice()`.
+        let l = Lifetime::ephemeral(EphemeralLifetime {
+            exports: vec![],
+            ..EphemeralLifetime::default()
+        });
+        assert!(l.ephemeral_exports().is_empty());
+
+        // Populated — projection returns the declared exports.
+        let exports = vec![minimal_export_spec(), {
+            let mut e = minimal_export_spec();
+            e.when = ExportTrigger::OnFailed;
+            e
+        }];
+        let l = Lifetime::ephemeral(EphemeralLifetime {
+            exports: exports.clone(),
+            ..EphemeralLifetime::default()
+        });
+        let slice = l.ephemeral_exports();
+        assert_eq!(slice.len(), exports.len());
+        for (i, expected) in exports.iter().enumerate() {
+            assert_eq!(slice[i].when, expected.when);
+        }
+    }
+
+    /// POINTER-IDENTITY CONTRACT on [`Lifetime::ephemeral_exports`]:
+    /// the returned slice points into `self.ephemeral.as_ref().
+    /// unwrap().exports`, not into a temporary. A mis-wire that
+    /// silently swapped the projection to a fresh Vec (e.g. through
+    /// `.to_vec()`) would surface here as a pointer-mismatch, before
+    /// any behavior-preservation invariant on downstream
+    /// [`ExportSpecSliceExt`] callers could hide it. Composes with
+    /// the peer contract on [`Self::resolved_ephemeral`]'s
+    /// `std::ptr::eq(e, l.ephemeral.as_ref().unwrap())` pin.
+    #[test]
+    fn ephemeral_exports_slice_matches_resolved_ephemeral_exports_pointer_when_present() {
+        let l = Lifetime::ephemeral(EphemeralLifetime {
+            exports: vec![minimal_export_spec()],
+            ..EphemeralLifetime::default()
+        });
+        let via_slice_ptr = l.ephemeral_exports().as_ptr();
+        let via_resolver_ptr = l
+            .resolved_ephemeral()
+            .expect("ephemeral-only must project")
+            .exports
+            .as_ptr();
+        assert!(std::ptr::eq(via_slice_ptr, via_resolver_ptr));
+    }
+
+    /// Minimal well-formed [`crate::export::ExportSpec`] for the
+    /// three [`Lifetime::ephemeral_exports`] tests above. Composed
+    /// through the smallest closed-set / tagged-union arms on the
+    /// export surface (`OnAttested` trigger, receipts-only source,
+    /// HTTP-event-only channel) so the fixture's identity comparisons
+    /// stay stable against future variant additions on the peer
+    /// discriminators.
+    fn minimal_export_spec() -> crate::export::ExportSpec {
+        use crate::export::{
+            ArtifactSource, ExportSpec, ExportTrigger, HttpEventChannel, ReceiptsSource,
+            VectorChannel,
+        };
+        ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                http_event: Some(HttpEventChannel::signal("receipt")),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::OnAttested,
+            experiment_id_override: None,
+        }
     }
 
     /// EMPTY-RESOLVES-TO-PERMANENT CONTRACT: the resolver's "no slot

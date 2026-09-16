@@ -1581,20 +1581,20 @@ fn evaluate_point_require_tag(
             .has_verification_phase(k)),
         ("export-when-", ExportTrigger, |k| spec
             .lifetime
-            .resolved_ephemeral()
-            .is_some_and(|e| e.exports.has_when(k))),
+            .ephemeral_exports()
+            .has_when(k)),
         ("channel-", ChannelKind, |k| spec
             .lifetime
-            .resolved_ephemeral()
-            .is_some_and(|e| e.exports.has_channel_kind(k))),
+            .ephemeral_exports()
+            .has_channel_kind(k)),
         ("report-format-", ReportFormat, |k| spec
             .lifetime
-            .resolved_ephemeral()
-            .is_some_and(|e| e.exports.has_report_format(k))),
+            .ephemeral_exports()
+            .has_report_format(k)),
         ("artifact-", ArtifactKind, |k| spec
             .lifetime
-            .resolved_ephemeral()
-            .is_some_and(|e| e.exports.has_artifact_kind(k))),
+            .ephemeral_exports()
+            .has_artifact_kind(k)),
         ("encapsulation-mode-", EncapsulationMode, |k| spec
             .encapsulates
             .as_ref()
@@ -1634,8 +1634,8 @@ fn evaluate_point_require_tag(
             .has_workload_kind(k)),
         ("report-payload-shape-", ReportPayloadShape, |k| spec
             .lifetime
-            .resolved_ephemeral()
-            .is_some_and(|e| e.exports.has_report_payload_shape(k))),
+            .ephemeral_exports()
+            .has_report_payload_shape(k)),
         ("input-arity-", Arity, |k| spec
             .classification
             .has_input_arity(k)),
@@ -1644,8 +1644,8 @@ fn evaluate_point_require_tag(
             .has_output_arity(k)),
         ("exports-fire-on-", ProcessPhase, |k| spec
             .lifetime
-            .resolved_ephemeral()
-            .is_some_and(|e| e.exports.has_applicable_at(k))),
+            .ephemeral_exports()
+            .has_applicable_at(k)),
     ) {
         return res;
     }

@@ -776,6 +776,109 @@ impl Classification {
     pub fn has_input_arity(&self, kind: Arity) -> bool {
         self.point_type.input_arity() == kind
     }
+
+    /// Closed-set-driven presence probe — does this [`Classification`]
+    /// carry a [`ConvergencePointType`] whose typed output-edge
+    /// cardinality projection ([`ConvergencePointType::output_arity`])
+    /// matches the given [`Arity`] discriminator? The ONE substrate
+    /// primitive that owns the `(Classification, Arity) -> bool`
+    /// output-side derived-typed-projection walk shape.
+    ///
+    /// # Fourth occupant on the (required-parent × nested-struct-scalar-child) corner — second via a derived-typed-projection; closes the DAG-composition arity pair
+    ///
+    /// Peer of [`Self::has_horizon_kind`],
+    /// [`Self::has_optimization_direction`], and
+    /// [`Self::has_input_arity`] on the (required-parent ×
+    /// nested-struct-scalar-child) corner. Byte-for-byte symmetric with
+    /// [`Self::has_input_arity`]: this method walks the SAME
+    /// `self.point_type` scalar carrier through the SAME `Arity`
+    /// closed set — the sole distinction is the typed projection
+    /// composed on the walk. `has_input_arity` composes
+    /// [`ConvergencePointType::input_arity`] (`Transform | Fork |
+    /// Broadcast | Observe → One`, `Join | Gate | Select | Reduce →
+    /// Many`); this method composes
+    /// [`ConvergencePointType::output_arity`] (`Fork | Broadcast →
+    /// Many`, everything else → `One`). Together the two probes close
+    /// the DAG-composition arity pair — the `(input_arity,
+    /// output_arity)` typed projection that pins each variant to
+    /// exactly one cell of the `Arity × Arity` topology table
+    /// (endomorphic `(One, One)`, diffusive `(One, Many)`, convergent
+    /// `(Many, One)`) so future DAG-composition validators dispatch on
+    /// a typed projection rather than re-deriving from variant names.
+    /// SECOND derived-typed-projection occupant on the
+    /// (required-parent × nested-struct-scalar-child) corner — pinning
+    /// the corner's "one carrier, N typed-projection probes" property
+    /// with a second projection over the same source closed set.
+    ///
+    /// # Semantics — VARIANT match on the OUTPUT-projected image
+    ///
+    /// `has_output_arity(kind)` returns `true` iff
+    /// `self.point_type.output_arity() == kind`. [`Arity`] carries no
+    /// `Default` impl, so exactly ONE of the two arms answers `true`
+    /// per well-formed [`crate::crd::ProcessSpec`], with no default-
+    /// arm short-circuit. The many-to-one projection shape means the
+    /// answer is invariant under intra-bucket swaps (`Fork ↔
+    /// Broadcast` both keep `output-arity-Many = true`; `Transform ↔
+    /// Join ↔ Gate ↔ Select ↔ Reduce ↔ Observe` all keep
+    /// `output-arity-One = true`) and flips at bucket boundaries
+    /// (`Fork ↔ Transform` flips `output-arity-Many` from `true` to
+    /// `false`). CROSS-PROJECTION DIAGONAL: `Fork | Broadcast` have
+    /// `(input_arity, output_arity) = (One, Many)` so `has_input_arity`
+    /// and `has_output_arity` DISAGREE on those two variants (the
+    /// diffusive bucket is the unique cell where the two projections
+    /// answer opposite `Arity` values); `Join | Gate | Select |
+    /// Reduce` have `(Many, One)` so the two probes disagree there too
+    /// (the convergent bucket is the mirror cell); `Transform |
+    /// Observe` have `(One, One)` so the two probes AGREE (the
+    /// endomorphic bucket). A regression that (a) probed
+    /// [`ConvergencePointType`] directly (dropping the
+    /// `.output_arity()` call), (b) inverted the projection (`One ↔
+    /// Many`), or (c) crossed the wires with
+    /// [`ConvergencePointType::input_arity`] (which disagrees on the
+    /// four arms in the diffusive + convergent cells) fails at this
+    /// probe's substrate site before drifting through every downstream
+    /// consumer.
+    ///
+    /// # Compounding
+    ///
+    /// This method POPULATES the DAG-composition arity pair for full
+    /// axis coverage — the natural fourth occupant the
+    /// [`Self::has_input_arity`] docstring names as the next
+    /// derived-typed-projection co-tenant on the same
+    /// `self.point_type` carrier. Operators authoring `(defpoint …
+    /// :requires (output-arity-Many))` in `checks.lisp` now get typed
+    /// access to the fan-out axis (edge-cardinality checks: "every
+    /// diffusive topology point emits fan-out" — the exact fleet-wide
+    /// property the (`Fork | Broadcast`, `Many`) projection composition
+    /// is designed to name) as the mirror of the input-side family,
+    /// and the two conjoined (`input-arity-One AND
+    /// output-arity-Many`) names the diffusive bucket exactly through
+    /// the two typed projections rather than through the OR of raw
+    /// `point-type-<Fork | Broadcast>` conjuncts. A future
+    /// [`ConvergencePointType`] variant (a hypothetical `Demux` for
+    /// `One → Many` or `Mux` for `Many → One`) reaches every downstream
+    /// through ONE `ALL` entry + one `as_str` arm + one `input_arity`
+    /// arm + one `output_arity` arm on the closed set with THIS probe
+    /// body untouched — the many-to-one projection means the bucket
+    /// membership shift lands exactly at each projection's own site,
+    /// not at every consumer that previously restated the bucket in
+    /// code.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the second derived-typed-projection presence-
+    /// probe body over the SAME `self.point_type` carrier lives at ONE
+    /// substrate site so every downstream (`output-arity-<kind>`
+    /// require-tag family in `tatara-check`, future DAG-composition
+    /// validators, future variant additions on
+    /// [`ConvergencePointType`]) binds through the SAME `has(kind)`
+    /// shape. THEORY.md §VI.1 — generation over composition; a future
+    /// [`Arity`] variant lands at ONE `ALL` entry + ONE `as_str` arm
+    /// on the closed set + ONE arm on each `input_arity`/`output_arity`
+    /// projection and both probes pick it up mechanically.
+    #[must_use]
+    pub fn has_output_arity(&self, kind: Arity) -> bool {
+        self.point_type.output_arity() == kind
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -4317,5 +4420,167 @@ mod tests {
         assert!(c.has_input_arity(Arity::One));
         assert!(!c.has_point_type(ConvergencePointType::Broadcast));
         assert!(!c.has_input_arity(Arity::Many));
+    }
+
+    // ── second derived-typed-projection presence probe on Classification × Arity ──
+    //
+    // Fail-before-pass-after granularity:
+    // [`Classification::has_output_arity`] did not exist before this
+    // commit — every consumer of the `(Classification, Arity) -> bool`
+    // two-hop `self.point_type.output_arity() == kind` probe shape
+    // would have to restate the derived-typed-projection walk at its
+    // own callsite. Post-lift the shape lives at ONE substrate owner
+    // and every downstream (the `output-arity-<kind>` require-tag
+    // family in `tatara-check`, future DAG-composition validators
+    // walking [`Arity::ALL`] on the fan-out side, any future consumer
+    // keying on the output-edge cardinality of a Process's convergence
+    // point) binds through the SAME `has(kind)` shape the peer input-
+    // side probe [`Classification::has_input_arity`] publishes. SECOND
+    // occupant of the DERIVED-TYPED-PROJECTION variant on the
+    // (required-parent × nested-struct-scalar-child) corner — closing
+    // the DAG-composition arity pair by mirroring `has_input_arity`
+    // through the sibling [`ConvergencePointType::output_arity`]
+    // projection.
+
+    /// PROJECTION-TRUTH-TABLE — for every [`ConvergencePointType`]
+    /// variant, `has_output_arity` on a [`Classification`] whose
+    /// `point_type` field is set to that variant returns `true` on
+    /// EXACTLY the [`Arity`] variant that
+    /// [`ConvergencePointType::output_arity`] projects to (and `false`
+    /// on every other variant). Sweep the
+    /// [`ConvergencePointType::ALL`] × [`Arity::ALL`] cross so a
+    /// regression that (a) probed [`ConvergencePointType`] directly
+    /// (dropping the `.output_arity()` call, silently answering `true`
+    /// on the populated slot only when the query happens to name the
+    /// same variant), (b) inverted the projection (`One ↔ Many`), (c)
+    /// crossed the wires with the sibling
+    /// [`ConvergencePointType::input_arity`] projection (which
+    /// disagrees on the diffusive `Fork | Broadcast → Many` output vs.
+    /// `Fork | Broadcast → One` input, AND on the convergent `Join |
+    /// Gate | Select | Reduce → One` output vs. `Many` input), (d)
+    /// hard-coded the arm to a single [`Arity`] (silently returning
+    /// `true` for every populated classification regardless of query
+    /// kind), or (e) wired the equality to a fixed unrelated field
+    /// fails HERE at the substrate primitive before landing at the
+    /// operator-facing checks.lisp surface. The projection's many-to-
+    /// one shape is pinned SYMMETRICALLY on both sides of the cross:
+    /// `Fork`, `Broadcast` populated arms answer `true` only for
+    /// `Arity::Many`; every other variant answers `true` only for
+    /// `Arity::One`.
+    #[test]
+    fn classification_has_output_arity_returns_true_iff_projection_matches_per_kind() {
+        for populated in ConvergencePointType::ALL {
+            let c = Classification {
+                point_type: populated,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            let expected_arity = populated.output_arity();
+            for query in Arity::ALL {
+                assert_eq!(
+                    c.has_output_arity(query),
+                    query == expected_arity,
+                    "point_type={populated:?} → output_arity={expected_arity:?}: query {query:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `point_type: ConvergencePointType::Gate`, and
+    /// [`ConvergencePointType::output_arity`] projects `Gate → One`,
+    /// so `has_output_arity` returns `true` on [`Arity::One`] and
+    /// `false` on [`Arity::Many`] — the MIRROR of the peer
+    /// [`Self::has_input_arity`] baseline (`Gate → input_arity = Many`),
+    /// which pins the convergent `(Many, One)` bucket at ONE
+    /// projection pair site. Pins the composition of the substrate's
+    /// baseline-constructor primitive with this presence-probe peer
+    /// and the sibling-projection correspondence (which pins `Gate` to
+    /// the fan-in `Many` input × fan-out `One` output cell) — a
+    /// regression that flipped `Gate`'s `output_arity` bucket
+    /// (silently mis-classifying every Gate as a `Many`-output point
+    /// at every downstream DAG-composition validator + this
+    /// require-tag family), or that wired `has_output_arity` to a
+    /// fixed arity answer, or that crossed the wires with
+    /// `input_arity` (which sends `Gate → Many`, the opposite bucket)
+    /// fails here at ONE narrow site before drifting across every
+    /// downstream fixture that keys assertions on the shape.
+    #[test]
+    fn classification_gate_compute_has_output_arity_one_only() {
+        let c = Classification::gate_compute();
+        for kind in Arity::ALL {
+            let expected = kind == Arity::One;
+            assert_eq!(
+                c.has_output_arity(kind),
+                expected,
+                "gate_compute (point_type=Gate → output_arity=One) must return {expected} for {kind:?}",
+            );
+        }
+    }
+
+    /// CROSS-PROJECTION COEXISTENCE — the peer input-side probe
+    /// [`Classification::has_input_arity`] and the output-side probe
+    /// [`Classification::has_output_arity`] read the SAME underlying
+    /// slot (`self.point_type`) through the SAME closed set
+    /// ([`Arity::ALL`]) but through DIFFERENT typed projections
+    /// ([`ConvergencePointType::input_arity`] vs.
+    /// [`ConvergencePointType::output_arity`]). A carrier with
+    /// `point_type: Fork` (the diffusive `(One, Many)` cell) MUST
+    /// simultaneously answer `has_input_arity(One) = true` AND
+    /// `has_output_arity(Many) = true` (Fork's arity pair), AND
+    /// simultaneously answer `has_input_arity(Many) = false` AND
+    /// `has_output_arity(One) = false` (opposite buckets). A carrier
+    /// with `point_type: Transform` (the endomorphic `(One, One)`
+    /// cell) MUST answer both probes with `Arity::One = true` — the
+    /// two projections AGREE in the endomorphic bucket. A carrier with
+    /// `point_type: Gate` (the convergent `(Many, One)` cell) MUST
+    /// answer `has_input_arity(Many) = true` AND
+    /// `has_output_arity(One) = true` — the mirror of the Fork case.
+    /// Pins the projection-composition contract at ONE narrow site —
+    /// a regression that (a) collapsed `has_output_arity` onto
+    /// `has_input_arity` (silently answering the input arity for
+    /// every output query on Fork/Broadcast/Join/Gate/Select/Reduce,
+    /// the six variants where the two projections disagree), (b)
+    /// swapped the projection direction (`Fork → (Many, One)` instead
+    /// of `(One, Many)`), or (c) drifted the topology-bucket contract
+    /// (silently mis-classifying Fork as endomorphic) fails HERE at
+    /// the substrate before landing at any consumer. THIS is the DAG-
+    /// composition arity pair pinned at ONE narrow site — the exact
+    /// property `convergence_point_type_arity_pair_agrees_with_bucket`
+    /// pins on the source projection functions themselves.
+    #[test]
+    fn classification_has_input_arity_and_has_output_arity_pin_dag_composition_pair() {
+        let fork = Classification {
+            point_type: ConvergencePointType::Fork,
+            substrate: SubstrateType::Compute,
+            horizon: Horizon::default(),
+            calm: CalmClassification::default(),
+            data_classification: DataClassification::default(),
+        };
+        assert!(fork.has_input_arity(Arity::One));
+        assert!(fork.has_output_arity(Arity::Many));
+        assert!(!fork.has_input_arity(Arity::Many));
+        assert!(!fork.has_output_arity(Arity::One));
+
+        let transform = Classification {
+            point_type: ConvergencePointType::Transform,
+            substrate: SubstrateType::Compute,
+            horizon: Horizon::default(),
+            calm: CalmClassification::default(),
+            data_classification: DataClassification::default(),
+        };
+        assert!(transform.has_input_arity(Arity::One));
+        assert!(transform.has_output_arity(Arity::One));
+        assert!(!transform.has_input_arity(Arity::Many));
+        assert!(!transform.has_output_arity(Arity::Many));
+
+        let gate = Classification::gate_compute();
+        assert!(gate.has_input_arity(Arity::Many));
+        assert!(gate.has_output_arity(Arity::One));
+        assert!(!gate.has_input_arity(Arity::One));
+        assert!(!gate.has_output_arity(Arity::Many));
     }
 }

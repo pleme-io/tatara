@@ -1750,6 +1750,45 @@ where
 ///   `channel-natsSubject` + `report-format-Junit` independently probe
 ///   the four axes on the same `&[ExportSpec]` slice.
 ///
+/// - `report-payload-shape-<kind>` — [`ReportPayloadShape`] closed set →
+///   [`tatara_process::export::ExportSpecSliceExt::has_report_payload_shape`]
+///   on [`EphemeralSpec::exports`] directly. Peer of the point surface's
+///   `report-payload-shape-<kind>` family (the twenty-second closed-set-
+///   driven prefix family on the point surface, which composes the SAME
+///   slice-level `ExportSpecSliceExt::has_report_payload_shape` substrate
+///   primitive through the `Lifetime::resolved_ephemeral()` Option-parent
+///   gate); this ephemeral peer routes through the SAME primitive with
+///   NO Option-parent hop (contrast the point-surface routing
+///   `spec.lifetime.resolved_ephemeral().is_some_and(|e| e.exports.has_report_payload_shape(kind))`).
+///   The [`From<EphemeralSpec>`] lowering copies `e.exports →
+///   EphemeralLifetime::exports` byte-for-byte (see
+///   [`tatara_process::ephemeral`] `From` impl line 311), so the SAME
+///   slice values reach both surfaces' `report-payload-shape-<kind>`
+///   families through the SAME
+///   [`ExportSpecSliceExt::has_report_payload_shape`] walk — a future
+///   third [`ReportPayloadShape`] variant reaches BOTH surfaces through
+///   the [`ReportPayloadShape::ALL`] sweep + one `as_str` arm on the
+///   closed set with no per-caller edit. SEVENTH closed-set-driven prefix
+///   family in the ephemeral require-tag vocabulary and FIFTH slice-child
+///   occupant routed DIRECTLY through the slice-level substrate; sibling
+///   of `report-format-<kind>` on the SAME `Option<TestReportSource>`
+///   nested-Option carrier, distinct on the derived-projection axis —
+///   this family reads the derived 2-arm [`ReportPayloadShape`] reached
+///   through the typed projection
+///   [`tatara_process::export::ReportFormat::payload_shape`] rather than
+///   the raw 4-arm [`ReportFormat`] discriminator at
+///   `test_report.format`. The projection's many-to-one shape (`Junit |
+///   TapV13 | Raw → OpaqueBytes`; `NdJson → NdJsonLines`) means a single
+///   TAP-formatted export simultaneously answers `true` for
+///   `report-format-TapV13` AND `report-payload-shape-OpaqueBytes` and
+///   `false` for both off-diagonals `report-format-Junit` /
+///   `report-payload-shape-NdJsonLines`. Closes the FIVE-of-FIVE two-
+///   surface symmetry contract on the slice-level probes: every slice-
+///   child probe published on the point surface (`export-when-`,
+///   `channel-`, `report-format-`, `artifact-`, `report-payload-shape-`)
+///   now has a byte-for-byte peer on the ephemeral surface routed through
+///   the SAME slice-level substrate primitive.
+///
 /// Every other tag is a fixed match on an [`EphemeralSpec`] slot; the
 /// remaining sugar-surface knobs (`aplicacao`, `ttl`, `teardown`,
 /// `postconditions`, `preconditions`, `closed-loop-auth`) aren't
@@ -1824,7 +1863,13 @@ where
 /// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_artifact_kind`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_artifact_suffix`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_artifact_prefix`],
-/// and [`tests::evaluate_ephemeral_require_tag_artifact_matches_point_peer_through_lowered_exports`].
+/// [`tests::evaluate_ephemeral_require_tag_artifact_matches_point_peer_through_lowered_exports`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_iff_report_payload_shape_matches_projection_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_report_payload_shape`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_false_on_non_test_report_source_for_every_report_payload_shape`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_report_payload_shape_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_report_payload_shape_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_report_payload_shape_matches_point_peer_through_lowered_exports`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -1867,6 +1912,13 @@ fn evaluate_ephemeral_require_tag(
             spec.exports.has_artifact_kind(kind)
         })
     {
+        return res;
+    }
+    if let Some(res) = strip_and_classify_prefixed_kind::<ReportPayloadShape, _>(
+        tag,
+        "report-payload-shape-",
+        |kind| spec.exports.has_report_payload_shape(kind),
+    ) {
         return res;
     }
     match tag {
@@ -10196,6 +10248,270 @@ mod tests {
                     eph_answer,
                     Ok(expected),
                     "ephemeral answer drifted from expected on {tag:?} populated={populated:?}",
+                );
+            }
+        }
+    }
+
+    // ── report-payload-shape-<kind> prefix family (ephemeral) ─────────
+    //
+    // Fail-before-pass-after granularity: the ephemeral require-tag
+    // vocabulary carried SIX closed-set-driven prefix families
+    // (`condition-<kind>`, `teardown-policy-<kind>`,
+    // `export-when-<kind>`, `channel-<kind>`, `report-format-<kind>`,
+    // `artifact-<kind>`) before this commit and had no way to
+    // distinguish the derived PAYLOAD-SHAPE projection of an ephemeral
+    // export's `test_report.format` slot — the two-arm collapse
+    // (`Junit | TapV13 | Raw → OpaqueBytes`; `NdJson → NdJsonLines`) was
+    // reachable on the point surface via the twenty-second family but
+    // not on the ephemeral sugar. The lift adds the SEVENTH closed-set-
+    // driven prefix family symmetrical with the six prior ones, routing
+    // through the pre-existing
+    // [`tatara_process::export::ExportSpecSliceExt::has_report_payload_shape`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`.
+    // FIFTH slice-child occupant routed DIRECTLY through the slice-
+    // level `ExportSpecSliceExt` trait primitive with no union-composing
+    // wrapper (siblings on the same slice: `export-when-<kind>`,
+    // `channel-<kind>`, `report-format-<kind>`, `artifact-<kind>`).
+    // Shares the nested-Option carrier shape with `report-format-<kind>`
+    // (both read the `Option<TestReportSource>` slot past
+    // `ExportSpec::source`) and distinct from it on the derived-
+    // projection axis (the raw 4-arm [`ReportFormat`] discriminator at
+    // `test_report.format` vs the derived 2-arm [`ReportPayloadShape`]
+    // reached through [`ReportFormat::payload_shape`]). Closes the
+    // FIVE-of-FIVE two-surface symmetry contract on the slice-level
+    // probes.
+
+    /// POPULATED-slot pin — `report-payload-shape-<kind>` dispatches
+    /// through the autoderived [`ReportPayloadShape`] `FromStr` + the
+    /// substrate
+    /// [`tatara_process::export::ExportSpecSliceExt::has_report_payload_shape`]
+    /// primitive, returning `true` only when the ephemeral spec's
+    /// `exports` vector carries at least one export whose
+    /// `source.test_report.format.payload_shape()` matches this shape.
+    /// Sweep the [`ReportFormat::ALL`] × [`ReportPayloadShape::ALL`]
+    /// cross so a regression that (a) probed [`ReportFormat`] directly
+    /// (dropping the `.payload_shape()` call), (b) inverted the
+    /// projection (`OpaqueBytes ↔ NdJsonLines`), (c) hard-coded the arm
+    /// to a single shape (silently returning `true` for every populated
+    /// export vector regardless of query shape), or (d) wired the
+    /// closure to a fixed unrelated field fails HERE at the classifier
+    /// before landing at the operator-facing checks.lisp surface. The
+    /// projection's many-to-one shape is pinned SYMMETRICALLY on both
+    /// sides of the cross: `Junit`, `TapV13`, `Raw` populated arms
+    /// answer `true` only for `OpaqueBytes`; `NdJson` populated arm
+    /// answers `true` only for `NdJsonLines`. Byte-for-byte peer of the
+    /// point-surface pin
+    /// [`evaluate_point_require_tag_returns_true_iff_report_payload_shape_matches_projection_per_kind`]
+    /// — reuses the `export_with_report_format` fixture on an
+    /// `EphemeralSpec { exports: … }` shape rather than the
+    /// point-surface `ephemeral_spec_with_exports` shape.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_iff_report_payload_shape_matches_projection_per_kind(
+    ) {
+        for populated in ReportFormat::ALL {
+            let spec = EphemeralSpec {
+                exports: vec![export_with_report_format(populated)],
+                ..ephemeral_fixture()
+            };
+            let expected_shape = populated.payload_shape();
+            for query in ReportPayloadShape::ALL {
+                let tag = format!("report-payload-shape-{}", query.as_str());
+                let expected = query == expected_shape;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral format={populated:?} → shape={expected_shape:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-EXPORTS pin — an ephemeral spec whose `exports` vector is
+    /// empty returns `Ok(false)` for every `report-payload-shape-<kind>`
+    /// tag. Locks the "reachable-empty-child" corner so a regression
+    /// that short-circuited on presence of the ephemeral surface alone
+    /// (returning `true` for every kind on any ephemeral), that treated
+    /// the empty vector's default answer as
+    /// `ReportFormat::default().payload_shape() == OpaqueBytes`, or
+    /// mis-routed the closure to a fixed always-true path fails HERE.
+    /// Distinct from the point surface's peer test which pins the
+    /// permanent-lifetime corner (unreachable via the
+    /// `resolved_ephemeral` gate); this ephemeral pin covers only the
+    /// reachable-empty-child corner because [`EphemeralSpec`] has no
+    /// permanent variant to collapse. The default `ephemeral_fixture`
+    /// (empty `exports: vec![]`) is the reachable-empty-child fixture.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_report_payload_shape(
+    ) {
+        let spec = ephemeral_fixture();
+        for kind in ReportPayloadShape::ALL {
+            let tag = format!("report-payload-shape-{}", kind.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(false),
+                "empty ephemeral exports must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// NESTED-OPTION-COLLAPSE pin — an ephemeral spec whose `exports`
+    /// vector carries a non-`test_report` export (a receipts-only
+    /// source) returns `Ok(false)` for EVERY
+    /// `report-payload-shape-<kind>` tag INCLUDING the
+    /// [`ReportPayloadShape::OpaqueBytes`] that is the projection of the
+    /// default [`ReportFormat::Raw`] a naive
+    /// `unwrap_or_default().payload_shape()` chain would spuriously
+    /// match. This is the ephemeral peer of the point surface's own
+    /// NESTED-OPTION-COLLAPSE pin — proves the nested-Option short-
+    /// circuit contract survives the surface change (no
+    /// `resolved_ephemeral` gate to short-circuit here, so the closed-
+    /// set walk MUST fire on the populated `exports` slot for the
+    /// collapse to hold). A regression that dropped the
+    /// `.as_ref().is_some_and(…)` gate on the substrate primitive fails
+    /// HERE — the reachable-empty-child pin above would still pass
+    /// (empty vector short-circuits before the nested-Option collapse
+    /// fires). Sweeps [`ReportPayloadShape::ALL`] so the collapse
+    /// contract is pinned symmetrically across every shape the closed
+    /// set names.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_non_test_report_source_for_every_report_payload_shape(
+    ) {
+        let receipts_only = ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::default(),
+            experiment_id_override: None,
+        };
+        let spec = EphemeralSpec {
+            exports: vec![receipts_only],
+            ..ephemeral_fixture()
+        };
+        for kind in ReportPayloadShape::ALL {
+            let tag = format!("report-payload-shape-{}", kind.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(false),
+                "receipts-only ephemeral export must return false for {tag:?} (including OpaqueBytes)",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `report-payload-shape-<garbage>` classifies
+    /// as [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag for ephemeral domain:
+    /// <verbatim>` diagnostic path fires. The canonical
+    /// [`ReportPayloadShape`] labels are PascalCase (`NdJsonLines`,
+    /// `OpaqueBytes`) — matching [`ReportPayloadShape::as_str`] byte-
+    /// for-byte — so snake_cased / lowerCamelCased / kebab-case /
+    /// cross-axis-leaked spellings are UNKNOWN suffixes. Pins the case-
+    /// sensitivity axis AND the axis boundary (raw [`ReportFormat`]
+    /// identifiers like `NdJson` live on the fifth ephemeral family and
+    /// MUST NOT resolve here).
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_report_payload_shape_suffix() {
+        let spec = ephemeral_fixture();
+        for garbage in [
+            "report-payload-shape-ndjsonlines",
+            "report-payload-shape-nd-json-lines",
+            "report-payload-shape-opaque_bytes",
+            "report-payload-shape-OPAQUEBYTES",
+            "report-payload-shape-NdJson",
+            "report-payload-shape-Raw",
+            "report-payload-shape-typo",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at
+    /// `report-payload-shape-` classifies as [`UnknownRequireTag`],
+    /// mirroring every prior closed-set prefix family on the ephemeral
+    /// surface. A regression that special-cased the bare prefix
+    /// (treating it as a coarse "any report-payload-shape axis
+    /// present") would fail HERE — the empty suffix must hit the
+    /// substrate primitive's canonical empty-string arm rather than
+    /// short-circuiting to `Ok(true)` on any ephemeral that carries a
+    /// non-empty `exports` vector. Locks the empty-suffix ↔ unknown-
+    /// suffix correspondence at ONE narrow classifier site.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_report_payload_shape_prefix() {
+        let spec = EphemeralSpec {
+            exports: vec![export_with_report_format(ReportFormat::TapV13)],
+            ..ephemeral_fixture()
+        };
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "report-payload-shape-"),
+            Err(UnknownRequireTag),
+            "bare `report-payload-shape-` must classify as UnknownRequireTag even with populated exports",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME `exports` slice reaches both
+    /// the ephemeral surface's `evaluate_ephemeral_require_tag`
+    /// classifier AND the point surface's `evaluate_point_require_tag`
+    /// classifier through the SAME
+    /// [`ExportSpecSliceExt::has_report_payload_shape`] substrate
+    /// primitive, so the two classifiers publish IDENTICAL answers for
+    /// every [`ReportFormat`] × every [`ReportPayloadShape`] cross.
+    /// Lowers the ephemeral spec to a `ProcessSpec` via the typed
+    /// `From<EphemeralSpec>` bridge (which copies `e.exports →
+    /// EphemeralLifetime::exports` byte-for-byte — see
+    /// [`tatara_process::ephemeral`] `From` impl) and cross-classifies.
+    /// Locks the two-surface symmetry contract on the
+    /// `report-payload-shape-<kind>` family — a regression that (a)
+    /// dropped the ephemeral routing arm, (b) inverted the routing
+    /// (probed a wrong slot), (c) diverged the two surfaces' closure
+    /// semantics, or (d) split the `.payload_shape()` projection between
+    /// the two surfaces fails HERE at ONE narrow site. Byte-for-byte
+    /// analog of
+    /// [`evaluate_ephemeral_require_tag_report_format_matches_point_peer_through_lowered_exports`]
+    /// on the sibling fifth family, but on the derived-projection axis
+    /// (the collapse through
+    /// [`tatara_process::export::ReportFormat::payload_shape`]) rather
+    /// than the raw discriminator — proving the parity contract
+    /// survives the derived-projection axis change on the same nested-
+    /// Option carrier AND the extra Option-parent hop on the point
+    /// surface. Closes the FIVE-of-FIVE slice-child parity contract:
+    /// every slice-child probe published on the point surface has a
+    /// byte-for-byte peer on the ephemeral surface routed through the
+    /// SAME slice-level substrate primitive.
+    #[test]
+    fn evaluate_ephemeral_require_tag_report_payload_shape_matches_point_peer_through_lowered_exports(
+    ) {
+        for populated in ReportFormat::ALL {
+            let eph = EphemeralSpec {
+                exports: vec![export_with_report_format(populated)],
+                ..ephemeral_fixture()
+            };
+            let point: ProcessSpec = eph.clone().into();
+            let expected_shape = populated.payload_shape();
+            for query in ReportPayloadShape::ALL {
+                let tag = format!("report-payload-shape-{}", query.as_str());
+                let eph_answer = evaluate_ephemeral_require_tag(&eph, &tag);
+                let point_answer = evaluate_point_require_tag(&point, &tag);
+                assert_eq!(
+                    eph_answer, point_answer,
+                    "two-surface parity broke on {tag:?} for populated={populated:?}: \
+                     eph={eph_answer:?} vs point={point_answer:?}",
+                );
+                let expected = query == expected_shape;
+                assert_eq!(
+                    eph_answer,
+                    Ok(expected),
+                    "ephemeral answer drifted from expected on {tag:?} populated={populated:?} \
+                     shape={expected_shape:?}",
                 );
             }
         }

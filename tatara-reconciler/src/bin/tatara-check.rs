@@ -22,6 +22,7 @@ use tatara_process::export::{
 };
 use tatara_process::intent::{IntentKind, WorkloadKind};
 use tatara_process::lifetime::{LifetimeKind, TeardownPolicy};
+use tatara_process::phase::ProcessPhase;
 use tatara_process::routing::RoutingForm;
 use tatara_process::signal::SighupStrategy;
 use tatara_process::spec::{DependsOnSliceExt, MustReachPhase};
@@ -1550,7 +1551,13 @@ macro_rules! dispatch_prefixed_kind {
 /// [`tests::evaluate_point_require_tag_returns_true_iff_output_arity_matches_projection_per_point_type`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_output_arity_suffix`],
 /// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_output_arity_prefix`],
-/// and [`tests::evaluate_point_require_tag_output_arity_and_input_arity_pin_dag_composition_pair`].
+/// [`tests::evaluate_point_require_tag_output_arity_and_input_arity_pin_dag_composition_pair`],
+/// [`tests::evaluate_point_require_tag_returns_true_iff_exports_fire_on_matches_trigger_projection_per_phase`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_exports_fire_on_phase`],
+/// [`tests::evaluate_point_require_tag_returns_false_on_empty_exports_for_every_exports_fire_on_phase`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_unknown_exports_fire_on_suffix`],
+/// [`tests::evaluate_point_require_tag_returns_unknown_on_bare_exports_fire_on_prefix`],
+/// and [`tests::evaluate_point_require_tag_exports_fire_on_and_export_when_coexist_via_projection`].
 fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
@@ -1635,6 +1642,10 @@ fn evaluate_point_require_tag(
         ("output-arity-", Arity, |k| spec
             .classification
             .has_output_arity(k)),
+        ("exports-fire-on-", ProcessPhase, |k| spec
+            .lifetime
+            .resolved_ephemeral()
+            .is_some_and(|e| e.exports.has_applicable_at(k))),
     ) {
         return res;
     }
@@ -2298,7 +2309,12 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
 /// [`tests::evaluate_ephemeral_require_tag_returns_true_on_default_routing_form_for_instance_only`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_routing_form_suffix`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_routing_form_prefix`],
-/// and [`tests::evaluate_ephemeral_require_tag_routing_form_matches_point_peer_through_lowered_routing`].
+/// [`tests::evaluate_ephemeral_require_tag_routing_form_matches_point_peer_through_lowered_routing`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_iff_exports_fire_on_matches_trigger_projection_per_phase`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_exports_fire_on_phase`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_exports_fire_on_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_exports_fire_on_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_exports_fire_on_matches_point_peer_through_lowered_exports`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -2333,6 +2349,8 @@ fn evaluate_ephemeral_require_tag(
         ("input-arity-", Arity, |k| spec.has_input_arity(k)),
         ("output-arity-", Arity, |k| spec.has_output_arity(k)),
         ("routing-form-", RoutingForm, |k| spec.has_routing_form(k)),
+        ("exports-fire-on-", ProcessPhase, |k| spec
+            .has_applicable_exports_at(k)),
     ) {
         return res;
     }
@@ -3401,6 +3419,7 @@ mod tests {
     };
     use tatara_process::intent::{AplicacaoIntent, ContainerIntent, IntentKind, WorkloadKind};
     use tatara_process::lifetime::{EphemeralLifetime, Lifetime, LifetimeKind, TeardownPolicy};
+    use tatara_process::phase::ProcessPhase;
     use tatara_process::routing::{RoutingBackend, RoutingForm, RoutingHostname, RoutingSpec};
     use tatara_process::signal::SighupStrategy;
     use tatara_process::spec::MustReachPhase;
@@ -7923,6 +7942,211 @@ mod tests {
             evaluate_point_require_tag(&spec, "routing-form-instance"),
             Ok(false),
             "off-diagonal `routing-form-instance` must be false: the routing declares Stable",
+        );
+    }
+
+    // ── exports-fire-on-<phase> prefix family (evaluate_point_require_tag) ─
+    //
+    // Fail-before-pass-after granularity: the `exports-fire-on-<phase>`
+    // prefix family did not exist before this commit — the point-domain
+    // require-tag vocabulary had `export-when-<kind>` (raw
+    // ExportTrigger discriminator) but no way to ask the derived
+    // `(when, phase) → fires_on(phase)` question the reconciler already
+    // consumes at the Attested → Releasing gate. Routes through the
+    // NEW slice-level substrate primitive
+    // [`ExportSpecSliceExt::has_applicable_at`] — the SIXTH slice-level
+    // closed-set-driven presence probe, and the FIRST whose
+    // discriminator is [`ProcessPhase`] (peer prefix families all
+    // discriminate over export-side vocabularies: ExportTrigger,
+    // ChannelKind, ReportFormat, ArtifactKind, ReportPayloadShape).
+    //
+    // FIRST occupant on a FRESH corner of the (parent-shape ×
+    // child-shape) axis: Option-parent (via
+    // `spec.lifetime.resolved_ephemeral()`) × slice-child × DERIVED
+    // phase-dispatch projection (via `ExportTrigger::fires_on`).
+    // Distinct from the five prior Option-parent × slice-child
+    // families: `export-when-<kind>` reads a raw stored discriminator
+    // equality on the `when` field; `channel-<kind>` /
+    // `artifact-<kind>` read tagged-union carrier populated-slot
+    // projections; `report-format-<kind>` /
+    // `report-payload-shape-<kind>` read a nested-Option scalar past
+    // `test_report`. THIS family reads a DERIVED per-phase dispatch
+    // over the SAME stored discriminator through the ONE
+    // [`ExportTrigger::fires_on`] projection — a receipts-only export
+    // with `when: Always` answers `true` for BOTH `exports-fire-on-
+    // Attested` AND `exports-fire-on-Failed` because `fires_on`
+    // widens the raw discriminator into terminal-phase coverage.
+
+    /// POPULATED-slot pin — `exports-fire-on-<phase>` dispatches through
+    /// the autoderived [`ProcessPhase`] `FromStr` + the substrate
+    /// [`ExportSpecSliceExt::has_applicable_at`] primitive, returning
+    /// `true` iff any resolved ephemeral export's trigger fires on the
+    /// queried phase. Sweep the [`ExportTrigger::ALL`] ×
+    /// [`ProcessPhase::ALL`] cross so a regression that (a) hard-coded
+    /// the arm to a single trigger, (b) short-circuited to raw `when ==
+    /// kind` equality (dropping `Always`'s dual-phase coverage), or (c)
+    /// wired the closure to an unrelated field fails HERE at the
+    /// classifier before landing at the operator-facing checks.lisp
+    /// surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_exports_fire_on_matches_trigger_projection_per_phase(
+    ) {
+        for trigger in ExportTrigger::ALL {
+            let spec = ephemeral_spec_with_exports(vec![export_at(trigger)]);
+            for phase in ProcessPhase::ALL {
+                let tag = format!("exports-fire-on-{}", phase.as_str());
+                let expected = trigger.fires_on(phase);
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "trigger={trigger:?}: tag {tag:?} drifted from fires_on truth table",
+                );
+            }
+        }
+    }
+
+    /// OPTION-PARENT SHORT-CIRCUIT pin — a permanent-lifetime
+    /// [`ProcessSpec`] returns `false` for every `exports-fire-on-<phase>`
+    /// tag because the `spec.lifetime.resolved_ephemeral()` gate
+    /// short-circuits before the slice-level walk fires. Locks the
+    /// Option-parent silencing contract: a Process without an ephemeral
+    /// lifetime can never route through Releasing (there's no export
+    /// vector to walk), so the classifier reads `false` on every phase
+    /// without reaching the underlying slice.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_exports_fire_on_phase(
+    ) {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert!(spec.lifetime.resolved_ephemeral().is_none());
+        for phase in ProcessPhase::ALL {
+            let tag = format!("exports-fire-on-{}", phase.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "permanent lifetime must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// EMPTY-EXPORTS pin — an ephemeral spec with an empty `exports`
+    /// vec returns `false` for every phase because
+    /// [`ExportSpecSliceExt::has_applicable_at`]'s existential quantifier
+    /// collapses on an empty slice. Distinct from the Option-parent
+    /// silencing pin above: this pin verifies the reachable arm's
+    /// empty-slice behavior — the walk EXECUTES on `&[]` and yields
+    /// `false` because no entry to test.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_empty_exports_for_every_exports_fire_on_phase() {
+        let spec = ephemeral_spec_with_exports(vec![]);
+        assert!(spec.lifetime.resolved_ephemeral().is_some());
+        for phase in ProcessPhase::ALL {
+            let tag = format!("exports-fire-on-{}", phase.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "empty exports vec must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `exports-fire-on-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// `unknown :requires tag: <verbatim>` diagnostic path fires. The
+    /// canonical [`ProcessPhase`] labels are PascalCase
+    /// (`Attested`, `Failed`, etc.) — matching the serde `rename_all =
+    /// "PascalCase"` output — so lower-case / typo spellings are
+    /// UNKNOWN suffixes. The empty-suffix boundary is pinned by
+    /// [`strip_and_classify_prefixed_kind_returns_unknown_on_empty_suffix`]
+    /// so no per-family duplicate here.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_exports_fire_on_suffix() {
+        let spec = ephemeral_spec_with_exports(vec![export_at(ExportTrigger::Always)]);
+        for garbage in [
+            "exports-fire-on-attested",
+            "exports-fire-on-ATTESTED",
+            "exports-fire-on-Attest",
+            "exports-fire-on-Terminated",
+            "exports-fire-on-Success",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag::default()),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at
+    /// `exports-fire-on-` classifies as [`UnknownRequireTag`],
+    /// mirroring every prior closed-set prefix family. The empty
+    /// suffix hits the substrate primitive's canonical empty-string
+    /// arm rather than short-circuiting to `Ok(true)` on any populated
+    /// exports vec (which would silently read as "any export axis
+    /// present" for every ephemeral Process). On the permanent-lifetime
+    /// side the same bare prefix is ALSO unknown — the substrate
+    /// primitive rejects the empty suffix before the Option-parent gate
+    /// fires — pinning the corner's empty-suffix contract as
+    /// independent of the parent-arm branch.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_exports_fire_on_prefix() {
+        let ephemeral_spec = ephemeral_spec_with_exports(vec![export_at(ExportTrigger::Always)]);
+        assert_eq!(
+            evaluate_point_require_tag(&ephemeral_spec, "exports-fire-on-"),
+            Err(UnknownRequireTag::default()),
+            "bare `exports-fire-on-` must classify as UnknownRequireTag on an ephemeral spec",
+        );
+        let permanent_spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&permanent_spec, "exports-fire-on-"),
+            Err(UnknownRequireTag::default()),
+            "bare `exports-fire-on-` must classify as UnknownRequireTag on a permanent spec",
+        );
+    }
+
+    /// PROJECTION-DISTINCTION pin — an ephemeral spec whose sole export
+    /// carries `when: Always` MUST simultaneously satisfy BOTH
+    /// `exports-fire-on-Attested` AND `exports-fire-on-Failed`
+    /// (because `Always.fires_on(Attested) = true` and
+    /// `Always.fires_on(Failed) = true`), while `export-when-Always`
+    /// answers `true` and `export-when-OnAttested` /
+    /// `export-when-OnFailed` both answer `false` (raw discriminator
+    /// equality reads only the stored variant). Locks the semantic
+    /// split between the derived phase-dispatch family (this NEW
+    /// family) and the raw stored-discriminator family
+    /// (`export-when-<kind>`) at ONE narrow site: they answer distinct
+    /// operator questions on the SAME slice, and a regression that
+    /// collapsed either into the other would fail HERE. The two
+    /// families coexist because they discriminate over DIFFERENT
+    /// closed sets ([`ProcessPhase`] vs [`ExportTrigger`]) through
+    /// distinct projections on the SAME `Vec<ExportSpec>` slot.
+    #[test]
+    fn evaluate_point_require_tag_exports_fire_on_and_export_when_coexist_via_projection() {
+        let spec = ephemeral_spec_with_exports(vec![export_at(ExportTrigger::Always)]);
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "exports-fire-on-Attested"),
+            Ok(true),
+            "Always fires on Attested",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "exports-fire-on-Failed"),
+            Ok(true),
+            "Always fires on Failed",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "export-when-Always"),
+            Ok(true),
+            "raw discriminator equality: when == Always",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "export-when-OnAttested"),
+            Ok(false),
+            "raw discriminator equality: when != OnAttested",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "export-when-OnFailed"),
+            Ok(false),
+            "raw discriminator equality: when != OnFailed",
         );
     }
 
@@ -13568,6 +13792,167 @@ mod tests {
                     evaluate_ephemeral_require_tag(&authored, &tag),
                     evaluate_point_require_tag(&lowered, &tag),
                     "two-surface routing-form parity drift: stable_name_claim={is_stable}, tag={tag:?}",
+                );
+            }
+        }
+    }
+
+    // ── exports-fire-on-<phase> prefix family (evaluate_ephemeral_require_tag) ─
+    //
+    // Fail-before-pass-after granularity: the `exports-fire-on-<phase>`
+    // family did not exist on the ephemeral surface before this commit
+    // — pre-lift the ephemeral surface had `export-when-<kind>` (raw
+    // ExportTrigger discriminator) but no way to ask the derived
+    // `(when, phase) → fires_on(phase)` question. Both surfaces
+    // classify through the ONE new slice-level substrate primitive
+    // [`ExportSpecSliceExt::has_applicable_at`]: the ephemeral surface
+    // walks `self.exports.has_applicable_at(phase)` directly through
+    // [`EphemeralSpec::has_applicable_exports_at`]; the point surface
+    // reaches the same primitive through
+    // `spec.lifetime.resolved_ephemeral().is_some_and(|e|
+    // e.exports.has_applicable_at(phase))`. The seventeenth ephemeral
+    // prefix family, symmetric to the point surface's newly-opened
+    // twenty-fifth family — locking two-surface parity at the classifier
+    // boundary means a future normalization at the compound `(when,
+    // phase) → fires_on(phase)` walk lands at the ONE slice-level
+    // primitive and both classifiers inherit the shift mechanically.
+
+    /// POPULATED-slot pin — `exports-fire-on-<phase>` on the ephemeral
+    /// surface dispatches through the autoderived [`ProcessPhase`]
+    /// `FromStr` + the substrate [`ExportSpecSliceExt::has_applicable_at`]
+    /// primitive on `self.exports`, returning `true` iff any authored
+    /// export's trigger fires on the queried phase. Sweep
+    /// [`ExportTrigger::ALL`] × [`ProcessPhase::ALL`] so a regression
+    /// that (a) hard-coded the arm to a single trigger, (b) short-
+    /// circuited to raw `when == kind` equality (dropping `Always`'s
+    /// dual-phase coverage), or (c) wired the closure to an unrelated
+    /// ephemeral field fails HERE at the classifier before landing at
+    /// the operator-facing checks.lisp surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_iff_exports_fire_on_matches_trigger_projection_per_phase(
+    ) {
+        for trigger in ExportTrigger::ALL {
+            let spec = EphemeralSpec {
+                exports: vec![export_at(trigger)],
+                ..ephemeral_fixture()
+            };
+            for phase in ProcessPhase::ALL {
+                let tag = format!("exports-fire-on-{}", phase.as_str());
+                let expected = trigger.fires_on(phase);
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral trigger={trigger:?}: tag {tag:?} drifted from fires_on truth table",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-EXPORTS pin — an [`EphemeralSpec`] with an empty `exports`
+    /// vec returns `false` for every phase because
+    /// [`ExportSpecSliceExt::has_applicable_at`]'s existential
+    /// quantifier collapses on an empty slice. The ephemeral surface
+    /// has NO Option-parent gate above `self.exports` (the vec is a
+    /// direct field), so this is the SOLE silencing corner on this
+    /// surface — a fresh ephemeral without declared exports never
+    /// asserts a phase-fire predicate.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_exports_fire_on_phase(
+    ) {
+        let spec = ephemeral_fixture();
+        assert!(spec.exports.is_empty());
+        for phase in ProcessPhase::ALL {
+            let tag = format!("exports-fire-on-{}", phase.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(false),
+                "empty ephemeral exports must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `exports-fire-on-<garbage>` on the
+    /// ephemeral surface classifies as [`UnknownRequireTag`] via the
+    /// shared `strip_and_classify_prefixed_kind` primitive, byte-for-
+    /// byte symmetrical with the point surface's peer pin. Case-
+    /// sensitivity is inherited from the autoderived
+    /// [`ProcessPhase`] `FromStr` (PascalCase per serde's rename).
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_exports_fire_on_suffix() {
+        let spec = EphemeralSpec {
+            exports: vec![export_at(ExportTrigger::Always)],
+            ..ephemeral_fixture()
+        };
+        for garbage in [
+            "exports-fire-on-attested",
+            "exports-fire-on-ATTESTED",
+            "exports-fire-on-Attest",
+            "exports-fire-on-Terminated",
+            "exports-fire-on-Success",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, garbage),
+                Err(UnknownRequireTag::default()),
+                "unknown ephemeral suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at
+    /// `exports-fire-on-` on the ephemeral surface classifies as
+    /// [`UnknownRequireTag`], mirroring every prior closed-set prefix
+    /// family. The empty suffix hits the substrate primitive's
+    /// canonical empty-string arm; on an empty-exports ephemeral the
+    /// same bare prefix is ALSO unknown — the substrate primitive
+    /// rejects the empty suffix BEFORE the slice walk fires — pinning
+    /// the empty-suffix contract as independent of the exports-vec
+    /// population.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_exports_fire_on_prefix() {
+        let populated = EphemeralSpec {
+            exports: vec![export_at(ExportTrigger::Always)],
+            ..ephemeral_fixture()
+        };
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&populated, "exports-fire-on-"),
+            Err(UnknownRequireTag::default()),
+            "bare `exports-fire-on-` must classify as UnknownRequireTag on a populated ephemeral",
+        );
+        let empty = ephemeral_fixture();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&empty, "exports-fire-on-"),
+            Err(UnknownRequireTag::default()),
+            "bare `exports-fire-on-` must classify as UnknownRequireTag on an empty ephemeral",
+        );
+    }
+
+    /// TWO-SURFACE SYMMETRY pin — every (trigger, phase) combination
+    /// on an [`EphemeralSpec`] returns identically through both
+    /// `evaluate_ephemeral_require_tag(&authored, ...)` AND
+    /// `evaluate_point_require_tag(&lowered, ...)`. Locks byte-for-byte
+    /// parity through the classifier boundary — both surfaces route
+    /// through the SAME slice-level substrate primitive
+    /// [`ExportSpecSliceExt::has_applicable_at`] on the SAME
+    /// `Vec<ExportSpec>` value (byte-copied by
+    /// `From<EphemeralSpec>` at `lifetime: Lifetime::ephemeral(...)`),
+    /// so a regression that (a) diverged the ephemeral probe from the
+    /// lowered-lifetime probe, or (b) diverged the `From<EphemeralSpec>`
+    /// lowering's `exports: e.exports` copy from byte-for-byte
+    /// forwarding, fails HERE at the two-surface boundary.
+    #[test]
+    fn evaluate_ephemeral_require_tag_exports_fire_on_matches_point_peer_through_lowered_exports() {
+        for trigger in ExportTrigger::ALL {
+            let authored = EphemeralSpec {
+                exports: vec![export_at(trigger)],
+                ..ephemeral_fixture()
+            };
+            let lowered: ProcessSpec = authored.clone().into();
+            for phase in ProcessPhase::ALL {
+                let tag = format!("exports-fire-on-{}", phase.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&authored, &tag),
+                    evaluate_point_require_tag(&lowered, &tag),
+                    "two-surface exports-fire-on parity drift: trigger={trigger:?}, tag={tag:?}",
                 );
             }
         }

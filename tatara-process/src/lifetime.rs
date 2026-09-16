@@ -17,7 +17,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::export::ExportSpec;
+use crate::export::{ExportSpec, ExportSpecSliceExt};
 use crate::phase::ProcessPhase;
 
 /// Lifetime slot on `ProcessSpec`. Exactly one variant should be populated;
@@ -561,8 +561,15 @@ impl EphemeralLifetime {
     ///
     /// Returns `false` when the export list is empty or no trigger
     /// matches — both cases collapse to the existing teardown path.
+    ///
+    /// Thin delegate to [`ExportSpecSliceExt::has_applicable_at`] on
+    /// `self.exports`. Both callers (this method and the peer
+    /// [`crate::ephemeral::EphemeralSpec::has_applicable_exports_at`]
+    /// on the sugar surface) route through the SAME slice-level
+    /// substrate primitive so a future normalization at the compound
+    /// `(when, phase) → fires_on(phase)` walk lands at ONE site.
     pub fn has_applicable_exports(&self, phase: ProcessPhase) -> bool {
-        self.exports.iter().any(|e| e.when.fires_on(phase))
+        self.exports.has_applicable_at(phase)
     }
 
     /// Iterate over the exports whose trigger fires on `phase`.

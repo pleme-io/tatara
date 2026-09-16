@@ -40,9 +40,10 @@ use crate::classification::{
     HorizonKind, OptimizationDirection, SubstrateType,
 };
 use crate::crd::ProcessSpec;
-use crate::export::ExportSpec;
+use crate::export::{ExportSpec, ExportSpecSliceExt};
 use crate::intent::{AplicacaoIntent, Intent};
 use crate::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
+use crate::phase::ProcessPhase;
 use crate::routing::{RoutingForm, RoutingSpec};
 
 /// `EphemeralSpec` — typed wrapper that authors `(defephemeral …)`.
@@ -1083,6 +1084,80 @@ impl EphemeralSpec {
     #[must_use]
     pub fn has_routing_form(&self, kind: RoutingForm) -> bool {
         self.routing.as_ref().is_some_and(|r| r.has_form(kind))
+    }
+
+    /// True iff at least one declared export in `self.exports` would
+    /// fire on the given terminal-reached [`ProcessPhase`] — the peer
+    /// of [`crate::lifetime::EphemeralLifetime::has_applicable_exports`]
+    /// on the [`EphemeralSpec`] surface.
+    ///
+    /// # Semantics — byte-identical to [`crate::lifetime::EphemeralLifetime::has_applicable_exports`]
+    ///
+    /// Both surfaces walk the SAME slice-level substrate primitive
+    /// [`ExportSpecSliceExt::has_applicable_at`] on their respective
+    /// `Vec<ExportSpec>` slot: [`EphemeralSpec`]'s `exports` field is
+    /// copied byte-for-byte into `EphemeralLifetime::exports` at the
+    /// `From<EphemeralSpec>` lowering, so a `has_applicable_exports_at`
+    /// query on the authored ephemeral spec answers identically to a
+    /// `has_applicable_exports` query on the lowered `EphemeralLifetime`.
+    /// A regression at the compound `(when, phase) → fires_on(phase)`
+    /// walk fails at [`ExportSpecSliceExt::has_applicable_at`]'s tests
+    /// rather than as silent drift at either surface's inherent method.
+    ///
+    /// # Sibling to [`crate::lifetime::EphemeralLifetime::has_applicable_exports`]
+    ///
+    /// Same shape, same axis, same body — the point-domain surface
+    /// composes through `spec.lifetime.resolved_ephemeral().is_some_and(
+    /// |e| e.exports.has_applicable_at(phase))`; the ephemeral sugar
+    /// surface reads `self.exports.has_applicable_at(phase)` directly
+    /// because `EphemeralSpec` stores `exports: Vec<ExportSpec>` as a
+    /// top-level field. Both routes bind through THIS ONE slice-level
+    /// primitive so a future normalization (widening the trigger from
+    /// a stored discriminator to a computed predicate, adding a phase
+    /// that composes across multiple trigger arms, threading a
+    /// per-export justification back for editor tooltips) lands at ONE
+    /// site and every downstream inherits the shift by construction.
+    ///
+    /// # Compounding
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// with the closed-set [`ProcessPhase`]'s autoderived `FromStr`
+    /// through the `strip_and_classify_prefixed_kind` substrate to
+    /// publish an `exports-fire-on-<phase>` closed-set prefix family
+    /// byte-for-byte symmetrical with the point surface's family via
+    /// `spec.lifetime.resolved_ephemeral().is_some_and(|e|
+    /// e.exports.has_applicable_at(phase))`. A future twelfth
+    /// [`ProcessPhase`] variant reaches BOTH surfaces' prefix families
+    /// through the ONE [`crate::export::ExportTrigger::fires_on`]
+    /// exhaustive match — either the new phase inherits a per-trigger
+    /// fire rule at that single substrate site or it collapses to
+    /// `false` for every trigger (the current non-terminal tail),
+    /// without a per-caller edit anywhere else.
+    ///
+    /// A future normalization at the compound `(when, phase) →
+    /// fires_on(phase)` walk (a widening that returns the applicable
+    /// exports themselves rather than a bool, a debug-build assertion
+    /// on redundant `Always`-triggered exports coexisting with an
+    /// `OnAttested` peer, a fleet-wide warn on empty-export ephemerals
+    /// declaring `OnAttested` postconditions) lands at the ONE
+    /// slice-level substrate primitive [`ExportSpecSliceExt::has_applicable_at`]
+    /// both this method and [`crate::lifetime::EphemeralLifetime::has_applicable_exports`]
+    /// compose against — so the two struct-level union methods stay
+    /// symmetric by construction.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the walk composes the SAME slice-level substrate
+    /// primitive on both this ephemeral surface and the
+    /// [`crate::lifetime::EphemeralLifetime`] surface, so a regression
+    /// at the compound `(when, phase) → fires_on(phase)` chain fails
+    /// at ONE site rather than as silent drift between the two peers).
+    /// THEORY.md §VI.1 (generation over composition — a future
+    /// [`ProcessPhase`] variant or a future [`crate::export::ExportTrigger`]
+    /// variant reaches both `exports-fire-on-<phase>` require-tag
+    /// surfaces mechanically through the SAME closed-set walk).
+    #[must_use]
+    pub fn has_applicable_exports_at(&self, phase: ProcessPhase) -> bool {
+        self.exports.has_applicable_at(phase)
     }
 }
 
@@ -2949,6 +3024,117 @@ mod tests {
                 assert_eq!(
                     ephemeral_answer, point_answer,
                     "two-surface routing-form parity drift: stable_name_claim={is_stable}, kind={kind:?}",
+                );
+            }
+        }
+    }
+
+    // ── EphemeralSpec::has_applicable_exports_at substrate pins ───────
+    //
+    // Fail-before-pass-after granularity: `has_applicable_exports_at`
+    // did not exist pre-lift on `impl EphemeralSpec` — the peer
+    // `EphemeralLifetime::has_applicable_exports` on the lowered
+    // `ProcessSpec` surface routed through the compound
+    // `.iter().any(|e| e.when.fires_on(phase))` chain inline, so the
+    // sugar surface had no matching primitive to publish an
+    // `exports-fire-on-<phase>` prefix family through the
+    // `strip_and_classify_prefixed_kind` substrate. Post-lift the
+    // compound-`(when, phase) → fires_on(phase)` probe body lives at
+    // ONE slice-level substrate site (`ExportSpecSliceExt::has_applicable_at`),
+    // this ephemeral surface routes through it directly, and the
+    // point surface reaches the same primitive through
+    // `spec.lifetime.resolved_ephemeral().is_some_and(|e|
+    // e.exports.has_applicable_at(phase))`.
+
+    fn export_at(when: crate::export::ExportTrigger) -> ExportSpec {
+        use crate::export::{ArtifactSource, ReceiptsSource, StdoutChannel, VectorChannel};
+        ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+            when,
+            experiment_id_override: None,
+        }
+    }
+
+    /// EMPTY-EXPORTS pin — an ephemeral spec with an empty `exports`
+    /// vec returns `false` for EVERY [`ProcessPhase`]. Sweep
+    /// [`ProcessPhase::ALL`] so a new variant added without a matching
+    /// arm in [`crate::export::ExportTrigger::fires_on`] surfaces at
+    /// rustc's exhaustiveness gate on the `ALL` literal (arity forced
+    /// by `[Self; 11]`) rather than as a silent false-positive at
+    /// every downstream `exports-fire-on-<phase>` ephemeral require-tag
+    /// callsite.
+    #[test]
+    fn has_applicable_exports_at_returns_false_on_empty_exports_for_every_phase() {
+        let spec = empty_ephemeral();
+        assert!(spec.exports.is_empty());
+        for phase in ProcessPhase::ALL {
+            assert!(
+                !spec.has_applicable_exports_at(phase),
+                "empty-exports ephemeral must return false for {phase:?}",
+            );
+        }
+    }
+
+    /// PER-TRIGGER × PER-PHASE pin — an ephemeral spec with a single
+    /// export answers `has_applicable_exports_at` identically to the
+    /// [`crate::export::ExportTrigger::fires_on`] truth table on that
+    /// (trigger, phase) pair, for every combination. Sweep the
+    /// [`crate::export::ExportTrigger::ALL`] × [`ProcessPhase::ALL`]
+    /// cross so a regression that (a) short-circuited to raw `when ==
+    /// kind` equality, (b) missed `Always`'s dual-phase coverage, or
+    /// (c) inverted a non-terminal phase to return `true` fails HERE
+    /// at the substrate primitive rather than at each downstream
+    /// `exports-fire-on-<phase>` classifier callsite.
+    #[test]
+    fn has_applicable_exports_at_matches_fires_on_truth_table_per_pair() {
+        for trigger in crate::export::ExportTrigger::ALL {
+            let mut spec = empty_ephemeral();
+            spec.exports = vec![export_at(trigger)];
+            for phase in ProcessPhase::ALL {
+                let expected = trigger.fires_on(phase);
+                assert_eq!(
+                    spec.has_applicable_exports_at(phase),
+                    expected,
+                    "ephemeral trigger={trigger:?} phase={phase:?} drifted from fires_on",
+                );
+            }
+        }
+    }
+
+    /// TWO-SURFACE SYMMETRY pin — an [`EphemeralSpec`] and the
+    /// [`ProcessSpec`] it lowers to through `From<EphemeralSpec>`
+    /// answer identically on every [`ProcessPhase`] × trigger
+    /// combination. Locks the byte-for-byte parity between
+    /// [`EphemeralSpec::has_applicable_exports_at`] (this new primitive)
+    /// and the point surface's `spec.lifetime.resolved_ephemeral()
+    /// .is_some_and(|e| e.exports.has_applicable_at(phase))` projection
+    /// at the tatara-check dispatch site. A regression that (a)
+    /// diverged the ephemeral probe from the lowered-lifetime probe,
+    /// (b) diverged the `From<EphemeralSpec>` lowering's
+    /// `exports: e.exports` copy from byte-for-byte forwarding, fails
+    /// HERE at the two-surface boundary.
+    #[test]
+    fn has_applicable_exports_at_matches_point_peer_through_lowered_exports() {
+        for trigger in crate::export::ExportTrigger::ALL {
+            let mut authored = empty_ephemeral();
+            authored.exports = vec![export_at(trigger)];
+            let lowered: ProcessSpec = authored.clone().into();
+            for phase in ProcessPhase::ALL {
+                let ephemeral_answer = authored.has_applicable_exports_at(phase);
+                let point_answer = lowered
+                    .lifetime
+                    .resolved_ephemeral()
+                    .is_some_and(|e| e.exports.has_applicable_at(phase));
+                assert_eq!(
+                    ephemeral_answer, point_answer,
+                    "two-surface exports-fire-on parity drift: trigger={trigger:?}, phase={phase:?}",
                 );
             }
         }

@@ -1241,6 +1241,57 @@ pub trait ExportSpecSliceExt {
     /// edit at this walk or at any downstream `report-payload-shape-
     /// <kind>` callsite.
     fn has_report_payload_shape(&self, kind: ReportPayloadShape) -> bool;
+
+    /// True iff at least one [`ExportSpec`] in this slice would fire
+    /// on the given terminal-reached [`ProcessPhase`] — the compound
+    /// `(ExportTrigger, ProcessPhase) → fires_on(phase)` walk lifted
+    /// to ONE slice-level substrate primitive past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold. Composes the
+    /// closed-set [`ExportTrigger::fires_on`] dispatch with the same
+    /// `.iter().any(|e| …)` walk shape [`Self::has_when`] +
+    /// [`Self::has_channel_kind`] + [`Self::has_report_format`] +
+    /// [`Self::has_artifact_kind`] + [`Self::has_report_payload_shape`]
+    /// publish, opening a SIXTH closed-set-driven presence probe on
+    /// the SAME `&[ExportSpec]` slice — the FIRST probe on this trait
+    /// whose closed-set discriminator is [`ProcessPhase`] (the peer
+    /// five probes discriminate over [`ExportTrigger`],
+    /// [`ChannelKind`], [`ReportFormat`], [`ArtifactKind`], and
+    /// [`ReportPayloadShape`] respectively) and the FIRST probe whose
+    /// closure body composes a DERIVED phase-dispatch projection
+    /// rather than a raw equality on a stored field.
+    ///
+    /// Semantics — DERIVED fires_on, not raw when equality:
+    /// `has_applicable_at(Attested)` returns `true` for a spec whose
+    /// `when` is `OnAttested` OR `Always` (both fire on `Attested`);
+    /// `has_when(OnAttested)` returns `true` only for the exact
+    /// `OnAttested` variant. The two probes coexist because they
+    /// answer distinct operator questions: `has_when` asks "does any
+    /// export CARRY this trigger literal" (raw discriminator equality),
+    /// while `has_applicable_at` asks "would any export FIRE at this
+    /// phase" (compound fires_on projection). An `Always`-triggered
+    /// export answers `false` for `has_when(OnAttested)` but `true`
+    /// for `has_applicable_at(Attested)`.
+    ///
+    /// A future fourth [`ExportTrigger`] variant reaches this walk
+    /// through the ONE [`ExportTrigger::fires_on`] arm alone — the
+    /// equality body reads the `fires_on(phase)` projection so no
+    /// per-variant substrate edit lands here. A future twelfth
+    /// [`ProcessPhase`] variant is handled by the exhaustive match
+    /// inside [`ExportTrigger::fires_on`] — either the new phase gets
+    /// a per-trigger fire rule (an `OnRetryExhausted` reaching a
+    /// hypothetical `RetryExhausted` phase) or the closed-set match
+    /// tail collapses it to `false` (every non-terminal phase).
+    ///
+    /// Callers whose invariant is "does any declared export fire
+    /// when we reach THIS phase" — the reconciler's `Attested → Releasing`
+    /// gate, the operator's `:requires (exports-fire-on-<phase>)`
+    /// audit tag, a future coherence check that flags an ephemeral
+    /// env whose exports never fire on `Attested` (a common
+    /// author-error where every export is `OnFailed` and successful
+    /// runs leave no trace) — reach this ONE primitive rather than
+    /// restating the `.iter().any(|e| e.when.fires_on(phase))` two-step
+    /// chain at each callsite.
+    fn has_applicable_at(&self, phase: ProcessPhase) -> bool;
 }
 
 impl ExportSpecSliceExt for [ExportSpec] {
@@ -1272,6 +1323,10 @@ impl ExportSpecSliceExt for [ExportSpec] {
                 .as_ref()
                 .is_some_and(|tr| tr.format.payload_shape() == kind)
         })
+    }
+
+    fn has_applicable_at(&self, phase: ProcessPhase) -> bool {
+        self.iter().any(|e| e.when.fires_on(phase))
     }
 }
 
@@ -3192,6 +3247,117 @@ mod tests {
             assert!(
                 !slice.has_report_payload_shape(kind),
                 "receipts-only export must return false for every payload shape: {kind:?}",
+            );
+        }
+    }
+
+    // ── ExportSpecSliceExt::has_applicable_at substrate pins ──────────
+    //
+    // Fail-before-pass-after granularity: `has_applicable_at` did not
+    // exist before this commit — the `(&[ExportSpec], ProcessPhase) ->
+    // bool` compound walk was previously spelled inline at
+    // `EphemeralLifetime::has_applicable_exports`
+    // (`self.exports.iter().any(|e| e.when.fires_on(phase))`). The lift
+    // opens the SIXTH method on the slice-level `ExportSpecSliceExt`
+    // (peer of `has_when`, `has_channel_kind`, `has_report_format`,
+    // `has_artifact_kind`, `has_report_payload_shape`), composing
+    // `ExportTrigger::fires_on` — the ONE substrate owner of the
+    // "(trigger, phase) → bool" projection — with the same
+    // `.iter().any(|e| …)` walk shape the five peers publish, and
+    // enabling the `exports-fire-on-<phase>` require-tag prefix family
+    // on both point and ephemeral surfaces in tatara-check to compose
+    // against ONE substrate site rather than restating the compound
+    // chain inline at each classifier arm.
+
+    /// EMPTY-SLICE pin — an empty `&[ExportSpec]` returns `false` for
+    /// EVERY [`ProcessPhase`]. Sweep [`ProcessPhase::ALL`] so a new
+    /// variant added without a matching arm in
+    /// [`ExportTrigger::fires_on`] surfaces at rustc's exhaustiveness
+    /// gate on the `ALL` literal (arity forced by `[Self; 11]`) rather
+    /// than as a silent false-positive at every downstream callsite.
+    #[test]
+    fn export_spec_slice_has_applicable_at_returns_false_on_empty_slice_for_every_phase() {
+        let empty: &[ExportSpec] = &[];
+        for phase in ProcessPhase::ALL {
+            assert!(
+                !empty.has_applicable_at(phase),
+                "empty slice must return false for {phase:?}",
+            );
+        }
+    }
+
+    /// PER-TRIGGER × PER-PHASE pin — a single-element slice matches the
+    /// `ExportTrigger::fires_on(phase)` truth table exactly, for every
+    /// (trigger, phase) pair. Sweep the [`ExportTrigger::ALL`] ×
+    /// [`ProcessPhase::ALL`] cross so a regression that (a) short-
+    /// circuited to a bare `e.when == kind` equality on the wrong
+    /// carrier, (b) matched only the terminal phase pair
+    /// (Attested/Failed) while dropping `Always`'s dual-phase coverage,
+    /// or (c) inverted a non-terminal phase to return `true` fails HERE
+    /// at the substrate primitive rather than at each downstream
+    /// `exports-fire-on-<phase>` classifier callsite.
+    #[test]
+    fn export_spec_slice_has_applicable_at_matches_fires_on_truth_table_per_pair() {
+        for trigger in ExportTrigger::ALL {
+            let slice = [export_at(trigger)];
+            for phase in ProcessPhase::ALL {
+                let expected = trigger.fires_on(phase);
+                assert_eq!(
+                    slice.has_applicable_at(phase),
+                    expected,
+                    "trigger={trigger:?} phase={phase:?} drifted from fires_on",
+                );
+            }
+        }
+    }
+
+    /// MULTI-ENTRY pin — a slice with multiple entries returns `true`
+    /// for every phase where any entry's trigger fires (existential
+    /// quantifier over the slice), `false` for phases where no entry's
+    /// trigger fires. Locks the `any` semantics AND the compound
+    /// projection semantics together — a regression that collapsed to
+    /// `first`-only probing (`slice.first().is_some_and(|e|
+    /// e.when.fires_on(phase))`) OR dropped the projection (comparing
+    /// the raw trigger `Always == OnAttested`) fails HERE even though
+    /// the single-element per-pair pin above passes.
+    #[test]
+    fn export_spec_slice_has_applicable_at_scans_beyond_the_first_position() {
+        let attested_only = [
+            export_at(ExportTrigger::OnFailed),
+            export_at(ExportTrigger::OnAttested),
+        ];
+        assert!(
+            attested_only.has_applicable_at(ProcessPhase::Attested),
+            "OnAttested at second position must fire on Attested",
+        );
+        assert!(
+            attested_only.has_applicable_at(ProcessPhase::Failed),
+            "OnFailed at first position must fire on Failed",
+        );
+        let always_and_failed = [
+            export_at(ExportTrigger::OnFailed),
+            export_at(ExportTrigger::Always),
+        ];
+        for phase in [ProcessPhase::Attested, ProcessPhase::Failed] {
+            assert!(
+                always_and_failed.has_applicable_at(phase),
+                "Always at second position must fire on {phase:?}",
+            );
+        }
+        for phase in [
+            ProcessPhase::Pending,
+            ProcessPhase::Forking,
+            ProcessPhase::Execing,
+            ProcessPhase::Running,
+            ProcessPhase::Reconverging,
+            ProcessPhase::Releasing,
+            ProcessPhase::Exiting,
+            ProcessPhase::Zombie,
+            ProcessPhase::Reaped,
+        ] {
+            assert!(
+                !always_and_failed.has_applicable_at(phase),
+                "no trigger fires on non-terminal {phase:?}",
             );
         }
     }

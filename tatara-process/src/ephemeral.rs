@@ -36,7 +36,7 @@ use tatara_lisp::DeriveTataraDomain;
 
 use crate::boundary::{Boundary, Condition, ConditionKind, ConditionSliceExt};
 use crate::classification::{
-    CalmClassification, Classification, ConvergencePointType, SubstrateType,
+    CalmClassification, Classification, ConvergencePointType, DataClassification, SubstrateType,
 };
 use crate::crd::ProcessSpec;
 use crate::export::ExportSpec;
@@ -296,9 +296,9 @@ impl EphemeralSpec {
     /// `Option<Classification>` → resolved-[`Classification`] walk.
     /// Every downstream classification-axis presence probe on the
     /// [`EphemeralSpec`] surface ([`Self::has_point_type`],
-    /// [`Self::has_substrate`], [`Self::has_calm`], and its future
-    /// peers on the five other classification axes —
-    /// `has_data_classification`, `has_horizon_kind`,
+    /// [`Self::has_substrate`], [`Self::has_calm`],
+    /// [`Self::has_data_classification`], and its future peers on the
+    /// four remaining classification axes — `has_horizon_kind`,
     /// `has_optimization_direction`, `has_input_arity`,
     /// `has_output_arity`) routes through THIS
     /// primitive so the "`None` fills through
@@ -374,7 +374,8 @@ impl EphemeralSpec {
     /// FIRST classification-axis peer on the [`EphemeralSpec`]
     /// surface. Six future sibling axes on the SAME `Cow`-resolver
     /// carrier ([`Self::has_substrate`] opened the SECOND,
-    /// [`Self::has_calm`] the THIRD; then `has_data_classification`,
+    /// [`Self::has_calm`] the THIRD,
+    /// [`Self::has_data_classification`] the FOURTH; then
     /// `has_horizon_kind`, `has_optimization_direction`,
     /// `has_input_arity`, `has_output_arity`) land as one-line
     /// wrappers around the SAME resolver + the sibling
@@ -429,10 +430,10 @@ impl EphemeralSpec {
     /// omitted `:classification` slot's fill-through logic lives at
     /// ONE substrate primitive rather than being restated in each
     /// per-axis probe body. Five future sibling axes on the SAME
-    /// `Cow`-resolver carrier ([`Self::has_calm`] opened the THIRD;
-    /// then `has_data_classification`, `has_horizon_kind`,
-    /// `has_optimization_direction`, `has_input_arity`,
-    /// `has_output_arity`) land as one-line
+    /// `Cow`-resolver carrier ([`Self::has_calm`] opened the THIRD,
+    /// [`Self::has_data_classification`] the FOURTH; then
+    /// `has_horizon_kind`, `has_optimization_direction`,
+    /// `has_input_arity`, `has_output_arity`) land as one-line
     /// wrappers around the SAME resolver + the sibling
     /// [`Classification`] closed-set primitive, so a future variant
     /// added to [`SubstrateType`] (or any of the six other closed
@@ -500,16 +501,16 @@ impl EphemeralSpec {
     /// peers, whose absent-classification arm defaults through a
     /// specific chosen baseline (`ConvergencePointType::Gate`,
     /// `SubstrateType::Compute`) rather than through the child's own
-    /// `#[default]`. Five future sibling axes on the SAME
-    /// `Cow`-resolver carrier (`has_data_classification`,
-    /// `has_horizon_kind`, `has_optimization_direction`,
-    /// `has_input_arity`, `has_output_arity`) land as one-line
-    /// wrappers around the SAME resolver + the sibling
-    /// [`Classification`] closed-set primitive, so a future variant
-    /// added to [`CalmClassification`] (or any of the five other
-    /// closed sets) reaches BOTH surfaces' `<axis>-<kind>` prefix
-    /// families through the SAME closed-set walk with no per-caller
-    /// edit.
+    /// `#[default]`. Four future sibling axes on the SAME
+    /// `Cow`-resolver carrier ([`Self::has_data_classification`]
+    /// opened the FOURTH; then `has_horizon_kind`,
+    /// `has_optimization_direction`, `has_input_arity`,
+    /// `has_output_arity`) land as one-line wrappers around the SAME
+    /// resolver + the sibling [`Classification`] closed-set
+    /// primitive, so a future variant added to
+    /// [`CalmClassification`] (or any of the five other closed sets)
+    /// reaches BOTH surfaces' `<axis>-<kind>` prefix families through
+    /// the SAME closed-set walk with no per-caller edit.
     ///
     /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
     /// preserves proofs; the classification-axis presence-probe body
@@ -524,6 +525,86 @@ impl EphemeralSpec {
     #[must_use]
     pub fn has_calm(&self, kind: CalmClassification) -> bool {
         self.resolved_classification().has_calm(kind)
+    }
+
+    /// True iff the resolved [`Classification`] carries the given
+    /// [`DataClassification`] on its `data_classification` slot —
+    /// byte-for-byte peer of [`Classification::has_data_classification`]
+    /// wrapped through the [`Self::resolved_classification`] resolver
+    /// so an operator-omitted `:classification` slot reads as the
+    /// [`default_ephemeral_class`] baseline the sibling
+    /// `From<EphemeralSpec> for ProcessSpec` lowering fills.
+    ///
+    /// # Two-surface parity contract
+    ///
+    /// A given [`EphemeralSpec`] classifies identically through this
+    /// primitive AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.has_data_classification(kind)`
+    /// on the lowered `ProcessSpec` — the `Cow<'_, Classification>`
+    /// resolver on this side and the `.unwrap_or_else(...)` fill on
+    /// the lowering side both dereference the same
+    /// `default_ephemeral_class()` value on `None` and the same
+    /// authored value on `Some(_)`. This means the ephemeral-surface
+    /// `data-classification-<kind>` `:requires` family in
+    /// `tatara-reconciler::bin::tatara-check` publishes the SAME
+    /// truth on the SAME authored spec as the point-surface family
+    /// on the mechanically-lowered `ProcessSpec`.
+    ///
+    /// # FOURTH classification-axis peer on the ephemeral surface
+    ///
+    /// Peer of [`Self::has_point_type`], [`Self::has_substrate`], and
+    /// [`Self::has_calm`] — all four route through the SAME
+    /// [`Self::resolved_classification`] resolver, so the operator-
+    /// omitted `:classification` slot's fill-through logic lives at
+    /// ONE substrate primitive rather than being restated in each
+    /// per-axis probe body. SECOND occupant on the (Option-parent ×
+    /// DEFAULTED-scalar-child × operator-resolvable-baseline) corner
+    /// of the ephemeral-surface presence-probe algebra alongside
+    /// [`Self::has_calm`] — both probe REQUIRED [`Classification`]
+    /// sub-slots whose child closed set carries its own `#[default]`
+    /// ([`DataClassification::Internal`] here,
+    /// [`CalmClassification::Monotone`] on the peer), so the
+    /// default-arm short-circuit on the absent-classification arm
+    /// reads `true` on the [`DataClassification`] child's
+    /// `#[default]` variant precisely because BOTH the parent
+    /// Option's fill-through baseline (`default_ephemeral_class`)
+    /// AND the child's own `#[default]` land on the SAME variant
+    /// ([`DataClassification::Internal`]). The two-defaults
+    /// composition property now walks TWO independent defaulted-
+    /// scalar-child slots on the SAME ephemeral resolver — a
+    /// regression that promoted a different [`DataClassification`]
+    /// variant to `#[default]` (or wired the arm to a fixed variant
+    /// answer) fails HERE at ONE narrow substrate site before
+    /// drifting through every unadorned ephemeral spec's baseline
+    /// data-classification answer. Distinct from the FIRST + SECOND
+    /// peers on the (Option-parent × NON-DEFAULT-scalar-child)
+    /// corner, whose absent-classification arm defaults through a
+    /// specific chosen baseline (`ConvergencePointType::Gate`,
+    /// `SubstrateType::Compute`) rather than through the child's own
+    /// `#[default]`. Four future sibling axes on the SAME
+    /// `Cow`-resolver carrier (`has_horizon_kind`,
+    /// `has_optimization_direction`, `has_input_arity`,
+    /// `has_output_arity`) land as one-line wrappers around the SAME
+    /// resolver + the sibling [`Classification`] closed-set
+    /// primitive, so a future variant added to
+    /// [`DataClassification`] (or any of the four other closed sets)
+    /// reaches BOTH surfaces' `<axis>-<kind>` prefix families through
+    /// the SAME closed-set walk with no per-caller edit.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-axis presence-probe body
+    /// composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE closed-set
+    /// primitive ([`Classification::has_data_classification`]) so
+    /// every downstream (`data-classification-<kind>` require-tag
+    /// families on both surfaces in tatara-check, closed-set audit
+    /// dispatchers, future variant additions on
+    /// [`DataClassification`]) binds through the SAME `has(kind)`
+    /// shape rather than restating either the resolver walk or the
+    /// closed-set equality at the callsite.
+    #[must_use]
+    pub fn has_data_classification(&self, kind: DataClassification) -> bool {
+        self.resolved_classification().has_data_classification(kind)
     }
 }
 
@@ -598,7 +679,9 @@ pub fn compile_ephemeral_source(
 mod tests {
     use super::*;
     use crate::boundary::ConditionKind;
-    use crate::classification::{CalmClassification, ConvergencePointType, SubstrateType};
+    use crate::classification::{
+        CalmClassification, ConvergencePointType, DataClassification, SubstrateType,
+    };
     use crate::intent::IntentVariant;
     use crate::lifetime::LifetimeVariant;
 
@@ -1488,6 +1571,134 @@ mod tests {
                     eph.has_calm(query),
                     lowered.classification.has_calm(query),
                     "authored classification.calm={populated:?}: parity drift on query {query:?}",
+                );
+            }
+        }
+    }
+
+    // ── EphemeralSpec::has_data_classification pins ──────────────────
+    //
+    // Fail-before-pass-after granularity: [`Self::has_data_classification`]
+    // did not exist pre-lift on `impl EphemeralSpec` — every callsite
+    // went through `.resolved_classification().data_classification ==
+    // kind` or through the lowered `ProcessSpec`'s
+    // `spec.classification.has_data_classification`. Post-lift the
+    // FOURTH classification-axis peer on the ephemeral sugar surface
+    // routes through the SAME [`Self::resolved_classification`]
+    // resolver + the sibling closed-set primitive
+    // [`crate::classification::Classification::has_data_classification`],
+    // so a regression that dropped the resolver hop, inverted the
+    // `Some`/`None` fill-through, or wired the closure to a fixed
+    // unrelated slot fails HERE. SECOND occupant on the (Option-parent
+    // × DEFAULTED-scalar-child × operator-resolvable-baseline) corner
+    // alongside [`Self::has_calm`]: both the parent fill-through
+    // baseline (`default_ephemeral_class`) AND the child's own
+    // `#[default]` land on the SAME variant
+    // ([`DataClassification::Internal`]), a two-defaults composition
+    // property the three pins below all exercise.
+
+    /// AUTHORED-slot VARIANT-MATCH pin — an [`EphemeralSpec`] whose
+    /// [`EphemeralSpec::classification`] slot names a concrete
+    /// [`Classification`] returns `true` from
+    /// [`Self::has_data_classification`] on the authored
+    /// [`DataClassification`] slot and `false` for every other
+    /// variant. Sweep the [`DataClassification::ALL`] × ALL cross so
+    /// a regression that hard-coded the arm to a single kind or
+    /// wired the closure to a fixed unrelated slot fails HERE at the
+    /// substrate primitive. Byte-for-byte peer of the point-surface
+    /// [`Classification::has_data_classification`] populated-slot
+    /// sweep on the SAME closed-set primitive.
+    #[test]
+    fn has_data_classification_returns_true_iff_authored_classification_matches_per_kind() {
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            for query in DataClassification::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    spec.has_data_classification(query),
+                    expected,
+                    "ephemeral classification.data_classification={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// ABSENT-slot DEFAULT-ARM pin — an [`EphemeralSpec`] whose
+    /// [`EphemeralSpec::classification`] slot is `None` returns
+    /// `true` from [`Self::has_data_classification`] on
+    /// [`DataClassification::Internal`] (the `default_ephemeral_class`
+    /// baseline's `data_classification` axis AND the
+    /// [`DataClassification`] child's own `#[default]` variant) and
+    /// `false` on every other variant. Pins the (Option-parent ×
+    /// DEFAULTED-scalar-child × operator-resolvable-baseline) corner's
+    /// default-arm short-circuit on the FOURTH classification-axis
+    /// peer — SECOND occupant on that corner after [`Self::has_calm`]
+    /// opened it. Two-defaults composition property: both the parent
+    /// fill-through and the child's `#[default]` land on the SAME
+    /// variant, so the ephemeral sugar surface's
+    /// `data-classification-Internal` require-tag reads `true` on
+    /// every operator-authored spec that omits both the
+    /// `:classification` slot AND the `:data-classification` sub-slot,
+    /// pinning the workspace's internal-by-default sensitivity posture.
+    #[test]
+    fn has_data_classification_probes_internal_only_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        for kind in DataClassification::ALL {
+            let expected = kind == DataClassification::Internal;
+            assert_eq!(
+                spec.has_data_classification(kind),
+                expected,
+                "absent classification (defaults to gate_compute): query {kind:?} must be {expected}",
+            );
+        }
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::has_data_classification`] AND
+    /// through `<eph.clone().into::<ProcessSpec>>()`
+    /// `.classification.has_data_classification(kind)` on the
+    /// mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`DataClassification::ALL`] variant) × ALL queries so a
+    /// future regression on either side of the resolver (a shift in
+    /// the ephemeral resolver's default, a shift in the
+    /// `From<EphemeralSpec>` lowering's fill-through) fails HERE at
+    /// the parity boundary. Byte-for-byte peer of the sibling
+    /// [`Self::has_point_type`] + [`Self::has_substrate`] +
+    /// [`Self::has_calm`] two-surface parity pins on the SAME
+    /// `Cow`-resolver carrier — the FOURTH classification-axis
+    /// two-surface parity contract on the ephemeral surface, and the
+    /// SECOND on the (Option-parent × DEFAULTED-scalar-child) corner.
+    #[test]
+    fn has_data_classification_matches_point_peer_through_lowered_classification() {
+        // Absent classification: both surfaces resolve through the SAME
+        // default and agree on every variant.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        for query in DataClassification::ALL {
+            assert_eq!(
+                eph.has_data_classification(query),
+                lowered.classification.has_data_classification(query),
+                "None-classification parity drift on query {query:?}",
+            );
+        }
+        // Authored classification: both surfaces read the same authored
+        // value verbatim.
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            for query in DataClassification::ALL {
+                assert_eq!(
+                    eph.has_data_classification(query),
+                    lowered.classification.has_data_classification(query),
+                    "authored classification.data_classification={populated:?}: parity drift on query {query:?}",
                 );
             }
         }

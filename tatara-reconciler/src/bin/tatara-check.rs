@@ -520,37 +520,41 @@ fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
 /// isn't one the point-domain require-tag surface understands. The
 /// caller composes the operator-facing diagnostic (which echoes the
 /// offending tag verbatim); the substrate owns only the classification
-/// AND (when the tag carried a KNOWN prefix whose suffix failed to
-/// parse as the prefix's closed set) a typed [`PrefixHint`] adornment
-/// the operator-facing diagnostic renders next to the tag echo.
+/// AND — when the tag carried a KNOWN prefix whose suffix failed to
+/// parse as the prefix's closed set OR when the tag near-missed a
+/// canonical fixed-tag entry within the substrate-wide bounded edit
+/// distance — a typed [`TagHint`] adornment the operator-facing
+/// diagnostic renders next to the tag echo.
 ///
 /// # Equality contract
 ///
 /// [`UnknownRequireTag`] is the coarse error CATEGORY — two values
-/// with different [`PrefixHint`] adornments still compare equal
-/// because the category is what every classify-caller keys on. The
-/// hint is a diagnostic ADORNMENT the caller renders next to the
-/// rejection; it is NOT part of the classification identity, so
-/// equality-based test assertions (`assert_eq!(actual,
-/// Err(UnknownRequireTag::default()))`) continue to pass through
-/// this reshape without knowing whether the specific rejection
-/// happened to carry a hint or not. Pre-lift the type was a unit
-/// struct with a compiler-derived `PartialEq` that trivially held
-/// on all instances; post-lift the same semantics hold under the
-/// manual impl below through the SAME operator-facing consumer
-/// contract.
+/// with different [`TagHint`] adornments still compare equal because
+/// the category is what every classify-caller keys on. The hint is a
+/// diagnostic ADORNMENT the caller renders next to the rejection; it
+/// is NOT part of the classification identity, so equality-based test
+/// assertions (`assert_eq!(actual, Err(UnknownRequireTag::default()))`)
+/// continue to pass through this reshape without knowing whether the
+/// specific rejection happened to carry a hint or not. Pre-lift the
+/// type was a unit struct with a compiler-derived `PartialEq` that
+/// trivially held on all instances; post-lift the same semantics hold
+/// under the manual impl below through the SAME operator-facing
+/// consumer contract.
 #[derive(Clone, Debug, Default)]
 struct UnknownRequireTag {
     /// Populated when the tag stripped a KNOWN prefix from
     /// [`dispatch_prefixed_kind!`] but the suffix failed to parse as
     /// the prefix's closed set (e.g. `intent-Nyx` — `intent-` stripped,
-    /// `Nyx` is not an [`IntentKind`] label). Absent when the tag
-    /// matched no known prefix at all (the caller's fixed-tag match
-    /// tail fell through to `_ => Err(UnknownRequireTag::default())`).
-    /// The hint is a diagnostic ADORNMENT rendered next to the tag
-    /// echo through [`UnknownRequireTag`]'s [`std::fmt::Display`] impl;
-    /// see [`PrefixHint`].
-    hint: Option<PrefixHint>,
+    /// `Nyx` is not an [`IntentKind`] label), OR when the tag matched
+    /// no known prefix at all and [`evaluate_fixed_tag`] ranks a
+    /// canonical fixed-tag entry within the substrate-wide bounded
+    /// edit distance (e.g. `deponds-on` → `depends-on`). Absent when
+    /// neither codepath finds a near-miss — the caller's diagnostic
+    /// yields a bare tag-echo, same as pre-lift for the fixed-tag miss
+    /// path. The hint is a diagnostic ADORNMENT rendered next to the
+    /// tag echo through [`UnknownRequireTag`]'s [`std::fmt::Display`]
+    /// impl; see [`TagHint`].
+    hint: Option<TagHint>,
 }
 
 impl PartialEq for UnknownRequireTag {
@@ -566,9 +570,11 @@ impl std::fmt::Display for UnknownRequireTag {
     /// Render the parenthetical adornment consumers append to the
     /// tag-echo diagnostic (`"unknown :requires tag: intent-Nyx"` +
     /// `"{err}"` → `"unknown :requires tag: intent-Nyx (unknown intent
-    /// kind: 'Nyx'; did you mean 'intent-Nix'?)"`). Renders to the
-    /// empty string when the error carries no [`PrefixHint`] — the
-    /// caller's fixed-tag miss path yields a bare tag-echo, same as
+    /// kind: 'Nyx'; did you mean 'intent-Nix'?)"`, or `"unknown
+    /// :requires tag: deponds-on (did you mean 'depends-on'?)"` on
+    /// the fixed-tag near-miss path). Renders to the empty string
+    /// when the error carries no [`TagHint`] — the caller's
+    /// far-miss fixed-tag path yields a bare tag-echo, same as
     /// pre-lift.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.hint {
@@ -587,7 +593,93 @@ impl UnknownRequireTag {
     /// Err(UnknownRequireTag::with_hint(...))` continues to hold —
     /// the hint is a diagnostic adornment, not an identity dimension.
     fn with_hint(hint: PrefixHint) -> Self {
-        Self { hint: Some(hint) }
+        Self {
+            hint: Some(TagHint::Prefix(hint)),
+        }
+    }
+
+    /// Construct with a fixed-tag near-miss suggestion — used at the
+    /// [`evaluate_fixed_tag`] miss branch when
+    /// [`tatara_lisp::domain::suggest`] ranks a canonical fixed-tag
+    /// entry within the substrate-wide bounded edit distance. The
+    /// hinted tag is the canonical fixed-tag label the operator
+    /// probably meant (`"depends-on"` for `"deponds-on"`,
+    /// `"aplicacao"` for `"aplicaco"`); the caller renders it via
+    /// [`UnknownRequireTag`]'s [`std::fmt::Display`] impl as a
+    /// parenthetical `" (did you mean {tag:?}?)"` adornment next to
+    /// the operator-facing tag echo. Peer of [`Self::with_hint`] on
+    /// the fixed-tag axis — same category-level `PartialEq` semantics,
+    /// same "silent over guessing" conservative-suggestion contract
+    /// [`tatara_lisp::domain::suggest`] inherits at the substrate.
+    fn with_fixed_hint(hinted_tag: String) -> Self {
+        Self {
+            hint: Some(TagHint::Fixed(FixedTagHint { hinted_tag })),
+        }
+    }
+}
+
+/// Typed diagnostic-hint carrier for [`UnknownRequireTag`], unifying
+/// the two miss-path near-miss adornments the require-tag classifier
+/// emits: [`TagHint::Prefix`] on a KNOWN-prefix + bad-suffix rejection
+/// ([`strip_and_classify_prefixed_kind`]) and [`TagHint::Fixed`] on a
+/// no-prefix-matched fixed-tag near-miss ([`evaluate_fixed_tag`]). The
+/// two variants render distinct parentheticals — the prefix variant
+/// names WHICH closed set the suffix was tested against + the parsed
+/// suffix + (optionally) the reconstructed `prefix-Suffix` canonical
+/// tag; the fixed variant names only the canonical fixed-tag
+/// suggestion — so the operator learns whether their typo lives in
+/// the closed-set suffix vocabulary or in the fixed-tag vocabulary,
+/// two distinct extensibility axes on the require-tag surface.
+///
+/// The two variants share ONE hint slot on [`UnknownRequireTag`]
+/// rather than TWO independent `Option`s because the tag classifier
+/// can only fall through ONE of the two miss paths on any given tag
+/// — a tag either strips a known prefix (miss path 1) or falls
+/// through to the fixed-tag match (miss path 2), never both. The
+/// enum encodes this mutual exclusion structurally.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum TagHint {
+    /// Closed-set suffix near-miss under a KNOWN prefix.
+    Prefix(PrefixHint),
+    /// Fixed-tag near-miss under the domain's fixed vocabulary.
+    Fixed(FixedTagHint),
+}
+
+impl std::fmt::Display for TagHint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TagHint::Prefix(p) => write!(f, "{p}"),
+            TagHint::Fixed(x) => write!(f, "{x}"),
+        }
+    }
+}
+
+/// Typed fixed-tag near-miss adornment threaded onto
+/// [`UnknownRequireTag`] when [`evaluate_fixed_tag`] observes a tag
+/// that missed every arm of the domain's fixed vocabulary but whose
+/// canonical near-miss (via [`tatara_lisp::domain::suggest`]) sits
+/// within the substrate-wide bounded edit distance. Rendered next to
+/// the operator-facing tag echo via [`UnknownRequireTag`]'s
+/// [`std::fmt::Display`] impl as a parenthetical
+/// `" (did you mean {tag:?}?)"`.
+///
+/// The `hinted_tag` slot is unconditionally populated because the
+/// carrier is constructed ONLY when [`tatara_lisp::domain::suggest`]
+/// returns `Some` — the substrate-wide "silent over guessing"
+/// conservative-suggestion contract keeps [`UnknownRequireTag`]'s
+/// bare-`default()` far-miss path byte-preserved. Peer of
+/// [`PrefixHint`] on the fixed-tag axis, sharing the SAME substrate
+/// suggest metric but publishing a distinct diagnostic surface
+/// because the closed-set label + suffix vocabulary don't apply to
+/// fixed tags (a fixed tag is not a `<prefix>-<suffix>` composite).
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FixedTagHint {
+    hinted_tag: String,
+}
+
+impl std::fmt::Display for FixedTagHint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(did you mean {:?}?)", self.hinted_tag)
     }
 }
 
@@ -1546,14 +1638,7 @@ fn evaluate_point_require_tag(
     ) {
         return res;
     }
-    match tag {
-        "depends-on" => Ok(!spec.depends_on.is_empty()),
-        "boundary-pre" => Ok(!spec.boundary.preconditions.is_empty()),
-        "boundary-post" => Ok(!spec.boundary.postconditions.is_empty()),
-        "compliance" => Ok(!spec.compliance.bindings.is_empty()),
-        "signals" => Ok(spec.signals.sigterm_grace_seconds > 0),
-        _ => Err(UnknownRequireTag::default()),
-    }
+    evaluate_fixed_tag(tag, spec, POINT_FIXED_TAG_ARMS)
 }
 
 /// Parse a `<prefix>-<suffix>` tag against a closed-set discriminator
@@ -1670,6 +1755,197 @@ where
         })),
     })
 }
+
+/// One arm of a domain's fixed `:requires <tag>` vocabulary — the
+/// (literal-tag, presence-probe) pair every non-closed-set fixed tag
+/// on a [`RequireTagDomain`] surface reduces to. Pre-lift the point
+/// surface (`"depends-on"`, `"boundary-pre"`, `"boundary-post"`,
+/// `"compliance"`, `"signals"`) and the ephemeral surface
+/// (`"aplicacao"`, `"ttl"`, `"teardown"`, `"postconditions"`,
+/// `"preconditions"`, `"closed-loop-auth"`) each hand-authored a
+/// `match tag { ... }` tail whose arms restated the tag literal AND
+/// the presence-probe body inline; post-lift each arm is ONE row of
+/// pure data and the (walk-the-table + near-miss-hint) discipline
+/// binds at ONE substrate owner ([`evaluate_fixed_tag`]).
+///
+/// The `probe` slot is a `fn(&S) -> bool` — a non-capturing function
+/// pointer, not a closure — so the table lives in `static` storage
+/// without a `Fn` trait object allocation and every arm's presence
+/// body reads as a pure projection on `&S`. `S` is bounded `'static`
+/// to satisfy the `static` promotion; the two current callers
+/// ([`tatara_process::crd::ProcessSpec`],
+/// [`tatara_process::ephemeral::EphemeralSpec`]) both satisfy it,
+/// and every future [`RequireTagDomain`] peer's spec type will too
+/// because a domain's spec is by construction a workspace-typed
+/// struct with no lifetime parameters.
+struct FixedTagArm<S: 'static> {
+    /// The canonical operator-facing tag literal (`"depends-on"`,
+    /// `"aplicacao"`, `"closed-loop-auth"`). Compared by `==` at the
+    /// [`evaluate_fixed_tag`] walk; also handed to
+    /// [`tatara_lisp::domain::suggest`] on miss so the substrate-wide
+    /// bounded near-miss metric can rank the operator's typo against
+    /// the domain's fixed vocabulary.
+    tag: &'static str,
+    /// The presence-probe body — `Ok(probe(spec))` is the row's
+    /// classification result on a hit. Non-capturing so the arm can
+    /// live in `static` storage.
+    probe: fn(&S) -> bool,
+}
+
+/// Walk `arms` looking for one whose `tag` equals the operator's
+/// input; on hit return `Ok(probe(spec))`; on miss thread the
+/// near-miss suggestion (via [`tatara_lisp::domain::suggest`] over
+/// the arm labels) into a [`FixedTagHint`]-bearing
+/// [`UnknownRequireTag`], or the bare-`default()` far-miss carrier
+/// when the substrate-wide bounded metric declines to guess. Fixed-
+/// tag peer of [`strip_and_classify_prefixed_kind`] on the require-
+/// tag surface — both dispatchers publish the SAME
+/// `Result<bool, UnknownRequireTag>` return shape and route their
+/// respective near-miss branches through the SAME substrate suggest
+/// primitive, so the operator's diagnostic reads uniformly whether
+/// the miss lived in the closed-set suffix vocabulary
+/// (`"intent-nyx"` → hint `"intent-nix"`) or the fixed-tag
+/// vocabulary (`"deponds-on"` → hint `"depends-on"`).
+///
+/// # Return shape
+///
+/// * `Ok(bool)` — an arm matched, its probe answered the presence
+///   question.
+/// * `Err(UnknownRequireTag)` — no arm matched. Carries a
+///   [`TagHint::Fixed`] adornment when the substrate ranks a
+///   canonical arm within the substrate-wide bounded edit distance,
+///   bare-`default()` (no hint) otherwise. The `PartialEq` category
+///   equality preserves every pre-lift assertion of the shape
+///   `assert_eq!(actual, Err(UnknownRequireTag::default()))`
+///   regardless of whether the specific rejection happened to
+///   carry a hint.
+///
+/// # Compounding
+///
+/// A future third [`RequireTagDomain`] peer declares its fixed
+/// vocabulary as a `&'static [FixedTagArm<TheirSpec>]` table and
+/// inherits the walk + near-miss discipline for free — no per-domain
+/// `match tag { ... }` restatement, no per-domain hint composition,
+/// no per-domain fixed-tag introspection ceiling. A future diagnostic
+/// shift on the fixed-tag miss path (attaching the offending tag to
+/// [`FixedTagHint`], surfacing the canonical labels list next to the
+/// suggestion, unifying with the closed-set near-miss shape) lands
+/// at THIS ONE substrate owner and both current fixed-tag surfaces
+/// plus every future peer inherit the shift by construction. A
+/// future documentation generator listing every domain's fixed-tag
+/// vocabulary walks the same tables — the arms are pure data, so a
+/// third consumer routes through ONE substrate primitive rather than
+/// re-scanning the source for `match tag { ... }` literals.
+///
+/// # Theory grounding
+///
+/// THEORY.md §V.1 — knowable platform; the fixed-tag miss path
+/// gains a diagnostic hint that composes through the SAME suggest
+/// metric every closed-set near-miss already routes through, closing
+/// the diagnostic-uniformity gap between the prefix vocabulary and
+/// the fixed vocabulary. THEORY.md §VI.1 — generation over
+/// composition; the fixed-tag miss diagnostic emerges from the
+/// composition of TWO substrate primitives (this table walk +
+/// [`tatara_lisp::domain::suggest`]) rather than as a per-arm
+/// hand-authored miss body.
+///
+/// Pinned by
+/// [`tests::evaluate_fixed_tag_returns_probe_on_arm_hit`],
+/// [`tests::evaluate_fixed_tag_returns_near_miss_hint_on_close_typo`],
+/// [`tests::evaluate_fixed_tag_returns_bare_default_on_far_miss`],
+/// [`tests::evaluate_fixed_tag_first_matching_arm_wins`].
+fn evaluate_fixed_tag<S>(
+    tag: &str,
+    spec: &S,
+    arms: &[FixedTagArm<S>],
+) -> Result<bool, UnknownRequireTag> {
+    for arm in arms {
+        if arm.tag == tag {
+            return Ok((arm.probe)(spec));
+        }
+    }
+    let candidates: Vec<&str> = arms.iter().map(|a| a.tag).collect();
+    match tatara_lisp::domain::suggest(tag, &candidates) {
+        Some(hinted) => Err(UnknownRequireTag::with_fixed_hint(hinted.to_owned())),
+        None => Err(UnknownRequireTag::default()),
+    }
+}
+
+/// Point (ProcessSpec) surface's fixed `:requires <tag>` vocabulary —
+/// the non-closed-set arms [`evaluate_point_require_tag`] walks after
+/// the prefix-family dispatcher's `Option<Result<...>>` chain returns
+/// `None`. Each row is ONE (literal, probe) pair; the walk +
+/// near-miss hint composition binds at
+/// [`evaluate_fixed_tag`]. `signals` reads the substrate default's
+/// positive `sigterm_grace_seconds`, so a default
+/// [`tatara_process::crd::ProcessSpec`] satisfies it out of the box;
+/// the other four arms address empty-collection slots that read
+/// `false` on a default spec. Ordering here is the pre-lift
+/// hand-authored `match` order, byte-preserved so any operator prose
+/// keyed on the order stays symmetric.
+static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = &[
+    FixedTagArm {
+        tag: "depends-on",
+        probe: |s| !s.depends_on.is_empty(),
+    },
+    FixedTagArm {
+        tag: "boundary-pre",
+        probe: |s| !s.boundary.preconditions.is_empty(),
+    },
+    FixedTagArm {
+        tag: "boundary-post",
+        probe: |s| !s.boundary.postconditions.is_empty(),
+    },
+    FixedTagArm {
+        tag: "compliance",
+        probe: |s| !s.compliance.bindings.is_empty(),
+    },
+    FixedTagArm {
+        tag: "signals",
+        probe: |s| s.signals.sigterm_grace_seconds > 0,
+    },
+];
+
+/// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
+/// vocabulary — peer of [`POINT_FIXED_TAG_ARMS`] on the ephemeral
+/// domain axis. `teardown` reads `true` unconditionally because
+/// [`tatara_process::lifetime::TeardownPolicy`] carries a substrate
+/// `#[default]` — an ephemeral spec without an operator-supplied
+/// teardown still has one (defaulted to
+/// [`tatara_process::lifetime::TeardownPolicy::Always`]); the
+/// per-variant probe lives on the closed-set `teardown-policy-<kind>`
+/// prefix family instead. `closed-loop-auth` is a
+/// [`tatara_process::boundary::ConditionKind::ClosedLoopAuth`]
+/// presence probe over the postconditions vector — a fixed-tag alias
+/// for the more general `condition-ClosedLoopAuth` prefix-family
+/// query, published because the closed-loop attestation path is a
+/// substrate-wide primitive the operator surfaces directly.
+static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::EphemeralSpec>] = &[
+    FixedTagArm {
+        tag: "aplicacao",
+        probe: |s| !s.aplicacao.chart_ref.is_empty(),
+    },
+    FixedTagArm {
+        tag: "ttl",
+        probe: |s| !s.ttl.is_empty(),
+    },
+    FixedTagArm {
+        tag: "teardown",
+        probe: |_| true,
+    },
+    FixedTagArm {
+        tag: "postconditions",
+        probe: |s| !s.postconditions.is_empty(),
+    },
+    FixedTagArm {
+        tag: "preconditions",
+        probe: |s| !s.preconditions.is_empty(),
+    },
+    FixedTagArm {
+        tag: "closed-loop-auth",
+        probe: |s| s.postconditions.has_kind(ConditionKind::ClosedLoopAuth),
+    },
+];
 
 /// Classify one `:requires <tag>` entry against a compiled
 /// [`tatara_process::ephemeral::EphemeralSpec`] and return whether the
@@ -2053,15 +2329,7 @@ fn evaluate_ephemeral_require_tag(
     ) {
         return res;
     }
-    match tag {
-        "aplicacao" => Ok(!spec.aplicacao.chart_ref.is_empty()),
-        "ttl" => Ok(!spec.ttl.is_empty()),
-        "teardown" => Ok(true),
-        "postconditions" => Ok(!spec.postconditions.is_empty()),
-        "preconditions" => Ok(!spec.preconditions.is_empty()),
-        "closed-loop-auth" => Ok(spec.postconditions.has_kind(ConditionKind::ClosedLoopAuth)),
-        _ => Err(UnknownRequireTag::default()),
-    }
+    evaluate_fixed_tag(tag, spec, EPHEMERAL_FIXED_TAG_ARMS)
 }
 
 /// Compile output handed back by [`RequireTagDomain::compile`] — the
@@ -3020,12 +3288,13 @@ fn normalize(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        check_yaml_parses, evaluate_ephemeral_require_tag, evaluate_point_require_tag, find_kw,
-        find_kw_string_list, head_symbol_or_missing, known_require_tag_domain_names,
-        min_defs_shortfall_msg, parse_kwargs, positional_string, read_or_fail,
-        report_result_prefixed, require_tag_domain_by_name, required_positional_string,
-        startup_diagnostic, strip_and_classify_prefixed_kind, PrefixHint, Report,
-        UnknownRequireTag, ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
+        check_yaml_parses, evaluate_ephemeral_require_tag, evaluate_fixed_tag,
+        evaluate_point_require_tag, find_kw, find_kw_string_list, head_symbol_or_missing,
+        known_require_tag_domain_names, min_defs_shortfall_msg, parse_kwargs, positional_string,
+        read_or_fail, report_result_prefixed, require_tag_domain_by_name,
+        required_positional_string, startup_diagnostic, strip_and_classify_prefixed_kind,
+        FixedTagArm, FixedTagHint, PrefixHint, Report, TagHint, UnknownRequireTag,
+        ALL_REQUIRE_TAG_DOMAINS, EPHEMERAL_FIXED_TAG_ARMS, MISSING_ARG_SLUG, POINT_FIXED_TAG_ARMS,
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
@@ -8950,9 +9219,12 @@ mod tests {
         let Some(Err(err)) = out else {
             panic!("expected Some(Err(_)) on prefix-hit + bad-suffix, got {out:?}");
         };
-        let hint = err
-            .hint
-            .expect("prefix hit + bad suffix must populate hint");
+        let Some(TagHint::Prefix(hint)) = err.hint else {
+            panic!(
+                "prefix hit + bad suffix must populate a prefix hint, got {:?}",
+                err.hint
+            );
+        };
         assert_eq!(hint.set_label, "intent kind");
         assert_eq!(hint.suffix, "nyx");
         assert_eq!(hint.hinted_tag.as_deref(), Some("intent-nix"));
@@ -8976,9 +9248,12 @@ mod tests {
         let Some(Err(err)) = out else {
             panic!("expected Some(Err(_)) on prefix-hit + far-miss suffix, got {out:?}");
         };
-        let hint = err
-            .hint
-            .expect("prefix hit populates hint even without a suggestion");
+        let Some(TagHint::Prefix(hint)) = err.hint else {
+            panic!(
+                "prefix hit populates a prefix hint even without a suggestion, got {:?}",
+                err.hint,
+            );
+        };
         assert_eq!(hint.set_label, "intent kind");
         assert_eq!(hint.suffix, "completely-not-a-thing");
         assert!(
@@ -9090,6 +9365,251 @@ mod tests {
             point.unknown_tag_diagnostic("intent-nyx", &err),
             "unknown :requires tag: intent-nyx (unknown intent kind: \"nyx\"; \
              did you mean \"intent-nix\"?)",
+        );
+    }
+
+    // ── evaluate_fixed_tag substrate pins ────────────────────────────
+    //
+    // Fail-before-pass-after granularity: the fixed-tag near-miss
+    // hint did not exist before this commit — pre-lift both surfaces'
+    // fixed-tag miss path (`_ => Err(UnknownRequireTag::default())`)
+    // returned a bare tag-echo regardless of how close the operator's
+    // typo sat to a canonical fixed tag, while the closed-set
+    // prefix-family miss path already threaded a substrate-wide
+    // suggest-metric near-miss into the diagnostic. Post-lift the
+    // fixed-tag miss path routes through `evaluate_fixed_tag` and
+    // threads a `TagHint::Fixed(FixedTagHint)` on close typos via
+    // `tatara_lisp::domain::suggest`, closing the diagnostic-
+    // uniformity gap between the prefix vocabulary and the fixed
+    // vocabulary on ONE substrate owner.
+
+    // Miniature domain-agnostic spec type used to exercise
+    // `evaluate_fixed_tag` in isolation from ProcessSpec / EphemeralSpec.
+    // Keeps the substrate primitive's pins independent from the two
+    // production spec surfaces so a regression on the walk / hint
+    // discipline surfaces HERE without dragging in per-surface field
+    // construction.
+    struct FixtureSpec {
+        alpha: bool,
+        beta: bool,
+    }
+
+    static FIXTURE_ARMS: &[FixedTagArm<FixtureSpec>] = &[
+        FixedTagArm {
+            tag: "depends-on",
+            probe: |s| s.alpha,
+        },
+        FixedTagArm {
+            tag: "compliance",
+            probe: |s| s.beta,
+        },
+    ];
+
+    /// HIT pin — a tag matching an arm returns the arm's probe result
+    /// verbatim. Two-arm sweep pins that the FIRST-MATCHING-ARM
+    /// semantics compose through the linear table walk with the
+    /// per-arm probe body applied unchanged; a regression that
+    /// short-circuited both arms to the same probe (or hard-wired one
+    /// arm's result to another) fires here at the classifier boundary.
+    #[test]
+    fn evaluate_fixed_tag_returns_probe_on_arm_hit() {
+        let spec = FixtureSpec {
+            alpha: true,
+            beta: false,
+        };
+        assert_eq!(
+            evaluate_fixed_tag("depends-on", &spec, FIXTURE_ARMS),
+            Ok(true)
+        );
+        assert_eq!(
+            evaluate_fixed_tag("compliance", &spec, FIXTURE_ARMS),
+            Ok(false)
+        );
+        let flipped = FixtureSpec {
+            alpha: false,
+            beta: true,
+        };
+        assert_eq!(
+            evaluate_fixed_tag("depends-on", &flipped, FIXTURE_ARMS),
+            Ok(false),
+        );
+        assert_eq!(
+            evaluate_fixed_tag("compliance", &flipped, FIXTURE_ARMS),
+            Ok(true),
+        );
+    }
+
+    /// FIRST-MATCH pin — arm order defines dispatch order: a table
+    /// with two rows sharing a tag would resolve to the FIRST row's
+    /// probe. Locks the walk semantics against a future refactor that
+    /// folds arms in reverse order (which would silently invert
+    /// classification when a hypothetical duplicate row landed).
+    #[test]
+    fn evaluate_fixed_tag_first_matching_arm_wins() {
+        static SHADOWED: &[FixedTagArm<FixtureSpec>] = &[
+            FixedTagArm {
+                tag: "shared",
+                probe: |_| true,
+            },
+            FixedTagArm {
+                tag: "shared",
+                probe: |_| {
+                    unreachable!("second arm sharing a tag with the first must not evaluate")
+                },
+            },
+        ];
+        let spec = FixtureSpec {
+            alpha: false,
+            beta: false,
+        };
+        assert_eq!(evaluate_fixed_tag("shared", &spec, SHADOWED), Ok(true));
+    }
+
+    /// NEAR-MISS pin — a tag one edit off a canonical arm returns
+    /// `Err(UnknownRequireTag)` carrying a `TagHint::Fixed` whose
+    /// `hinted_tag` names the canonical arm the operator probably
+    /// meant. `deponds-on` sits at edit distance 1 from `depends-on`
+    /// (10 chars → bound 3 via the substrate suggestion-bound
+    /// function), well within the substrate-wide bounded near-miss
+    /// window. Pins the composition of the table walk with
+    /// `tatara_lisp::domain::suggest` at the substrate boundary.
+    #[test]
+    fn evaluate_fixed_tag_returns_near_miss_hint_on_close_typo() {
+        let spec = FixtureSpec {
+            alpha: true,
+            beta: true,
+        };
+        let err = evaluate_fixed_tag("deponds-on", &spec, FIXTURE_ARMS)
+            .expect_err("typo must miss every arm");
+        assert_eq!(
+            err.hint,
+            Some(TagHint::Fixed(FixedTagHint {
+                hinted_tag: "depends-on".into(),
+            })),
+        );
+    }
+
+    /// FAR-MISS pin — a tag whose closest canonical arm sits outside
+    /// the substrate-wide bounded edit distance returns the bare
+    /// `UnknownRequireTag::default()` (`hint: None`), preserving the
+    /// pre-lift far-miss shape byte-for-byte. Silent-over-guessing
+    /// inherits from `tatara_lisp::domain::suggest`.
+    #[test]
+    fn evaluate_fixed_tag_returns_bare_default_on_far_miss() {
+        let spec = FixtureSpec {
+            alpha: false,
+            beta: false,
+        };
+        let err = evaluate_fixed_tag("xyzzy", &spec, FIXTURE_ARMS)
+            .expect_err("far-miss must not match any arm");
+        assert!(
+            err.hint.is_none(),
+            "far-miss must not produce a fixed-tag hint",
+        );
+    }
+
+    /// POINT-SURFACE end-to-end pin — the point (ProcessSpec) fixed
+    /// vocabulary carries `depends-on`; an operator authoring
+    /// `:requires (deponds-on)` (single-character transposition) in
+    /// `checks.lisp` sees the near-miss hint threaded through the
+    /// point domain's diagnostic composer. Locks the transitive
+    /// propagation across FOUR substrate boundaries
+    /// (`evaluate_fixed_tag` miss → `tatara_lisp::domain::suggest`
+    /// succeed → `FixedTagHint` materialization → `Display`
+    /// composition into `RequireTagDomain::unknown_tag_diagnostic`).
+    #[test]
+    fn point_domain_fixed_tag_near_miss_hint_end_to_end() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        let err = evaluate_point_require_tag(&spec, "deponds-on")
+            .expect_err("deponds-on must miss every arm");
+        assert_eq!(
+            err.hint,
+            Some(TagHint::Fixed(FixedTagHint {
+                hinted_tag: "depends-on".into(),
+            })),
+        );
+        let point = require_tag_domain_by_name("point").expect("point domain registered");
+        assert_eq!(
+            point.unknown_tag_diagnostic("deponds-on", &err),
+            "unknown :requires tag: deponds-on (did you mean \"depends-on\"?)",
+        );
+    }
+
+    /// EPHEMERAL-SURFACE end-to-end pin — the ephemeral
+    /// (EphemeralSpec) fixed vocabulary carries `aplicacao`; an
+    /// operator authoring `:requires (aplicaco)` (single-character
+    /// deletion) in `checks.lisp` sees the near-miss hint threaded
+    /// through the ephemeral domain's diagnostic composer. Peer of
+    /// `point_domain_fixed_tag_near_miss_hint_end_to_end` on the
+    /// ephemeral domain axis — same substrate primitives, distinct
+    /// spec surface, both diagnostic prefixes rendered via the SAME
+    /// `RequireTagDomain::unknown_tag_diagnostic` boundary.
+    #[test]
+    fn ephemeral_domain_fixed_tag_near_miss_hint_end_to_end() {
+        let spec = ephemeral_fixture();
+        let err = evaluate_ephemeral_require_tag(&spec, "aplicaco")
+            .expect_err("aplicaco must miss every arm");
+        assert_eq!(
+            err.hint,
+            Some(TagHint::Fixed(FixedTagHint {
+                hinted_tag: "aplicacao".into(),
+            })),
+        );
+        let ephemeral =
+            require_tag_domain_by_name("ephemeral").expect("ephemeral domain registered");
+        assert_eq!(
+            ephemeral.unknown_tag_diagnostic("aplicaco", &err),
+            "unknown :requires tag for ephemeral domain: aplicaco \
+             (did you mean \"aplicacao\"?)",
+        );
+    }
+
+    /// DISPLAY pin — `TagHint::Fixed` renders through its `Display`
+    /// impl as `(did you mean \"<tag>\"?)`, no set-label / suffix
+    /// preamble because a fixed tag is not a `<prefix>-<suffix>`
+    /// composite. Peer of `unknown_require_tag_display_renders_hint_when_present_else_empty`
+    /// on the fixed-tag axis. An `UnknownRequireTag` carrying a
+    /// `TagHint::Fixed` renders as `" (did you mean \"<tag>\"?)"`
+    /// (leading space matches the prefix-hint shape so the caller's
+    /// tag-echo concatenation stays byte-uniform).
+    #[test]
+    fn unknown_require_tag_display_renders_fixed_hint() {
+        let err = UnknownRequireTag::with_fixed_hint("depends-on".into());
+        assert_eq!(format!("{err}"), " (did you mean \"depends-on\"?)");
+    }
+
+    /// TABLE-COVERAGE pin — the two production tables
+    /// (`POINT_FIXED_TAG_ARMS`, `EPHEMERAL_FIXED_TAG_ARMS`) each list
+    /// the same fixed-tag literals the pre-lift `match tag { ... }`
+    /// arm bodies did. Locks the table's operator-facing vocabulary
+    /// against a drift that removes an arm without a corresponding
+    /// test-surface update. Ordering here matches the pre-lift
+    /// hand-authored `match` order.
+    #[test]
+    fn fixed_tag_arm_tables_list_expected_literals() {
+        let point_tags: Vec<&'static str> = POINT_FIXED_TAG_ARMS.iter().map(|a| a.tag).collect();
+        assert_eq!(
+            point_tags,
+            vec![
+                "depends-on",
+                "boundary-pre",
+                "boundary-post",
+                "compliance",
+                "signals",
+            ],
+        );
+        let ephemeral_tags: Vec<&'static str> =
+            EPHEMERAL_FIXED_TAG_ARMS.iter().map(|a| a.tag).collect();
+        assert_eq!(
+            ephemeral_tags,
+            vec![
+                "aplicacao",
+                "ttl",
+                "teardown",
+                "postconditions",
+                "preconditions",
+                "closed-loop-auth",
+            ],
         );
     }
 

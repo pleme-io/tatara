@@ -299,9 +299,8 @@ impl EphemeralSpec {
     /// [`EphemeralSpec`] surface ([`Self::has_point_type`],
     /// [`Self::has_substrate`], [`Self::has_calm`],
     /// [`Self::has_data_classification`], [`Self::has_horizon_kind`],
-    /// [`Self::has_optimization_direction`], and its future peers on the
-    /// two remaining classification axes — `has_input_arity`,
-    /// `has_output_arity`) routes through THIS
+    /// [`Self::has_optimization_direction`], [`Self::has_input_arity`],
+    /// [`Self::has_output_arity`]) routes through THIS
     /// primitive so the "`None` fills through
     /// [`default_ephemeral_class`]" resolution lives at ONE site rather
     /// than being restated in each per-axis probe body. A future
@@ -855,13 +854,13 @@ impl EphemeralSpec {
     /// Option<OptimizationDirection>` through `unwrap_or_default`), and
     /// derived-typed-projection (this method reads
     /// `point_type.input_arity(): Arity` through a many-to-one
-    /// projection). ONE future sibling axis on the SAME `Cow`-resolver
-    /// carrier (`has_output_arity`) lands as a one-line wrapper around
-    /// the SAME resolver + the sibling [`Classification`] closed-set
-    /// primitive, so a future variant added to [`Arity`] or to
-    /// [`ConvergencePointType`] reaches BOTH surfaces'
-    /// `<axis>-<kind>` prefix families through the SAME closed-set walk
-    /// with no per-caller edit.
+    /// projection). The co-tenant derived-typed-projection axis on the
+    /// SAME `Cow`-resolver carrier ([`Self::has_output_arity`]) lands as
+    /// a one-line wrapper around the SAME resolver + the sibling
+    /// [`Classification`] closed-set primitive, so a future variant
+    /// added to [`Arity`] or to [`ConvergencePointType`] reaches BOTH
+    /// surfaces' `<axis>-<kind>` prefix families through the SAME
+    /// closed-set walk with no per-caller edit.
     ///
     /// # Semantics — VARIANT match on the projected image
     ///
@@ -901,6 +900,103 @@ impl EphemeralSpec {
     #[must_use]
     pub fn has_input_arity(&self, kind: Arity) -> bool {
         self.resolved_classification().has_input_arity(kind)
+    }
+
+    /// True iff the resolved [`Classification`]'s nested
+    /// [`ConvergencePointType`] projects (via the many-to-one
+    /// [`ConvergencePointType::output_arity`] typed projection) to the
+    /// given [`Arity`] discriminator — byte-for-byte peer of
+    /// [`Classification::has_output_arity`] wrapped through the
+    /// [`Self::resolved_classification`] resolver so an operator-omitted
+    /// `:classification` slot reads as the [`default_ephemeral_class`]
+    /// baseline the sibling `From<EphemeralSpec> for ProcessSpec`
+    /// lowering fills.
+    ///
+    /// # Two-surface parity contract
+    ///
+    /// A given [`EphemeralSpec`] classifies identically through this
+    /// primitive AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.has_output_arity(kind)`
+    /// on the lowered `ProcessSpec` — the `Cow<'_, Classification>`
+    /// resolver on this side and the `.unwrap_or_else(...)` fill on the
+    /// lowering side both dereference the same
+    /// `default_ephemeral_class()` value on `None` and the same
+    /// authored value on `Some(_)`, and the sibling
+    /// [`Classification::has_output_arity`] applies the same
+    /// `point_type.output_arity()` typed projection on both sides. This
+    /// means the ephemeral-surface `output-arity-<kind>` `:requires`
+    /// family in `tatara-reconciler::bin::tatara-check` publishes the
+    /// SAME truth on the SAME authored spec as the point-surface family
+    /// on the mechanically-lowered `ProcessSpec`.
+    ///
+    /// # EIGHTH classification-axis peer — closes the ephemeral-side DAG-composition arity pair
+    ///
+    /// Peer of [`Self::has_point_type`], [`Self::has_substrate`],
+    /// [`Self::has_calm`], [`Self::has_data_classification`],
+    /// [`Self::has_horizon_kind`], [`Self::has_optimization_direction`],
+    /// and [`Self::has_input_arity`] — all eight route through the SAME
+    /// [`Self::resolved_classification`] resolver, so the operator-
+    /// omitted `:classification` slot's fill-through logic lives at ONE
+    /// substrate primitive rather than being restated in each per-axis
+    /// probe body. SECOND occupant on the (Option-parent × NESTED-
+    /// STRUCT-scalar-child × derived-typed-projection) corner on the
+    /// ephemeral surface — co-tenant with [`Self::has_input_arity`] on
+    /// the SAME `point_type` scalar carrier through the SAME [`Arity`]
+    /// closed set but through the sibling many-to-one typed projection
+    /// [`ConvergencePointType::output_arity`] (`Transform | Join | Gate
+    /// | Select | Reduce | Observe → One`, `Fork | Broadcast → Many`).
+    /// Closes the DAG-composition arity pair on the ephemeral side —
+    /// the two projections DISAGREE on the diffusive arms `Fork |
+    /// Broadcast` (input `One` vs. output `Many`) and on the convergent
+    /// arms `Join | Gate | Select | Reduce` (input `Many` vs. output
+    /// `One`), and AGREE on the endomorphic arms `Transform | Observe`
+    /// (both `One`). Byte-for-byte symmetric with the DAG-composition
+    /// arity pair on the point surface ([`Classification::has_input_arity`] +
+    /// [`Classification::has_output_arity`]) — THAT pair walks a required
+    /// [`Classification`] carrier; THIS pair walks the SAME projection
+    /// pair on the `Cow`-resolver carrier so the resolver walk composes
+    /// with the projection at ONE substrate site rather than being
+    /// restated per surface.
+    ///
+    /// # Semantics — VARIANT match on the projected image
+    ///
+    /// [`Arity`] carries no `Default` impl (the 2-arm bare enum with no
+    /// `#[default]`), so exactly ONE of the two arms answers `true` per
+    /// well-formed [`EphemeralSpec`], with no default-arm short-circuit
+    /// shortcut. The absent-`:classification` baseline
+    /// [`default_ephemeral_class`] fills `point_type: Gate`, and
+    /// [`ConvergencePointType::output_arity`] projects `Gate → One`, so
+    /// the ephemeral sugar surface's `output-arity-One` require-tag
+    /// reads `true` on every operator-authored spec that omits the
+    /// `:classification` slot — pinning the workspace's convergent-by-
+    /// default point posture on the output side. The many-to-one
+    /// projection shape means the answer is invariant under intra-
+    /// bucket point-type swaps (`Fork ↔ Broadcast` both keep
+    /// `output-arity-Many = true`; `Transform ↔ Join ↔ Gate ↔ Select ↔
+    /// Reduce ↔ Observe` all keep `output-arity-One = true`) and flips
+    /// at bucket boundaries (`Fork ↔ Transform` flips `output-arity-
+    /// Many` from `true` to `false`). A regression that dropped the
+    /// resolver hop, probed [`ConvergencePointType`] directly (dropping
+    /// the `.output_arity()` call), inverted the projection (`One ↔
+    /// Many`), or crossed the wires with the sibling
+    /// [`ConvergencePointType::input_arity`] projection fails HERE at
+    /// ONE narrow substrate site before drifting through every
+    /// unadorned ephemeral spec's baseline output-arity answer.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-axis presence-probe body
+    /// composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE closed-set primitive
+    /// ([`Classification::has_output_arity`]) so every downstream
+    /// (`output-arity-<kind>` require-tag families on both surfaces in
+    /// tatara-check, closed-set audit dispatchers, future variant
+    /// additions on [`Arity`] or on [`ConvergencePointType`]) binds
+    /// through the SAME `has(kind)` shape rather than restating either
+    /// the resolver walk or the closed-set equality plus the typed-
+    /// projection hop at the callsite.
+    #[must_use]
+    pub fn has_output_arity(&self, kind: Arity) -> bool {
+        self.resolved_classification().has_output_arity(kind)
     }
 }
 
@@ -2450,5 +2546,190 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ── EphemeralSpec::has_output_arity pins ─────────────────────────
+    //
+    // Fail-before-pass-after granularity: [`Self::has_output_arity`] did
+    // not exist pre-lift on `impl EphemeralSpec` — every callsite went
+    // through `.resolved_classification().point_type.output_arity() ==
+    // kind` or through the lowered `ProcessSpec`'s
+    // `spec.classification.has_output_arity`. Post-lift the EIGHTH
+    // classification-axis peer on the ephemeral sugar surface routes
+    // through the SAME [`Self::resolved_classification`] resolver + the
+    // sibling closed-set primitive
+    // [`crate::classification::Classification::has_output_arity`], so a
+    // regression that dropped the resolver hop, dropped the
+    // `.output_arity()` projection call, inverted the projection (`One
+    // ↔ Many`), or crossed the wires with the sibling
+    // [`ConvergencePointType::input_arity`] projection fails HERE.
+    // CLOSES the (Option-parent × NESTED-STRUCT-scalar-child ×
+    // derived-typed-projection) corner on the ephemeral surface as the
+    // SECOND occupant — co-tenant with [`Self::has_input_arity`] on the
+    // SAME `point_type` scalar carrier through the SAME [`Arity`] closed
+    // set but through the sibling many-to-one projection, closing the
+    // DAG-composition arity pair on the ephemeral side.
+
+    /// AUTHORED-slot PROJECTED-VARIANT pin — an [`EphemeralSpec`] whose
+    /// [`EphemeralSpec::classification`] slot names a concrete
+    /// [`Classification`] with an authored [`ConvergencePointType`]
+    /// returns `true` from [`Self::has_output_arity`] on the [`Arity`]
+    /// value the projection [`ConvergencePointType::output_arity`] maps
+    /// the authored point-type to and `false` for every other variant.
+    /// Sweep the [`ConvergencePointType::ALL`] × [`Arity::ALL`] cross so
+    /// a regression that (a) dropped the projection call, (b) inverted
+    /// the projection, (c) probed [`ConvergencePointType`] directly, or
+    /// (d) crossed wires with [`ConvergencePointType::input_arity`]
+    /// fails HERE at the substrate primitive. Byte-for-byte peer of the
+    /// point-surface [`Classification::has_output_arity`] populated-slot
+    /// sweep on the SAME closed-set primitive routed through the SAME
+    /// projection.
+    #[test]
+    fn has_output_arity_returns_true_iff_authored_point_type_projects_per_kind() {
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            let projected = populated.output_arity();
+            for query in Arity::ALL {
+                let expected = query == projected;
+                assert_eq!(
+                    spec.has_output_arity(query),
+                    expected,
+                    "ephemeral classification.point_type={populated:?} (projects to {projected:?}): query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// ABSENT-slot PROJECTED-BASELINE pin — an [`EphemeralSpec`] whose
+    /// [`EphemeralSpec::classification`] slot is `None` returns `true`
+    /// from [`Self::has_output_arity`] on [`Arity::One`] (the
+    /// [`default_ephemeral_class`] baseline fills `point_type: Gate`,
+    /// and [`ConvergencePointType::output_arity`] projects
+    /// `Gate → Arity::One`) and `false` on [`Arity::Many`]. MIRROR of
+    /// the [`Self::has_input_arity`] baseline (`Gate → input_arity =
+    /// Many`) — the DAG-composition arity pair projects the same `Gate`
+    /// baseline through the two projections to opposite [`Arity`] arms,
+    /// so this pin locks the output-side half of that pair against a
+    /// regression that (a) promoted the baseline's `point_type` off
+    /// `Gate` (silently flipping every unadorned Process's convergent-
+    /// by-default output-side posture to diffusive), (b) dropped the
+    /// projection call, (c) inverted the projection, or (d) crossed
+    /// wires with [`ConvergencePointType::input_arity`] (which would
+    /// flip the baseline answer from `One` to `Many` for `Gate`).
+    #[test]
+    fn has_output_arity_probes_one_only_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        for kind in Arity::ALL {
+            let expected = kind == Arity::One;
+            assert_eq!(
+                spec.has_output_arity(kind),
+                expected,
+                "absent classification (defaults to gate_compute, point_type=Gate → output_arity=One): query {kind:?} must be {expected}",
+            );
+        }
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::has_output_arity`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.has_output_arity(kind)`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`ConvergencePointType::ALL`] variant) × [`Arity::ALL`] queries
+    /// so a future regression on either side of the resolver fails HERE
+    /// at the parity boundary. Byte-for-byte peer of the seven sibling
+    /// two-surface parity pins on the SAME `Cow`-resolver carrier — the
+    /// EIGHTH classification-axis two-surface parity contract on the
+    /// ephemeral surface, closing the SECOND occupant of the (Option-
+    /// parent × NESTED-STRUCT-scalar-child × derived-typed-projection)
+    /// corner.
+    #[test]
+    fn has_output_arity_matches_point_peer_through_lowered_classification() {
+        // Absent classification: both surfaces resolve through the SAME
+        // default and agree on every variant.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        for query in Arity::ALL {
+            assert_eq!(
+                eph.has_output_arity(query),
+                lowered.classification.has_output_arity(query),
+                "None-classification parity drift on query {query:?}",
+            );
+        }
+        // Authored classification: both surfaces read the same authored
+        // point_type and route through the same projection.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            for query in Arity::ALL {
+                assert_eq!(
+                    eph.has_output_arity(query),
+                    lowered.classification.has_output_arity(query),
+                    "authored classification.point_type={populated:?}: parity drift on query {query:?}",
+                );
+            }
+        }
+    }
+
+    /// DAG-COMPOSITION ARITY-PAIR pin — the SEVENTH
+    /// ([`Self::has_input_arity`]) and EIGHTH
+    /// ([`Self::has_output_arity`]) classification-axis peers on the
+    /// ephemeral surface walk the SAME `point_type` scalar carrier
+    /// (routed through the SAME [`Self::resolved_classification`]
+    /// resolver) through the SAME [`Arity`] closed set but through
+    /// DIFFERENT typed projections
+    /// ([`ConvergencePointType::input_arity`] vs.
+    /// [`ConvergencePointType::output_arity`]). An [`EphemeralSpec`]
+    /// with `classification.point_type = Fork` (the diffusive `(One,
+    /// Many)` cell) MUST simultaneously answer `has_input_arity(One)`
+    /// true AND `has_output_arity(Many)` true AND
+    /// `has_input_arity(Many)` false AND `has_output_arity(One)` false.
+    /// An [`EphemeralSpec`] with `point_type = Transform` (endomorphic
+    /// `(One, One)`) MUST answer BOTH `has_input_arity(One)` and
+    /// `has_output_arity(One)` true — the two projections AGREE in the
+    /// endomorphic bucket. The absent-classification baseline (Gate,
+    /// convergent `(Many, One)`) MUST answer
+    /// `has_input_arity(Many)` true AND `has_output_arity(One)` true —
+    /// the mirror of the Fork case. A regression that (a) collapsed
+    /// `has_output_arity` onto `has_input_arity`, (b) swapped the
+    /// projection direction, or (c) drifted the topology-bucket
+    /// contract fails HERE at ONE narrow ephemeral-surface site,
+    /// symmetric with the point-surface DAG-composition arity-pair pin.
+    #[test]
+    fn has_input_arity_and_has_output_arity_pin_dag_composition_pair() {
+        // Diffusive cell: Fork carries (input, output) = (One, Many)
+        let mut classification = Classification::gate_compute();
+        classification.point_type = ConvergencePointType::Fork;
+        let mut fork = empty_ephemeral();
+        fork.classification = Some(classification);
+        assert!(fork.has_input_arity(Arity::One));
+        assert!(fork.has_output_arity(Arity::Many));
+        assert!(!fork.has_input_arity(Arity::Many));
+        assert!(!fork.has_output_arity(Arity::One));
+
+        // Endomorphic cell: Transform carries (input, output) = (One, One)
+        let mut classification = Classification::gate_compute();
+        classification.point_type = ConvergencePointType::Transform;
+        let mut transform = empty_ephemeral();
+        transform.classification = Some(classification);
+        assert!(transform.has_input_arity(Arity::One));
+        assert!(transform.has_output_arity(Arity::One));
+        assert!(!transform.has_input_arity(Arity::Many));
+        assert!(!transform.has_output_arity(Arity::Many));
+
+        // Convergent cell: absent classification defaults to Gate,
+        // which carries (input, output) = (Many, One).
+        let gate = empty_ephemeral();
+        assert!(gate.classification.is_none());
+        assert!(gate.has_input_arity(Arity::Many));
+        assert!(gate.has_output_arity(Arity::One));
+        assert!(!gate.has_input_arity(Arity::One));
+        assert!(!gate.has_output_arity(Arity::Many));
     }
 }

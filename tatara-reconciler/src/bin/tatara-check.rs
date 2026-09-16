@@ -1889,7 +1889,12 @@ where
 /// [`tests::evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_internal_only`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_data_classification_suffix`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_data_classification_prefix`],
-/// and [`tests::evaluate_ephemeral_require_tag_data_classification_matches_point_peer_through_resolved_classification`].
+/// [`tests::evaluate_ephemeral_require_tag_data_classification_matches_point_peer_through_resolved_classification`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_iff_horizon_kind_matches_authored_classification_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_bounded_only`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_horizon_kind_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_horizon_kind_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_horizon_kind_matches_point_peer_through_resolved_classification`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -1967,6 +1972,11 @@ fn evaluate_ephemeral_require_tag(
         "data-classification-",
         |kind| spec.has_data_classification(kind),
     ) {
+        return res;
+    }
+    if let Some(res) = strip_and_classify_prefixed_kind::<HorizonKind, _>(tag, "horizon-", |kind| {
+        spec.has_horizon_kind(kind)
+    }) {
         return res;
     }
     match tag {
@@ -11330,6 +11340,215 @@ mod tests {
                     evaluate_ephemeral_require_tag(&eph, &tag),
                     evaluate_point_require_tag(&point, &tag),
                     "authored classification.data_classification={populated:?}: parity drift on tag {tag:?}",
+                );
+            }
+        }
+    }
+
+    // ── evaluate_ephemeral_require_tag / horizon-<kind> pins ─────────
+    //
+    // Fail-before-pass-after granularity: the ephemeral surface's
+    // `horizon-<kind>` prefix family did not route pre-lift — the
+    // vocabulary block on `evaluate_ephemeral_require_tag` had peers
+    // to the point surface's twelfth + thirteenth + fourteenth +
+    // fifteenth families (`point-type-<kind>` + `substrate-<kind>` +
+    // `calm-<kind>` + `data-classification-<kind>`) but NOT the
+    // sixteenth (`horizon-<kind>`). Post-lift the routing dispatches
+    // through the ONE substrate primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::has_horizon_kind`]
+    // + the sibling resolver
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`]
+    // — a regression that (a) hard-coded the arm to a single kind, (b)
+    // inverted the resolver's `None` fill-through (`Some(_)` filled
+    // through the default), (c) probed the wrong slot (`data_classification`
+    // instead of `horizon.kind`), or (d) drifted the fill-through
+    // default from the sibling `From<EphemeralSpec>` lowering fails
+    // HERE at the substrate primitives rather than as silent operator-
+    // facing drift at the ephemeral `horizon-<kind>` require-tag
+    // surface. FIFTH classification-axis peer on the ephemeral
+    // surface — OPENS a fresh (Option-parent × NESTED-STRUCT-scalar-
+    // child × operator-resolvable-baseline) corner distinct from the
+    // four prior scalar-carrier peers on the (Option-parent × NON-
+    // DEFAULT-scalar-child) and (Option-parent × DEFAULTED-scalar-
+    // child) corners. The two-defaults composition property (parent
+    // fill-through baseline AND child `#[default]` land on the SAME
+    // variant [`HorizonKind::Bounded`], reached through the nested
+    // `Horizon::default()` fill) is exercised at the pins below.
+
+    /// AUTHORED-slot VARIANT-MATCH pin — the ephemeral `horizon-<kind>`
+    /// prefix family dispatches through the autoderived
+    /// [`HorizonKind`] `FromStr` + the substrate
+    /// [`tatara_process::ephemeral::EphemeralSpec::has_horizon_kind`]
+    /// + the sibling resolver
+    /// [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`]
+    /// on the operator-authored [`Classification`] slot. Sweeps the
+    /// [`HorizonKind::ALL`] × ALL cross so a stray hard-coded arm
+    /// fails HERE. Byte-for-byte peer of the point-surface pin
+    /// [`evaluate_point_require_tag_returns_true_iff_horizon_kind_matches_variant_per_kind`]
+    /// on the SAME closed set, routed through the ephemeral sugar
+    /// surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_iff_horizon_kind_matches_authored_classification_per_kind(
+    ) {
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = Horizon {
+                kind: populated,
+                ..Horizon::default()
+            };
+            let spec = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            for query in HorizonKind::ALL {
+                let tag = format!("horizon-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral classification.horizon.kind={populated:?}: tag {tag:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// ABSENT-slot DEFAULT-ARM pin — an [`EphemeralSpec`] whose
+    /// `:classification` slot is omitted from the `(defephemeral …)`
+    /// form (`None` on the wire) reads as the workspace-baseline
+    /// [`tatara_process::classification::Classification::gate_compute`]
+    /// value through
+    /// [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    /// Pins the fresh (Option-parent × NESTED-STRUCT-scalar-child ×
+    /// operator-resolvable-baseline) corner's default-arm short-
+    /// circuit on the FIFTH classification-axis peer:
+    /// `horizon-Bounded` reads `true`, every other variant reads
+    /// `false`. Two-defaults composition property through a NESTED-
+    /// STRUCT hop: both the parent Option's fill-through baseline
+    /// (`default_ephemeral_class` fills
+    /// `horizon: Horizon::default()`) AND the child's own `#[default]`
+    /// ([`HorizonKind::Bounded`] via `#[default]` on the closed set)
+    /// land on the SAME variant, so the ephemeral sugar surface's
+    /// `horizon-Bounded` require-tag reads `true` on every operator-
+    /// authored spec that omits both the `:classification` slot AND
+    /// the `:horizon` sub-slot.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_bounded_only() {
+        let spec = EphemeralSpec {
+            classification: None,
+            ..ephemeral_fixture()
+        };
+        for kind in HorizonKind::ALL {
+            let tag = format!("horizon-{}", kind.as_str());
+            let expected = kind == HorizonKind::Bounded;
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(expected),
+                "absent ephemeral classification (defaults to gate_compute): tag {tag:?} drifted",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `horizon-<garbage>` classifies as
+    /// [`UnknownRequireTag`] rather than silently returning
+    /// `Ok(false)`. Sweeps case-variants of a known variant name plus
+    /// pure garbage plus cross-axis rejects (raw
+    /// `ConvergencePointType` / `SubstrateType` / `CalmClassification`
+    /// / `DataClassification` identifiers must NOT resolve here). A
+    /// regression that folded case (`FromStr` gone `case_insensitive`)
+    /// or gained a permissive-fallthrough (e.g. unknown suffix routes
+    /// to `Bounded`) would silently reclassify an unknown tag as
+    /// `Ok(_)` and fail HERE.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_horizon_kind_suffix() {
+        let spec = ephemeral_fixture();
+        for tag in [
+            "horizon-bounded",
+            "horizon-BOUNDED",
+            "horizon-ASYMPTOTIC",
+            "horizon-Periodic",
+            "horizon-Bogus",
+            "horizon-Gate",     // point-type variant leaking
+            "horizon-Compute",  // substrate variant leaking
+            "horizon-Monotone", // calm variant leaking
+            "horizon-Internal", // data-classification variant leaking
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, tag),
+                Err(UnknownRequireTag),
+                "unknown ephemeral horizon suffix {tag:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-prefix pin — `"horizon-"` (empty suffix) MUST classify as
+    /// [`UnknownRequireTag`] rather than as any variant. Locks the
+    /// suffix-nonempty invariant at the substrate
+    /// `strip_and_classify_prefixed_kind` boundary on the ephemeral
+    /// surface's FIFTH classification-axis peer.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_horizon_kind_prefix() {
+        let spec = ephemeral_fixture();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "horizon-"),
+            Err(UnknownRequireTag),
+            "bare `horizon-` prefix must classify as UnknownRequireTag",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`evaluate_ephemeral_require_tag`] AND
+    /// through [`evaluate_point_require_tag`] on the mechanically-
+    /// lowered `ProcessSpec` via `<eph.clone().into()>`. Sweeps both
+    /// the (`None` classification) baseline arm and every
+    /// [`HorizonKind::ALL`] populated arm × every ALL query so a
+    /// future regression on either surface's resolver (an ephemeral-
+    /// side fill-through drift, a point-side nested-struct-scalar-
+    /// carrier probe drift) fails HERE. Byte-for-byte peer of the
+    /// sibling two-surface parity pins on the FIRST + SECOND + THIRD
+    /// + FOURTH classification-axis peers (`point-type-<kind>`,
+    /// `substrate-<kind>`, `calm-<kind>`, `data-classification-<kind>`)
+    /// — the FIFTH classification-axis two-surface parity contract on
+    /// the ephemeral surface, and the FIRST on the (Option-parent ×
+    /// NESTED-STRUCT-scalar-child) corner.
+    #[test]
+    fn evaluate_ephemeral_require_tag_horizon_kind_matches_point_peer_through_resolved_classification(
+    ) {
+        // Absent classification baseline — both surfaces resolve
+        // through the SAME `default_ephemeral_class` fill-through and
+        // agree on every variant.
+        let eph = EphemeralSpec {
+            classification: None,
+            ..ephemeral_fixture()
+        };
+        let point: ProcessSpec = eph.clone().into();
+        for query in HorizonKind::ALL {
+            let tag = format!("horizon-{}", query.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph, &tag),
+                evaluate_point_require_tag(&point, &tag),
+                "None-classification parity drift on tag {tag:?}",
+            );
+        }
+        // Authored classification arms — the operator's authored value
+        // rides across the `From<EphemeralSpec>` lowering byte-for-
+        // byte, so both surfaces classify identically on every variant.
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = Horizon {
+                kind: populated,
+                ..Horizon::default()
+            };
+            let eph = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let point: ProcessSpec = eph.clone().into();
+            for query in HorizonKind::ALL {
+                let tag = format!("horizon-{}", query.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&eph, &tag),
+                    evaluate_point_require_tag(&point, &tag),
+                    "authored classification.horizon.kind={populated:?}: parity drift on tag {tag:?}",
                 );
             }
         }

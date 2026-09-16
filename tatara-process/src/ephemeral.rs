@@ -36,7 +36,8 @@ use tatara_lisp::DeriveTataraDomain;
 
 use crate::boundary::{Boundary, Condition, ConditionKind, ConditionSliceExt};
 use crate::classification::{
-    CalmClassification, Classification, ConvergencePointType, DataClassification, SubstrateType,
+    CalmClassification, Classification, ConvergencePointType, DataClassification, HorizonKind,
+    SubstrateType,
 };
 use crate::crd::ProcessSpec;
 use crate::export::ExportSpec;
@@ -297,9 +298,9 @@ impl EphemeralSpec {
     /// Every downstream classification-axis presence probe on the
     /// [`EphemeralSpec`] surface ([`Self::has_point_type`],
     /// [`Self::has_substrate`], [`Self::has_calm`],
-    /// [`Self::has_data_classification`], and its future peers on the
-    /// four remaining classification axes — `has_horizon_kind`,
-    /// `has_optimization_direction`, `has_input_arity`,
+    /// [`Self::has_data_classification`], [`Self::has_horizon_kind`],
+    /// and its future peers on the three remaining classification
+    /// axes — `has_optimization_direction`, `has_input_arity`,
     /// `has_output_arity`) routes through THIS
     /// primitive so the "`None` fills through
     /// [`default_ephemeral_class`]" resolution lives at ONE site rather
@@ -375,15 +376,15 @@ impl EphemeralSpec {
     /// surface. Six future sibling axes on the SAME `Cow`-resolver
     /// carrier ([`Self::has_substrate`] opened the SECOND,
     /// [`Self::has_calm`] the THIRD,
-    /// [`Self::has_data_classification`] the FOURTH; then
-    /// `has_horizon_kind`, `has_optimization_direction`,
-    /// `has_input_arity`, `has_output_arity`) land as one-line
-    /// wrappers around the SAME resolver + the sibling
-    /// [`Classification`] closed-set primitive, so a future variant
-    /// added to [`ConvergencePointType`] (or any of the seven other
-    /// closed sets) reaches BOTH surfaces' `<axis>-<kind>` prefix
-    /// families through the SAME closed-set walk with no per-caller
-    /// edit.
+    /// [`Self::has_data_classification`] the FOURTH,
+    /// [`Self::has_horizon_kind`] the FIFTH; then
+    /// `has_optimization_direction`, `has_input_arity`,
+    /// `has_output_arity`) land as one-line wrappers around the SAME
+    /// resolver + the sibling [`Classification`] closed-set
+    /// primitive, so a future variant added to
+    /// [`ConvergencePointType`] (or any of the seven other closed
+    /// sets) reaches BOTH surfaces' `<axis>-<kind>` prefix families
+    /// through the SAME closed-set walk with no per-caller edit.
     ///
     /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
     /// preserves proofs; the classification-axis presence-probe body
@@ -431,14 +432,15 @@ impl EphemeralSpec {
     /// ONE substrate primitive rather than being restated in each
     /// per-axis probe body. Five future sibling axes on the SAME
     /// `Cow`-resolver carrier ([`Self::has_calm`] opened the THIRD,
-    /// [`Self::has_data_classification`] the FOURTH; then
-    /// `has_horizon_kind`, `has_optimization_direction`,
-    /// `has_input_arity`, `has_output_arity`) land as one-line
-    /// wrappers around the SAME resolver + the sibling
-    /// [`Classification`] closed-set primitive, so a future variant
-    /// added to [`SubstrateType`] (or any of the six other closed
-    /// sets) reaches BOTH surfaces' `<axis>-<kind>` prefix families
-    /// through the SAME closed-set walk with no per-caller edit.
+    /// [`Self::has_data_classification`] the FOURTH,
+    /// [`Self::has_horizon_kind`] the FIFTH; then
+    /// `has_optimization_direction`, `has_input_arity`,
+    /// `has_output_arity`) land as one-line wrappers around the SAME
+    /// resolver + the sibling [`Classification`] closed-set
+    /// primitive, so a future variant added to [`SubstrateType`] (or
+    /// any of the six other closed sets) reaches BOTH surfaces'
+    /// `<axis>-<kind>` prefix families through the SAME closed-set
+    /// walk with no per-caller edit.
     ///
     /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
     /// preserves proofs; the classification-axis presence-probe body
@@ -503,7 +505,7 @@ impl EphemeralSpec {
     /// `SubstrateType::Compute`) rather than through the child's own
     /// `#[default]`. Four future sibling axes on the SAME
     /// `Cow`-resolver carrier ([`Self::has_data_classification`]
-    /// opened the FOURTH; then `has_horizon_kind`,
+    /// opened the FOURTH, [`Self::has_horizon_kind`] the FIFTH; then
     /// `has_optimization_direction`, `has_input_arity`,
     /// `has_output_arity`) land as one-line wrappers around the SAME
     /// resolver + the sibling [`Classification`] closed-set
@@ -582,8 +584,8 @@ impl EphemeralSpec {
     /// specific chosen baseline (`ConvergencePointType::Gate`,
     /// `SubstrateType::Compute`) rather than through the child's own
     /// `#[default]`. Four future sibling axes on the SAME
-    /// `Cow`-resolver carrier (`has_horizon_kind`,
-    /// `has_optimization_direction`, `has_input_arity`,
+    /// `Cow`-resolver carrier ([`Self::has_horizon_kind`] opened the
+    /// FIFTH; then `has_optimization_direction`, `has_input_arity`,
     /// `has_output_arity`) land as one-line wrappers around the SAME
     /// resolver + the sibling [`Classification`] closed-set
     /// primitive, so a future variant added to
@@ -605,6 +607,91 @@ impl EphemeralSpec {
     #[must_use]
     pub fn has_data_classification(&self, kind: DataClassification) -> bool {
         self.resolved_classification().has_data_classification(kind)
+    }
+
+    /// True iff the resolved [`Classification`]'s nested [`Horizon`]
+    /// carries the given [`HorizonKind`] discriminator on its
+    /// `horizon.kind` slot — byte-for-byte peer of
+    /// [`Classification::has_horizon_kind`] wrapped through the
+    /// [`Self::resolved_classification`] resolver so an operator-
+    /// omitted `:classification` slot reads as the
+    /// [`default_ephemeral_class`] baseline the sibling
+    /// `From<EphemeralSpec> for ProcessSpec` lowering fills.
+    ///
+    /// # Two-surface parity contract
+    ///
+    /// A given [`EphemeralSpec`] classifies identically through this
+    /// primitive AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.has_horizon_kind(kind)`
+    /// on the lowered `ProcessSpec` — the `Cow<'_, Classification>`
+    /// resolver on this side and the `.unwrap_or_else(...)` fill on
+    /// the lowering side both dereference the same
+    /// `default_ephemeral_class()` value on `None` and the same
+    /// authored value on `Some(_)`. This means the ephemeral-surface
+    /// `horizon-<kind>` `:requires` family in
+    /// `tatara-reconciler::bin::tatara-check` publishes the SAME
+    /// truth on the SAME authored spec as the point-surface family
+    /// on the mechanically-lowered `ProcessSpec`.
+    ///
+    /// # FIFTH classification-axis peer on the ephemeral surface
+    ///
+    /// Peer of [`Self::has_point_type`], [`Self::has_substrate`],
+    /// [`Self::has_calm`], and [`Self::has_data_classification`] — all
+    /// five route through the SAME [`Self::resolved_classification`]
+    /// resolver, so the operator-omitted `:classification` slot's
+    /// fill-through logic lives at ONE substrate primitive rather
+    /// than being restated in each per-axis probe body. OPENS a fresh
+    /// (Option-parent × NESTED-STRUCT-scalar-child ×
+    /// operator-resolvable-baseline) corner on the ephemeral-surface
+    /// presence-probe algebra — the four prior peers on this surface
+    /// all read the closed-set discriminator DIRECTLY off a scalar
+    /// [`Classification`] slot (`point_type`, `substrate`, `calm`,
+    /// `data_classification`); this probe instead threads through a
+    /// NESTED-STRUCT intermediary ([`Horizon`], the defaulted nested
+    /// struct owning the `horizon` axis) to reach a scalar
+    /// [`HorizonKind`] discriminator on `horizon.kind`. The
+    /// default-arm short-circuit on the absent-classification arm
+    /// reads `true` on the [`HorizonKind`] child's `#[default]`
+    /// variant precisely because BOTH the parent Option's fill-
+    /// through baseline ([`default_ephemeral_class`], which fills
+    /// `horizon: Horizon::default()`) AND the child's own `#[default]`
+    /// land on the SAME variant ([`HorizonKind::Bounded`]). A
+    /// regression that dropped `#[default]` on [`HorizonKind`], or
+    /// promoted `Asymptotic` to `#[default]`, or wired the arm to a
+    /// fixed variant answer, or crossed the wires through the wrong
+    /// nested struct fails HERE at ONE narrow substrate site before
+    /// drifting through every unadorned ephemeral spec's baseline
+    /// horizon answer. Distinct from the FIRST + SECOND peers on the
+    /// (Option-parent × NON-DEFAULT-scalar-child) corner
+    /// (`has_point_type`, `has_substrate`) whose absent-classification
+    /// arm defaults through a specific chosen baseline
+    /// (`ConvergencePointType::Gate`, `SubstrateType::Compute`), AND
+    /// distinct from the THIRD + FOURTH peers on the (Option-parent ×
+    /// DEFAULTED-scalar-child) corner (`has_calm`,
+    /// `has_data_classification`) which reach a defaulted scalar
+    /// DIRECTLY off the parent without a nested-struct hop. Three
+    /// future sibling axes on the SAME `Cow`-resolver carrier
+    /// (`has_optimization_direction`, `has_input_arity`,
+    /// `has_output_arity`) land as one-line wrappers around the SAME
+    /// resolver + the sibling [`Classification`] closed-set
+    /// primitive, so a future variant added to [`HorizonKind`] (or
+    /// any of the three other closed sets) reaches BOTH surfaces'
+    /// `<axis>-<kind>` prefix families through the SAME closed-set
+    /// walk with no per-caller edit.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-axis presence-probe body
+    /// composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE closed-set
+    /// primitive ([`Classification::has_horizon_kind`]) so every
+    /// downstream (`horizon-<kind>` require-tag families on both
+    /// surfaces in tatara-check, closed-set audit dispatchers, future
+    /// variant additions on [`HorizonKind`]) binds through the SAME
+    /// `has(kind)` shape rather than restating either the resolver
+    /// walk or the closed-set equality at the callsite.
+    #[must_use]
+    pub fn has_horizon_kind(&self, kind: HorizonKind) -> bool {
+        self.resolved_classification().has_horizon_kind(kind)
     }
 }
 
@@ -680,7 +767,8 @@ mod tests {
     use super::*;
     use crate::boundary::ConditionKind;
     use crate::classification::{
-        CalmClassification, ConvergencePointType, DataClassification, SubstrateType,
+        CalmClassification, ConvergencePointType, DataClassification, Horizon, HorizonKind,
+        SubstrateType,
     };
     use crate::intent::IntentVariant;
     use crate::lifetime::LifetimeVariant;
@@ -1699,6 +1787,148 @@ mod tests {
                     eph.has_data_classification(query),
                     lowered.classification.has_data_classification(query),
                     "authored classification.data_classification={populated:?}: parity drift on query {query:?}",
+                );
+            }
+        }
+    }
+
+    // ── EphemeralSpec::has_horizon_kind pins ─────────────────────────
+    //
+    // Fail-before-pass-after granularity: [`Self::has_horizon_kind`]
+    // did not exist pre-lift on `impl EphemeralSpec` — every callsite
+    // went through `.resolved_classification().horizon.kind == kind`
+    // or through the lowered `ProcessSpec`'s
+    // `spec.classification.has_horizon_kind`. Post-lift the FIFTH
+    // classification-axis peer on the ephemeral sugar surface routes
+    // through the SAME [`Self::resolved_classification`] resolver +
+    // the sibling closed-set primitive
+    // [`crate::classification::Classification::has_horizon_kind`], so
+    // a regression that dropped the resolver hop, inverted the
+    // `Some`/`None` fill-through, or wired the closure to a fixed
+    // unrelated slot fails HERE. OPENS a fresh (Option-parent ×
+    // NESTED-STRUCT-scalar-child × operator-resolvable-baseline)
+    // corner on the ephemeral surface — distinct from the four prior
+    // scalar-carrier peers on the (Option-parent × NON-DEFAULT-scalar-
+    // child) and (Option-parent × DEFAULTED-scalar-child) corners, all
+    // of which reach a discriminator DIRECTLY off a scalar
+    // [`Classification`] slot. Both the parent Option's fill-through
+    // baseline (`default_ephemeral_class`, which fills
+    // `horizon: Horizon::default()`) AND the child's own `#[default]`
+    // land on the SAME variant ([`HorizonKind::Bounded`]) — a two-
+    // defaults composition property the three pins below all
+    // exercise.
+
+    /// AUTHORED-slot VARIANT-MATCH pin — an [`EphemeralSpec`] whose
+    /// [`EphemeralSpec::classification`] slot names a concrete
+    /// [`Classification`] returns `true` from
+    /// [`Self::has_horizon_kind`] on the authored [`HorizonKind`] slot
+    /// and `false` for every other variant. Sweep the
+    /// [`HorizonKind::ALL`] × ALL cross so a regression that hard-
+    /// coded the arm to a single kind or wired the closure to a
+    /// fixed unrelated slot (e.g. reading `self.classification` as if
+    /// it were a scalar rather than routing through
+    /// `resolved_classification().horizon.kind`) fails HERE at the
+    /// substrate primitive. Byte-for-byte peer of the point-surface
+    /// [`Classification::has_horizon_kind`] populated-slot sweep on
+    /// the SAME closed-set primitive.
+    #[test]
+    fn has_horizon_kind_returns_true_iff_authored_classification_matches_per_kind() {
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = Horizon {
+                kind: populated,
+                ..Horizon::default()
+            };
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            for query in HorizonKind::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    spec.has_horizon_kind(query),
+                    expected,
+                    "ephemeral classification.horizon.kind={populated:?}: query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// ABSENT-slot DEFAULT-ARM pin — an [`EphemeralSpec`] whose
+    /// [`EphemeralSpec::classification`] slot is `None` returns
+    /// `true` from [`Self::has_horizon_kind`] on
+    /// [`HorizonKind::Bounded`] (the `default_ephemeral_class`
+    /// baseline's `horizon.kind` axis AND the [`HorizonKind`] child's
+    /// own `#[default]` variant) and `false` on every other variant.
+    /// Pins the fresh (Option-parent × NESTED-STRUCT-scalar-child ×
+    /// operator-resolvable-baseline) corner's default-arm short-
+    /// circuit on the FIFTH classification-axis peer. Two-defaults
+    /// composition property through a NESTED-STRUCT hop: both the
+    /// parent Option's fill-through baseline
+    /// (`default_ephemeral_class` fills `horizon: Horizon::default()`)
+    /// AND the child's own `#[default]` (`HorizonKind::Bounded` via
+    /// `#[default]` on the closed set) land on the SAME variant, so
+    /// the ephemeral sugar surface's `horizon-Bounded` require-tag
+    /// reads `true` on every operator-authored spec that omits both
+    /// the `:classification` slot AND the `:horizon` sub-slot,
+    /// pinning the workspace's bounded-by-default lifetime posture.
+    #[test]
+    fn has_horizon_kind_probes_bounded_only_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        for kind in HorizonKind::ALL {
+            let expected = kind == HorizonKind::Bounded;
+            assert_eq!(
+                spec.has_horizon_kind(kind),
+                expected,
+                "absent classification (defaults to gate_compute): query {kind:?} must be {expected}",
+            );
+        }
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::has_horizon_kind`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>()`
+    /// `.classification.has_horizon_kind(kind)` on the mechanically-
+    /// lowered `ProcessSpec`. Sweeps (`None` classification, `Some(_)`
+    /// classification on every [`HorizonKind::ALL`] variant) × ALL
+    /// queries so a future regression on either side of the resolver
+    /// (a shift in the ephemeral resolver's default, a shift in the
+    /// `From<EphemeralSpec>` lowering's fill-through) fails HERE at
+    /// the parity boundary. Byte-for-byte peer of the sibling
+    /// [`Self::has_point_type`] + [`Self::has_substrate`] +
+    /// [`Self::has_calm`] + [`Self::has_data_classification`] two-
+    /// surface parity pins on the SAME `Cow`-resolver carrier — the
+    /// FIFTH classification-axis two-surface parity contract on the
+    /// ephemeral surface, and the FIRST on the (Option-parent ×
+    /// NESTED-STRUCT-scalar-child) corner.
+    #[test]
+    fn has_horizon_kind_matches_point_peer_through_lowered_classification() {
+        // Absent classification: both surfaces resolve through the SAME
+        // default and agree on every variant.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        for query in HorizonKind::ALL {
+            assert_eq!(
+                eph.has_horizon_kind(query),
+                lowered.classification.has_horizon_kind(query),
+                "None-classification parity drift on query {query:?}",
+            );
+        }
+        // Authored classification: both surfaces read the same authored
+        // value verbatim.
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = Horizon {
+                kind: populated,
+                ..Horizon::default()
+            };
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            for query in HorizonKind::ALL {
+                assert_eq!(
+                    eph.has_horizon_kind(query),
+                    lowered.classification.has_horizon_kind(query),
+                    "authored classification.horizon.kind={populated:?}: parity drift on query {query:?}",
                 );
             }
         }

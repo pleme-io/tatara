@@ -1894,7 +1894,12 @@ where
 /// [`tests::evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_bounded_only`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_horizon_kind_suffix`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_horizon_kind_prefix`],
-/// and [`tests::evaluate_ephemeral_require_tag_horizon_kind_matches_point_peer_through_resolved_classification`].
+/// [`tests::evaluate_ephemeral_require_tag_horizon_kind_matches_point_peer_through_resolved_classification`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_iff_optimization_direction_matches_authored_classification_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_minimize_only`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_optimization_direction_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_optimization_direction_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_optimization_direction_matches_point_peer_through_resolved_classification`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -1977,6 +1982,13 @@ fn evaluate_ephemeral_require_tag(
     if let Some(res) = strip_and_classify_prefixed_kind::<HorizonKind, _>(tag, "horizon-", |kind| {
         spec.has_horizon_kind(kind)
     }) {
+        return res;
+    }
+    if let Some(res) = strip_and_classify_prefixed_kind::<OptimizationDirection, _>(
+        tag,
+        "optimization-direction-",
+        |kind| spec.has_optimization_direction(kind),
+    ) {
         return res;
     }
     match tag {
@@ -11549,6 +11561,252 @@ mod tests {
                     evaluate_ephemeral_require_tag(&eph, &tag),
                     evaluate_point_require_tag(&point, &tag),
                     "authored classification.horizon.kind={populated:?}: parity drift on tag {tag:?}",
+                );
+            }
+        }
+    }
+
+    // ── evaluate_ephemeral_require_tag / optimization-direction-<kind> pins ───
+    //
+    // Fail-before-pass-after granularity: the ephemeral surface's
+    // `optimization-direction-<kind>` prefix family did not route
+    // pre-lift — the vocabulary block on `evaluate_ephemeral_require_tag`
+    // had peers to the point surface's twelfth through sixteenth
+    // families (`point-type-<kind>` + `substrate-<kind>` + `calm-<kind>`
+    // + `data-classification-<kind>` + `horizon-<kind>`) but NOT the
+    // seventeenth (`optimization-direction-<kind>`). Post-lift the
+    // routing dispatches through the ONE substrate primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::has_optimization_direction`]
+    // + the sibling resolver
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`]
+    // + the sibling closed-set primitive
+    // [`tatara_process::classification::Classification::has_optimization_direction`]
+    // (which composes `Option::unwrap_or_default` over the inner
+    // `horizon.direction: Option<OptimizationDirection>` slot on the
+    // closed set's `#[default] Minimize`) — a regression that (a)
+    // hard-coded the arm to a single kind, (b) inverted the resolver's
+    // `None` fill-through (`Some(_)` filled through the default), (c)
+    // dropped the inner `Option::unwrap_or_default` collapse (a `None`
+    // inner Option classifying as `false` on Minimize), (d) probed the
+    // wrong slot (`horizon.kind` instead of `horizon.direction`), (e)
+    // drifted the fill-through default from the sibling
+    // `From<EphemeralSpec>` lowering, or (f) flipped
+    // [`OptimizationDirection`]'s `#[default]` off `Minimize` (silently
+    // inverting every unadorned `Asymptotic` Process's rate-window
+    // evaluator polarity) fails HERE at the substrate primitives
+    // rather than as silent operator-facing drift at the ephemeral
+    // `optimization-direction-<kind>` require-tag surface. SIXTH
+    // classification-axis peer on the ephemeral surface — SECOND
+    // occupant on the (Option-parent × NESTED-STRUCT-scalar-child ×
+    // operator-resolvable-baseline) corner alongside `horizon-<kind>`,
+    // pinning the corner as a proven-repeatable primitive shape on
+    // the ephemeral surface. The two-defaults composition property
+    // through TWO Option-hops (parent `EphemeralSpec::classification`
+    // and inner `Horizon::direction` both `None`, both collapsing to
+    // [`OptimizationDirection::Minimize`]) is exercised at the pins
+    // below.
+
+    /// AUTHORED-slot VARIANT-MATCH pin — the ephemeral
+    /// `optimization-direction-<kind>` prefix family dispatches
+    /// through the autoderived [`OptimizationDirection`] `FromStr` +
+    /// the substrate
+    /// [`tatara_process::ephemeral::EphemeralSpec::has_optimization_direction`]
+    /// + the sibling resolver
+    /// [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`]
+    /// on the operator-authored [`Classification`] slot with
+    /// `Some(_)` on the inner `horizon.direction`. Sweeps the
+    /// [`OptimizationDirection::ALL`] × ALL cross so a stray hard-
+    /// coded arm fails HERE. Byte-for-byte peer of the point-surface
+    /// pin
+    /// [`evaluate_point_require_tag_returns_true_iff_optimization_direction_matches_variant_per_kind`]
+    /// on the SAME closed set, routed through the ephemeral sugar
+    /// surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_iff_optimization_direction_matches_authored_classification_per_kind(
+    ) {
+        for populated in OptimizationDirection::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = Horizon {
+                direction: Some(populated),
+                ..Horizon::default()
+            };
+            let spec = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            for query in OptimizationDirection::ALL {
+                let tag = format!("optimization-direction-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral classification.horizon.direction=Some({populated:?}): tag {tag:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// ABSENT-slot DEFAULT-ARM pin — an [`EphemeralSpec`] whose
+    /// `:classification` slot is omitted from the `(defephemeral …)`
+    /// form (`None` on the wire) reads as the workspace-baseline
+    /// [`tatara_process::classification::Classification::gate_compute`]
+    /// value through
+    /// [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`],
+    /// which fills `horizon: Horizon::default()` (leaves `direction:
+    /// None`), and the substrate's inner `Option::unwrap_or_default`
+    /// collapse then reads [`OptimizationDirection::Minimize`] via
+    /// the closed set's `#[default]`. Pins the (Option-parent ×
+    /// NESTED-STRUCT-scalar-child × operator-resolvable-baseline)
+    /// corner's default-arm short-circuit on the SIXTH
+    /// classification-axis peer through TWO Option-hops:
+    /// `optimization-direction-Minimize` reads `true`, every other
+    /// variant reads `false`. A regression that promoted
+    /// [`OptimizationDirection::Maximize`] to `#[default]` (silently
+    /// inverting every unadorned Process's rate-window evaluator
+    /// polarity), or dropped the inner `Option::unwrap_or_default`
+    /// collapse (a `None` inner Option classifying as `false` on
+    /// Minimize), or wired the arm to a fixed variant answer, fails
+    /// HERE.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_minimize_only() {
+        let spec = EphemeralSpec {
+            classification: None,
+            ..ephemeral_fixture()
+        };
+        for kind in OptimizationDirection::ALL {
+            let tag = format!("optimization-direction-{}", kind.as_str());
+            let expected = kind == OptimizationDirection::Minimize;
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(expected),
+                "absent ephemeral classification (defaults to gate_compute): tag {tag:?} drifted",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `optimization-direction-<garbage>`
+    /// classifies as [`UnknownRequireTag`] rather than silently
+    /// returning `Ok(false)`. Sweeps case-variants of a known variant
+    /// name plus pure garbage plus cross-axis rejects (raw
+    /// `ConvergencePointType` / `SubstrateType` / `CalmClassification`
+    /// / `DataClassification` / `HorizonKind` identifiers must NOT
+    /// resolve here). A regression that folded case (`FromStr` gone
+    /// `case_insensitive`) or gained a permissive-fallthrough (e.g.
+    /// unknown suffix routes to `Minimize`) would silently reclassify
+    /// an unknown tag as `Ok(_)` and fail HERE.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_optimization_direction_suffix() {
+        let spec = ephemeral_fixture();
+        for tag in [
+            "optimization-direction-minimize",
+            "optimization-direction-MINIMIZE",
+            "optimization-direction-MAXIMIZE",
+            "optimization-direction-Stabilize",
+            "optimization-direction-Bogus",
+            "optimization-direction-Gate", // point-type variant leaking
+            "optimization-direction-Compute", // substrate variant leaking
+            "optimization-direction-Monotone", // calm variant leaking
+            "optimization-direction-Internal", // data-classification variant leaking
+            "optimization-direction-Bounded", // horizon-kind variant leaking
+            "optimization-direction-Asymptotic", // horizon-kind variant leaking
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, tag),
+                Err(UnknownRequireTag),
+                "unknown ephemeral optimization-direction suffix {tag:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-prefix pin — `"optimization-direction-"` (empty suffix)
+    /// MUST classify as [`UnknownRequireTag`] rather than as any
+    /// variant. Locks the suffix-nonempty invariant at the substrate
+    /// `strip_and_classify_prefixed_kind` boundary on the ephemeral
+    /// surface's SIXTH classification-axis peer.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_optimization_direction_prefix() {
+        let spec = ephemeral_fixture();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "optimization-direction-"),
+            Err(UnknownRequireTag),
+            "bare `optimization-direction-` prefix must classify as UnknownRequireTag",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`evaluate_ephemeral_require_tag`] AND
+    /// through [`evaluate_point_require_tag`] on the mechanically-
+    /// lowered `ProcessSpec` via `<eph.clone().into()>`. Sweeps three
+    /// arms — (`None` classification), (`Some(_)` classification with
+    /// inner `direction: None`), and (`Some(_)` classification on
+    /// every [`OptimizationDirection::ALL`] variant with `direction:
+    /// Some(_)`) — × every ALL query so a future regression on either
+    /// surface's resolver (an ephemeral-side fill-through drift, a
+    /// point-side nested-struct-Option-scalar-carrier probe drift, an
+    /// inner `Option::unwrap_or_default` collapse drift on either
+    /// side) fails HERE. Byte-for-byte peer of the sibling two-
+    /// surface parity pins on the FIRST + SECOND + THIRD + FOURTH +
+    /// FIFTH classification-axis peers (`point-type-<kind>`,
+    /// `substrate-<kind>`, `calm-<kind>`, `data-classification-<kind>`,
+    /// `horizon-<kind>`) — the SIXTH classification-axis two-surface
+    /// parity contract on the ephemeral surface, and the SECOND on
+    /// the (Option-parent × NESTED-STRUCT-scalar-child) corner.
+    #[test]
+    fn evaluate_ephemeral_require_tag_optimization_direction_matches_point_peer_through_resolved_classification(
+    ) {
+        // Absent classification baseline — both surfaces resolve
+        // through the SAME `default_ephemeral_class` fill-through and
+        // agree on every variant.
+        let eph = EphemeralSpec {
+            classification: None,
+            ..ephemeral_fixture()
+        };
+        let point: ProcessSpec = eph.clone().into();
+        for query in OptimizationDirection::ALL {
+            let tag = format!("optimization-direction-{}", query.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph, &tag),
+                evaluate_point_require_tag(&point, &tag),
+                "None-classification parity drift on tag {tag:?}",
+            );
+        }
+        // Authored classification with `direction: None` — the inner
+        // Option collapses through `unwrap_or_default` on both sides,
+        // reading `Minimize`.
+        let mut classification = Classification::gate_compute();
+        classification.horizon = Horizon::default();
+        let eph = EphemeralSpec {
+            classification: Some(classification),
+            ..ephemeral_fixture()
+        };
+        let point: ProcessSpec = eph.clone().into();
+        for query in OptimizationDirection::ALL {
+            let tag = format!("optimization-direction-{}", query.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph, &tag),
+                evaluate_point_require_tag(&point, &tag),
+                "authored classification with horizon.direction=None: parity drift on tag {tag:?}",
+            );
+        }
+        // Authored classification with `direction: Some(_)` — both
+        // surfaces read the same authored value verbatim.
+        for populated in OptimizationDirection::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = Horizon {
+                direction: Some(populated),
+                ..Horizon::default()
+            };
+            let eph = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let point: ProcessSpec = eph.clone().into();
+            for query in OptimizationDirection::ALL {
+                let tag = format!("optimization-direction-{}", query.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&eph, &tag),
+                    evaluate_point_require_tag(&point, &tag),
+                    "authored classification.horizon.direction=Some({populated:?}): parity drift on tag {tag:?}",
                 );
             }
         }

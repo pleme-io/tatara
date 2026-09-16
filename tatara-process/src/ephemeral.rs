@@ -43,7 +43,7 @@ use crate::crd::ProcessSpec;
 use crate::export::ExportSpec;
 use crate::intent::{AplicacaoIntent, Intent};
 use crate::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
-use crate::routing::RoutingSpec;
+use crate::routing::{RoutingForm, RoutingSpec};
 
 /// `EphemeralSpec` — typed wrapper that authors `(defephemeral …)`.
 ///
@@ -997,6 +997,92 @@ impl EphemeralSpec {
     #[must_use]
     pub fn has_output_arity(&self, kind: Arity) -> bool {
         self.resolved_classification().has_output_arity(kind)
+    }
+
+    /// True iff this ephemeral spec's [`Self::routing`] slot is
+    /// populated AND the inner [`RoutingSpec`]'s derived
+    /// [`RoutingForm`] equals `kind` — the substrate primitive that
+    /// owns the (`&EphemeralSpec`, [`RoutingForm`]) → `bool` presence-
+    /// probe shape on the sugar-surface type.
+    ///
+    /// # Peer to [`crate::routing::RoutingSpec::has_form`]
+    ///
+    /// [`RoutingSpec::has_form`] carries the same `(&self, RoutingForm)
+    /// -> bool` signature on the inner routing carrier reached through
+    /// the Option gate; this peer composes byte-identical semantics on
+    /// [`EphemeralSpec`]'s direct `routing: Option<RoutingSpec>` slot,
+    /// so both surfaces' `routing-form-<kind>` require-tag families
+    /// route through the SAME `RoutingSpec::has_form` primitive. A
+    /// future normalization at the probe shape (a widened return
+    /// carrying the derived [`RoutingForm`] variant, a debug-build
+    /// assertion on operator-set vs defaulted overrides on the
+    /// `stable_name_claim` bool, a fleet-wide warn on `Stable`
+    /// combined with content-hashed hostnames) lands at ONE site per
+    /// surface and every downstream `routing-form-<kind>` require-tag
+    /// family + closed-set audit dispatcher picks it up mechanically.
+    ///
+    /// # Semantics — Option-gated derived-scalar match
+    ///
+    /// [`EphemeralSpec::routing`] is an `Option<RoutingSpec>`: `None`
+    /// on an in-cluster-only ephemeral env (no per-instance edges
+    /// declared), `Some(_)` when the operator authored the
+    /// `:routing (…)` slot. `has_routing_form(kind)` returns `true`
+    /// iff the slot is `Some(spec)` AND `spec.has_form(kind)` — the
+    /// Option-parent gate short-circuits `false` on `None` regardless
+    /// of `kind`, and the reachable arm reads the DERIVED
+    /// [`RoutingForm`] through the ONE substrate composer
+    /// [`RoutingForm::from_is_stable`] over the child
+    /// `stable_name_claim` bool (a `false` default projects to
+    /// [`RoutingForm::Instance`], a `true` operator override projects
+    /// to [`RoutingForm::Stable`]).
+    ///
+    /// # Corner — (Option-parent × derived-scalar-child)
+    ///
+    /// SAME corner as the point surface's `routing-form-<kind>`
+    /// family (via [`crate::routing::RoutingSpec::has_form`] reached
+    /// through `spec.routing.as_ref().is_some_and(|r| r.has_form(k))`)
+    /// — both surfaces' Option-parent hop threads through the SAME
+    /// `Option<RoutingSpec>` field name on their respective sugar
+    /// structs. The [`From<EphemeralSpec>`] lowering copies
+    /// `e.routing → ProcessSpec::routing` byte-for-byte at the
+    /// [`From`] impl in this module (see the `routing: e.routing`
+    /// line), so the SAME `Option<RoutingSpec>` reaches both
+    /// surfaces' `routing-form-<kind>` families through the SAME
+    /// [`RoutingSpec::has_form`] walk. Distinct from
+    /// [`Self::has_teardown_policy`] on this same surface, which
+    /// walks a required-scalar-child through no Option-parent hop.
+    ///
+    /// # Compounding
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// with the closed-set `FromStr` autoderived on [`RoutingForm`]
+    /// through the `strip_and_classify_prefixed_kind` substrate to
+    /// publish a `routing-form-<kind>` prefix family byte-for-byte
+    /// symmetrical with the point surface's family via
+    /// [`crate::routing::RoutingSpec::has_form`]. A future third
+    /// [`RoutingForm`] variant added to `ALL` (a hypothetical
+    /// `Anchored` for "hold the claim only for a specific
+    /// generation") reaches BOTH surfaces' `routing-form-<kind>`
+    /// prefix families through the SAME closed-set walk with no
+    /// per-caller edit — the two-surface symmetry means adding a
+    /// variant on the closed set publishes it in lockstep across
+    /// every downstream consumer.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the Option-gated derived-scalar-carrier
+    /// presence-probe body lives at ONE substrate site per surface
+    /// so every downstream (`routing-form-<kind>` require-tag families
+    /// on both surfaces in tatara-check, closed-set audit dispatchers,
+    /// future variant additions on [`RoutingForm`]) binds through the
+    /// SAME `has(kind)` shape rather than restating the
+    /// `spec.routing.as_ref().is_some_and(|r| r.has_form(kind))`
+    /// closure body at each call site). THEORY.md §VI.1 (generation
+    /// over composition — a future variant lands at ONE `ALL` entry +
+    /// one `as_str` arm on the closed set and the probe picks it up
+    /// mechanically without further per-consumer edits).
+    #[must_use]
+    pub fn has_routing_form(&self, kind: RoutingForm) -> bool {
+        self.routing.as_ref().is_some_and(|r| r.has_form(kind))
     }
 }
 
@@ -2731,5 +2817,140 @@ mod tests {
         assert!(gate.has_output_arity(Arity::One));
         assert!(!gate.has_input_arity(Arity::One));
         assert!(!gate.has_output_arity(Arity::Many));
+    }
+
+    // ── EphemeralSpec::has_routing_form pins ─────────────────────────
+    //
+    // Fail-before-pass-after granularity: `has_routing_form` did not
+    // exist pre-lift on `impl EphemeralSpec` — the point-surface
+    // `routing-form-<kind>` prefix family in tatara-check routed
+    // through `spec.routing.as_ref().is_some_and(|r| r.has_form(k))`
+    // inline, so the ephemeral surface had no matching primitive to
+    // publish the SAME `routing-form-<kind>` prefix family through
+    // the `strip_and_classify_prefixed_kind` substrate. Post-lift the
+    // Option-gated derived-scalar-child probe body lives at ONE
+    // inherent site on [`EphemeralSpec`] and every consumer (this
+    // module's peer-symmetry tests, tatara-check's ephemeral
+    // require-tag classifier, any future audit dispatcher walking
+    // [`RoutingForm::ALL`] over the ephemeral surface) binds through
+    // the SAME `has_routing_form(kind)` shape.
+
+    fn routing_spec(is_stable: bool) -> RoutingSpec {
+        use crate::routing::{RoutingBackend, RoutingHostname};
+        RoutingSpec {
+            hostnames: vec![RoutingHostname::content_hashed("api")],
+            backend: RoutingBackend::plain("svc", 80),
+            stable_name_claim: is_stable,
+            priority: 0,
+        }
+    }
+
+    /// POPULATED-slot pin — a populated `routing` slot answers `true`
+    /// exactly for the [`RoutingForm`] variant its
+    /// [`RoutingSpec::has_form`] derived-scalar arm agrees with, and
+    /// `false` for every other variant. Sweep the two-boolean × ALL
+    /// cross so a regression that (a) hard-coded the arm to a single
+    /// variant, (b) dropped the Option-parent gate (silently reading
+    /// through `.unwrap_or_default()` on an absent routing slot), or
+    /// (c) crossed the wires from
+    /// [`RoutingForm::from_is_stable`] to a fixed variant fails
+    /// HERE before landing at the operator-facing checks.lisp
+    /// surface.
+    #[test]
+    fn has_routing_form_returns_true_iff_populated_routing_derives_form_per_kind() {
+        for is_stable in [true, false] {
+            let populated = RoutingForm::from_is_stable(is_stable);
+            let mut spec = empty_ephemeral();
+            spec.routing = Some(routing_spec(is_stable));
+            for query in RoutingForm::ALL {
+                let expected = query == populated;
+                assert_eq!(
+                    spec.has_routing_form(query),
+                    expected,
+                    "ephemeral routing.stable_name_claim={is_stable} (derives {populated:?}): query {query:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// OPTION-PARENT SHORT-CIRCUIT pin — an [`EphemeralSpec`] whose
+    /// `routing` slot is `None` returns `false` for every
+    /// [`RoutingForm`] variant, INCLUDING the closed set's
+    /// derived-default [`RoutingForm::Instance`]. Locks the
+    /// Option-parent silencing contract so a regression that dropped
+    /// the `spec.routing.as_ref()` gate (silently probing an absent
+    /// routing slot as if it carried the defaulted `Instance` form)
+    /// fails HERE. Peer to
+    /// [`evaluate_point_require_tag_returns_false_on_absent_routing_for_every_routing_form_kind`]
+    /// on the point surface — the two-surface symmetry means both
+    /// classifiers publish the SAME Option-parent silencing at ONE
+    /// substrate site per surface.
+    #[test]
+    fn has_routing_form_returns_false_on_absent_routing_for_every_kind() {
+        let spec = empty_ephemeral();
+        assert!(spec.routing.is_none());
+        for kind in RoutingForm::ALL {
+            assert!(
+                !spec.has_routing_form(kind),
+                "absent ephemeral routing must return false for {kind:?}",
+            );
+        }
+    }
+
+    /// DEFAULT-ARM SHORT-CIRCUIT pin — an [`EphemeralSpec`] whose
+    /// `routing` slot is a [`RoutingSpec`] with `stable_name_claim`
+    /// at its `#[serde(default)]` (bool default = `false`) answers
+    /// `true` on [`RoutingForm::Instance`] and `false` on every other
+    /// variant WITHOUT the operator naming the routing-form axis on
+    /// the routing spec. Peer to
+    /// [`evaluate_point_require_tag_returns_true_on_default_routing_form_for_instance_only`]
+    /// on the point surface — both surfaces read the derived-child
+    /// arm through the ONE substrate composer
+    /// [`RoutingForm::from_is_stable`], so a future normalization at
+    /// the derivation lands at ONE site and every downstream
+    /// (routing-form require-tag families on both surfaces,
+    /// closed-set audit dispatchers) picks it up mechanically.
+    #[test]
+    fn has_routing_form_probes_instance_only_on_default_populated_routing() {
+        let mut spec = empty_ephemeral();
+        spec.routing = Some(routing_spec(bool::default()));
+        for kind in RoutingForm::ALL {
+            let expected = kind == RoutingForm::Instance;
+            assert_eq!(
+                spec.has_routing_form(kind),
+                expected,
+                "default-populated ephemeral routing (stable_name_claim=false → Instance) baseline: query {kind:?} must be {expected}",
+            );
+        }
+    }
+
+    /// TWO-SURFACE SYMMETRY pin — an [`EphemeralSpec`] and the
+    /// [`ProcessSpec`] it lowers to through `From<EphemeralSpec>`
+    /// answer identically on every [`RoutingForm`] × `is_stable`
+    /// combination. Locks the byte-for-byte parity between
+    /// [`EphemeralSpec::has_routing_form`] (this new primitive) and
+    /// the point surface's `spec.routing.as_ref().is_some_and(|r|
+    /// r.has_form(k))` inline projection at the tatara-check dispatch
+    /// site. A regression that (a) diverged the ephemeral probe from
+    /// the lowered point probe (e.g., dropped the Option-parent gate
+    /// on ONE side, crossed the derived-child arm on the OTHER), or
+    /// (b) diverged the `From<EphemeralSpec>` lowering's
+    /// `routing: e.routing` copy from byte-for-byte forwarding, fails
+    /// HERE at the two-surface boundary.
+    #[test]
+    fn has_routing_form_matches_point_peer_through_lowered_routing() {
+        for is_stable in [true, false] {
+            let mut authored = empty_ephemeral();
+            authored.routing = Some(routing_spec(is_stable));
+            let lowered: ProcessSpec = authored.clone().into();
+            for kind in RoutingForm::ALL {
+                let ephemeral_answer = authored.has_routing_form(kind);
+                let point_answer = lowered.routing.as_ref().is_some_and(|r| r.has_form(kind));
+                assert_eq!(
+                    ephemeral_answer, point_answer,
+                    "two-surface routing-form parity drift: stable_name_claim={is_stable}, kind={kind:?}",
+                );
+            }
+        }
     }
 }

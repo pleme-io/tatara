@@ -2292,7 +2292,13 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_output_arity_suffix`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_output_arity_prefix`],
 /// [`tests::evaluate_ephemeral_require_tag_output_arity_matches_point_peer_through_resolved_classification`],
-/// and [`tests::evaluate_ephemeral_require_tag_output_arity_and_input_arity_pin_dag_composition_pair`].
+/// [`tests::evaluate_ephemeral_require_tag_output_arity_and_input_arity_pin_dag_composition_pair`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_iff_routing_form_matches_variant_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_false_on_absent_routing_for_every_routing_form_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_on_default_routing_form_for_instance_only`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_routing_form_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_routing_form_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_routing_form_matches_point_peer_through_lowered_routing`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -2326,6 +2332,7 @@ fn evaluate_ephemeral_require_tag(
             .has_optimization_direction(k)),
         ("input-arity-", Arity, |k| spec.has_input_arity(k)),
         ("output-arity-", Arity, |k| spec.has_output_arity(k)),
+        ("routing-form-", RoutingForm, |k| spec.has_routing_form(k)),
     ) {
         return res;
     }
@@ -13317,6 +13324,253 @@ mod tests {
             Ok(false),
             "Gate convergent baseline: output-arity-Many must be false",
         );
+    }
+
+    // ── ephemeral routing-form-<kind> prefix family pins ─────────────
+    //
+    // Fail-before-pass-after granularity: the ephemeral surface's
+    // `routing-form-<kind>` prefix family did not exist before this
+    // commit — the ephemeral require-tag vocabulary carried the
+    // fifteen prior closed-set-driven families but had no way to
+    // discriminate WHICH [`RoutingForm`] a declared-per-ephemeral
+    // routing spec claims: the "hold the ProcessTable claim, emit
+    // the unprefixed `${app}.${cluster}` FQDN" stable-name posture
+    // vs the default per-instance `${app}.${eph_id}.${cluster}` FQDN.
+    // The point surface's `routing-form-<kind>` family has held this
+    // discrimination since the nineteenth-point commit; this lift
+    // closes the two-surface parity gap on the (Option-parent ×
+    // derived-scalar-child) corner by opening the byte-for-byte
+    // ephemeral peer through the newly-opened
+    // [`tatara_process::ephemeral::EphemeralSpec::has_routing_form`]
+    // substrate primitive.
+    //
+    // SIXTEENTH closed-set-driven prefix family in the ephemeral
+    // require-tag vocabulary and FIRST occupant on the (Option-parent
+    // × derived-scalar-child) corner of the ephemeral surface's
+    // presence-probe algebra — distinct from every prior ephemeral
+    // family:
+    // - `condition-<kind>` walks a slice-child through a
+    //   union-composing inherent method (no Option-parent hop).
+    // - `teardown-policy-<kind>` walks a required-scalar-child
+    //   (no Option-parent hop).
+    // - `export-when-<kind>` / `channel-<kind>` /
+    //   `report-format-<kind>` / `artifact-<kind>` /
+    //   `report-payload-shape-<kind>` walk slice-children DIRECTLY
+    //   (no Option-parent hop; ephemeral surface reads
+    //   `spec.exports` verbatim).
+    // - `point-type-<kind>` and its seven classification-axis peers
+    //   walk a derived resolver over `Option<Classification>`
+    //   through the ONE substrate primitive
+    //   [`EphemeralSpec::resolved_classification`] — a
+    //   `Cow<Classification>` walk with a substrate-baseline fill,
+    //   NOT the Option-parent short-circuit shape.
+    // `routing-form-<kind>` walks a genuine Option-parent × derived-
+    // scalar-child pair: `spec.routing.as_ref().is_some_and(|r|
+    // r.has_form(k))` — the Option-parent hop short-circuits `false`
+    // on an in-cluster-only ephemeral (`routing: None`), and the
+    // reachable arm reads the DERIVED [`RoutingForm`] through the
+    // ONE substrate composer [`RoutingForm::from_is_stable`] over
+    // the child `stable_name_claim` bool.
+
+    fn ephemeral_routing(is_stable: bool) -> RoutingSpec {
+        RoutingSpec {
+            hostnames: vec![RoutingHostname::content_hashed("api")],
+            backend: RoutingBackend::plain("svc", 80),
+            stable_name_claim: is_stable,
+            priority: 0,
+        }
+    }
+
+    /// POPULATED-slot pin — `routing-form-<kind>` dispatches through
+    /// the autoderived [`RoutingForm`] `FromStr` + the substrate
+    /// [`tatara_process::ephemeral::EphemeralSpec::has_routing_form`]
+    /// primitive on the ephemeral surface, returning `true` only
+    /// when the ephemeral spec's `routing` slot is populated AND the
+    /// inner [`RoutingSpec`]'s derived [`RoutingForm`] matches the
+    /// queried variant. Sweep the [`RoutingForm::ALL`] × ALL cross
+    /// so a regression that (a) hard-coded the arm to a single
+    /// variant (silently returning `true` on every populated routing
+    /// spec regardless of query kind), (b) dropped the composition
+    /// through [`RoutingForm::from_is_stable`] (drifting from every
+    /// other consumer of the `stable_name_claim → RoutingForm`
+    /// projection), or (c) wired the closure to an unrelated field
+    /// (a stray probe on `priority` / `hostnames.len()`) fails HERE
+    /// at the classifier before landing at the operator-facing
+    /// checks.lisp surface. Byte-for-byte peer of
+    /// [`evaluate_point_require_tag_returns_true_iff_routing_form_matches_variant_per_kind`]
+    /// on the point surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_iff_routing_form_matches_variant_per_kind() {
+        for is_stable in [true, false] {
+            let populated = RoutingForm::from_is_stable(is_stable);
+            let spec = EphemeralSpec {
+                routing: Some(ephemeral_routing(is_stable)),
+                ..ephemeral_fixture()
+            };
+            for query in RoutingForm::ALL {
+                let tag = format!("routing-form-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral routing.stable_name_claim={is_stable} populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// OPTION-PARENT SHORT-CIRCUIT pin — a default (`routing: None`)
+    /// [`EphemeralSpec`] returns `Ok(false)` for every
+    /// `routing-form-<kind>` tag because the `spec.routing.as_ref()`
+    /// gate short-circuits the walk. Locks the Option-parent
+    /// silencing contract so a regression that dropped the Option
+    /// gate (probing an absent routing slot as if it carried the
+    /// defaulted `Instance` form) would return `Ok(true)` on
+    /// `routing-form-instance` here for every ephemeral. Peer of
+    /// [`evaluate_point_require_tag_returns_false_on_absent_routing_for_every_routing_form_kind`]
+    /// on the point surface — the two-surface symmetry means both
+    /// classifiers silence the Option-parent at ONE substrate site
+    /// per surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_absent_routing_for_every_routing_form_kind()
+    {
+        let spec = ephemeral_fixture();
+        assert!(spec.routing.is_none());
+        for kind in RoutingForm::ALL {
+            let tag = format!("routing-form-{}", kind.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(false),
+                "absent ephemeral routing must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// DEFAULT-ARM SHORT-CIRCUIT pin — an [`EphemeralSpec`] whose
+    /// `routing` slot is a [`RoutingSpec`] with `stable_name_claim`
+    /// at its `#[serde(default)]` (bool default = `false`) answers
+    /// `true` on `routing-form-instance` and `false` on every other
+    /// variant WITHOUT the operator naming the routing-form axis on
+    /// the routing spec. Peer of
+    /// [`evaluate_point_require_tag_returns_true_on_default_routing_form_for_instance_only`]
+    /// on the point surface — both surfaces read the derived-child
+    /// arm through the ONE substrate composer
+    /// [`RoutingForm::from_is_stable`], so a future normalization at
+    /// the derivation lands at ONE site and every downstream
+    /// (routing-form require-tag families on both surfaces,
+    /// closed-set audit dispatchers) picks it up mechanically.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_default_routing_form_for_instance_only() {
+        let spec = EphemeralSpec {
+            routing: Some(ephemeral_routing(bool::default())),
+            ..ephemeral_fixture()
+        };
+        for kind in RoutingForm::ALL {
+            let tag = format!("routing-form-{}", kind.as_str());
+            let expected = kind == RoutingForm::Instance;
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(expected),
+                "default ephemeral routing (stable_name_claim=false → Instance) baseline: tag {tag:?} must be {expected}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `routing-form-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag for ephemeral domain:
+    /// <verbatim>` diagnostic path fires. The canonical
+    /// [`RoutingForm`] labels are the lower-case wire-format keys
+    /// (`stable`, `instance`) — matching the
+    /// [`crate::annotations::ROUTING_FORM`] annotation / label
+    /// values the reconciler stamps verbatim — so PascalCase / typo
+    /// spellings are UNKNOWN suffixes. Peer of
+    /// [`evaluate_point_require_tag_returns_unknown_on_unknown_routing_form_suffix`]
+    /// on the point surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_routing_form_suffix() {
+        let spec = EphemeralSpec {
+            routing: Some(ephemeral_routing(true)),
+            ..ephemeral_fixture()
+        };
+        for garbage in [
+            "routing-form-Stable",
+            "routing-form-STABLE",
+            "routing-form-Instance",
+            "routing-form-stble",
+            "routing-form-Gateway",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, garbage),
+                Err(UnknownRequireTag::default()),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at
+    /// `routing-form-` classifies as [`UnknownRequireTag`] on BOTH
+    /// the routed-populated and the routed-absent ephemeral arms.
+    /// The empty suffix hits the substrate primitive's canonical
+    /// empty-string arm rather than short-circuiting to `Ok(true)`
+    /// on any populated routing spec (which would silently read as
+    /// "any routing axis present" for every ephemeral with a routing
+    /// slot). Locks the empty-suffix ↔ unknown-suffix correspondence
+    /// at ONE narrow classifier site for the sixteenth ephemeral
+    /// family, INDEPENDENT of whether the Option-parent gate would
+    /// fire — the substrate primitive rejects the empty suffix
+    /// before consulting the parent-arm branch. Peer of
+    /// [`evaluate_point_require_tag_returns_unknown_on_bare_routing_form_prefix`]
+    /// on the point surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_routing_form_prefix() {
+        let routed_spec = EphemeralSpec {
+            routing: Some(ephemeral_routing(true)),
+            ..ephemeral_fixture()
+        };
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&routed_spec, "routing-form-"),
+            Err(UnknownRequireTag::default()),
+            "bare `routing-form-` must classify as UnknownRequireTag on a routed ephemeral spec",
+        );
+        let unrouted_spec = ephemeral_fixture();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&unrouted_spec, "routing-form-"),
+            Err(UnknownRequireTag::default()),
+            "bare `routing-form-` must classify as UnknownRequireTag on an unrouted ephemeral spec",
+        );
+    }
+
+    /// TWO-SURFACE SYMMETRY pin — an [`EphemeralSpec`] and the
+    /// [`ProcessSpec`] it lowers to through `From<EphemeralSpec>`
+    /// answer identically on every `routing-form-<kind>` × two-
+    /// boolean cross when queried through the classifier of the
+    /// respective `:domain`. Locks byte-for-byte parity between the
+    /// SIXTEENTH ephemeral prefix family (this new lift) and the
+    /// NINETEENTH point prefix family (opened previously) on the
+    /// SAME (Option-parent × derived-scalar-child) corner. A
+    /// regression that (a) diverged the ephemeral probe from the
+    /// lowered point probe, or (b) diverged the `From<EphemeralSpec>`
+    /// lowering's `routing: e.routing` copy from byte-for-byte
+    /// forwarding, fails HERE at the two-surface boundary.
+    #[test]
+    fn evaluate_ephemeral_require_tag_routing_form_matches_point_peer_through_lowered_routing() {
+        for is_stable in [true, false] {
+            let authored = EphemeralSpec {
+                routing: Some(ephemeral_routing(is_stable)),
+                ..ephemeral_fixture()
+            };
+            let lowered: ProcessSpec = authored.clone().into();
+            for kind in RoutingForm::ALL {
+                let tag = format!("routing-form-{}", kind.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&authored, &tag),
+                    evaluate_point_require_tag(&lowered, &tag),
+                    "two-surface routing-form parity drift: stable_name_claim={is_stable}, tag={tag:?}",
+                );
+            }
+        }
     }
 
     // ── RequireTagDomain trait dispatch pins ─────────────────────────

@@ -171,7 +171,7 @@ pub struct ClientConfig {
     pub drivers: DriverConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ResourceConfig {
     #[serde(default)]
     pub cpu_mhz: u64,
@@ -321,15 +321,6 @@ impl Default for KindlingConfig {
     }
 }
 
-impl Default for ResourceConfig {
-    fn default() -> Self {
-        Self {
-            cpu_mhz: 0,
-            memory_mb: 0,
-        }
-    }
-}
-
 impl Default for DriverConfig {
     fn default() -> Self {
         Self {
@@ -451,16 +442,10 @@ fn default_nats_url() -> String {
     "nats://127.0.0.1:4222".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SuiConfig {
     #[serde(default)]
     pub daemon_addr: Option<String>,
-}
-
-impl Default for SuiConfig {
-    fn default() -> Self {
-        Self { daemon_addr: None }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -538,7 +523,9 @@ impl shikumi::TieredConfig for ServerConfig {
             volumes: <VolumeConfig as shikumi::TieredConfig>::bare(),
         }
     }
-    fn prescribed_default() -> Self { Self::default() }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for ClientConfig {
@@ -551,17 +538,32 @@ impl shikumi::TieredConfig for ClientConfig {
             drivers: <DriverConfig as shikumi::TieredConfig>::bare(),
         }
     }
-    fn prescribed_default() -> Self { Self::default() }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for StateConfig {
-    fn bare() -> Self { Self { dir: PathBuf::new() } }
-    fn prescribed_default() -> Self { Self::default() }
+    fn bare() -> Self {
+        Self {
+            dir: PathBuf::new(),
+        }
+    }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for SchedulerConfig {
-    fn bare() -> Self { Self { eval_interval_secs: 0, heartbeat_grace_secs: 0 } }
-    fn prescribed_default() -> Self { Self::default() }
+    fn bare() -> Self {
+        Self {
+            eval_interval_secs: 0,
+            heartbeat_grace_secs: 0,
+        }
+    }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for ReconcilerConfig {
@@ -576,7 +578,9 @@ impl shikumi::TieredConfig for ReconcilerConfig {
             flake_metadata_timeout_secs: 0,
         }
     }
-    fn prescribed_default() -> Self { Self::default() }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for ClusterConfig {
@@ -592,7 +596,9 @@ impl shikumi::TieredConfig for ClusterConfig {
             auto_bootstrap: false,
         }
     }
-    fn prescribed_default() -> Self { Self::default() }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for P2pConfig {
@@ -603,37 +609,65 @@ impl shikumi::TieredConfig for P2pConfig {
             eager_replication: false,
         }
     }
-    fn prescribed_default() -> Self { Self::default() }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for KindlingConfig {
-    fn bare() -> Self { <Self as shikumi::TieredConfig>::prescribed_default() }
-    fn prescribed_default() -> Self { Self::default() }
+    fn bare() -> Self {
+        <Self as shikumi::TieredConfig>::prescribed_default()
+    }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for DriverConfig {
-    fn bare() -> Self { <Self as shikumi::TieredConfig>::prescribed_default() }
-    fn prescribed_default() -> Self { Self::default() }
+    fn bare() -> Self {
+        <Self as shikumi::TieredConfig>::prescribed_default()
+    }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for NatsConfig {
-    fn bare() -> Self { <Self as shikumi::TieredConfig>::prescribed_default() }
-    fn prescribed_default() -> Self { Self::default() }
+    fn bare() -> Self {
+        <Self as shikumi::TieredConfig>::prescribed_default()
+    }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for SuiConfig {
-    fn bare() -> Self { <Self as shikumi::TieredConfig>::prescribed_default() }
-    fn prescribed_default() -> Self { Self::default() }
+    fn bare() -> Self {
+        <Self as shikumi::TieredConfig>::prescribed_default()
+    }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for PortConfig {
-    fn bare() -> Self { <Self as shikumi::TieredConfig>::prescribed_default() }
-    fn prescribed_default() -> Self { Self::default() }
+    fn bare() -> Self {
+        <Self as shikumi::TieredConfig>::prescribed_default()
+    }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 impl shikumi::TieredConfig for VolumeConfig {
-    fn bare() -> Self { Self { dir: PathBuf::new() } }
-    fn prescribed_default() -> Self { Self::default() }
+    fn bare() -> Self {
+        Self {
+            dir: PathBuf::new(),
+        }
+    }
+    fn prescribed_default() -> Self {
+        Self::default()
+    }
 }
 
 #[cfg(test)]
@@ -666,7 +700,10 @@ mod tiered_tests {
         let b = <ServerConfig as TieredConfig>::bare();
         let d = <ServerConfig as TieredConfig>::prescribed_default();
         let diff = d.diff_against(&b);
-        assert!(!diff.is_empty_diff(), "bare and prescribed_default must differ");
+        assert!(
+            !diff.is_empty_diff(),
+            "bare and prescribed_default must differ"
+        );
     }
 
     #[test]
@@ -675,9 +712,11 @@ mod tiered_tests {
             <ServerConfig as TieredConfig>::resolve_tier(ConfigTier::Bare).http_addr,
             ""
         );
-        assert!(!<ServerConfig as TieredConfig>::resolve_tier(ConfigTier::Default)
-            .http_addr
-            .is_empty());
+        assert!(
+            !<ServerConfig as TieredConfig>::resolve_tier(ConfigTier::Default)
+                .http_addr
+                .is_empty()
+        );
     }
 
     #[test]

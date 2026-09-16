@@ -177,7 +177,7 @@ pub type TaskPhase =
 
 // ── Allocation-Level Detail Types ──────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct AllocWarmProgress {
     pub secrets_resolved: bool,
     pub volumes_mounted: bool,
@@ -188,18 +188,6 @@ pub struct AllocWarmProgress {
     /// Endpoint registered in the networking plane.
     #[serde(default)]
     pub endpoint_registered: bool,
-}
-
-impl Default for AllocWarmProgress {
-    fn default() -> Self {
-        Self {
-            secrets_resolved: false,
-            volumes_mounted: false,
-            task_progress: HashMap::new(),
-            network_identity_assigned: false,
-            endpoint_registered: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -228,7 +216,7 @@ pub type AllocationPhase =
 
 // ── Node-Level Detail Types ────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct NodeWarmProgress {
     pub raft_joined: bool,
     pub gossip_converged: bool,
@@ -239,18 +227,6 @@ pub struct NodeWarmProgress {
     /// Number of mesh peers connected.
     #[serde(default)]
     pub mesh_peers_connected: u32,
-}
-
-impl Default for NodeWarmProgress {
-    fn default() -> Self {
-        Self {
-            raft_joined: false,
-            gossip_converged: false,
-            drivers_ready: Vec::new(),
-            wireguard_tunnel_up: false,
-            mesh_peers_connected: 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

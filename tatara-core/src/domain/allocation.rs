@@ -13,9 +13,10 @@ pub enum AllocationState {
     Lost,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskRunState {
+    #[default]
     Pending,
     Running,
     Dead,
@@ -35,7 +36,7 @@ pub struct Allocation {
     pub job_version: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TaskState {
     pub state: TaskRunState,
     pub pid: Option<u32>,
@@ -84,13 +85,6 @@ impl Allocation {
 
 impl TaskState {
     pub fn new() -> Self {
-        Self {
-            state: TaskRunState::Pending,
-            pid: None,
-            exit_code: None,
-            started_at: None,
-            finished_at: None,
-            restarts: 0,
-        }
+        Self::default()
     }
 }

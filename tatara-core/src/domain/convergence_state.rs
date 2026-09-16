@@ -155,7 +155,6 @@ impl ConvergenceState {
         }
 
         // Detect oscillation: rate alternates sign across ticks
-        let was_converging = old_numeric > new_numeric;
         let direction_changed = (self.rate > 0.0) != (old_numeric > new_numeric);
         if direction_changed && self.ticks > 2 {
             self.recent_phase_changes += 1;
@@ -180,8 +179,7 @@ impl ConvergenceState {
         if std::mem::discriminant(&self.distance) != std::mem::discriminant(&new_distance) {
             self.time_in_current_state = Duration::zero();
         } else {
-            self.time_in_current_state =
-                self.time_in_current_state + Duration::milliseconds(tick_duration_ms as i64);
+            self.time_in_current_state += Duration::milliseconds(tick_duration_ms as i64);
         }
 
         self.distance = new_distance;
@@ -401,7 +399,7 @@ impl ClusterConvergence {
         let mut summary = Self::default();
         let mut total_distance = 0.0;
 
-        for (_, state) in &entities {
+        for state in entities.values() {
             match &state.distance {
                 ConvergenceDistance::Converged => summary.converged += 1,
                 ConvergenceDistance::Partial { .. } => summary.partial += 1,
@@ -654,12 +652,15 @@ mod tests {
     #[test]
     fn test_boundary_attestation_chain() {
         // Simulate: Point A attests → hash feeds into Point B's preparation
-        let mut boundary_a = ConvergenceBoundary::default();
-        boundary_a.phase = BoundaryPhase::Attested;
-        boundary_a.output_attestation = Some("blake3:abc123".to_string());
-
-        let mut boundary_b = ConvergenceBoundary::default();
-        boundary_b.input_attestation = boundary_a.output_attestation.clone();
+        let boundary_a = ConvergenceBoundary {
+            phase: BoundaryPhase::Attested,
+            output_attestation: Some("blake3:abc123".to_string()),
+            ..Default::default()
+        };
+        let boundary_b = ConvergenceBoundary {
+            input_attestation: boundary_a.output_attestation.clone(),
+            ..Default::default()
+        };
 
         // Point B's preparation can verify A's hash
         assert_eq!(

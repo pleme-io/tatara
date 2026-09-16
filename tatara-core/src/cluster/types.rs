@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::domain::event::{Event, EventRing};
 use crate::domain::job::{DriverType, JobSpec, Resources};
 use crate::domain::lifecycle::{
-    AllocationPhase, DesiredAllocationState, DesiredPhase, NodePhase, ObservedAllocationState,
+    AllocationPhase, DesiredAllocationState, NodePhase, ObservedAllocationState,
 };
 use crate::domain::release::Release;
 use crate::domain::source::{Source, SourceStatus};

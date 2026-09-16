@@ -10,19 +10,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Health status of a service instance.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceHealth {
+    #[default]
     Passing,
     Warning,
     Critical,
     Maintenance,
-}
-
-impl Default for ServiceHealth {
-    fn default() -> Self {
-        Self::Passing
-    }
 }
 
 /// A registered service instance in the catalog.

@@ -100,8 +100,9 @@ mod tests {
     fn test_ordering() {
         let a = PointId::compute(b"a", &[], b"s");
         let b = PointId::compute(b"b", &[], b"s");
-        // Just verify ordering is consistent
-        assert!(a < b || a > b || a == b);
+        // Distinct inputs hash to distinct ids under the BLAKE3 derivation, so
+        // ordering is defined and non-reflexive between them.
+        assert_ne!(a, b);
     }
 
     #[test]

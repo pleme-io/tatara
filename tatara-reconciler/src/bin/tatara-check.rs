@@ -1620,6 +1620,30 @@ where
 ///   `teardown` AND `teardown-policy-Always`, and fails
 ///   `teardown-policy-OnAttested` / `-OnFailed` / `-Never`.
 ///
+/// - `export-when-<kind>` — [`ExportTrigger`] closed set →
+///   [`tatara_process::export::ExportSpecSliceExt::has_when`] on
+///   [`EphemeralSpec::exports`] directly. Peer of the point surface's
+///   `export-when-<kind>` family (which composes the SAME slice-level
+///   `ExportSpecSliceExt::has_when` substrate primitive through the
+///   `Lifetime::resolved_ephemeral()` Option-parent gate); this
+///   ephemeral peer routes through the SAME primitive with NO Option-
+///   parent hop because [`EphemeralSpec`] carries `exports: Vec<ExportSpec>`
+///   directly (contrast the point-surface routing
+///   `spec.lifetime.resolved_ephemeral().is_some_and(|e| e.exports.has_when(kind))`).
+///   The [`From<EphemeralSpec>`] lowering copies `e.exports →
+///   EphemeralLifetime::exports` byte-for-byte (see
+///   [`tatara_process::ephemeral`] `From` impl line 311), so the SAME
+///   slice values reach both surfaces' `export-when-<kind>` families
+///   through the SAME [`ExportSpecSliceExt::has_when`] walk — a future
+///   fifth [`ExportTrigger`] variant reaches BOTH surfaces through the
+///   [`ExportTrigger::ALL`] sweep + one `as_str` arm on the closed
+///   set with no per-caller edit. THIRD closed-set-driven prefix
+///   family in the ephemeral require-tag vocabulary and FIRST
+///   slice-child occupant routed DIRECTLY through the slice-level
+///   substrate (no union-composing wrapper, contrast the
+///   `condition-<kind>` family above which composes pre ∪ post through
+///   an inherent method).
+///
 /// Every other tag is a fixed match on an [`EphemeralSpec`] slot; the
 /// remaining sugar-surface knobs (`aplicacao`, `ttl`, `teardown`,
 /// `postconditions`, `preconditions`, `closed-loop-auth`) aren't
@@ -1673,7 +1697,12 @@ where
 /// [`tests::evaluate_ephemeral_require_tag_returns_true_on_default_ephemeral_teardown_policy_for_always_only`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_teardown_policy_suffix`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_teardown_policy_prefix`],
-/// and [`tests::evaluate_ephemeral_require_tag_teardown_policy_coexists_with_fixed_teardown_tag`].
+/// [`tests::evaluate_ephemeral_require_tag_teardown_policy_coexists_with_fixed_teardown_tag`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_on_populated_export_when_slot_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_export_when_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_export_when_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_export_when_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_export_when_matches_point_peer_through_lowered_exports`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -1688,6 +1717,13 @@ fn evaluate_ephemeral_require_tag(
     if let Some(res) =
         strip_and_classify_prefixed_kind::<TeardownPolicy, _>(tag, "teardown-policy-", |kind| {
             spec.has_teardown_policy(kind)
+        })
+    {
+        return res;
+    }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<ExportTrigger, _>(tag, "export-when-", |kind| {
+            spec.exports.has_when(kind)
         })
     {
         return res;
@@ -9196,6 +9232,198 @@ mod tests {
                 Ok(false),
                 "off-diagonal {tag:?} must be false: the ephemeral declares OnAttested",
             );
+        }
+    }
+
+    // ── ephemeral export-when-<kind> prefix family pins ──────────────
+    //
+    // Fail-before-pass-after granularity: the ephemeral surface's
+    // `export-when-<kind>` prefix family did not exist before this
+    // commit — the ephemeral require-tag vocabulary carried only the
+    // `condition-<kind>` (slice-child, union-composed) and
+    // `teardown-policy-<kind>` (required-scalar-child) closed-set
+    // prefix families, so an operator authoring
+    // `:requires (export-when-OnAttested)` in a
+    // `(lisp-compiles … :domain ephemeral)` check would classify as
+    // `UnknownRequireTag`. The lift adds the THIRD closed-set-driven
+    // prefix family in the ephemeral require-tag vocabulary
+    // (byte-for-byte symmetrical with the point surface's
+    // `export-when-<kind>` family), routing through the SAME
+    // slice-level substrate primitive
+    // [`tatara_process::export::ExportSpecSliceExt::has_when`] the
+    // point surface routes through, but on the ephemeral surface's
+    // direct `EphemeralSpec::exports` field WITHOUT an Option-parent
+    // hop (contrast the point surface's routing through
+    // `spec.lifetime.resolved_ephemeral().is_some_and(|e| e.exports.has_when(kind))`).
+    // FIRST slice-child occupant on the ephemeral surface routed
+    // DIRECTLY through the slice-level `ExportSpecSliceExt` trait
+    // primitive with no union-composing wrapper (contrast the
+    // `condition-<kind>` family which composes pre ∪ post through an
+    // inherent method).
+
+    /// POPULATED-slot pin — `export-when-<kind>` dispatches through
+    /// the autoderived [`ExportTrigger`] `FromStr` + the substrate
+    /// [`tatara_process::export::ExportSpecSliceExt::has_when`]
+    /// primitive on the ephemeral surface's direct `exports` slice
+    /// (no Option-parent hop), returning `true` only when at least
+    /// one export in the ephemeral spec's `exports` slot carries the
+    /// queried trigger. Sweep the [`ExportTrigger::ALL`] × ALL cross
+    /// so a regression that hard-coded the arm to a single kind or
+    /// wired the closure to a fixed unrelated field (a stray probe
+    /// on `ttl` / `max_concurrent` / `postconditions`) fails HERE at
+    /// the ephemeral classifier before landing at the operator-
+    /// facing checks.lisp surface. Byte-for-byte peer of
+    /// [`evaluate_point_require_tag_returns_true_on_populated_export_when_slot_per_kind`]
+    /// on the point surface — the two-surface symmetry means an
+    /// operator can author identical `export-when-<kind>` semantics
+    /// under either `:domain point` or `:domain ephemeral` slot
+    /// without a per-surface behavioral gotcha.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_populated_export_when_slot_per_kind() {
+        for populated in ExportTrigger::ALL {
+            let spec = EphemeralSpec {
+                exports: vec![export_at(populated)],
+                ..ephemeral_fixture()
+            };
+            for query in ExportTrigger::ALL {
+                let tag = format!("export-when-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral export populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-EXPORTS pin — an ephemeral spec whose `exports` vector
+    /// is empty returns `Ok(false)` for every `export-when-<kind>`
+    /// tag. Locks the "reachable-empty-child" corner so a regression
+    /// that short-circuited on presence of the ephemeral surface
+    /// alone (returning `true` for every kind on any ephemeral) or
+    /// mis-routed the closure to a fixed always-true path fails
+    /// HERE. Distinct from the point surface's peer test which pins
+    /// TWO corners (unreachable-parent via permanent lifetime AND
+    /// reachable-empty-child); this ephemeral pin covers only the
+    /// reachable-empty-child corner because [`EphemeralSpec`] has
+    /// no permanent variant to collapse. The default `ephemeral_fixture`
+    /// (empty `exports: vec![]`) is the reachable-empty-child fixture.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_export_when_kind() {
+        let spec = ephemeral_fixture();
+        for kind in ExportTrigger::ALL {
+            let tag = format!("export-when-{}", kind.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(false),
+                "empty ephemeral exports must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `export-when-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag for ephemeral domain:
+    /// <verbatim>` diagnostic path fires. The canonical
+    /// [`ExportTrigger`] labels are the PascalCase wire-format keys
+    /// (`OnAttested`, `OnFailed`, `Always`) — matching the serde
+    /// `rename_all = "PascalCase"` external-tag form on the wire
+    /// verbatim — so lowercased / all-caps / typo spellings are
+    /// UNKNOWN suffixes. Pin the case-sensitivity axis so a
+    /// regression that ASCIIfolded or lowercased on parse would fail
+    /// HERE. The empty-suffix boundary is pinned by
+    /// [`Self::evaluate_ephemeral_require_tag_returns_unknown_on_bare_export_when_prefix`]
+    /// as a peer of the point surface's own bare-prefix pins.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_export_when_suffix() {
+        let spec = ephemeral_fixture();
+        for garbage in [
+            "export-when-onattested",
+            "export-when-ALWAYS",
+            "export-when-OnSuccess",
+            "export-when-typo",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at
+    /// `export-when-` classifies as [`UnknownRequireTag`], mirroring
+    /// every prior closed-set prefix family on the ephemeral surface.
+    /// A regression that special-cased the bare prefix (treating it
+    /// as a coarse "any export-when axis present") would fail HERE
+    /// — the empty suffix must hit the substrate primitive's
+    /// canonical empty-string arm rather than short-circuiting to
+    /// `Ok(true)` on any ephemeral that carries a non-empty
+    /// `exports` vector. Locks the empty-suffix ↔ unknown-suffix
+    /// correspondence at ONE narrow classifier site.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_export_when_prefix() {
+        let spec = EphemeralSpec {
+            exports: vec![export_at(ExportTrigger::OnAttested)],
+            ..ephemeral_fixture()
+        };
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "export-when-"),
+            Err(UnknownRequireTag),
+            "bare `export-when-` must classify as UnknownRequireTag even with populated exports",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME `exports` slice reaches
+    /// both the ephemeral surface's `evaluate_ephemeral_require_tag`
+    /// classifier AND the point surface's `evaluate_point_require_tag`
+    /// classifier through the SAME [`ExportSpecSliceExt::has_when`]
+    /// substrate primitive, so the two classifiers publish IDENTICAL
+    /// answers for every [`ExportTrigger`] kind × every
+    /// `EphemeralSpec::exports` value. Lowers the ephemeral spec to
+    /// a `ProcessSpec` via the typed `From<EphemeralSpec>` bridge
+    /// (which copies `e.exports → EphemeralLifetime::exports` byte-
+    /// for-byte — see [`tatara_process::ephemeral`] `From` impl) and
+    /// cross-classifies. Locks the two-surface symmetry contract on
+    /// the `export-when-<kind>` family — a regression that (a)
+    /// dropped the ephemeral routing arm, (b) inverted the routing
+    /// (probed a wrong slot), or (c) diverged the two surfaces'
+    /// closure semantics fails HERE at ONE narrow site. This pin is
+    /// the point-vs-ephemeral analog of the two-surface parity pins
+    /// on `condition-<kind>` and `teardown-policy-<kind>` — but
+    /// where those pins compose per-surface inherent methods against
+    /// the SAME slice primitive, THIS pin routes both surfaces
+    /// through the SAME slice primitive DIRECTLY (no inherent
+    /// wrapper on either side) with distinct traversal paths (direct
+    /// slice on ephemeral, `resolved_ephemeral()` Option-hop on
+    /// point) — proving that the parity contract survives the extra
+    /// hop.
+    #[test]
+    fn evaluate_ephemeral_require_tag_export_when_matches_point_peer_through_lowered_exports() {
+        for populated in ExportTrigger::ALL {
+            let eph = EphemeralSpec {
+                exports: vec![export_at(populated)],
+                ..ephemeral_fixture()
+            };
+            let point: ProcessSpec = eph.clone().into();
+            for query in ExportTrigger::ALL {
+                let tag = format!("export-when-{}", query.as_str());
+                let eph_answer = evaluate_ephemeral_require_tag(&eph, &tag);
+                let point_answer = evaluate_point_require_tag(&point, &tag);
+                assert_eq!(
+                    eph_answer, point_answer,
+                    "two-surface parity broke on {tag:?} for populated={populated:?}: \
+                     eph={eph_answer:?} vs point={point_answer:?}",
+                );
+                let expected = query == populated;
+                assert_eq!(
+                    eph_answer,
+                    Ok(expected),
+                    "ephemeral answer drifted from expected on {tag:?} populated={populated:?}",
+                );
+            }
         }
     }
 

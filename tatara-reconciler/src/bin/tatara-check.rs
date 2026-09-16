@@ -1644,6 +1644,37 @@ where
 ///   `condition-<kind>` family above which composes pre ∪ post through
 ///   an inherent method).
 ///
+/// - `channel-<kind>` — [`ChannelKind`] closed set →
+///   [`tatara_process::export::ExportSpecSliceExt::has_channel_kind`]
+///   on [`EphemeralSpec::exports`] directly. Peer of the point surface's
+///   `channel-<kind>` family (the eighth closed-set-driven prefix family
+///   on the point surface, which composes the SAME slice-level
+///   `ExportSpecSliceExt::has_channel_kind` substrate primitive through
+///   the `Lifetime::resolved_ephemeral()` Option-parent gate); this
+///   ephemeral peer routes through the SAME primitive with NO Option-
+///   parent hop (contrast the point-surface routing
+///   `spec.lifetime.resolved_ephemeral().is_some_and(|e| e.exports.has_channel_kind(kind))`).
+///   The [`From<EphemeralSpec>`] lowering copies `e.exports →
+///   EphemeralLifetime::exports` byte-for-byte (see
+///   [`tatara_process::ephemeral`] `From` impl line 311), so the SAME
+///   slice values reach both surfaces' `channel-<kind>` families
+///   through the SAME [`ExportSpecSliceExt::has_channel_kind`] walk —
+///   a future fourth [`ChannelKind`] variant reaches BOTH surfaces
+///   through the [`ChannelKind::ALL`] sweep + one `as_str` arm on the
+///   closed set with no per-caller edit. FOURTH closed-set-driven
+///   prefix family in the ephemeral require-tag vocabulary and SECOND
+///   slice-child occupant routed DIRECTLY through the slice-level
+///   substrate; distinct from the sibling `export-when-<kind>` family
+///   on ONE dimension — the child projection reads the outer
+///   tagged-union carrier ([`ChannelKind::from(&VectorChannel)`] via
+///   `Which one of {http_event, nats_subject, stdout} is `Some(_)`?`)
+///   rather than the direct closed-set field ([`ExportSpec::when`]),
+///   so an ambiguous [`VectorChannel`] (two channels populated) reads
+///   as `None` at the projection and answers `false` on every
+///   `channel-<kind>` query while `export-when-<kind>` on the same
+///   export answers on the unambiguous scalar. Sibling on the same
+///   slice, distinct on the child-projection axis.
+///
 /// Every other tag is a fixed match on an [`EphemeralSpec`] slot; the
 /// remaining sugar-surface knobs (`aplicacao`, `ttl`, `teardown`,
 /// `postconditions`, `preconditions`, `closed-loop-auth`) aren't
@@ -1702,7 +1733,12 @@ where
 /// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_export_when_kind`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_export_when_suffix`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_export_when_prefix`],
-/// and [`tests::evaluate_ephemeral_require_tag_export_when_matches_point_peer_through_lowered_exports`].
+/// [`tests::evaluate_ephemeral_require_tag_export_when_matches_point_peer_through_lowered_exports`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_on_populated_channel_slot_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_channel_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_channel_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_channel_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_channel_matches_point_peer_through_lowered_exports`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -1726,6 +1762,11 @@ fn evaluate_ephemeral_require_tag(
             spec.exports.has_when(kind)
         })
     {
+        return res;
+    }
+    if let Some(res) = strip_and_classify_prefixed_kind::<ChannelKind, _>(tag, "channel-", |kind| {
+        spec.exports.has_channel_kind(kind)
+    }) {
         return res;
     }
     match tag {
@@ -9410,6 +9451,207 @@ mod tests {
             let point: ProcessSpec = eph.clone().into();
             for query in ExportTrigger::ALL {
                 let tag = format!("export-when-{}", query.as_str());
+                let eph_answer = evaluate_ephemeral_require_tag(&eph, &tag);
+                let point_answer = evaluate_point_require_tag(&point, &tag);
+                assert_eq!(
+                    eph_answer, point_answer,
+                    "two-surface parity broke on {tag:?} for populated={populated:?}: \
+                     eph={eph_answer:?} vs point={point_answer:?}",
+                );
+                let expected = query == populated;
+                assert_eq!(
+                    eph_answer,
+                    Ok(expected),
+                    "ephemeral answer drifted from expected on {tag:?} populated={populated:?}",
+                );
+            }
+        }
+    }
+
+    // ── ephemeral channel-<kind> prefix family pins ──────────────────
+    //
+    // Fail-before-pass-after granularity: the ephemeral surface's
+    // `channel-<kind>` prefix family did not exist before this
+    // commit — the ephemeral require-tag vocabulary carried only the
+    // three prior closed-set-driven prefix families (`condition-<kind>`
+    // on a slice-child via a union-composing inherent method,
+    // `teardown-policy-<kind>` on a required-scalar-child, and
+    // `export-when-<kind>` on a direct slice-child through
+    // `ExportSpecSliceExt::has_when`), so an operator authoring
+    // `:requires (channel-natsSubject)` in a
+    // `(lisp-compiles … :domain ephemeral)` check would classify as
+    // `UnknownRequireTag`. The lift adds the FOURTH closed-set-driven
+    // prefix family in the ephemeral require-tag vocabulary
+    // (byte-for-byte symmetrical with the point surface's eighth
+    // `channel-<kind>` family), routing through the SAME
+    // slice-level substrate primitive
+    // [`tatara_process::export::ExportSpecSliceExt::has_channel_kind`]
+    // the point surface routes through, but on the ephemeral surface's
+    // direct `EphemeralSpec::exports` field WITHOUT an Option-parent
+    // hop (contrast the point surface's routing through
+    // `spec.lifetime.resolved_ephemeral().is_some_and(|e| e.exports.has_channel_kind(kind))`).
+    // SECOND slice-child occupant on the ephemeral surface routed
+    // DIRECTLY through the slice-level `ExportSpecSliceExt` trait
+    // primitive with no union-composing wrapper (contrast the
+    // `condition-<kind>` family which composes pre ∪ post through an
+    // inherent method), sibling on the same slice to the third
+    // family (`export-when-<kind>`) but distinct on the child-
+    // projection axis (outer tagged-union carrier via
+    // `ChannelKind::from(&VectorChannel)` vs direct closed-set field
+    // via `ExportSpec::when`).
+
+    /// POPULATED-slot pin — `channel-<kind>` dispatches through the
+    /// autoderived [`ChannelKind`] `FromStr` + the substrate
+    /// [`tatara_process::export::ExportSpecSliceExt::has_channel_kind`]
+    /// primitive on the ephemeral surface's direct `exports` slice
+    /// (no Option-parent hop), returning `true` only when at least
+    /// one export in the ephemeral spec's `exports` slot carries the
+    /// queried channel kind on its `channel` slot. Sweep the
+    /// [`ChannelKind::ALL`] × ALL cross so a regression that hard-
+    /// coded the arm to a single kind or wired the closure to a
+    /// fixed unrelated field (a stray probe on `when` / `source` /
+    /// `experiment_id_override`) fails HERE at the ephemeral
+    /// classifier before landing at the operator-facing checks.lisp
+    /// surface. Byte-for-byte peer of
+    /// [`evaluate_point_require_tag_returns_true_on_populated_channel_slot_per_kind`]
+    /// on the point surface — the two-surface symmetry means an
+    /// operator can author identical `channel-<kind>` semantics
+    /// under either `:domain point` or `:domain ephemeral` slot
+    /// without a per-surface behavioral gotcha.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_populated_channel_slot_per_kind() {
+        for populated in ChannelKind::ALL {
+            let spec = EphemeralSpec {
+                exports: vec![export_with_channel(populated)],
+                ..ephemeral_fixture()
+            };
+            for query in ChannelKind::ALL {
+                let tag = format!("channel-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral channel populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-EXPORTS pin — an ephemeral spec whose `exports` vector
+    /// is empty returns `Ok(false)` for every `channel-<kind>` tag.
+    /// Locks the "reachable-empty-child" corner so a regression that
+    /// short-circuited on presence of the ephemeral surface alone
+    /// (returning `true` for every kind on any ephemeral) or mis-
+    /// routed the closure to a fixed always-true path fails HERE.
+    /// Distinct from the point surface's peer test which pins TWO
+    /// corners (unreachable-parent via permanent lifetime AND
+    /// reachable-empty-child); this ephemeral pin covers only the
+    /// reachable-empty-child corner because [`EphemeralSpec`] has no
+    /// permanent variant to collapse. The default `ephemeral_fixture`
+    /// (empty `exports: vec![]`) is the reachable-empty-child fixture.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_channel_kind() {
+        let spec = ephemeral_fixture();
+        for kind in ChannelKind::ALL {
+            let tag = format!("channel-{}", kind.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(false),
+                "empty ephemeral exports must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `channel-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag for ephemeral domain:
+    /// <verbatim>` diagnostic path fires. The canonical
+    /// [`ChannelKind`] labels are camelCase (`httpEvent`,
+    /// `natsSubject`, `stdout`) — matching the serde
+    /// `rename_all = "camelCase"` field names on `VectorChannel`
+    /// verbatim — so PascalCase / all-caps / typo spellings are
+    /// UNKNOWN suffixes, a distinct contract from the PascalCase
+    /// closed sets [`ExportTrigger`] / [`ConditionKind`] carry. Pin
+    /// the case-sensitivity axis so a regression that ASCIIfolded
+    /// or PascalCased on parse would fail HERE. The empty-suffix
+    /// boundary is pinned by
+    /// [`Self::evaluate_ephemeral_require_tag_returns_unknown_on_bare_channel_prefix`]
+    /// as a peer of the point surface's own bare-prefix pins.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_channel_suffix() {
+        let spec = ephemeral_fixture();
+        for garbage in [
+            "channel-HttpEvent",
+            "channel-NatsSubject",
+            "channel-STDOUT",
+            "channel-typo",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at `channel-`
+    /// classifies as [`UnknownRequireTag`], mirroring every prior
+    /// closed-set prefix family on the ephemeral surface. A
+    /// regression that special-cased the bare prefix (treating it as
+    /// a coarse "any channel axis present") would fail HERE — the
+    /// empty suffix must hit the substrate primitive's canonical
+    /// empty-string arm rather than short-circuiting to `Ok(true)`
+    /// on any ephemeral that carries a non-empty `exports` vector.
+    /// Locks the empty-suffix ↔ unknown-suffix correspondence at ONE
+    /// narrow classifier site.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_channel_prefix() {
+        let spec = EphemeralSpec {
+            exports: vec![export_with_channel(ChannelKind::NatsSubject)],
+            ..ephemeral_fixture()
+        };
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "channel-"),
+            Err(UnknownRequireTag),
+            "bare `channel-` must classify as UnknownRequireTag even with populated exports",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME `exports` slice reaches
+    /// both the ephemeral surface's `evaluate_ephemeral_require_tag`
+    /// classifier AND the point surface's `evaluate_point_require_tag`
+    /// classifier through the SAME
+    /// [`ExportSpecSliceExt::has_channel_kind`] substrate primitive,
+    /// so the two classifiers publish IDENTICAL answers for every
+    /// [`ChannelKind`] × every `EphemeralSpec::exports` value.
+    /// Lowers the ephemeral spec to a `ProcessSpec` via the typed
+    /// `From<EphemeralSpec>` bridge (which copies `e.exports →
+    /// EphemeralLifetime::exports` byte-for-byte — see
+    /// [`tatara_process::ephemeral`] `From` impl) and cross-
+    /// classifies. Locks the two-surface symmetry contract on the
+    /// `channel-<kind>` family — a regression that (a) dropped the
+    /// ephemeral routing arm, (b) inverted the routing (probed a
+    /// wrong slot), or (c) diverged the two surfaces' closure
+    /// semantics fails HERE at ONE narrow site. Byte-for-byte
+    /// analog of
+    /// [`evaluate_ephemeral_require_tag_export_when_matches_point_peer_through_lowered_exports`]
+    /// on the sibling third family, but on the outer-tagged-union-
+    /// carrier child projection ([`ChannelKind::from(&VectorChannel)`])
+    /// rather than the direct closed-set field ([`ExportSpec::when`])
+    /// — proving the parity contract survives the child-projection
+    /// axis change AND the extra Option-parent hop on the point
+    /// surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_channel_matches_point_peer_through_lowered_exports() {
+        for populated in ChannelKind::ALL {
+            let eph = EphemeralSpec {
+                exports: vec![export_with_channel(populated)],
+                ..ephemeral_fixture()
+            };
+            let point: ProcessSpec = eph.clone().into();
+            for query in ChannelKind::ALL {
+                let tag = format!("channel-{}", query.as_str());
                 let eph_answer = evaluate_ephemeral_require_tag(&eph, &tag);
                 let point_answer = evaluate_point_require_tag(&point, &tag);
                 assert_eq!(

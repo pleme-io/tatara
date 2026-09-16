@@ -1675,6 +1675,48 @@ where
 ///   export answers on the unambiguous scalar. Sibling on the same
 ///   slice, distinct on the child-projection axis.
 ///
+/// - `report-format-<kind>` — [`ReportFormat`] closed set →
+///   [`tatara_process::export::ExportSpecSliceExt::has_report_format`]
+///   on [`EphemeralSpec::exports`] directly. Peer of the point surface's
+///   `report-format-<kind>` family (the ninth closed-set-driven prefix
+///   family on the point surface, which composes the SAME slice-level
+///   `ExportSpecSliceExt::has_report_format` substrate primitive through
+///   the `Lifetime::resolved_ephemeral()` Option-parent gate); this
+///   ephemeral peer routes through the SAME primitive with NO Option-
+///   parent hop (contrast the point-surface routing
+///   `spec.lifetime.resolved_ephemeral().is_some_and(|e| e.exports.has_report_format(kind))`).
+///   The [`From<EphemeralSpec>`] lowering copies `e.exports →
+///   EphemeralLifetime::exports` byte-for-byte (see
+///   [`tatara_process::ephemeral`] `From` impl line 311), so the SAME
+///   slice values reach both surfaces' `report-format-<kind>` families
+///   through the SAME [`ExportSpecSliceExt::has_report_format`] walk —
+///   a future fifth [`ReportFormat`] variant reaches BOTH surfaces
+///   through the [`ReportFormat::ALL`] sweep + one `as_str` arm on the
+///   closed set with no per-caller edit. FIFTH closed-set-driven prefix
+///   family in the ephemeral require-tag vocabulary and THIRD
+///   slice-child occupant routed DIRECTLY through the slice-level
+///   substrate; distinct from the sibling `export-when-<kind>` and
+///   `channel-<kind>` families on ONE dimension — the child projection
+///   reads a NESTED-Option scalar
+///   (`e.source.test_report.as_ref().is_some_and(|tr| tr.format == kind)`),
+///   so a reachable-populated export whose `source.test_report` slot is
+///   empty (e.g. a `receipts`-only source) answers `false` for EVERY
+///   `report-format-<kind>` query INCLUDING the default
+///   [`ReportFormat::Raw`] that a naive `unwrap_or_default()` projection
+///   would spuriously match. Contrast the direct closed-set scalar
+///   (`ExportSpec::when` on `export-when-<kind>`) and the outer
+///   tagged-union carrier
+///   ([`ChannelKind::from(&VectorChannel)`] on `channel-<kind>`) —
+///   sibling on the same slice, distinct on the child-projection axis
+///   for the SECOND time in the ephemeral vocabulary. Locks the
+///   nested-Option-collapse contract at ONE substrate primitive: a
+///   future normalization at
+///   [`ExportSpecSliceExt::has_report_format`] (a widened return
+///   carrying the matching `TestReportSource` ref, a debug-build
+///   assertion on ambiguous source variants) lands at ONE site and
+///   both surfaces' `report-format-<kind>` families pick it up
+///   mechanically.
+///
 /// Every other tag is a fixed match on an [`EphemeralSpec`] slot; the
 /// remaining sugar-surface knobs (`aplicacao`, `ttl`, `teardown`,
 /// `postconditions`, `preconditions`, `closed-loop-auth`) aren't
@@ -1738,7 +1780,13 @@ where
 /// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_channel_kind`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_channel_suffix`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_channel_prefix`],
-/// and [`tests::evaluate_ephemeral_require_tag_channel_matches_point_peer_through_lowered_exports`].
+/// [`tests::evaluate_ephemeral_require_tag_channel_matches_point_peer_through_lowered_exports`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_on_populated_report_format_slot_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_report_format_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_false_on_non_test_report_source_for_every_report_format_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_report_format_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_report_format_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_report_format_matches_point_peer_through_lowered_exports`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -1767,6 +1815,13 @@ fn evaluate_ephemeral_require_tag(
     if let Some(res) = strip_and_classify_prefixed_kind::<ChannelKind, _>(tag, "channel-", |kind| {
         spec.exports.has_channel_kind(kind)
     }) {
+        return res;
+    }
+    if let Some(res) =
+        strip_and_classify_prefixed_kind::<ReportFormat, _>(tag, "report-format-", |kind| {
+            spec.exports.has_report_format(kind)
+        })
+    {
         return res;
     }
     match tag {
@@ -9652,6 +9707,249 @@ mod tests {
             let point: ProcessSpec = eph.clone().into();
             for query in ChannelKind::ALL {
                 let tag = format!("channel-{}", query.as_str());
+                let eph_answer = evaluate_ephemeral_require_tag(&eph, &tag);
+                let point_answer = evaluate_point_require_tag(&point, &tag);
+                assert_eq!(
+                    eph_answer, point_answer,
+                    "two-surface parity broke on {tag:?} for populated={populated:?}: \
+                     eph={eph_answer:?} vs point={point_answer:?}",
+                );
+                let expected = query == populated;
+                assert_eq!(
+                    eph_answer,
+                    Ok(expected),
+                    "ephemeral answer drifted from expected on {tag:?} populated={populated:?}",
+                );
+            }
+        }
+    }
+
+    // ── report-format-<kind> prefix family (ephemeral) ───────────────
+    //
+    // Fail-before-pass-after granularity: the ephemeral require-tag
+    // vocabulary carried FOUR closed-set-driven prefix families
+    // (`condition-<kind>`, `teardown-policy-<kind>`,
+    // `export-when-<kind>`, `channel-<kind>`) before this commit and
+    // had no way to distinguish which REPORT FORMAT an ephemeral
+    // export's `source.test_report.format` slot carries — a JUnit run
+    // vs a NDJSON stream lift. The lift adds the FIFTH closed-set-
+    // driven prefix family symmetrical with the four prior ones,
+    // routing through the pre-existing
+    // [`tatara_process::export::ExportSpecSliceExt::has_report_format`]
+    // substrate primitive via `strip_and_classify_prefixed_kind`. THIRD
+    // slice-child occupant routed DIRECTLY through the slice-level
+    // substrate on the ephemeral surface — sibling of
+    // `export-when-<kind>` (direct closed-set scalar `ExportSpec::when`)
+    // and `channel-<kind>` (outer tagged-union carrier
+    // `ChannelKind::from(&VectorChannel)`) on the SAME slice, distinct
+    // on the child-projection axis: this family reads a NESTED-Option
+    // scalar (`e.source.test_report.as_ref().is_some_and(|tr| tr.format
+    // == kind)`), so a reachable-populated export whose
+    // `source.test_report` slot is empty answers `false` for EVERY
+    // format kind INCLUDING the default [`ReportFormat::Raw`] a naive
+    // `unwrap_or_default()` projection would spuriously match.
+
+    /// POPULATED-slot pin — `report-format-<kind>` dispatches through
+    /// the autoderived [`ReportFormat`] `FromStr` + the substrate
+    /// [`tatara_process::export::ExportSpecSliceExt::has_report_format`]
+    /// primitive, returning `true` only when the ephemeral's `exports`
+    /// vector carries at least one export whose
+    /// `source.test_report.format` slot matches this kind. Sweep the
+    /// [`ReportFormat::ALL`] × ALL cross so a regression that hard-
+    /// coded the arm to a single kind (silently returning `true` for
+    /// every populated export vector regardless of query kind), wired
+    /// the closure to a fixed unrelated field (a stray
+    /// `experiment_id_override.is_some()`, a probe on `when` /
+    /// `channel`), or collapsed the outer nested-Option projection
+    /// (probing `test_report.is_some()` alone and treating the empty
+    /// case as `ReportFormat::default() == Raw`) fails HERE at the
+    /// classifier before landing at the operator-facing checks.lisp
+    /// surface. Byte-for-byte analog of the peer point-surface pin
+    /// [`evaluate_point_require_tag_returns_true_on_populated_report_format_slot_per_kind`]
+    /// — reuses the `export_with_report_format` fixture on a
+    /// `EphemeralSpec { exports: … }` shape rather than the
+    /// point-surface `ephemeral_spec_with_exports` shape.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_populated_report_format_slot_per_kind() {
+        for populated in ReportFormat::ALL {
+            let spec = EphemeralSpec {
+                exports: vec![export_with_report_format(populated)],
+                ..ephemeral_fixture()
+            };
+            for query in ReportFormat::ALL {
+                let tag = format!("report-format-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral report format populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// EMPTY-EXPORTS pin — an ephemeral spec whose `exports` vector is
+    /// empty returns `Ok(false)` for every `report-format-<kind>` tag.
+    /// Locks the "reachable-empty-child" corner so a regression that
+    /// short-circuited on presence of the ephemeral surface alone
+    /// (returning `true` for every kind on any ephemeral), that
+    /// treated the empty vector's default answer as
+    /// `ReportFormat::default() == Raw`, or mis-routed the closure to
+    /// a fixed always-true path fails HERE. Distinct from the point
+    /// surface's peer test which pins TWO corners (unreachable-parent
+    /// via permanent lifetime AND reachable-empty-child); this
+    /// ephemeral pin covers only the reachable-empty-child corner
+    /// because [`EphemeralSpec`] has no permanent variant to collapse.
+    /// The default `ephemeral_fixture` (empty `exports: vec![]`) is
+    /// the reachable-empty-child fixture.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_empty_exports_for_every_report_format_kind()
+    {
+        let spec = ephemeral_fixture();
+        for kind in ReportFormat::ALL {
+            let tag = format!("report-format-{}", kind.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(false),
+                "empty ephemeral exports must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// NESTED-OPTION-COLLAPSE pin — an ephemeral spec whose `exports`
+    /// vector carries a non-`test_report` export (a receipts-only
+    /// source) returns `Ok(false)` for EVERY `report-format-<kind>`
+    /// tag INCLUDING the default [`ReportFormat::Raw`] that a naive
+    /// `unwrap_or_default()` projection would spuriously match. This
+    /// is the ephemeral peer of the point surface's own NESTED-OPTION-
+    /// COLLAPSE pin — proves the nested-Option short-circuit contract
+    /// survives the surface change (no `resolved_ephemeral` gate to
+    /// short-circuit here, so the closed-set walk MUST fire on the
+    /// populated `exports` slot for the collapse to hold). A
+    /// regression that dropped the `.as_ref().is_some_and(…)` gate on
+    /// the substrate primitive fails HERE — the reachable-empty-child
+    /// pin above would still pass (empty vector short-circuits before
+    /// the nested-Option collapse fires). Sweeps [`ReportFormat::ALL`]
+    /// so the collapse contract is pinned symmetrically across every
+    /// format the closed set names.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_non_test_report_source_for_every_report_format_kind(
+    ) {
+        let receipts_only = ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::default(),
+            experiment_id_override: None,
+        };
+        let spec = EphemeralSpec {
+            exports: vec![receipts_only],
+            ..ephemeral_fixture()
+        };
+        for kind in ReportFormat::ALL {
+            let tag = format!("report-format-{}", kind.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(false),
+                "receipts-only ephemeral export must return false for {tag:?} (including Raw)",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `report-format-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag for ephemeral domain:
+    /// <verbatim>` diagnostic path fires. The canonical
+    /// [`ReportFormat`] labels are PascalCase (`Junit`, `TapV13`,
+    /// `NdJson`, `Raw`) — matching the serde `rename_all =
+    /// "PascalCase"` output verbatim — so camelCase / all-lowercase /
+    /// all-caps spellings are UNKNOWN suffixes, a distinct contract
+    /// from the camelCase closed set [`ChannelKind`] the fourth
+    /// ephemeral family carries. Pin the case-sensitivity axis so a
+    /// regression that ASCIIfolded or camel-cased on parse (a
+    /// hypothetical `to_lower_camel` normalization at the tag layer)
+    /// would fail HERE.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_report_format_suffix() {
+        let spec = ephemeral_fixture();
+        for garbage in [
+            "report-format-junit",
+            "report-format-tapV13",
+            "report-format-NDJSON",
+            "report-format-typo",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, garbage),
+                Err(UnknownRequireTag),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at `report-format-`
+    /// classifies as [`UnknownRequireTag`], mirroring every prior
+    /// closed-set prefix family on the ephemeral surface. A regression
+    /// that special-cased the bare prefix (treating it as a coarse
+    /// "any report-format axis present") would fail HERE — the empty
+    /// suffix must hit the substrate primitive's canonical empty-string
+    /// arm rather than short-circuiting to `Ok(true)` on any ephemeral
+    /// that carries a non-empty `exports` vector. Locks the
+    /// empty-suffix ↔ unknown-suffix correspondence at ONE narrow
+    /// classifier site.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_report_format_prefix() {
+        let spec = EphemeralSpec {
+            exports: vec![export_with_report_format(ReportFormat::Junit)],
+            ..ephemeral_fixture()
+        };
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "report-format-"),
+            Err(UnknownRequireTag),
+            "bare `report-format-` must classify as UnknownRequireTag even with populated exports",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME `exports` slice reaches
+    /// both the ephemeral surface's `evaluate_ephemeral_require_tag`
+    /// classifier AND the point surface's `evaluate_point_require_tag`
+    /// classifier through the SAME
+    /// [`ExportSpecSliceExt::has_report_format`] substrate primitive,
+    /// so the two classifiers publish IDENTICAL answers for every
+    /// [`ReportFormat`] × every `EphemeralSpec::exports` value. Lowers
+    /// the ephemeral spec to a `ProcessSpec` via the typed
+    /// `From<EphemeralSpec>` bridge (which copies `e.exports →
+    /// EphemeralLifetime::exports` byte-for-byte — see
+    /// [`tatara_process::ephemeral`] `From` impl) and cross-classifies.
+    /// Locks the two-surface symmetry contract on the
+    /// `report-format-<kind>` family — a regression that (a) dropped
+    /// the ephemeral routing arm, (b) inverted the routing (probed a
+    /// wrong slot), or (c) diverged the two surfaces' closure
+    /// semantics fails HERE at ONE narrow site. Byte-for-byte analog
+    /// of
+    /// [`evaluate_ephemeral_require_tag_channel_matches_point_peer_through_lowered_exports`]
+    /// on the sibling fourth family, but on the nested-Option scalar
+    /// child projection (`test_report.as_ref().is_some_and(|tr|
+    /// tr.format == kind)`) rather than the outer tagged-union carrier
+    /// ([`ChannelKind::from(&VectorChannel)`]) — proving the parity
+    /// contract survives the SECOND child-projection axis change in
+    /// the ephemeral vocabulary AND the extra Option-parent hop on the
+    /// point surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_report_format_matches_point_peer_through_lowered_exports() {
+        for populated in ReportFormat::ALL {
+            let eph = EphemeralSpec {
+                exports: vec![export_with_report_format(populated)],
+                ..ephemeral_fixture()
+            };
+            let point: ProcessSpec = eph.clone().into();
+            for query in ReportFormat::ALL {
+                let tag = format!("report-format-{}", query.as_str());
                 let eph_answer = evaluate_ephemeral_require_tag(&eph, &tag);
                 let point_answer = evaluate_point_require_tag(&point, &tag);
                 assert_eq!(

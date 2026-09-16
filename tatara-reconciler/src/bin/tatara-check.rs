@@ -524,6 +524,88 @@ fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct UnknownRequireTag;
 
+/// Tabular sugar over [`strip_and_classify_prefixed_kind`] — the ONE
+/// substrate primitive that owns the "walk a list of
+/// `(prefix-literal, closed-set-type, probe-closure)` triples,
+/// short-circuit on the first matching prefix, evaluate to `None`
+/// when nothing matched" shape shared by both
+/// [`evaluate_point_require_tag`] and
+/// [`evaluate_ephemeral_require_tag`]. Pre-lift each surface
+/// hand-authored a fifteen-to-twenty-four-deep chain of identical
+/// four-line `if let Some(res) = strip_and_classify_prefixed_kind::<K,
+/// _>(tag, "prefix-", |k| spec.<probe>(k)) { return res; }` stanzas
+/// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold; post-lift
+/// each row declares its `(literal-prefix, closed-set-type,
+/// probe-closure)` once and the macro composes them through
+/// `Option::or_else`, laziness preserved (the probe closure attached
+/// to a row runs only when the tag carries that row's prefix and its
+/// suffix parses as the row's closed set) and semantics preserved
+/// (first-matching-prefix wins, empty table would evaluate to `None`
+/// — the grammar requires at least one row).
+///
+/// # Semantics
+///
+/// The macro expands to an `Option<Result<bool, UnknownRequireTag>>`:
+///
+/// * `Some(Ok(true))` — matched some row's prefix, the suffix parsed
+///   as that row's closed set, that row's probe answered `true`.
+/// * `Some(Ok(false))` — same shape, probe answered `false`.
+/// * `Some(Err(UnknownRequireTag))` — matched some row's prefix but
+///   the suffix failed to parse as that row's closed set. First-match
+///   short-circuits before any later row runs, byte-for-byte matching
+///   the hand-authored `if let Some(res) = … { return res; }` chain
+///   semantics the two surfaces publish today.
+/// * `None` — no row's prefix matched. The caller falls through to
+///   its fixed-tag match tail.
+///
+/// # Compounding
+///
+/// A future closed-set-driven prefix family on either surface (a
+/// `phase-<kind>` on [`tatara_process::phase::ProcessPhase`], a
+/// hypothetical `max-concurrent-tier-<kind>`, or any new closed-set
+/// discriminator that opens a fresh presence-probe corner on either
+/// spec) lands as ONE more `(prefix-literal, ClosedSetType, |k|
+/// spec.<field>.has_<axis>(k))` row on the appropriate surface's
+/// macro invocation — no per-row restatement of the three-step
+/// (`strip_prefix` → `parse::<K>` → `probe`) shape, no per-row
+/// `if let Some(res) = … { return res; }` boilerplate. A future
+/// diagnostic shift on [`strip_and_classify_prefixed_kind`] (attaching
+/// the offending suffix to [`UnknownRequireTag`], surfacing near-miss
+/// suggestions via a hypothetical `<K as ClosedSet>::labels_joined`
+/// walk) reaches every existing prefix family on both surfaces
+/// through ONE substrate owner. A future third-domain surface (a
+/// hypothetical `evaluate_alertpolicy_require_tag(&AlertPolicySpec,
+/// &str)` third consumer of the `(lisp-compiles :domain <name>)`
+/// executor's shared pipeline) declares its vocabulary through the
+/// SAME macro rather than restating the walk at yet another callsite.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+/// caller's row list is data (prefix literals + closed-set types +
+/// probe closures), the macro is generation; both compose
+/// independently, so a regression that drifted one row's
+/// strip/parse discipline from another becomes structurally
+/// impossible. THEORY.md §VI.1 — generation over composition;
+/// the three-step (`strip_prefix` → `parse::<K>` → `probe`) chain now
+/// dispatches every closed-set prefix family across both surfaces
+/// through ONE generation site.
+///
+/// Pinned by
+/// [`tests::dispatch_prefixed_kind_returns_none_when_no_row_prefix_matches`],
+/// [`tests::dispatch_prefixed_kind_returns_first_matching_row_probe`],
+/// [`tests::dispatch_prefixed_kind_skips_rows_whose_prefix_does_not_match`],
+/// and
+/// [`tests::dispatch_prefixed_kind_returns_unknown_when_prefix_matches_but_suffix_fails_to_parse`].
+macro_rules! dispatch_prefixed_kind {
+    ($tag:expr $(, ($prefix:literal, $K:ty, $probe:expr))+ $(,)?) => {{
+        let tag: &str = $tag;
+        let out: Option<Result<bool, UnknownRequireTag>> = None
+            $(
+                .or_else(|| strip_and_classify_prefixed_kind::<$K, _>(tag, $prefix, $probe))
+            )+;
+        out
+    }};
+}
+
 /// Classify one `:requires <tag>` entry against a compiled
 /// [`tatara_process::crd::ProcessSpec`] and return whether the spec
 /// satisfies it. `Ok(true)` — satisfied; `Ok(false)` — the spec
@@ -1272,176 +1354,87 @@ fn evaluate_point_require_tag(
     spec: &tatara_process::crd::ProcessSpec,
     tag: &str,
 ) -> Result<bool, UnknownRequireTag> {
-    if let Some(res) = strip_and_classify_prefixed_kind::<IntentKind, _>(tag, "intent-", |kind| {
-        spec.intent.has(kind)
-    }) {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<LifetimeKind, _>(tag, "lifetime-", |kind| {
-            spec.lifetime.has(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<ConditionKind, _>(tag, "condition-", |kind| {
-            spec.boundary.has_condition_kind(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<MustReachPhase, _>(tag, "must-reach-", |kind| {
-            spec.depends_on.has_must_reach(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<SighupStrategy, _>(tag, "sighup-", |kind| {
-            spec.signals.has_sighup_strategy(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<VerificationPhase, _>(
+    if let Some(res) = dispatch_prefixed_kind!(
         tag,
-        "verification-phase-",
-        |kind| spec.compliance.bindings.has_verification_phase(kind),
-    ) {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<ExportTrigger, _>(tag, "export-when-", |kind| {
-            spec.lifetime
-                .resolved_ephemeral()
-                .is_some_and(|e| e.exports.has_when(kind))
-        })
-    {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<ChannelKind, _>(tag, "channel-", |kind| {
-        spec.lifetime
+        ("intent-", IntentKind, |k| spec.intent.has(k)),
+        ("lifetime-", LifetimeKind, |k| spec.lifetime.has(k)),
+        ("condition-", ConditionKind, |k| spec
+            .boundary
+            .has_condition_kind(k)),
+        ("must-reach-", MustReachPhase, |k| spec
+            .depends_on
+            .has_must_reach(k)),
+        ("sighup-", SighupStrategy, |k| spec
+            .signals
+            .has_sighup_strategy(k)),
+        ("verification-phase-", VerificationPhase, |k| spec
+            .compliance
+            .bindings
+            .has_verification_phase(k)),
+        ("export-when-", ExportTrigger, |k| spec
+            .lifetime
             .resolved_ephemeral()
-            .is_some_and(|e| e.exports.has_channel_kind(kind))
-    }) {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<ReportFormat, _>(tag, "report-format-", |kind| {
-            spec.lifetime
-                .resolved_ephemeral()
-                .is_some_and(|e| e.exports.has_report_format(kind))
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<ArtifactKind, _>(tag, "artifact-", |kind| {
-            spec.lifetime
-                .resolved_ephemeral()
-                .is_some_and(|e| e.exports.has_artifact_kind(kind))
-        })
-    {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<EncapsulationMode, _>(
-        tag,
-        "encapsulation-mode-",
-        |kind| spec.encapsulates.as_ref().is_some_and(|e| e.has_mode(kind)),
+            .is_some_and(|e| e.exports.has_when(k))),
+        ("channel-", ChannelKind, |k| spec
+            .lifetime
+            .resolved_ephemeral()
+            .is_some_and(|e| e.exports.has_channel_kind(k))),
+        ("report-format-", ReportFormat, |k| spec
+            .lifetime
+            .resolved_ephemeral()
+            .is_some_and(|e| e.exports.has_report_format(k))),
+        ("artifact-", ArtifactKind, |k| spec
+            .lifetime
+            .resolved_ephemeral()
+            .is_some_and(|e| e.exports.has_artifact_kind(k))),
+        ("encapsulation-mode-", EncapsulationMode, |k| spec
+            .encapsulates
+            .as_ref()
+            .is_some_and(|e| e.has_mode(k))),
+        ("point-type-", ConvergencePointType, |k| spec
+            .classification
+            .has_point_type(k)),
+        ("substrate-", SubstrateType, |k| spec
+            .classification
+            .has_substrate(k)),
+        ("calm-", CalmClassification, |k| spec
+            .classification
+            .has_calm(k)),
+        ("data-classification-", DataClassification, |k| spec
+            .classification
+            .has_data_classification(k)),
+        ("horizon-", HorizonKind, |k| spec
+            .classification
+            .has_horizon_kind(k)),
+        ("optimization-direction-", OptimizationDirection, |k| spec
+            .classification
+            .has_optimization_direction(k)),
+        ("teardown-policy-", TeardownPolicy, |k| spec
+            .lifetime
+            .resolved_ephemeral()
+            .is_some_and(|e| e.has_teardown_policy(k))),
+        ("routing-form-", RoutingForm, |k| spec
+            .routing
+            .as_ref()
+            .is_some_and(|r| r.has_form(k))),
+        ("encapsulation-target-", EncapsulationTarget, |k| spec
+            .encapsulates
+            .as_ref()
+            .is_some_and(|e| e.kind.has(k))),
+        ("workload-kind-", WorkloadKind, |k| spec
+            .intent
+            .has_workload_kind(k)),
+        ("report-payload-shape-", ReportPayloadShape, |k| spec
+            .lifetime
+            .resolved_ephemeral()
+            .is_some_and(|e| e.exports.has_report_payload_shape(k))),
+        ("input-arity-", Arity, |k| spec
+            .classification
+            .has_input_arity(k)),
+        ("output-arity-", Arity, |k| spec
+            .classification
+            .has_output_arity(k)),
     ) {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<ConvergencePointType, _>(tag, "point-type-", |kind| {
-            spec.classification.has_point_type(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<SubstrateType, _>(tag, "substrate-", |kind| {
-            spec.classification.has_substrate(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<CalmClassification, _>(tag, "calm-", |kind| {
-            spec.classification.has_calm(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<DataClassification, _>(
-        tag,
-        "data-classification-",
-        |kind| spec.classification.has_data_classification(kind),
-    ) {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<HorizonKind, _>(tag, "horizon-", |kind| {
-        spec.classification.has_horizon_kind(kind)
-    }) {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<OptimizationDirection, _>(
-        tag,
-        "optimization-direction-",
-        |kind| spec.classification.has_optimization_direction(kind),
-    ) {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<TeardownPolicy, _>(tag, "teardown-policy-", |kind| {
-            spec.lifetime
-                .resolved_ephemeral()
-                .is_some_and(|e| e.has_teardown_policy(kind))
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<RoutingForm, _>(tag, "routing-form-", |kind| {
-            spec.routing.as_ref().is_some_and(|r| r.has_form(kind))
-        })
-    {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<EncapsulationTarget, _>(
-        tag,
-        "encapsulation-target-",
-        |kind| spec.encapsulates.as_ref().is_some_and(|e| e.kind.has(kind)),
-    ) {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<WorkloadKind, _>(tag, "workload-kind-", |kind| {
-            spec.intent.has_workload_kind(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<ReportPayloadShape, _>(
-        tag,
-        "report-payload-shape-",
-        |kind| {
-            spec.lifetime
-                .resolved_ephemeral()
-                .is_some_and(|e| e.exports.has_report_payload_shape(kind))
-        },
-    ) {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<Arity, _>(tag, "input-arity-", |kind| {
-        spec.classification.has_input_arity(kind)
-    }) {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<Arity, _>(tag, "output-arity-", |kind| {
-        spec.classification.has_output_arity(kind)
-    }) {
         return res;
     }
     match tag {
@@ -1915,101 +1908,36 @@ fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
 ) -> Result<bool, UnknownRequireTag> {
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<ConditionKind, _>(tag, "condition-", |kind| {
-            spec.has_condition_kind(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<TeardownPolicy, _>(tag, "teardown-policy-", |kind| {
-            spec.has_teardown_policy(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<ExportTrigger, _>(tag, "export-when-", |kind| {
-            spec.exports.has_when(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<ChannelKind, _>(tag, "channel-", |kind| {
-        spec.exports.has_channel_kind(kind)
-    }) {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<ReportFormat, _>(tag, "report-format-", |kind| {
-            spec.exports.has_report_format(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<ArtifactKind, _>(tag, "artifact-", |kind| {
-            spec.exports.has_artifact_kind(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<ReportPayloadShape, _>(
+    if let Some(res) = dispatch_prefixed_kind!(
         tag,
-        "report-payload-shape-",
-        |kind| spec.exports.has_report_payload_shape(kind),
+        ("condition-", ConditionKind, |k| spec.has_condition_kind(k)),
+        ("teardown-policy-", TeardownPolicy, |k| spec
+            .has_teardown_policy(k)),
+        ("export-when-", ExportTrigger, |k| spec.exports.has_when(k)),
+        ("channel-", ChannelKind, |k| spec
+            .exports
+            .has_channel_kind(k)),
+        ("report-format-", ReportFormat, |k| spec
+            .exports
+            .has_report_format(k)),
+        ("artifact-", ArtifactKind, |k| spec
+            .exports
+            .has_artifact_kind(k)),
+        ("report-payload-shape-", ReportPayloadShape, |k| spec
+            .exports
+            .has_report_payload_shape(k)),
+        ("point-type-", ConvergencePointType, |k| spec
+            .has_point_type(k)),
+        ("substrate-", SubstrateType, |k| spec.has_substrate(k)),
+        ("calm-", CalmClassification, |k| spec.has_calm(k)),
+        ("data-classification-", DataClassification, |k| spec
+            .has_data_classification(k)),
+        ("horizon-", HorizonKind, |k| spec.has_horizon_kind(k)),
+        ("optimization-direction-", OptimizationDirection, |k| spec
+            .has_optimization_direction(k)),
+        ("input-arity-", Arity, |k| spec.has_input_arity(k)),
+        ("output-arity-", Arity, |k| spec.has_output_arity(k)),
     ) {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<ConvergencePointType, _>(tag, "point-type-", |kind| {
-            spec.has_point_type(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<SubstrateType, _>(tag, "substrate-", |kind| {
-            spec.has_substrate(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) =
-        strip_and_classify_prefixed_kind::<CalmClassification, _>(tag, "calm-", |kind| {
-            spec.has_calm(kind)
-        })
-    {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<DataClassification, _>(
-        tag,
-        "data-classification-",
-        |kind| spec.has_data_classification(kind),
-    ) {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<HorizonKind, _>(tag, "horizon-", |kind| {
-        spec.has_horizon_kind(kind)
-    }) {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<OptimizationDirection, _>(
-        tag,
-        "optimization-direction-",
-        |kind| spec.has_optimization_direction(kind),
-    ) {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<Arity, _>(tag, "input-arity-", |kind| {
-        spec.has_input_arity(kind)
-    }) {
-        return res;
-    }
-    if let Some(res) = strip_and_classify_prefixed_kind::<Arity, _>(tag, "output-arity-", |kind| {
-        spec.has_output_arity(kind)
-    }) {
         return res;
     }
     match tag {
@@ -8854,6 +8782,113 @@ mod tests {
             ),
             Some(Err(UnknownRequireTag)),
         );
+    }
+
+    // ── dispatch_prefixed_kind! macro substrate pins ─────────────────
+    //
+    // Fail-before-pass-after granularity: `dispatch_prefixed_kind!`
+    // did not exist before this commit — the two dispatch surfaces
+    // (`evaluate_point_require_tag`, `evaluate_ephemeral_require_tag`)
+    // each hand-authored their own `if let Some(res) =
+    // strip_and_classify_prefixed_kind::<K, _>(tag, "prefix-", |k|
+    // spec.<probe>(k)) { return res; }` chain — pre-lift 24 + 15
+    // near-identical four-line stanzas past the ★★ PRIME-DIRECTIVE
+    // ≥ 2 duplication threshold. Post-lift both surfaces route
+    // through this macro whose (empty-table-forbidden, first-match-
+    // wins, laziness-preserved, Ok/Err propagation) contract is
+    // owned by these four pins. A regression that inverted the
+    // short-circuit direction (e.g. accepted a later row's answer
+    // over an earlier row's), evaluated a row's probe eagerly (e.g.
+    // ran probes on rows whose prefix did not match), or swallowed
+    // `Some(Err(UnknownRequireTag))` into `None` (silently falling
+    // through to the fixed-tag match tail) fails at ONE narrow
+    // substrate site here before drifting through every dispatch
+    // surface.
+
+    /// FIRST-ROW-MATCH pin — a tag matched by the FIRST row's prefix
+    /// with a parseable suffix routes through the FIRST row's probe
+    /// and short-circuits; a hypothetical LATER row's probe MUST NOT
+    /// evaluate (an `unreachable!` in a later row would fire under a
+    /// regression that folded rows in reverse order).
+    #[test]
+    fn dispatch_prefixed_kind_returns_first_matching_row_probe() {
+        // Two rows share the same prefix — first wins; second's probe
+        // must not evaluate under the first-match short-circuit
+        // (`Option::or_else` never invokes its closure when self is
+        // already `Some(_)`).
+        let out: Option<Result<bool, UnknownRequireTag>> = dispatch_prefixed_kind!(
+            "condition-JobAttested",
+            ("condition-", ConditionKind, |_k: ConditionKind| true),
+            ("condition-", ConditionKind, |_k: ConditionKind| {
+                unreachable!("second row with matching prefix must not evaluate")
+            }),
+        );
+        assert_eq!(out, Some(Ok(true)));
+    }
+
+    /// NON-MATCHING-PREFIX pin — a row whose prefix does not match the
+    /// tag is walked past (its probe MUST NOT evaluate) so a later row
+    /// whose prefix does match reaches its probe. Locks the laziness
+    /// discipline the `.or_else` composition inherits: a probe closure
+    /// on a non-matching row is captured but never invoked because
+    /// `strip_and_classify_prefixed_kind` returns `None` before its
+    /// third arg runs. A regression that flattened the chain to
+    /// evaluate every row's probe up front would fire the
+    /// `unreachable!` in the first row here.
+    #[test]
+    fn dispatch_prefixed_kind_skips_rows_whose_prefix_does_not_match() {
+        let out: Option<Result<bool, UnknownRequireTag>> = dispatch_prefixed_kind!(
+            "condition-JobAttested",
+            ("intent-", IntentKind, |_k: IntentKind| {
+                unreachable!("row without matching prefix must not evaluate")
+            }),
+            ("condition-", ConditionKind, |_k: ConditionKind| true),
+        );
+        assert_eq!(out, Some(Ok(true)));
+    }
+
+    /// NO-ROW-MATCH pin — a tag that matches NO row's prefix
+    /// evaluates to `None`. The caller (both `evaluate_*_require_tag`
+    /// dispatch surfaces) reads that as "fall through to the fixed-
+    /// tag match tail". A regression that returned `Some(Err(_))`
+    /// instead of `None` on a prefix miss would silently promote every
+    /// fixed-tag arm's diagnostic path from
+    /// "unknown :requires tag" to a swallowed `Err`.
+    #[test]
+    fn dispatch_prefixed_kind_returns_none_when_no_row_prefix_matches() {
+        let out: Option<Result<bool, UnknownRequireTag>> = dispatch_prefixed_kind!(
+            "totally-unknown-tag",
+            ("condition-", ConditionKind, |_k: ConditionKind| {
+                unreachable!("row without matching prefix must not evaluate")
+            }),
+            ("intent-", IntentKind, |_k: IntentKind| {
+                unreachable!("row without matching prefix must not evaluate")
+            }),
+        );
+        assert!(out.is_none());
+    }
+
+    /// PARSE-FAIL PROPAGATION pin — a tag whose prefix matches a row
+    /// but whose suffix fails to parse as that row's closed set
+    /// evaluates to `Some(Err(UnknownRequireTag))` and short-circuits
+    /// (a hypothetical LATER row's probe MUST NOT evaluate). Locks
+    /// the taxonomy: the caller's dispatch surface reads
+    /// `Some(Err(_))` as "the tag was in the prefix vocabulary but
+    /// misspelled" and threads the operator-facing
+    /// "unknown :requires tag" diagnostic, not "no known prefix" —
+    /// distinct from the `None` arm the peer pin above guards.
+    #[test]
+    fn dispatch_prefixed_kind_returns_unknown_when_prefix_matches_but_suffix_fails_to_parse() {
+        let out: Option<Result<bool, UnknownRequireTag>> = dispatch_prefixed_kind!(
+            "condition-NotAConditionKindVariant",
+            ("condition-", ConditionKind, |_k: ConditionKind| {
+                unreachable!("probe must not fire on parse failure")
+            }),
+            ("intent-", IntentKind, |_k: IntentKind| {
+                unreachable!("later row must not evaluate after first prefix hit")
+            }),
+        );
+        assert_eq!(out, Some(Err(UnknownRequireTag)));
     }
 
     // ── evaluate_ephemeral_require_tag substrate pins ────────────────

@@ -2357,6 +2357,64 @@ struct CompiledSource {
     classify: Box<dyn Fn(&str) -> Result<bool, UnknownRequireTag>>,
 }
 
+/// Assemble a [`CompiledSource`] from a compile-step's typed vec and a
+/// non-capturing evaluator `fn(&S, &str) -> Result<bool, UnknownRequireTag>`.
+/// Pre-lift both [`RequireTagDomain::compile`] impls (`PointDomain` +
+/// `EphemeralDomain`) hand-authored the identical `(count = defs.len(),
+/// classify = Box::new(move |tag| eval(&defs[0].spec, tag)))` shape past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold — post-lift ONE
+/// substrate primitive owns the (count computation, first-def
+/// selection, boxed classifier capture) discipline; both current
+/// callers plus every future [`RequireTagDomain`] peer route through it.
+///
+/// Generic over the spec type `S: 'static` — `S` is bounded `'static`
+/// so the owning `defs` vec (and the `move`-captured `&defs[0].spec`
+/// borrow through the returned `Fn`) does not carry a lifetime past
+/// the trait method's `Box<dyn Fn(...) + 'static>` return. The two
+/// current callers (`ProcessSpec`, `EphemeralSpec`) both satisfy it,
+/// and every future workspace-typed spec struct will too because a
+/// domain's spec is by construction a `#[derive(TataraDomain)]` struct
+/// with no lifetime parameters.
+///
+/// The `evaluate` slot is a `fn(&S, &str) -> Result<bool,
+/// UnknownRequireTag>` — a non-capturing function pointer, not a
+/// closure — so the boxing at the classify-closure boundary is the
+/// ONLY heap allocation on the compile path, and a future peer's
+/// evaluator (`evaluate_<newdomain>_require_tag`) plugs in without a
+/// trait-object indirection.
+///
+/// # Compounding
+///
+/// A future third [`RequireTagDomain`] peer's `compile` impl reads as
+/// `Ok(build_compiled_source(compile_<newdomain>_source(src)?,
+/// evaluate_<newdomain>_require_tag))` — a two-line body binding to
+/// the same substrate owner. A future diagnostic shift on the compile-
+/// carrier shape (attaching the domain-name to the classify closure,
+/// caching the first-def's name for a downstream `"({name}: … )"`
+/// preamble, threading a per-definition index in place of the
+/// hard-coded `[0]`) lands at THIS ONE substrate owner and every
+/// current + future peer inherits the shift.
+///
+/// # Theory grounding
+///
+/// THEORY.md §II.1 invariant 2 — free middle; the (defs, evaluator)
+/// pair is pure data at the call boundary, so the composition
+/// (`count = defs.len()`, `classify = Box::new(move |tag| evaluator(
+/// &defs[0].spec, tag))`) can never drift between peers. THEORY.md
+/// §VI.1 — generation over composition; the classify closure is
+/// generated once for every current + future domain rather than
+/// hand-authored per-arm.
+fn build_compiled_source<S: 'static>(
+    defs: Vec<tatara_lisp::NamedDefinition<S>>,
+    evaluate: fn(&S, &str) -> Result<bool, UnknownRequireTag>,
+) -> CompiledSource {
+    let count = defs.len();
+    CompiledSource {
+        count,
+        classify: Box::new(move |tag| evaluate(&defs[0].spec, tag)),
+    }
+}
+
 /// The per-domain slice of the `(lisp-compiles ... :domain <name>)`
 /// executor — a substrate primitive that owns three domain-specific
 /// steps the shared pipeline in [`check_lisp_compiles`] threads through
@@ -2412,58 +2470,77 @@ struct CompiledSource {
 trait RequireTagDomain: Sync {
     fn name(&self) -> &'static str;
     fn compile(&self, src: &str) -> tatara_lisp::Result<CompiledSource>;
-    /// Compose the operator-facing `"unknown :requires tag[...]: <tag>"`
-    /// diagnostic, appending the [`UnknownRequireTag`] adornment when
-    /// present (rendered through its [`std::fmt::Display`] impl — a
-    /// parenthetical " (unknown <set>: 'suffix'; did you mean
-    /// 'prefix-Suffix'?)" for a KNOWN-prefix + bad-suffix input, empty
-    /// for a no-prefix-matched fixed-tag miss).
-    fn unknown_tag_diagnostic(&self, tag: &str, err: &UnknownRequireTag) -> String;
+    /// The domain-specific operator-facing prose head — everything the
+    /// pre-lift `"unknown :requires tag[...]"` `format!` string held
+    /// LEFT of the `": {tag}{err}"` suffix. Point-domain reads
+    /// `"unknown :requires tag"`; ephemeral-domain reads
+    /// `"unknown :requires tag for ephemeral domain"`. The
+    /// [`RequireTagDomain::unknown_tag_diagnostic`] default composes
+    /// this prefix with the shared `": {tag}{err}"` suffix at ONE
+    /// substrate owner, so a future third domain declares its head and
+    /// inherits the suffix by construction — no per-domain `format!`
+    /// restatement.
+    fn diagnostic_prefix(&self) -> &'static str;
+    /// Compose the operator-facing `"<diagnostic_prefix>: <tag><err>"`
+    /// prose the pre-lift `check_lisp_compiles` executor's two arms
+    /// hand-authored verbatim. Default body threads
+    /// [`RequireTagDomain::diagnostic_prefix`] through the shared
+    /// suffix; the [`UnknownRequireTag`] adornment renders through its
+    /// [`std::fmt::Display`] impl (a parenthetical " (unknown <set>:
+    /// 'suffix'; did you mean 'prefix-Suffix'?)" for a KNOWN-prefix +
+    /// bad-suffix input, `" (did you mean \"<tag>\"?)"` for a fixed-tag
+    /// near-miss, empty for a hint-free far-miss). Override only when a
+    /// future domain's diagnostic needs a shape that does not decompose
+    /// as `prefix + ": " + tag + err_display`.
+    fn unknown_tag_diagnostic(&self, tag: &str, err: &UnknownRequireTag) -> String {
+        format!("{}: {tag}{err}", self.diagnostic_prefix())
+    }
 }
 
 /// [`RequireTagDomain`] impl for the point (ProcessSpec) surface —
-/// wraps [`tatara_process::compile_source`] + [`evaluate_point_require_tag`]
-/// + the pre-lift `"unknown :requires tag: <tag>"` diagnostic prose.
+/// wraps [`tatara_process::compile_source`] and
+/// [`evaluate_point_require_tag`] and the pre-lift
+/// `"unknown :requires tag: <tag>"` diagnostic prose (now generated at
+/// the trait's default [`RequireTagDomain::unknown_tag_diagnostic`]
+/// from [`PointDomain::diagnostic_prefix`]).
 struct PointDomain;
 
 impl RequireTagDomain for PointDomain {
     fn name(&self) -> &'static str {
         "point"
     }
-    fn compile(&self, src: &str) -> tatara_lisp::Result<CompiledSource> {
-        let defs = tatara_process::compile_source(src)?;
-        let count = defs.len();
-        Ok(CompiledSource {
-            count,
-            classify: Box::new(move |tag| evaluate_point_require_tag(&defs[0].spec, tag)),
-        })
+    fn diagnostic_prefix(&self) -> &'static str {
+        "unknown :requires tag"
     }
-    fn unknown_tag_diagnostic(&self, tag: &str, err: &UnknownRequireTag) -> String {
-        format!("unknown :requires tag: {tag}{err}")
+    fn compile(&self, src: &str) -> tatara_lisp::Result<CompiledSource> {
+        Ok(build_compiled_source(
+            tatara_process::compile_source(src)?,
+            evaluate_point_require_tag,
+        ))
     }
 }
 
 /// [`RequireTagDomain`] impl for the ephemeral (EphemeralSpec) surface
-/// — wraps [`tatara_process::ephemeral::compile_ephemeral_source`] +
-/// [`evaluate_ephemeral_require_tag`] + the pre-lift
+/// — wraps [`tatara_process::ephemeral::compile_ephemeral_source`] and
+/// [`evaluate_ephemeral_require_tag`] and the pre-lift
 /// `"unknown :requires tag for ephemeral domain: <tag>"` diagnostic
-/// prose.
+/// prose (now generated at the trait's default
+/// [`RequireTagDomain::unknown_tag_diagnostic`] from
+/// [`EphemeralDomain::diagnostic_prefix`]).
 struct EphemeralDomain;
 
 impl RequireTagDomain for EphemeralDomain {
     fn name(&self) -> &'static str {
         "ephemeral"
     }
-    fn compile(&self, src: &str) -> tatara_lisp::Result<CompiledSource> {
-        let defs = tatara_process::ephemeral::compile_ephemeral_source(src)?;
-        let count = defs.len();
-        Ok(CompiledSource {
-            count,
-            classify: Box::new(move |tag| evaluate_ephemeral_require_tag(&defs[0].spec, tag)),
-        })
+    fn diagnostic_prefix(&self) -> &'static str {
+        "unknown :requires tag for ephemeral domain"
     }
-    fn unknown_tag_diagnostic(&self, tag: &str, err: &UnknownRequireTag) -> String {
-        format!("unknown :requires tag for ephemeral domain: {tag}{err}")
+    fn compile(&self, src: &str) -> tatara_lisp::Result<CompiledSource> {
+        Ok(build_compiled_source(
+            tatara_process::ephemeral::compile_ephemeral_source(src)?,
+            evaluate_ephemeral_require_tag,
+        ))
     }
 }
 
@@ -3288,13 +3365,14 @@ fn normalize(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        check_yaml_parses, evaluate_ephemeral_require_tag, evaluate_fixed_tag,
-        evaluate_point_require_tag, find_kw, find_kw_string_list, head_symbol_or_missing,
-        known_require_tag_domain_names, min_defs_shortfall_msg, parse_kwargs, positional_string,
-        read_or_fail, report_result_prefixed, require_tag_domain_by_name,
-        required_positional_string, startup_diagnostic, strip_and_classify_prefixed_kind,
-        FixedTagArm, FixedTagHint, PrefixHint, Report, TagHint, UnknownRequireTag,
-        ALL_REQUIRE_TAG_DOMAINS, EPHEMERAL_FIXED_TAG_ARMS, MISSING_ARG_SLUG, POINT_FIXED_TAG_ARMS,
+        build_compiled_source, check_yaml_parses, evaluate_ephemeral_require_tag,
+        evaluate_fixed_tag, evaluate_point_require_tag, find_kw, find_kw_string_list,
+        head_symbol_or_missing, known_require_tag_domain_names, min_defs_shortfall_msg,
+        parse_kwargs, positional_string, read_or_fail, report_result_prefixed,
+        require_tag_domain_by_name, required_positional_string, startup_diagnostic,
+        strip_and_classify_prefixed_kind, FixedTagArm, FixedTagHint, PrefixHint, Report, TagHint,
+        UnknownRequireTag, ALL_REQUIRE_TAG_DOMAINS, EPHEMERAL_FIXED_TAG_ARMS, MISSING_ARG_SLUG,
+        POINT_FIXED_TAG_ARMS,
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
@@ -13465,6 +13543,131 @@ mod tests {
         assert_eq!(
             eph.unknown_tag_diagnostic("aplicaca", &bare),
             "unknown :requires tag for ephemeral domain: aplicaca",
+        );
+    }
+
+    /// DIAGNOSTIC-PREFIX pin — each registered domain's
+    /// `diagnostic_prefix()` returns the exact pre-lift `format!`-head
+    /// literal. Post-lift the default
+    /// [`super::RequireTagDomain::unknown_tag_diagnostic`] composes
+    /// this head with the shared `": {tag}{err}"` suffix, so a
+    /// regression that renamed a prefix would silently reshape every
+    /// operator-facing `"unknown :requires tag[...]"` prose downstream
+    /// (grep-breaking) — this pin catches it BEFORE the executor
+    /// composes.
+    #[test]
+    fn require_tag_domain_diagnostic_prefix_matches_pre_lift_head_literal() {
+        let point = require_tag_domain_by_name("point").expect("point domain registered");
+        assert_eq!(point.diagnostic_prefix(), "unknown :requires tag");
+        let eph = require_tag_domain_by_name("ephemeral").expect("ephemeral domain registered");
+        assert_eq!(
+            eph.diagnostic_prefix(),
+            "unknown :requires tag for ephemeral domain",
+        );
+    }
+
+    /// DEFAULT-COMPOSITION pin — the trait-provided default
+    /// [`super::RequireTagDomain::unknown_tag_diagnostic`] composes as
+    /// `<diagnostic_prefix>: <tag><err_display>` byte-for-byte on a
+    /// fixture domain that has no other override. Load-bearing on a
+    /// FUTURE third domain: a domain whose only per-domain declaration
+    /// is a fresh `diagnostic_prefix` inherits the exact composition
+    /// shape both current arms restated pre-lift — this pin locks it.
+    #[test]
+    fn default_unknown_tag_diagnostic_composes_prefix_and_tag_and_err() {
+        use super::RequireTagDomain;
+        struct FixtureDomain;
+        impl RequireTagDomain for FixtureDomain {
+            fn name(&self) -> &'static str {
+                "fixture"
+            }
+            fn diagnostic_prefix(&self) -> &'static str {
+                "unknown :requires tag on fixture-only surface"
+            }
+            fn compile(&self, _src: &str) -> tatara_lisp::Result<super::CompiledSource> {
+                unreachable!("compile not exercised in this pin");
+            }
+        }
+        let f = FixtureDomain;
+        let bare = UnknownRequireTag::default();
+        assert_eq!(
+            f.unknown_tag_diagnostic("some-tag", &bare),
+            "unknown :requires tag on fixture-only surface: some-tag",
+        );
+        // Hint-bearing err — the fixed-tag near-miss adornment composes
+        // through the same `{err}` slot the default's `format!` threads,
+        // so a future domain inherits BOTH the prefix + the adornment
+        // composition without a per-domain override.
+        let with_hint = UnknownRequireTag::with_fixed_hint("depends-on".to_owned());
+        assert_eq!(
+            f.unknown_tag_diagnostic("deponds-on", &with_hint),
+            "unknown :requires tag on fixture-only surface: deponds-on (did you mean \"depends-on\"?)",
+        );
+    }
+
+    /// BUILD-COMPILED-SOURCE-COUNT pin — the substrate helper reports
+    /// `defs.len()` verbatim on the returned [`super::CompiledSource`].
+    /// Pre-lift both [`super::PointDomain::compile`] +
+    /// [`super::EphemeralDomain::compile`] hand-authored `let count =
+    /// defs.len();` before the closure capture; post-lift ONE substrate
+    /// owner threads the count so a regression that swapped `count`
+    /// for a hard-coded `1`, `0`, or the closure's own state would
+    /// fail HERE before drifting into `min_defs_shortfall_msg`'s
+    /// operator-facing shortfall prose.
+    #[test]
+    fn build_compiled_source_returns_defs_len_verbatim() {
+        let defs: Vec<tatara_lisp::NamedDefinition<u32>> = (0..3)
+            .map(|i| tatara_lisp::NamedDefinition {
+                name: format!("n{i}"),
+                spec: i,
+            })
+            .collect();
+        fn eval(_spec: &u32, _tag: &str) -> Result<bool, UnknownRequireTag> {
+            Ok(true)
+        }
+        let compiled = build_compiled_source(defs, eval);
+        assert_eq!(compiled.count, 3, "count mirrors defs.len() verbatim");
+    }
+
+    /// BUILD-COMPILED-SOURCE-FIRST-DEF pin — the substrate helper's
+    /// classify closure captures the first definition's spec and
+    /// evaluates the passed-in function against it. Feeds the fixture
+    /// evaluator two u8 sentinels (matching the u8-typed fixture spec)
+    /// so the assertion pins BOTH `evaluate(&defs[0].spec, tag)` (not
+    /// `defs[1]` or a snapshot of the tag) AND the tag forwarding.
+    /// A regression that captured the last def, cloned the spec into
+    /// the closure prematurely, or dropped the tag argument would fail
+    /// HERE before drifting into the executor's per-tag classification
+    /// loop.
+    #[test]
+    fn build_compiled_source_classify_calls_evaluator_over_first_def() {
+        let defs = vec![
+            tatara_lisp::NamedDefinition {
+                name: "first".to_owned(),
+                spec: 1u8,
+            },
+            tatara_lisp::NamedDefinition {
+                name: "second".to_owned(),
+                spec: 99u8,
+            },
+        ];
+        // Evaluator returns Ok(true) iff spec is the FIRST def's spec
+        // (u8 sentinel 1); tag "first-hit" gates the branch so a
+        // regression that dropped the tag forwarding would flip the
+        // classification.
+        fn eval(spec: &u8, tag: &str) -> Result<bool, UnknownRequireTag> {
+            Ok(*spec == 1 && tag == "first-hit")
+        }
+        let compiled = build_compiled_source(defs, eval);
+        assert_eq!(
+            (compiled.classify)("first-hit"),
+            Ok(true),
+            "classifier binds to defs[0].spec (u8=1) AND forwards the tag",
+        );
+        assert_eq!(
+            (compiled.classify)("miss"),
+            Ok(false),
+            "tag forwarding — a non-matching tag misses",
         );
     }
 

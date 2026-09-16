@@ -6376,6 +6376,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "shikumi",
+ "tatara-closed-set",
  "tatara-core",
  "tatara-domains",
  "tatara-lattice",

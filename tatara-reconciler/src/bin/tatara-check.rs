@@ -8,7 +8,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::str::FromStr;
 
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::boundary::{ConditionKind, ConditionSliceExt};
@@ -441,8 +440,8 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
     for req in &requires {
         let ok = match (compiled.classify)(req) {
             Ok(matched) => matched,
-            Err(UnknownRequireTag) => {
-                return report.fail(label, domain.unknown_tag_diagnostic(req));
+            Err(err) => {
+                return report.fail(label, domain.unknown_tag_diagnostic(req, &err));
             }
         };
         if !ok {
@@ -520,9 +519,119 @@ fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
 /// Sentinel returned by [`evaluate_point_require_tag`] when the tag
 /// isn't one the point-domain require-tag surface understands. The
 /// caller composes the operator-facing diagnostic (which echoes the
-/// offending tag verbatim); the substrate owns only the classification.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct UnknownRequireTag;
+/// offending tag verbatim); the substrate owns only the classification
+/// AND (when the tag carried a KNOWN prefix whose suffix failed to
+/// parse as the prefix's closed set) a typed [`PrefixHint`] adornment
+/// the operator-facing diagnostic renders next to the tag echo.
+///
+/// # Equality contract
+///
+/// [`UnknownRequireTag`] is the coarse error CATEGORY — two values
+/// with different [`PrefixHint`] adornments still compare equal
+/// because the category is what every classify-caller keys on. The
+/// hint is a diagnostic ADORNMENT the caller renders next to the
+/// rejection; it is NOT part of the classification identity, so
+/// equality-based test assertions (`assert_eq!(actual,
+/// Err(UnknownRequireTag::default()))`) continue to pass through
+/// this reshape without knowing whether the specific rejection
+/// happened to carry a hint or not. Pre-lift the type was a unit
+/// struct with a compiler-derived `PartialEq` that trivially held
+/// on all instances; post-lift the same semantics hold under the
+/// manual impl below through the SAME operator-facing consumer
+/// contract.
+#[derive(Clone, Debug, Default)]
+struct UnknownRequireTag {
+    /// Populated when the tag stripped a KNOWN prefix from
+    /// [`dispatch_prefixed_kind!`] but the suffix failed to parse as
+    /// the prefix's closed set (e.g. `intent-Nyx` — `intent-` stripped,
+    /// `Nyx` is not an [`IntentKind`] label). Absent when the tag
+    /// matched no known prefix at all (the caller's fixed-tag match
+    /// tail fell through to `_ => Err(UnknownRequireTag::default())`).
+    /// The hint is a diagnostic ADORNMENT rendered next to the tag
+    /// echo through [`UnknownRequireTag`]'s [`std::fmt::Display`] impl;
+    /// see [`PrefixHint`].
+    hint: Option<PrefixHint>,
+}
+
+impl PartialEq for UnknownRequireTag {
+    /// All [`UnknownRequireTag`] values compare equal — see the type-
+    /// level "Equality contract" docstring for the rationale.
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+impl Eq for UnknownRequireTag {}
+
+impl std::fmt::Display for UnknownRequireTag {
+    /// Render the parenthetical adornment consumers append to the
+    /// tag-echo diagnostic (`"unknown :requires tag: intent-Nyx"` +
+    /// `"{err}"` → `"unknown :requires tag: intent-Nyx (unknown intent
+    /// kind: 'Nyx'; did you mean 'intent-Nix'?)"`). Renders to the
+    /// empty string when the error carries no [`PrefixHint`] — the
+    /// caller's fixed-tag miss path yields a bare tag-echo, same as
+    /// pre-lift.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.hint {
+            None => Ok(()),
+            Some(hint) => write!(f, " {hint}"),
+        }
+    }
+}
+
+impl UnknownRequireTag {
+    /// Construct with a populated [`PrefixHint`] — used at the
+    /// [`strip_and_classify_prefixed_kind`] parse-failure branch to
+    /// thread the closed-set near-miss into the caller's diagnostic
+    /// path. The category-level `PartialEq` above ignores the hint,
+    /// so an assertion like `Err(UnknownRequireTag::default()) ==
+    /// Err(UnknownRequireTag::with_hint(...))` continues to hold —
+    /// the hint is a diagnostic adornment, not an identity dimension.
+    fn with_hint(hint: PrefixHint) -> Self {
+        Self { hint: Some(hint) }
+    }
+}
+
+/// Typed near-miss adornment threaded onto [`UnknownRequireTag`] when
+/// [`strip_and_classify_prefixed_kind`] observes a tag whose prefix
+/// stripped from a KNOWN family but whose suffix failed to parse as
+/// the family's closed set. Rendered next to the operator-facing
+/// tag echo via [`UnknownRequireTag`]'s [`std::fmt::Display`] impl.
+///
+/// Fields:
+/// * `set_label` — `<K as tatara_lisp::ClosedSet>::SET_LABEL`, the
+///   substrate-wide spaced-lowercase noun of the closed set (`"intent
+///   kind"`, `"lifetime kind"`, `"condition kind"`, …). Emitted
+///   verbatim into the diagnostic so the operator learns WHICH closed
+///   set their suffix was tested against.
+/// * `suffix` — the offending post-prefix substring (owned so the
+///   hint outlives the tag slice the classifier walked). Echoed
+///   verbatim so the operator's typo appears in the message quoted.
+/// * `hinted_tag` — the prefix-plus-canonical-suggestion string
+///   (`"intent-Nix"`) [`tatara_lisp::ClosedSet::suggest_closest`]
+///   projected onto when a canonical label sits within the substrate-
+///   wide bounded edit distance. `None` when no candidate qualifies
+///   — the conservative-suggestion contract (silent over guessing)
+///   the [`suggest_closest`](tatara_lisp::ClosedSet::suggest_closest)
+///   substrate primitive inherits from [`tatara_lisp::domain::suggest`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PrefixHint {
+    set_label: &'static str,
+    suffix: String,
+    hinted_tag: Option<String>,
+}
+
+impl std::fmt::Display for PrefixHint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.hinted_tag {
+            Some(tag) => write!(
+                f,
+                "(unknown {}: {:?}; did you mean {:?}?)",
+                self.set_label, self.suffix, tag,
+            ),
+            None => write!(f, "(unknown {}: {:?})", self.set_label, self.suffix),
+        }
+    }
+}
 
 /// Tabular sugar over [`strip_and_classify_prefixed_kind`] — the ONE
 /// substrate primitive that owns the "walk a list of
@@ -1443,7 +1552,7 @@ fn evaluate_point_require_tag(
         "boundary-post" => Ok(!spec.boundary.postconditions.is_empty()),
         "compliance" => Ok(!spec.compliance.bindings.is_empty()),
         "signals" => Ok(spec.signals.sigterm_grace_seconds > 0),
-        _ => Err(UnknownRequireTag),
+        _ => Err(UnknownRequireTag::default()),
     }
 }
 
@@ -1548,13 +1657,17 @@ fn strip_and_classify_prefixed_kind<K, F>(
     probe: F,
 ) -> Option<Result<bool, UnknownRequireTag>>
 where
-    K: FromStr,
+    K: tatara_closed_set::ClosedSet,
     F: FnOnce(K) -> bool,
 {
     let suffix = tag.strip_prefix(prefix)?;
-    Some(match suffix.parse::<K>() {
-        Ok(kind) => Ok(probe(kind)),
-        Err(_) => Err(UnknownRequireTag),
+    Some(match K::find_by_label(suffix) {
+        Some(kind) => Ok(probe(kind)),
+        None => Err(UnknownRequireTag::with_hint(PrefixHint {
+            set_label: K::SET_LABEL,
+            suffix: suffix.to_owned(),
+            hinted_tag: K::suggest_closest(suffix).map(|v| format!("{prefix}{}", v.label())),
+        })),
     })
 }
 
@@ -1947,7 +2060,7 @@ fn evaluate_ephemeral_require_tag(
         "postconditions" => Ok(!spec.postconditions.is_empty()),
         "preconditions" => Ok(!spec.preconditions.is_empty()),
         "closed-loop-auth" => Ok(spec.postconditions.has_kind(ConditionKind::ClosedLoopAuth)),
-        _ => Err(UnknownRequireTag),
+        _ => Err(UnknownRequireTag::default()),
     }
 }
 
@@ -2031,7 +2144,13 @@ struct CompiledSource {
 trait RequireTagDomain: Sync {
     fn name(&self) -> &'static str;
     fn compile(&self, src: &str) -> tatara_lisp::Result<CompiledSource>;
-    fn unknown_tag_diagnostic(&self, tag: &str) -> String;
+    /// Compose the operator-facing `"unknown :requires tag[...]: <tag>"`
+    /// diagnostic, appending the [`UnknownRequireTag`] adornment when
+    /// present (rendered through its [`std::fmt::Display`] impl — a
+    /// parenthetical " (unknown <set>: 'suffix'; did you mean
+    /// 'prefix-Suffix'?)" for a KNOWN-prefix + bad-suffix input, empty
+    /// for a no-prefix-matched fixed-tag miss).
+    fn unknown_tag_diagnostic(&self, tag: &str, err: &UnknownRequireTag) -> String;
 }
 
 /// [`RequireTagDomain`] impl for the point (ProcessSpec) surface —
@@ -2051,8 +2170,8 @@ impl RequireTagDomain for PointDomain {
             classify: Box::new(move |tag| evaluate_point_require_tag(&defs[0].spec, tag)),
         })
     }
-    fn unknown_tag_diagnostic(&self, tag: &str) -> String {
-        format!("unknown :requires tag: {tag}")
+    fn unknown_tag_diagnostic(&self, tag: &str, err: &UnknownRequireTag) -> String {
+        format!("unknown :requires tag: {tag}{err}")
     }
 }
 
@@ -2075,8 +2194,8 @@ impl RequireTagDomain for EphemeralDomain {
             classify: Box::new(move |tag| evaluate_ephemeral_require_tag(&defs[0].spec, tag)),
         })
     }
-    fn unknown_tag_diagnostic(&self, tag: &str) -> String {
-        format!("unknown :requires tag for ephemeral domain: {tag}")
+    fn unknown_tag_diagnostic(&self, tag: &str, err: &UnknownRequireTag) -> String {
+        format!("unknown :requires tag for ephemeral domain: {tag}{err}")
     }
 }
 
@@ -2905,8 +3024,8 @@ mod tests {
         find_kw_string_list, head_symbol_or_missing, known_require_tag_domain_names,
         min_defs_shortfall_msg, parse_kwargs, positional_string, read_or_fail,
         report_result_prefixed, require_tag_domain_by_name, required_positional_string,
-        startup_diagnostic, strip_and_classify_prefixed_kind, Report, UnknownRequireTag,
-        ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
+        startup_diagnostic, strip_and_classify_prefixed_kind, PrefixHint, Report,
+        UnknownRequireTag, ALL_REQUIRE_TAG_DOMAINS, MISSING_ARG_SLUG,
     };
     use tatara_lisp::{read, Sexp};
     use tatara_process::boundary::{Condition, ConditionKind};
@@ -3797,11 +3916,11 @@ mod tests {
         let spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&spec, "lifetime-burst"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
         );
         assert_eq!(
             evaluate_point_require_tag(&spec, "lifetime-typo"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
         );
     }
 
@@ -3816,7 +3935,7 @@ mod tests {
         let spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&spec, "lifetime-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
         );
     }
 
@@ -3874,7 +3993,7 @@ mod tests {
         );
         assert_eq!(
             evaluate_point_require_tag(&spec, "totally-unknown"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
         );
     }
 
@@ -3970,7 +4089,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -4110,7 +4229,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -4250,7 +4369,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -4393,7 +4512,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -4600,7 +4719,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -4801,7 +4920,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -5060,7 +5179,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -5307,7 +5426,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -5545,7 +5664,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -5669,7 +5788,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -5691,7 +5810,7 @@ mod tests {
         let spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&spec, "point-type-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `point-type-` must classify as UnknownRequireTag",
         );
     }
@@ -5832,7 +5951,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -5857,7 +5976,7 @@ mod tests {
         let spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&spec, "substrate-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `substrate-` must classify as UnknownRequireTag",
         );
     }
@@ -6027,7 +6146,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -6058,7 +6177,7 @@ mod tests {
         let spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&spec, "calm-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `calm-` must classify as UnknownRequireTag",
         );
     }
@@ -6245,7 +6364,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -6275,7 +6394,7 @@ mod tests {
         let spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&spec, "data-classification-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `data-classification-` must classify as UnknownRequireTag",
         );
     }
@@ -6489,7 +6608,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -6517,7 +6636,7 @@ mod tests {
         let spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&spec, "horizon-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `horizon-` must classify as UnknownRequireTag",
         );
     }
@@ -6763,7 +6882,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -6791,7 +6910,7 @@ mod tests {
         let spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&spec, "optimization-direction-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `optimization-direction-` must classify as UnknownRequireTag",
         );
     }
@@ -7073,7 +7192,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -7105,13 +7224,13 @@ mod tests {
         };
         assert_eq!(
             evaluate_point_require_tag(&ephemeral_spec, "teardown-policy-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `teardown-policy-` must classify as UnknownRequireTag on an ephemeral spec",
         );
         let permanent_spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&permanent_spec, "teardown-policy-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `teardown-policy-` must classify as UnknownRequireTag on a permanent spec",
         );
     }
@@ -7348,7 +7467,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -7381,13 +7500,13 @@ mod tests {
         };
         assert_eq!(
             evaluate_point_require_tag(&routed_spec, "routing-form-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `routing-form-` must classify as UnknownRequireTag on a routed spec",
         );
         let unrouted_spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&unrouted_spec, "routing-form-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `routing-form-` must classify as UnknownRequireTag on an unrouted spec",
         );
     }
@@ -7650,7 +7769,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -7673,7 +7792,7 @@ mod tests {
         spec.encapsulates = Some(encapsulates_with_target(EncapsulationTarget::BareWorkload));
         assert_eq!(
             evaluate_point_require_tag(&spec, "encapsulation-target-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `encapsulation-target-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -7929,7 +8048,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -7955,7 +8074,7 @@ mod tests {
         };
         assert_eq!(
             evaluate_point_require_tag(&spec, "workload-kind-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `workload-kind-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -8166,7 +8285,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -8188,7 +8307,7 @@ mod tests {
         let spec = ephemeral_spec_with_exports(vec![]);
         assert_eq!(
             evaluate_point_require_tag(&spec, "report-payload-shape-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `report-payload-shape-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -8337,7 +8456,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -8359,7 +8478,7 @@ mod tests {
         let spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&spec, "input-arity-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `input-arity-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -8505,7 +8624,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_point_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -8527,7 +8646,7 @@ mod tests {
         let spec = ProcessSpec::gate_compute_defaults();
         assert_eq!(
             evaluate_point_require_tag(&spec, "output-arity-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `output-arity-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -8757,7 +8876,7 @@ mod tests {
                     "lifetime-",
                     unreachable_probe,
                 ),
-                Some(Err(UnknownRequireTag)),
+                Some(Err(UnknownRequireTag::default())),
                 "out-of-vocabulary suffix {tag:?} must classify as UnknownRequireTag",
             );
         }
@@ -8780,7 +8899,197 @@ mod tests {
                 "lifetime-",
                 unreachable_probe,
             ),
-            Some(Err(UnknownRequireTag)),
+            Some(Err(UnknownRequireTag::default())),
+        );
+    }
+
+    // ── PrefixHint / UnknownRequireTag near-miss adornment pins ──────
+    //
+    // Fail-before-pass-after granularity: [`PrefixHint`] and the
+    // [`UnknownRequireTag::hint`] slot did not exist before this commit
+    // — the pre-lift sentinel was a unit struct that discarded the
+    // parse-error carrier its [`std::str::FromStr`] bound produced, so
+    // an operator's `intent-Nyx` typo read identically at the diagnostic
+    // surface to an `intent-completely-not-a-thing` random word (both
+    // rendered `"unknown :requires tag: <tag>"` with no near-miss
+    // suggestion). Post-lift the substrate switches its bound from
+    // `K: FromStr` to `K: tatara_closed_set::ClosedSet` and threads
+    // `<K as ClosedSet>::SET_LABEL` + `<K as ClosedSet>::suggest_closest`
+    // — the substrate primitives EVERY closed-set discriminator in
+    // tatara-process already implements through `#[derive(DeriveClosedSet)]`
+    // — into a typed [`PrefixHint`] that the [`UnknownRequireTag`]
+    // Display impl renders as a parenthetical adornment next to the
+    // tag echo. The four pins below lock the four cells of the
+    // (near-miss × prefix-hit-with-bad-suffix) matrix at the substrate
+    // primitive's return-shape boundary, and one caller-side pin
+    // witnesses end-to-end propagation through
+    // [`evaluate_point_require_tag`] into the diagnostic prose. A
+    // regression that reverted the bound, dropped the SET_LABEL
+    // projection, discarded the suggest_closest hint, or broke the
+    // Display composition surfaces HERE.
+
+    /// NEAR-MISS pin — a suffix within the substrate-wide bounded
+    /// edit distance of a canonical label carries a
+    /// [`PrefixHint::hinted_tag`] pointing at the closest canonical
+    /// prefixed tag (`"intent-nyx"` → `Some("intent-nix")`, edit
+    /// distance 1 on 3-char suffixes with a bound of 1). Locks the
+    /// composition of `<K as ClosedSet>::suggest_closest` + the
+    /// caller's prefix literal so the operator-facing "did you mean"
+    /// hint reads as a full prefixed tag they can copy-paste back into
+    /// their `checks.lisp`. Also witnesses `<K as ClosedSet>::SET_LABEL`
+    /// propagates verbatim through the hint (`IntentKind::SET_LABEL`
+    /// = `"intent kind"`).
+    #[test]
+    fn strip_and_classify_prefixed_kind_threads_prefix_hint_when_suffix_is_near_miss() {
+        let unreachable_probe = |_kind: IntentKind| unreachable!("probe fires only on Ok");
+        let out = strip_and_classify_prefixed_kind::<IntentKind, _>(
+            "intent-nyx",
+            "intent-",
+            unreachable_probe,
+        );
+        let Some(Err(err)) = out else {
+            panic!("expected Some(Err(_)) on prefix-hit + bad-suffix, got {out:?}");
+        };
+        let hint = err
+            .hint
+            .expect("prefix hit + bad suffix must populate hint");
+        assert_eq!(hint.set_label, "intent kind");
+        assert_eq!(hint.suffix, "nyx");
+        assert_eq!(hint.hinted_tag.as_deref(), Some("intent-nix"));
+    }
+
+    /// FAR-MISS pin — a suffix outside the substrate-wide bounded edit
+    /// distance leaves [`PrefixHint::hinted_tag`] absent (the
+    /// conservative-suggestion contract silent-over-guessing inherits
+    /// from `tatara_lisp::domain::suggest`). Locks the boundary at
+    /// which the hint stops emitting — a regression that widened the
+    /// edit-distance bound would surface HERE by pinning a suggestion
+    /// for random garbage.
+    #[test]
+    fn strip_and_classify_prefixed_kind_leaves_hint_tag_absent_when_suffix_is_far_miss() {
+        let unreachable_probe = |_kind: IntentKind| unreachable!("probe fires only on Ok");
+        let out = strip_and_classify_prefixed_kind::<IntentKind, _>(
+            "intent-completely-not-a-thing",
+            "intent-",
+            unreachable_probe,
+        );
+        let Some(Err(err)) = out else {
+            panic!("expected Some(Err(_)) on prefix-hit + far-miss suffix, got {out:?}");
+        };
+        let hint = err
+            .hint
+            .expect("prefix hit populates hint even without a suggestion");
+        assert_eq!(hint.set_label, "intent kind");
+        assert_eq!(hint.suffix, "completely-not-a-thing");
+        assert!(
+            hint.hinted_tag.is_none(),
+            "far-miss suffix must not carry a hinted_tag, got {:?}",
+            hint.hinted_tag,
+        );
+    }
+
+    /// FIXED-TAG-MISS pin — a tag that matched NO known prefix (the
+    /// caller's fixed-tag match tail fell through to `_ =>
+    /// Err(UnknownRequireTag::default())`) carries an absent hint. The
+    /// substrate primitive is not even called on this path — the pin
+    /// is here for symmetry with the two prefix-hit pins above and to
+    /// witness the [`UnknownRequireTag::default`] constructor produces
+    /// an empty-hint value byte-for-byte.
+    #[test]
+    fn unknown_require_tag_default_has_no_prefix_hint() {
+        let err = UnknownRequireTag::default();
+        assert!(
+            err.hint.is_none(),
+            "default UnknownRequireTag carries no hint"
+        );
+    }
+
+    /// DISPLAY-COMPOSITION pin — a hint-bearing [`UnknownRequireTag`]
+    /// renders through [`std::fmt::Display`] as a parenthetical
+    /// adornment the caller's diagnostic composer appends after the
+    /// tag echo; a hint-free one renders to the empty string so the
+    /// pre-lift bare tag-echo path is byte-preserved. Also witnesses
+    /// [`PrefixHint::Display`]'s two branches (`hinted_tag: Some`
+    /// vs `None`) render the two operator-facing shapes the
+    /// diagnostic-composer relies on.
+    #[test]
+    fn unknown_require_tag_display_renders_hint_when_present_else_empty() {
+        let bare = UnknownRequireTag::default();
+        assert_eq!(format!("{bare}"), "");
+        let with_suggestion = UnknownRequireTag::with_hint(PrefixHint {
+            set_label: "intent kind",
+            suffix: "nyx".into(),
+            hinted_tag: Some("intent-nix".into()),
+        });
+        assert_eq!(
+            format!("{with_suggestion}"),
+            " (unknown intent kind: \"nyx\"; did you mean \"intent-nix\"?)",
+        );
+        let without_suggestion = UnknownRequireTag::with_hint(PrefixHint {
+            set_label: "intent kind",
+            suffix: "completely-not-a-thing".into(),
+            hinted_tag: None,
+        });
+        assert_eq!(
+            format!("{without_suggestion}"),
+            " (unknown intent kind: \"completely-not-a-thing\")",
+        );
+    }
+
+    /// CATEGORY-EQUALITY pin — [`UnknownRequireTag`]'s manual
+    /// `PartialEq` impl treats all instances as equal regardless of
+    /// their [`PrefixHint`] contents. This preserves the pre-lift
+    /// unit-struct equality semantics every `assert_eq!(...,
+    /// Err(UnknownRequireTag::default()))` test site relies on, and
+    /// documents that the hint is a DIAGNOSTIC ADORNMENT rather than
+    /// a classification-identity dimension — the error IS the
+    /// coarse "unknown require tag" category; the hint is what the
+    /// operator sees, not what the classifier keys on. Locks the
+    /// contract so a future derive of `PartialEq` (which would fold
+    /// the hint into equality) fails HERE.
+    #[test]
+    fn unknown_require_tag_equality_ignores_prefix_hint_contents() {
+        let bare = UnknownRequireTag::default();
+        let with_hint = UnknownRequireTag::with_hint(PrefixHint {
+            set_label: "intent kind",
+            suffix: "nyx".into(),
+            hinted_tag: Some("intent-nix".into()),
+        });
+        let with_other_hint = UnknownRequireTag::with_hint(PrefixHint {
+            set_label: "lifetime kind",
+            suffix: "burst".into(),
+            hinted_tag: None,
+        });
+        assert_eq!(bare, with_hint);
+        assert_eq!(with_hint, with_other_hint);
+        assert_eq!(with_other_hint, bare);
+    }
+
+    /// END-TO-END pin — an operator authoring `:requires (intent-Nyx)`
+    /// in `checks.lisp` sees the near-miss hint threaded all the way
+    /// from the [`ClosedSet::suggest_closest`] substrate primitive
+    /// through [`strip_and_classify_prefixed_kind`] into the point-
+    /// domain [`RequireTagDomain::unknown_tag_diagnostic`] composer's
+    /// operator-facing prose. Locks the transitive propagation across
+    /// FIVE substrate boundaries (`ClosedSet::find_by_label` fail →
+    /// `ClosedSet::suggest_closest` succeed → `PrefixHint`
+    /// materialization → `UnknownRequireTag` boxing → `Display`
+    /// composition into the domain's diagnostic prefix), so a
+    /// regression that severed any one of them surfaces HERE at ONE
+    /// caller-side witness instead of at a runtime `cargo run --bin
+    /// tatara-check` sweep against a live `checks.lisp` reference.
+    #[test]
+    fn point_domain_unknown_tag_diagnostic_carries_near_miss_hint_end_to_end() {
+        let point = require_tag_domain_by_name("point").expect("point domain registered");
+        let err = super::UnknownRequireTag::with_hint(PrefixHint {
+            set_label: "intent kind",
+            suffix: "nyx".into(),
+            hinted_tag: Some("intent-nix".into()),
+        });
+        assert_eq!(
+            point.unknown_tag_diagnostic("intent-nyx", &err),
+            "unknown :requires tag: intent-nyx (unknown intent kind: \"nyx\"; \
+             did you mean \"intent-nix\"?)",
         );
     }
 
@@ -8888,7 +9197,7 @@ mod tests {
                 unreachable!("later row must not evaluate after first prefix hit")
             }),
         );
-        assert_eq!(out, Some(Err(UnknownRequireTag)));
+        assert_eq!(out, Some(Err(UnknownRequireTag::default())));
     }
 
     // ── evaluate_ephemeral_require_tag substrate pins ────────────────
@@ -9017,7 +9326,7 @@ mod tests {
         for tag in ["totally-unknown", "aplicaca", "cl-auth", ""] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, tag),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "out-of-vocabulary tag {tag:?} must classify as UnknownRequireTag",
             );
         }
@@ -9078,11 +9387,11 @@ mod tests {
         // parity. A future trait binding will consume both.
         assert_eq!(
             evaluate_ephemeral_require_tag(&eph, "nope"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
         );
         assert_eq!(
             evaluate_point_require_tag(&point, "nope"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
         );
     }
 
@@ -9180,7 +9489,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -9478,7 +9787,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -9503,7 +9812,7 @@ mod tests {
         let spec = ephemeral_fixture();
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "teardown-policy-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `teardown-policy-` must classify as UnknownRequireTag on an ephemeral spec",
         );
     }
@@ -9666,7 +9975,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -9690,7 +9999,7 @@ mod tests {
         };
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "export-when-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `export-when-` must classify as UnknownRequireTag even with populated exports",
         );
     }
@@ -9867,7 +10176,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -9891,7 +10200,7 @@ mod tests {
         };
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "channel-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `channel-` must classify as UnknownRequireTag even with populated exports",
         );
     }
@@ -10109,7 +10418,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -10133,7 +10442,7 @@ mod tests {
         };
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "report-format-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `report-format-` must classify as UnknownRequireTag even with populated exports",
         );
     }
@@ -10300,7 +10609,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -10323,7 +10632,7 @@ mod tests {
         };
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "artifact-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `artifact-` must classify as UnknownRequireTag even with populated exports",
         );
     }
@@ -10555,7 +10864,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, garbage),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
             );
         }
@@ -10579,7 +10888,7 @@ mod tests {
         };
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "report-payload-shape-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `report-payload-shape-` must classify as UnknownRequireTag even with populated exports",
         );
     }
@@ -10754,7 +11063,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, tag),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown ephemeral point-type suffix {tag:?} must classify as UnknownRequireTag",
             );
         }
@@ -10770,7 +11079,7 @@ mod tests {
         let spec = ephemeral_fixture();
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "point-type-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `point-type-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -10940,7 +11249,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, tag),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown ephemeral substrate suffix {tag:?} must classify as UnknownRequireTag",
             );
         }
@@ -10956,7 +11265,7 @@ mod tests {
         let spec = ephemeral_fixture();
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "substrate-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `substrate-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -11137,7 +11446,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, tag),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown ephemeral calm suffix {tag:?} must classify as UnknownRequireTag",
             );
         }
@@ -11153,7 +11462,7 @@ mod tests {
         let spec = ephemeral_fixture();
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "calm-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `calm-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -11336,7 +11645,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, tag),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown ephemeral data-classification suffix {tag:?} must classify as UnknownRequireTag",
             );
         }
@@ -11352,7 +11661,7 @@ mod tests {
         let spec = ephemeral_fixture();
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "data-classification-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `data-classification-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -11542,7 +11851,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, tag),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown ephemeral horizon suffix {tag:?} must classify as UnknownRequireTag",
             );
         }
@@ -11558,7 +11867,7 @@ mod tests {
         let spec = ephemeral_fixture();
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "horizon-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `horizon-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -11768,7 +12077,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, tag),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown ephemeral optimization-direction suffix {tag:?} must classify as UnknownRequireTag",
             );
         }
@@ -11784,7 +12093,7 @@ mod tests {
         let spec = ephemeral_fixture();
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "optimization-direction-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `optimization-direction-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -12012,7 +12321,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, tag),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown ephemeral input-arity suffix {tag:?} must classify as UnknownRequireTag",
             );
         }
@@ -12028,7 +12337,7 @@ mod tests {
         let spec = ephemeral_fixture();
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "input-arity-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `input-arity-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -12234,7 +12543,7 @@ mod tests {
         ] {
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, tag),
-                Err(UnknownRequireTag),
+                Err(UnknownRequireTag::default()),
                 "unknown ephemeral output-arity suffix {tag:?} must classify as UnknownRequireTag",
             );
         }
@@ -12250,7 +12559,7 @@ mod tests {
         let spec = ephemeral_fixture();
         assert_eq!(
             evaluate_ephemeral_require_tag(&spec, "output-arity-"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "bare `output-arity-` prefix must classify as UnknownRequireTag",
         );
     }
@@ -12541,7 +12850,7 @@ mod tests {
         }
         assert_eq!(
             (compiled.classify)("not-a-tag"),
-            Err(UnknownRequireTag),
+            Err(UnknownRequireTag::default()),
             "out-of-vocabulary tag must classify as UnknownRequireTag through the trait",
         );
     }
@@ -12602,27 +12911,39 @@ mod tests {
                 "trait-routed classification must agree with direct primitive on tag {tag:?}",
             );
         }
-        assert_eq!((compiled.classify)("not-a-tag"), Err(UnknownRequireTag),);
+        assert_eq!(
+            (compiled.classify)("not-a-tag"),
+            Err(UnknownRequireTag::default()),
+        );
     }
 
     /// UNKNOWN-TAG-PROSE pin — each domain's `unknown_tag_diagnostic`
     /// composes the exact pre-lift `format!` shape both pre-lift
-    /// arms restated inside `check_lisp_compiles`. Load-bearing: an
-    /// operator that greps for the pre-lift substring
-    /// `"unknown :requires tag"` sees the SAME prose post-lift; the
-    /// ephemeral-domain-specific `" for ephemeral domain:"` mid-clause
-    /// stays byte-identical. A regression that dropped the mid-clause
-    /// or renamed the two prose shapes surfaces HERE.
+    /// arms restated inside `check_lisp_compiles`, PLUS the post-lift
+    /// [`UnknownRequireTag`] adornment appended through the
+    /// [`std::fmt::Display`] boundary. Load-bearing: an operator that
+    /// greps for the pre-lift substring `"unknown :requires tag"` sees
+    /// the SAME prose post-lift; the ephemeral-domain-specific `" for
+    /// ephemeral domain:"` mid-clause stays byte-identical. A hint-
+    /// free error (a fixed-tag-miss path where no prefix stripped)
+    /// renders to the bare tag echo byte-for-byte the way pre-lift
+    /// did — the adornment is empty when the hint slot is [`None`].
+    /// A hint-bearing error (a KNOWN prefix + bad suffix) renders the
+    /// parenthetical adornment [`PrefixHint`]'s [`std::fmt::Display`]
+    /// composes. A regression that dropped the mid-clause, renamed
+    /// the two prose shapes, or accidentally stringified the hint on
+    /// a fixed-tag-miss error surfaces HERE.
     #[test]
     fn require_tag_domain_unknown_tag_diagnostic_matches_pre_lift_shape() {
         let point = require_tag_domain_by_name("point").expect("point domain registered");
+        let bare = UnknownRequireTag::default();
         assert_eq!(
-            point.unknown_tag_diagnostic("intent-frobnicate"),
+            point.unknown_tag_diagnostic("intent-frobnicate", &bare),
             "unknown :requires tag: intent-frobnicate",
         );
         let eph = require_tag_domain_by_name("ephemeral").expect("ephemeral domain registered");
         assert_eq!(
-            eph.unknown_tag_diagnostic("aplicaca"),
+            eph.unknown_tag_diagnostic("aplicaca", &bare),
             "unknown :requires tag for ephemeral domain: aplicaca",
         );
     }

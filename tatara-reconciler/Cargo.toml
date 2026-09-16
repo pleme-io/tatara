@@ -24,6 +24,14 @@ tatara-process = { path = "../tatara-process" , version = "0.2.65" }
 tatara-lattice = { path = "../tatara-lattice" , version = "0.2.65" }
 tatara-lisp = { path = "../tatara-lisp" , version = "0.3" }
 tatara-domains = { path = "../tatara-domains" , version = "0.2.65" }
+# `tatara-check` binds a generic `K: tatara_closed_set::ClosedSet` in
+# `strip_and_classify_prefixed_kind` so the near-miss hint threaded onto
+# `UnknownRequireTag` composes through the SAME `SET_LABEL` /
+# `find_by_label` / `suggest_closest` substrate primitives every
+# `#[derive(tatara_closed_set::DeriveClosedSet)]` enum in tatara-process
+# already implements — no per-K FromStr err-mapping restatement, and no
+# per-K near-miss metric on the caller side.
+tatara-closed-set = "0.3"
 
 # Typed config + hot-reload (XDG discovery + env override + ArcSwap).
 # Git-sourced rather than path — the substrate's Nix image build

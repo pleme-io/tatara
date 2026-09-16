@@ -1899,7 +1899,12 @@ where
 /// [`tests::evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_minimize_only`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_optimization_direction_suffix`],
 /// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_optimization_direction_prefix`],
-/// and [`tests::evaluate_ephemeral_require_tag_optimization_direction_matches_point_peer_through_resolved_classification`].
+/// [`tests::evaluate_ephemeral_require_tag_optimization_direction_matches_point_peer_through_resolved_classification`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_iff_input_arity_matches_authored_classification_per_kind`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_input_arity_many_only`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_unknown_input_arity_suffix`],
+/// [`tests::evaluate_ephemeral_require_tag_returns_unknown_on_bare_input_arity_prefix`],
+/// and [`tests::evaluate_ephemeral_require_tag_input_arity_matches_point_peer_through_resolved_classification`].
 fn evaluate_ephemeral_require_tag(
     spec: &tatara_process::ephemeral::EphemeralSpec,
     tag: &str,
@@ -1989,6 +1994,11 @@ fn evaluate_ephemeral_require_tag(
         "optimization-direction-",
         |kind| spec.has_optimization_direction(kind),
     ) {
+        return res;
+    }
+    if let Some(res) = strip_and_classify_prefixed_kind::<Arity, _>(tag, "input-arity-", |kind| {
+        spec.has_input_arity(kind)
+    }) {
         return res;
     }
     match tag {
@@ -11807,6 +11817,228 @@ mod tests {
                     evaluate_ephemeral_require_tag(&eph, &tag),
                     evaluate_point_require_tag(&point, &tag),
                     "authored classification.horizon.direction=Some({populated:?}): parity drift on tag {tag:?}",
+                );
+            }
+        }
+    }
+
+    // ── evaluate_ephemeral_require_tag / input-arity-<kind> pins ─────
+    //
+    // Fail-before-pass-after granularity: the ephemeral surface's
+    // `input-arity-<kind>` prefix family did not route pre-lift — the
+    // vocabulary block on `evaluate_ephemeral_require_tag` had peers
+    // to the point surface's twelfth through seventeenth families
+    // (`point-type-<kind>` + `substrate-<kind>` + `calm-<kind>` +
+    // `data-classification-<kind>` + `horizon-<kind>` +
+    // `optimization-direction-<kind>`) but NOT the twenty-third
+    // (`input-arity-<kind>`). Post-lift the routing dispatches through
+    // the ONE substrate primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::has_input_arity`] +
+    // the sibling resolver
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`]
+    // + the sibling closed-set primitive
+    // [`tatara_process::classification::Classification::has_input_arity`]
+    // (which composes the many-to-one typed projection
+    // [`ConvergencePointType::input_arity`] on `self.point_type`) — a
+    // regression that (a) hard-coded the arm to a single kind, (b)
+    // inverted the resolver's `None` fill-through, (c) dropped the
+    // `.input_arity()` typed projection call, (d) inverted the
+    // projection (`One ↔ Many`), (e) crossed wires with the sibling
+    // `ConvergencePointType::output_arity` projection, or (f) drifted
+    // the fill-through baseline from the sibling `From<EphemeralSpec>`
+    // lowering, fails HERE at the substrate primitives rather than as
+    // silent operator-facing drift at the ephemeral
+    // `input-arity-<kind>` require-tag surface. SEVENTH classification-
+    // axis peer on the ephemeral surface — FIRST occupant on the
+    // (Option-parent × NESTED-STRUCT-scalar-child × derived-typed-
+    // projection) corner on the ephemeral surface, opening the
+    // corner's ephemeral-side traversal shape. [`Arity`] carries no
+    // `#[default]`, so no default-arm short-circuit shortcut applies
+    // here — the absent-classification baseline routes entirely
+    // through the projection's bucket-membership decision on
+    // `default_ephemeral_class`'s `point_type: Gate` (projects to
+    // `Arity::Many` on the input side).
+
+    /// AUTHORED-slot PROJECTED-VARIANT pin — the ephemeral
+    /// `input-arity-<kind>` prefix family dispatches through the
+    /// autoderived [`Arity`] `FromStr` + the substrate
+    /// [`tatara_process::ephemeral::EphemeralSpec::has_input_arity`] +
+    /// the sibling resolver
+    /// [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`]
+    /// on the operator-authored [`Classification`] slot's
+    /// [`ConvergencePointType`] projection. Sweeps the
+    /// [`ConvergencePointType::ALL`] × [`Arity::ALL`] cross so a stray
+    /// hard-coded arm, a dropped projection call, a wire-cross with
+    /// [`ConvergencePointType::output_arity`], or an inverted projection
+    /// fails HERE. Byte-for-byte peer of the point-surface pin
+    /// [`evaluate_point_require_tag_returns_true_iff_input_arity_matches_projection_per_point_type`]
+    /// on the SAME closed set, routed through the ephemeral sugar
+    /// surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_iff_input_arity_matches_authored_classification_per_kind(
+    ) {
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let spec = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let projected = populated.input_arity();
+            for query in Arity::ALL {
+                let tag = format!("input-arity-{}", query.as_str());
+                let expected = query == projected;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral classification.point_type={populated:?} (projects to {projected:?}): tag {tag:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// ABSENT-slot PROJECTED-BASELINE pin — an [`EphemeralSpec`] whose
+    /// `:classification` slot is omitted from the `(defephemeral …)`
+    /// form (`None` on the wire) reads as the workspace-baseline
+    /// [`tatara_process::classification::Classification::gate_compute`]
+    /// value through
+    /// [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`],
+    /// which fills `point_type: Gate`, and
+    /// [`ConvergencePointType::input_arity`] projects `Gate →
+    /// Arity::Many`. Pins the (Option-parent × NESTED-STRUCT-scalar-
+    /// child × derived-typed-projection) corner's baseline projection
+    /// on the SEVENTH classification-axis peer through a chain of ONE
+    /// fill-through composed with ONE many-to-one projection:
+    /// `input-arity-Many` reads `true`, `input-arity-One` reads
+    /// `false`. [`Arity`] carries no `#[default]`, so this pin exercises
+    /// the projection's bucket-membership decision on the baseline
+    /// rather than any default-arm short-circuit. A regression that
+    /// promoted the baseline's `point_type` off `Gate`, dropped the
+    /// projection call, inverted the projection, or crossed wires with
+    /// [`ConvergencePointType::output_arity`] (which projects
+    /// `Gate → Arity::One`, flipping the baseline answer from `Many`
+    /// to `One`) fails HERE.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_input_arity_many_only(
+    ) {
+        let spec = EphemeralSpec {
+            classification: None,
+            ..ephemeral_fixture()
+        };
+        for kind in Arity::ALL {
+            let tag = format!("input-arity-{}", kind.as_str());
+            let expected = kind == Arity::Many;
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &tag),
+                Ok(expected),
+                "absent ephemeral classification (defaults to gate_compute, point_type=Gate → input_arity=Many): tag {tag:?} drifted",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `input-arity-<garbage>` classifies as
+    /// [`UnknownRequireTag`] rather than silently returning
+    /// `Ok(false)`. Sweeps case-variants of a known [`Arity`] name
+    /// plus pure garbage plus cross-axis rejects (raw
+    /// [`ConvergencePointType`] / [`SubstrateType`] / [`CalmClassification`]
+    /// / [`DataClassification`] / [`HorizonKind`] /
+    /// [`OptimizationDirection`] identifiers must NOT resolve here). A
+    /// regression that folded case (`FromStr` gone `case_insensitive`)
+    /// or gained a permissive-fallthrough (e.g. unknown suffix routes
+    /// to `Many`) would silently reclassify an unknown tag as `Ok(_)`
+    /// and fail HERE.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_input_arity_suffix() {
+        let spec = ephemeral_fixture();
+        for tag in [
+            "input-arity-one",
+            "input-arity-many",
+            "input-arity-ONE",
+            "input-arity-MANY",
+            "input-arity-Zero",
+            "input-arity-Bogus",
+            "input-arity-Gate",     // point-type variant leaking
+            "input-arity-Compute",  // substrate variant leaking
+            "input-arity-Monotone", // calm variant leaking
+            "input-arity-Internal", // data-classification variant leaking
+            "input-arity-Bounded",  // horizon-kind variant leaking
+            "input-arity-Minimize", // optimization-direction variant leaking
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, tag),
+                Err(UnknownRequireTag),
+                "unknown ephemeral input-arity suffix {tag:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-prefix pin — `"input-arity-"` (empty suffix) MUST classify
+    /// as [`UnknownRequireTag`] rather than as any variant. Locks the
+    /// suffix-nonempty invariant at the substrate
+    /// `strip_and_classify_prefixed_kind` boundary on the ephemeral
+    /// surface's SEVENTH classification-axis peer.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_input_arity_prefix() {
+        let spec = ephemeral_fixture();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "input-arity-"),
+            Err(UnknownRequireTag),
+            "bare `input-arity-` prefix must classify as UnknownRequireTag",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`evaluate_ephemeral_require_tag`] AND
+    /// through [`evaluate_point_require_tag`] on the mechanically-
+    /// lowered `ProcessSpec` via `<eph.clone().into()>`. Sweeps
+    /// (`None` classification, `Some(_)` classification on every
+    /// [`ConvergencePointType::ALL`] variant) × every [`Arity::ALL`]
+    /// query so a future regression on either surface's resolver (an
+    /// ephemeral-side fill-through drift, a point-side projection
+    /// drift, a wire-cross with `output_arity` on either side) fails
+    /// HERE. Byte-for-byte peer of the sibling two-surface parity pins
+    /// on the FIRST through SIXTH classification-axis peers
+    /// (`point-type-<kind>`, `substrate-<kind>`, `calm-<kind>`,
+    /// `data-classification-<kind>`, `horizon-<kind>`,
+    /// `optimization-direction-<kind>`) — the SEVENTH classification-
+    /// axis two-surface parity contract on the ephemeral surface, and
+    /// the FIRST on the (Option-parent × NESTED-STRUCT-scalar-child ×
+    /// derived-typed-projection) corner.
+    #[test]
+    fn evaluate_ephemeral_require_tag_input_arity_matches_point_peer_through_resolved_classification(
+    ) {
+        // Absent classification baseline — both surfaces resolve
+        // through the SAME `default_ephemeral_class` fill-through and
+        // agree on every variant.
+        let eph = EphemeralSpec {
+            classification: None,
+            ..ephemeral_fixture()
+        };
+        let point: ProcessSpec = eph.clone().into();
+        for query in Arity::ALL {
+            let tag = format!("input-arity-{}", query.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph, &tag),
+                evaluate_point_require_tag(&point, &tag),
+                "None-classification parity drift on tag {tag:?}",
+            );
+        }
+        // Authored classification: both surfaces read the same authored
+        // point_type and route through the same projection.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let eph = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let point: ProcessSpec = eph.clone().into();
+            for query in Arity::ALL {
+                let tag = format!("input-arity-{}", query.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&eph, &tag),
+                    evaluate_point_require_tag(&point, &tag),
+                    "authored classification.point_type={populated:?}: parity drift on tag {tag:?}",
                 );
             }
         }

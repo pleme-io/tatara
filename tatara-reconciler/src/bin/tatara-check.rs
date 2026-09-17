@@ -2371,6 +2371,48 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "telemetry-substrate",
         probe: |s| s.classification.substrate_is_telemetry(),
     },
+    // `monotone-calm` — TWELFTH occupant on the (parent × derived-
+    // nullary-bool) corner of the workspace-wide fixed-tag algebra
+    // after the two `horizon.*`, one `coordination-required`, two
+    // `data-*`, three `point-*`, and three `*-substrate` arms opened
+    // + populated the corner; SECOND occupant threading the
+    // classification-`calm` axis — CLOSES the calm axis on the corner
+    // into the FULL binary XOR partition contract
+    // `monotone-calm ⊕ coordination-required`. Composes the ONE
+    // substrate primitive
+    // [`tatara_process::classification::Classification::calm_is_monotone`]
+    // that walks `self.calm.is_monotone()` — the CALM theorem's
+    // positive-framing image (Hellerstein 2010: "Consistency As
+    // Logical Monotonicity") as a fixed-tag audit surface. Answers
+    // the gossip-eligibility-facing question "can this Process's
+    // distributed state changes ride gossip rather than Raft
+    // (because they are monotone per CALM)?" — `true` on the
+    // `Monotone` default (unadorned Process is gossip-eligible under
+    // the CALM theorem), `false` on `NonMonotone` (requires Raft
+    // coordination). Byte-for-byte symmetrical with the ephemeral
+    // surface's `monotone-calm` arm on [`EPHEMERAL_FIXED_TAG_ARMS`]
+    // via
+    // [`tatara_process::ephemeral::EphemeralSpec::calm_is_monotone`]
+    // — both surfaces route through the SAME
+    // [`Classification::calm_is_monotone`] primitive after the
+    // ephemeral surface pays ONE resolver hop. Structural byte-for-
+    // byte peer of the sibling `coordination-required` arm above
+    // (the antisymmetric partner on the same axis): both walk the
+    // same scalar `calm` slot through ONE layer of `Default`
+    // (`CalmClassification::default = Monotone`). SECOND calm-axis
+    // peer CLOSES the calm-axis MUTEX pin
+    // (`coordination-required ⇒ ¬monotone-calm`) into the FULL
+    // binary XOR partition sealed on the closed set by
+    // `calm_classification_monotone_xor_requires_coordination` and
+    // composed through the parent-composed layer by
+    // `classification_calm_probes_form_binary_xor_partition_over_all`,
+    // the calm-axis counterpart of the ternary XOR partitions
+    // already sealed on the sibling `point_type` and `substrate`
+    // axes.
+    FixedTagArm {
+        tag: "monotone-calm",
+        probe: |s| s.classification.calm_is_monotone(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2680,6 +2722,32 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "telemetry-substrate",
         probe: |s| s.substrate_is_telemetry(),
+    },
+    // `monotone-calm` — byte-for-byte peer of the point surface's
+    // `monotone-calm` arm on [`POINT_FIXED_TAG_ARMS`] via
+    // [`Classification::calm_is_monotone`] reached through the
+    // resolver primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    // Composes the ONE ephemeral-surface substrate primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::calm_is_monotone`]
+    // that walks `self.resolved_classification().calm.is_monotone()`.
+    // Both surfaces route through the SAME
+    // [`Classification::calm_is_monotone`] primitive after the
+    // ephemeral surface pays ONE resolver hop. SECOND ephemeral-
+    // surface peer on the calm axis — CLOSES the axis into the FULL
+    // binary XOR partition contract sealed on this surface by
+    // `ephemeral_calm_probes_form_binary_xor_partition_over_all`,
+    // the resolver-hop peer of the parent-composed
+    // `classification_calm_probes_form_binary_xor_partition_over_all`.
+    // Binary counterpart of the ternary XOR partitions sealed on
+    // the sibling `point_type` and `substrate` axes on this surface
+    // by
+    // `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`
+    // and
+    // `ephemeral_substrate_probes_form_three_way_xor_partition_over_all`.
+    FixedTagArm {
+        tag: "monotone-calm",
+        probe: |s| s.calm_is_monotone(),
     },
 ];
 
@@ -11495,6 +11563,7 @@ mod tests {
                 "resource-substrate",
                 "policy-substrate",
                 "telemetry-substrate",
+                "monotone-calm",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -11519,6 +11588,7 @@ mod tests {
                 "resource-substrate",
                 "policy-substrate",
                 "telemetry-substrate",
+                "monotone-calm",
             ],
         );
     }

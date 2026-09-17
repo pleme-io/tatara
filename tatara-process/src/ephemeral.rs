@@ -2093,6 +2093,103 @@ impl EphemeralSpec {
         self.resolved_classification().substrate_is_telemetry()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s
+    /// [`crate::classification::CalmClassification`] project to `true`
+    /// under [`crate::classification::CalmClassification::is_monotone`]?
+    /// Byte-for-byte peer of [`Classification::calm_is_monotone`]
+    /// wrapped through the [`Self::resolved_classification`] resolver
+    /// so an operator-omitted `:classification` slot on
+    /// `(defephemeral …)` still answers via the substrate default.
+    /// The ONE ephemeral-surface substrate primitive that owns the
+    /// `(&EphemeralSpec) -> bool` derived-nullary-boolean walk on the
+    /// CALM-monotone-plane question — the positive framing peer of
+    /// [`Self::calm_requires_coordination`].
+    ///
+    /// # Twelfth derived-nullary-boolean peer on the ephemeral surface — CLOSES the calm axis
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], [`Self::data_is_regulated`],
+    /// [`Self::data_is_restricted`], [`Self::point_is_endomorphic`],
+    /// [`Self::point_is_diffusive`], [`Self::point_is_convergent`],
+    /// [`Self::substrate_is_resource`], [`Self::substrate_is_policy`],
+    /// and [`Self::substrate_is_telemetry`] on the ephemeral
+    /// surface's (resolver-hop × derived-nullary-bool) shape — the
+    /// TWELFTH peer overall and the SECOND peer threading the
+    /// classification-`calm` axis. This peer CLOSES the calm axis
+    /// on the ephemeral surface into the FULL binary XOR partition
+    /// contract `calm_is_monotone ⊕ calm_requires_coordination` —
+    /// sealed on this surface by
+    /// `ephemeral_calm_probes_form_binary_xor_partition_over_all`,
+    /// the resolver-hop peer of the parent-composed
+    /// `classification_calm_probes_form_binary_xor_partition_over_all`.
+    /// Structural twin of the sibling horizon-axis binary XOR
+    /// sealed on the closed set by
+    /// `horizon_kind_terminate_xor_requires_metric_axes`, lifted
+    /// through the resolver hop to the ephemeral surface. The
+    /// resolver-hop shape is byte-identical across all twelve peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `calm_is_monotone()` returns `true` iff
+    /// `self.resolved_classification().calm_is_monotone()`. The
+    /// resolver returns the authored [`Classification`] when present
+    /// and the substrate default [`Classification::gate_compute`] on
+    /// absence. Because [`Classification::gate_compute`] carries
+    /// [`crate::classification::CalmClassification::default =
+    /// Monotone`] via `#[default]`, a bare ephemeral spec with no
+    /// `:classification` slot answers `true` — every unadorned
+    /// `(defephemeral …)` reads as gossip-eligible under the
+    /// positive CALM framing, safe under Hellerstein's theorem
+    /// (monotone operations distribute without coordination). A
+    /// regression that dropped the resolver hop, probed the wrong
+    /// closed-set arm, or inverted the projection fails HERE at ONE
+    /// narrow substrate site before drifting through every
+    /// unadorned ephemeral spec's positive-CALM-framing answer.
+    /// Mirror-inverted from the sibling
+    /// `calm_requires_coordination_probes_false_on_absent_classification`
+    /// (both walk the SAME defaulted `calm` field, so
+    /// `requires_coordination = false` ⇒ `is_monotone = true` on the
+    /// closed set's disjoint XOR partition).
+    ///
+    /// # Compounding — CLOSES the calm axis on the ephemeral surface
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `monotone-calm` on `EPHEMERAL_FIXED_TAG_ARMS`
+    /// — byte-for-byte peer of the point surface's `monotone-calm`
+    /// fixed tag on `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::calm_is_monotone`] directly. The two-
+    /// surface parity contract holds by construction: both surfaces
+    /// route through the SAME [`Classification::calm_is_monotone`]
+    /// primitive after the ephemeral surface pays ONE resolver hop.
+    /// SECOND ephemeral-surface peer on the `calm` axis — CLOSES the
+    /// axis into a proven-repeatable two-peer sub-corner exactly as
+    /// the `horizon` axis is closed on the closed-set layer by
+    /// `horizon_kind_terminate_xor_requires_metric_axes`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-`calm`-axis derived-
+    /// nullary-boolean probe body composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::calm_is_monotone`]) so every downstream
+    /// (`monotone-calm` fixed tags on both surfaces in tatara-check,
+    /// future scheduler / gossip-eligibility validators reading the
+    /// positive CALM framing, future variant additions on
+    /// [`crate::classification::CalmClassification`]) binds through
+    /// the SAME `calm_is_monotone()` shape rather than restating
+    /// either the resolver walk or the closed-set projection
+    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// over composition; a future
+    /// [`crate::classification::CalmClassification`] variant lands
+    /// at ONE `ALL` entry + ONE `is_monotone` arm on the closed set
+    /// and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn calm_is_monotone(&self) -> bool {
+        self.resolved_classification().calm_is_monotone()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -5514,6 +5611,190 @@ mod tests {
             assert_eq!(
                 hits, 1,
                 "authored substrate={populated:?}: probes {buckets:?} — exactly one must be true (three-way XOR partition violated)",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::calm_is_monotone pins ─────────────────────────
+    //
+    // Fail-before-pass-after granularity: `calm_is_monotone` did not
+    // exist pre-lift on `impl EphemeralSpec` — every consumer walking
+    // the "can this ephemeral spec participate in gossip-only writes?"
+    // question went through the antisymmetric
+    // `!self.calm_requires_coordination()` or through
+    // `.resolved_classification().calm.is_monotone()`. Post-lift the
+    // TWELFTH derived-nullary-boolean peer on the ephemeral surface
+    // (SECOND on the calm axis, closing that axis into a binary XOR
+    // partition on this surface) routes through the SAME
+    // [`Self::resolved_classification`] resolver + the sibling
+    // substrate primitive
+    // [`crate::classification::Classification::calm_is_monotone`], so
+    // the two-surface parity contract holds by construction, AND the
+    // two calm-axis peers on this surface CLOSE the axis into the
+    // FULL binary XOR partition contract via
+    // `ephemeral_calm_probes_form_binary_xor_partition_over_all`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific
+    /// [`crate::classification::CalmClassification`] variant answers
+    /// [`Self::calm_is_monotone`] matching the closed set's own
+    /// [`crate::classification::CalmClassification::is_monotone`]
+    /// truth table. Sweep
+    /// [`crate::classification::CalmClassification::ALL`] so a
+    /// regression that (a) hard-coded the body to a fixed answer,
+    /// (b) inverted the projection, or (c) crossed the wires with
+    /// the sibling
+    /// [`crate::classification::CalmClassification::requires_coordination`]
+    /// projection fails HERE at the substrate primitive before
+    /// drifting through the `monotone-calm` fixed tag or the peer
+    /// point surface.
+    #[test]
+    fn calm_is_monotone_returns_calm_projection_per_kind() {
+        for populated in CalmClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.calm = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.calm_is_monotone(),
+                populated.is_monotone(),
+                "authored calm={populated:?}: calm_is_monotone() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries
+    /// [`crate::classification::CalmClassification::default = Monotone`]
+    /// via `#[default]`, and
+    /// [`crate::classification::CalmClassification::Monotone::is_monotone`]
+    /// projects `true`, so [`Self::calm_is_monotone`] returns
+    /// `true`. Pins the resolver's default-arm short-circuit through
+    /// TWO layers of `Default` ([`Classification::gate_compute`] →
+    /// [`crate::classification::CalmClassification::default`])
+    /// reaching this derived-nullary predicate. Mirror-inverted from
+    /// the sibling
+    /// `calm_requires_coordination_probes_false_on_absent_classification`
+    /// (both walk the SAME defaulted `calm` field, so
+    /// `requires_coordination = false` ⇒ `is_monotone = true` on the
+    /// closed set's disjoint XOR partition). Guarantees every
+    /// unadorned `(defephemeral …)` reads as gossip-eligible under
+    /// the positive CALM framing.
+    #[test]
+    fn calm_is_monotone_probes_true_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            spec.calm_is_monotone(),
+            "absent classification (defaults to gate_compute, calm=Monotone → is_monotone=true)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::calm_is_monotone`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.calm_is_monotone()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`crate::classification::CalmClassification::ALL`] variant) so
+    /// a future regression on either side of the resolver fails HERE
+    /// at the parity boundary. Byte-for-byte peer of
+    /// `calm_requires_coordination_matches_point_peer_through_lowered_classification`
+    /// on the SAME closed-set axis via the antisymmetric projection.
+    #[test]
+    fn calm_is_monotone_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.calm_is_monotone(),
+            lowered.classification.calm_is_monotone(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in CalmClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.calm = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.calm_is_monotone(),
+                lowered.classification.calm_is_monotone(),
+                "authored calm={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// MUTEX pin — [`Self::calm_requires_coordination`] AND
+    /// [`Self::calm_is_monotone`] are NEVER simultaneously true for
+    /// ANY [`EphemeralSpec`] (authored or defaulted). FIRST
+    /// ephemeral-surface `calm`-axis corner-peer MUTEX pin — the
+    /// calm axis's counterpart to the sibling substrate-axis
+    /// `ephemeral_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all`
+    /// on a binary (rather than ternary) closed set.
+    #[test]
+    fn ephemeral_calm_requires_coordination_and_calm_is_monotone_are_mutex_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        assert!(
+            !(eph.calm_requires_coordination() && eph.calm_is_monotone()),
+            "None-classification: calm_requires_coordination AND calm_is_monotone both true (mutex violated)",
+        );
+        // Authored classification.
+        for populated in CalmClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.calm = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            assert!(
+                !(eph.calm_requires_coordination() && eph.calm_is_monotone()),
+                "authored calm={populated:?}: calm_requires_coordination AND calm_is_monotone both true (mutex violated)",
+            );
+        }
+    }
+
+    /// BINARY XOR PARTITION pin — for the absent-classification
+    /// baseline AND every
+    /// [`crate::classification::CalmClassification::ALL`] variant,
+    /// EXACTLY ONE of [`Self::calm_is_monotone`] and
+    /// [`Self::calm_requires_coordination`] returns `true`. CLOSES
+    /// the calm-axis MUTEX pin
+    /// (`calm_requires_coordination ⇒ ¬calm_is_monotone`) into the
+    /// FULL binary XOR partition contract on the ephemeral surface
+    /// — the resolver-hop peer of the parent-composed
+    /// `classification_calm_probes_form_binary_xor_partition_over_all`
+    /// test. Binary counterpart of the ternary XOR partitions sealed
+    /// on the sibling `point_type` and `substrate` axes by
+    /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`
+    /// and
+    /// `ephemeral_substrate_probes_form_three_way_xor_partition_over_all`.
+    /// Guarantees the absent-classification case lands in the
+    /// monotone bucket (`gate_compute` → CalmClassification::Monotone
+    /// → is_monotone = true), so every unadorned `(defephemeral …)`
+    /// audits under a definite non-empty CALM bucket.
+    #[test]
+    fn ephemeral_calm_probes_form_binary_xor_partition_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let buckets = [eph.calm_is_monotone(), eph.calm_requires_coordination()];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
+        );
+        // Authored classification.
+        for populated in CalmClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.calm = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let buckets = [eph.calm_is_monotone(), eph.calm_requires_coordination()];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "authored calm={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
             );
         }
     }

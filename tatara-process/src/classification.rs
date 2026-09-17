@@ -2028,6 +2028,120 @@ impl Classification {
     pub fn substrate_is_telemetry(&self) -> bool {
         self.substrate.is_telemetry()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`]'s
+    /// [`CalmClassification`] project to `true` under
+    /// [`CalmClassification::is_monotone`]? The ONE substrate
+    /// primitive that owns the `(Classification) -> bool` derived-
+    /// nullary-predicate walk shape on the `calm` slot for the
+    /// CALM-monotone-plane question — the positive framing peer of
+    /// [`Self::calm_requires_coordination`].
+    ///
+    /// # Twelfth occupant on the (parent × derived-nullary-bool) corner — CLOSES the calm axis
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], [`Self::data_is_regulated`],
+    /// [`Self::data_is_restricted`], [`Self::point_is_endomorphic`],
+    /// [`Self::point_is_diffusive`], [`Self::point_is_convergent`],
+    /// [`Self::substrate_is_resource`], [`Self::substrate_is_policy`],
+    /// and [`Self::substrate_is_telemetry`] on the workspace-wide
+    /// (parent × derived-nullary-bool) corner of the closed-set-driven
+    /// presence-probe algebra — the TWELFTH occupant on the corner and
+    /// the SECOND peer threading the classification-`calm` axis. This
+    /// peer CLOSES the calm axis on the corner into the FULL binary
+    /// XOR partition contract `calm_is_monotone ⊕
+    /// calm_requires_coordination` — the closed-set partition sealed
+    /// on [`CalmClassification`] by
+    /// `calm_classification_monotone_xor_requires_coordination` now
+    /// composes through the parent-composed layer as a substrate-wide
+    /// theorem pinned by
+    /// `classification_calm_probes_form_binary_xor_partition_over_all`.
+    /// Structural twin of the sibling horizon-axis binary XOR
+    /// partition sealed on the closed set by
+    /// `horizon_kind_terminate_xor_requires_metric_axes` (which
+    /// composes at the closed-set layer today — the parent-composed
+    /// lift lands here as the calm axis's counterpart). The calm axis
+    /// becomes the THIRD classification axis (after `point_type`,
+    /// `substrate`) to reach the closed XOR partition landmark on
+    /// this corner, promoting the axis-closure milestone from a
+    /// twin (ternary on `point_type` + `substrate`) to a triple
+    /// (adding binary on `calm`). Direct-scalar peer of
+    /// [`Self::calm_requires_coordination`]: both walk the same
+    /// scalar `calm` slot on the parent — TWO layers of `Default`
+    /// short-circuit reaching the derived-nullary predicate
+    /// ([`Classification::gate_compute`] → [`CalmClassification::default`]).
+    /// The [`Classification::gate_compute`] baseline's default-arm
+    /// answer projects `true` HERE (Monotone default →
+    /// `is_monotone() = true`), mirror-inverted from
+    /// [`Self::calm_requires_coordination`]'s Monotone-default `false`.
+    ///
+    /// # Semantics — derived nullary boolean over the closed-set plane
+    ///
+    /// `calm_is_monotone()` returns `true` iff
+    /// `self.calm.is_monotone()`. The two-variant
+    /// [`CalmClassification`] closed set publishes the truth table:
+    /// [`CalmClassification::Monotone`] → `true` (CALM ⇒ can be
+    /// distributed without coordination); [`CalmClassification::NonMonotone`]
+    /// → `false` (CALM ⇒ requires coordination). A
+    /// [`Classification::gate_compute`] baseline answers `true`
+    /// because its `calm: CalmClassification::default() = Monotone`
+    /// field defaults via [`CalmClassification`]'s `#[default]`, so
+    /// every unadorned Process reads as gossip-eligible (safe under
+    /// the CALM theorem: monotone operations distribute without
+    /// coordination).
+    ///
+    /// A future third [`CalmClassification`] variant (a hypothetical
+    /// `ConditionallyMonotone` sentinel for CRDT joins under a fixed
+    /// schema) lands at ONE `ALL` entry + ONE `is_monotone` arm on
+    /// the closed set with the probe body untouched — the nullary-
+    /// predicate shape defers every per-variant monotonicity decision
+    /// to the closed set's own truth table
+    /// ([`CalmClassification::is_monotone`]) rather than duplicating
+    /// the discriminator sweep here.
+    ///
+    /// # Compounding — CLOSES the calm axis into a binary XOR partition
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `monotone-calm` on `POINT_FIXED_TAG_ARMS` —
+    /// byte-for-byte structural peer of the sibling
+    /// `coordination-required` fixed tag (the antisymmetric partner
+    /// on the same axis) and of every other `(parent × derived-
+    /// nullary-bool)` corner arm. The ephemeral surface publishes the
+    /// same tag via
+    /// [`crate::ephemeral::EphemeralSpec::calm_is_monotone`], which
+    /// composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (monotone-calm)` audit answers the same question on
+    /// both surfaces. SECOND calm-axis peer CLOSES the binary XOR
+    /// partition contract `is_monotone ⊕ requires_coordination`
+    /// sealed on the closed set by
+    /// `calm_classification_monotone_xor_requires_coordination`
+    /// through the parent-composed layer as a substrate-wide theorem
+    /// — the exact binary lift already sealed on the sibling
+    /// `horizon` axis at the closed-set layer by
+    /// `horizon_kind_terminate_xor_requires_metric_axes`, now with
+    /// the parent-composed layer's own XOR partition test on the
+    /// calm axis.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `monotone-calm` fixed tag in `tatara-check`, future scheduler
+    /// / coordination-mode validators reading the positive CALM
+    /// framing, future variant additions on [`CalmClassification`])
+    /// binds through the SAME `calm_is_monotone()` shape rather than
+    /// restating either `!self.calm_requires_coordination()` or
+    /// `self.calm.is_monotone()` at the callsite. THEORY.md §VI.1 —
+    /// generation over composition; a future [`CalmClassification`]
+    /// variant lands at ONE `ALL` entry + ONE `is_monotone` arm on
+    /// the closed set and this probe picks it up mechanically.
+    #[must_use]
+    pub fn calm_is_monotone(&self) -> bool {
+        self.calm.is_monotone()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -2939,6 +3053,38 @@ impl CalmClassification {
         match self {
             Self::Monotone => false,
             Self::NonMonotone => true,
+        }
+    }
+
+    /// CALM-THEOREM POSITIVE FRAMING: is this classification monotone
+    /// — i.e. can it be distributed WITHOUT coordination per the
+    /// biconditional half of Hellerstein's CALM theorem
+    /// (Consistency As Logical Monotonicity)? Closed-set match (not
+    /// `matches!`) so a future variant triggers the compiler's
+    /// exhaustiveness check at this site rather than silently
+    /// defaulting to `false` (which would silently mark a genuinely
+    /// monotone operation as coordination-required and pay the Raft
+    /// tax indefinitely) or `true` (which would silently ship a non-
+    /// monotone operation onto the no-coordination path). The typed
+    /// image of the theorem's LOAD-BEARING half: `Monotone ⇒ true`
+    /// and `NonMonotone ⇒ false` is the antisymmetric partner of
+    /// [`Self::requires_coordination`] — exactly one of
+    /// `(is_monotone, requires_coordination)` is true per variant —
+    /// pinned by `calm_classification_monotone_xor_requires_coordination`.
+    /// Mirror of [`HorizonKind::terminates`] /
+    /// [`HorizonKind::requires_metric_axes`] on the horizon axis:
+    /// both closed sets are binary and both publish their two
+    /// derived-nullary-bool projections at ONE site each so the axis
+    /// carves into complementary buckets by construction. The
+    /// positive framing is the substrate primitive Hellerstein
+    /// himself names ("Consistency As Logical Monotonicity"); a
+    /// future consumer asking "can this Process participate in
+    /// gossip-only writes?" reads [`Self::is_monotone`] rather than
+    /// re-deriving via `!requires_coordination()` at the callsite.
+    pub const fn is_monotone(self) -> bool {
+        match self {
+            Self::Monotone => true,
+            Self::NonMonotone => false,
         }
     }
 }
@@ -4157,6 +4303,51 @@ mod tests {
         let c = CalmClassification::default();
         assert_eq!(c, CalmClassification::Monotone);
         assert!(!c.requires_coordination());
+    }
+
+    /// CALM-THEOREM POSITIVE-FRAMING TRUTH-TABLE CONTRACT:
+    /// `is_monotone` implements the antisymmetric partner of
+    /// `requires_coordination` — `Monotone ⇒ true` and
+    /// `NonMonotone ⇒ false`. Pinning this table at one site means
+    /// any future consumer asking the positive CALM framing "can
+    /// this Process participate in gossip-only writes?" reads the
+    /// same projection the lattice ordering and the antisymmetric
+    /// `requires_coordination` peer read. A future variant that
+    /// flipped this mapping would have to renumber every consumer
+    /// deliberately rather than silently promoting a non-monotone
+    /// operation onto the gossip path.
+    #[test]
+    fn calm_classification_is_monotone_truth_table() {
+        assert!(CalmClassification::Monotone.is_monotone());
+        assert!(!CalmClassification::NonMonotone.is_monotone());
+    }
+
+    /// XOR PARTITION CONTRACT: for every [`CalmClassification`]
+    /// variant, EXACTLY ONE of `is_monotone` /
+    /// `requires_coordination` is true — the two predicates carve
+    /// the closed set into COMPLEMENTARY buckets (monotone ↔ no
+    /// coordination; non-monotone ↔ requires coordination), the
+    /// biconditional half of Hellerstein's CALM theorem as a
+    /// closed-set-driven proof. A future variant that returned
+    /// `true` for both (a monotone operation that nonetheless
+    /// requires coordination — a category error under CALM) or
+    /// `false` for both (an inert variant with no monotonicity
+    /// classification — nothing to dispatch on) would fail here,
+    /// forcing the author to extend either the predicates or the
+    /// [`CalmClassification`] enum deliberately. Structural twin of
+    /// [`horizon_kind_terminate_xor_requires_metric_axes`] on the
+    /// horizon axis — both binary closed sets publish their two
+    /// derived-nullary-bool projections as complementary XOR pairs
+    /// at ONE site each so the axis carves into disjoint buckets
+    /// by construction.
+    #[test]
+    fn calm_classification_monotone_xor_requires_coordination() {
+        for c in CalmClassification::ALL {
+            assert!(
+                c.is_monotone() ^ c.requires_coordination(),
+                "{c:?}: is_monotone() XOR requires_coordination() must hold",
+            );
+        }
     }
 
     /// BRIDGE ROUND-TRIP CONTRACT: every variant survives the
@@ -6886,6 +7077,162 @@ mod tests {
             assert_eq!(
                 hits, 1,
                 "substrate={populated:?}: probes {buckets:?} — exactly one must be true (three-way XOR partition violated)",
+            );
+        }
+    }
+
+    // ── Classification::calm_is_monotone substrate pins ─────────────
+    //
+    // Fail-before-pass-after granularity: [`Classification::calm_is_monotone`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the scalar [`CalmClassification`]
+    // slot's [`CalmClassification::is_monotone`] projection had no
+    // substrate owner. Post-lift the shape lives at ONE substrate
+    // primitive and every downstream (the `monotone-calm` fixed tag
+    // in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::calm_is_monotone`] peer,
+    // future scheduler / gossip-eligibility validators asking the
+    // positive CALM framing) composes against the SAME
+    // `calm_is_monotone()` shape rather than restating either
+    // `!self.calm_requires_coordination()` or the
+    // `self.calm.is_monotone()` chain at its own callsite. TWELFTH
+    // occupant of the (parent × derived-nullary-bool) corner and
+    // SECOND occupant threading the classification-`calm` axis —
+    // CLOSES the calm axis on the corner into the FULL binary XOR
+    // partition contract `calm_is_monotone ⊕ calm_requires_coordination`
+    // sealed on the closed set by
+    // `calm_classification_monotone_xor_requires_coordination` and
+    // composed through the parent-composed layer by
+    // `classification_calm_probes_form_binary_xor_partition_over_all`.
+
+    /// PER-VARIANT pin — for every [`CalmClassification`] variant, a
+    /// [`Classification`] whose `calm` field carries that variant
+    /// returns `calm_is_monotone()` matching the closed set's own
+    /// [`CalmClassification::is_monotone`] truth table. Sweep
+    /// [`CalmClassification::ALL`] so a regression that (a) hard-
+    /// coded the method body to a fixed answer (silently returning
+    /// `true` regardless of the stored variant, silently marking
+    /// every Process as gossip-eligible and shipping non-monotone
+    /// operations onto the no-coordination path), (b) inverted the
+    /// projection (silently promoting NonMonotone to "monotone"),
+    /// or (c) crossed the wires with a sibling classification-axis
+    /// probe fails HERE at the substrate primitive before drifting
+    /// through the `monotone-calm` fixed tag or the peer ephemeral
+    /// surface.
+    #[test]
+    fn classification_calm_is_monotone_matches_calm_classification_projection() {
+        for populated in CalmClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: populated,
+                data_classification: DataClassification::default(),
+            };
+            assert_eq!(
+                c.calm_is_monotone(),
+                populated.is_monotone(),
+                "calm={populated:?}: calm_is_monotone() drift from CalmClassification::is_monotone()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `calm: CalmClassification::default()` which defaults to
+    /// [`CalmClassification::Monotone`] via `#[default]`, and
+    /// [`CalmClassification::Monotone::is_monotone`] projects `true`,
+    /// so `calm_is_monotone()` returns `true`. Pins the default-arm
+    /// short-circuit through ONE layer of `Default`
+    /// (`CalmClassification`'s) at ONE narrow site — a regression
+    /// that promoted [`CalmClassification::NonMonotone`] to
+    /// `#[default]`, or that wired [`CalmClassification::Monotone`]
+    /// to `is_monotone() = false`, would fail HERE before drifting
+    /// through every unadorned Process's positive-CALM-framing
+    /// answer. Mirror-inverted from the sibling
+    /// `classification_gate_compute_calm_requires_coordination_is_false`
+    /// baseline (both walk the SAME defaulted `calm` field, so
+    /// `requires_coordination = false` ⇒ `is_monotone = true` on the
+    /// closed set's disjoint XOR partition).
+    #[test]
+    fn classification_gate_compute_calm_is_monotone_is_true() {
+        let c = Classification::gate_compute();
+        assert!(
+            c.calm_is_monotone(),
+            "gate_compute (calm=Monotone → is_monotone=true) baseline",
+        );
+    }
+
+    /// MUTEX pin — [`Classification::calm_requires_coordination`] AND
+    /// [`Classification::calm_is_monotone`] are NEVER simultaneously
+    /// true for ANY [`CalmClassification`] variant, since the closed
+    /// set's own `is_monotone` / `requires_coordination` pair carves
+    /// it into TWO disjoint buckets sealed on the closed set by
+    /// `calm_classification_monotone_xor_requires_coordination`.
+    /// FIRST calm-axis corner-peer MUTEX pin — the calm axis's
+    /// counterpart to the sibling substrate-axis
+    /// `classification_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all`
+    /// on a binary (rather than ternary) closed set.
+    #[test]
+    fn classification_calm_requires_coordination_and_calm_is_monotone_are_mutex_over_all() {
+        for populated in CalmClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: populated,
+                data_classification: DataClassification::default(),
+            };
+            assert!(
+                !(c.calm_requires_coordination() && c.calm_is_monotone()),
+                "calm={populated:?}: calm_requires_coordination AND calm_is_monotone both true (mutex violated)",
+            );
+        }
+    }
+
+    /// BINARY XOR PARTITION pin — for every [`CalmClassification`]
+    /// variant, EXACTLY ONE of
+    /// [`Classification::calm_is_monotone`] and
+    /// [`Classification::calm_requires_coordination`] returns `true`
+    /// on a [`Classification`] carrying that variant. CLOSES the
+    /// calm-axis MUTEX pin
+    /// (`calm_requires_coordination ⇒ ¬calm_is_monotone`) into the
+    /// FULL binary XOR partition contract sealed on the closed set
+    /// by `calm_classification_monotone_xor_requires_coordination`
+    /// AND now composed through the parent-composed layer as a
+    /// substrate-wide theorem. Binary counterpart of the ternary XOR
+    /// partitions sealed on the sibling `point_type` and `substrate`
+    /// axes by
+    /// `classification_point_type_probes_form_three_way_xor_partition_over_all`
+    /// and
+    /// `classification_substrate_probes_form_three_way_xor_partition_over_all`
+    /// — where those axes carve the closed set into THREE disjoint
+    /// buckets, the calm axis carves into TWO. Structural twin of
+    /// the closed-set-layer binary XOR
+    /// `horizon_kind_terminate_xor_requires_metric_axes` on the
+    /// sibling horizon axis, lifted through the parent-composed
+    /// layer to make the calm axis the THIRD classification axis to
+    /// reach a closed XOR partition landmark on this corner. A
+    /// regression that crossed the wires between the two parent-
+    /// composed probes (one probe silently composing the wrong
+    /// closed-set arm) fails HERE rather than at every downstream
+    /// consumer that trusts the two probes partition the calm slot
+    /// into disjoint buckets whose union covers every variant.
+    #[test]
+    fn classification_calm_probes_form_binary_xor_partition_over_all() {
+        for populated in CalmClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: populated,
+                data_classification: DataClassification::default(),
+            };
+            let buckets = [c.calm_is_monotone(), c.calm_requires_coordination()];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "calm={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
             );
         }
     }

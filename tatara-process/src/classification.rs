@@ -6102,13 +6102,7 @@ mod tests {
     #[test]
     fn classification_has_input_arity_returns_true_iff_projection_matches_per_kind() {
         for populated in ConvergencePointType::ALL {
-            let c = Classification {
-                point_type: populated,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             let expected_arity = populated.input_arity();
             for query in Arity::ALL {
                 assert_eq!(
@@ -6247,13 +6241,7 @@ mod tests {
     #[test]
     fn classification_has_output_arity_returns_true_iff_projection_matches_per_kind() {
         for populated in ConvergencePointType::ALL {
-            let c = Classification {
-                point_type: populated,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             let expected_arity = populated.output_arity();
             for query in Arity::ALL {
                 assert_eq!(
@@ -6617,13 +6605,7 @@ mod tests {
     #[test]
     fn classification_calm_requires_coordination_matches_calm_classification_projection() {
         for populated in CalmClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: populated,
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.calm_requires_coordination(),
                 populated.requires_coordination(),
@@ -6701,13 +6683,7 @@ mod tests {
     #[test]
     fn classification_data_is_regulated_matches_data_classification_projection() {
         for populated in DataClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: populated,
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.data_is_regulated(),
                 populated.is_regulated(),
@@ -6782,13 +6758,7 @@ mod tests {
     #[test]
     fn classification_data_is_restricted_matches_data_classification_projection() {
         for populated in DataClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: populated,
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.data_is_restricted(),
                 populated.is_restricted(),
@@ -6847,13 +6817,7 @@ mod tests {
     #[test]
     fn classification_data_is_regulated_implies_data_is_restricted_over_all() {
         for populated in DataClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: populated,
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert!(
                 !c.data_is_regulated() || c.data_is_restricted(),
                 "data_classification={populated:?}: data_is_regulated ⇒ data_is_restricted violated",
@@ -6899,13 +6863,7 @@ mod tests {
     #[test]
     fn classification_point_is_endomorphic_matches_point_type_projection() {
         for populated in ConvergencePointType::ALL {
-            let c = Classification {
-                point_type: populated,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.point_is_endomorphic(),
                 populated.is_endomorphic(),
@@ -6978,13 +6936,7 @@ mod tests {
     #[test]
     fn classification_point_is_diffusive_matches_point_type_projection() {
         for populated in ConvergencePointType::ALL {
-            let c = Classification {
-                point_type: populated,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.point_is_diffusive(),
                 populated.is_diffusive(),
@@ -7044,13 +6996,7 @@ mod tests {
     #[test]
     fn classification_point_is_endomorphic_and_point_is_diffusive_are_mutex_over_all() {
         for populated in ConvergencePointType::ALL {
-            let c = Classification {
-                point_type: populated,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert!(
                 !(c.point_is_endomorphic() && c.point_is_diffusive()),
                 "point_type={populated:?}: point_is_endomorphic AND point_is_diffusive both true (mutex violated)",
@@ -7090,13 +7036,7 @@ mod tests {
     #[test]
     fn classification_point_is_convergent_matches_point_type_projection() {
         for populated in ConvergencePointType::ALL {
-            let c = Classification {
-                point_type: populated,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.point_is_convergent(),
                 populated.is_convergent(),
@@ -7200,13 +7140,7 @@ mod tests {
     #[test]
     fn classification_substrate_is_resource_matches_substrate_projection() {
         for populated in SubstrateType::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: populated,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.substrate_is_resource(),
                 populated.is_resource(),
@@ -7277,13 +7211,7 @@ mod tests {
     #[test]
     fn classification_substrate_is_policy_matches_substrate_projection() {
         for populated in SubstrateType::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: populated,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.substrate_is_policy(),
                 populated.is_policy(),
@@ -7341,13 +7269,7 @@ mod tests {
     #[test]
     fn classification_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all() {
         for populated in SubstrateType::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: populated,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert!(
                 !(c.substrate_is_resource() && c.substrate_is_policy()),
                 "substrate={populated:?}: substrate_is_resource AND substrate_is_policy both true (mutex violated)",
@@ -7391,13 +7313,7 @@ mod tests {
     #[test]
     fn classification_substrate_is_telemetry_matches_substrate_projection() {
         for populated in SubstrateType::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: populated,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.substrate_is_telemetry(),
                 populated.is_telemetry(),
@@ -7446,13 +7362,7 @@ mod tests {
     #[test]
     fn classification_substrate_is_resource_and_substrate_is_telemetry_are_mutex_over_all() {
         for populated in SubstrateType::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: populated,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert!(
                 !(c.substrate_is_resource() && c.substrate_is_telemetry()),
                 "substrate={populated:?}: substrate_is_resource AND substrate_is_telemetry both true (mutex violated)",
@@ -7471,13 +7381,7 @@ mod tests {
     #[test]
     fn classification_substrate_is_policy_and_substrate_is_telemetry_are_mutex_over_all() {
         for populated in SubstrateType::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: populated,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert!(
                 !(c.substrate_is_policy() && c.substrate_is_telemetry()),
                 "substrate={populated:?}: substrate_is_policy AND substrate_is_telemetry both true (mutex violated)",
@@ -7565,13 +7469,7 @@ mod tests {
     #[test]
     fn classification_calm_is_monotone_matches_calm_classification_projection() {
         for populated in CalmClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: populated,
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.calm_is_monotone(),
                 populated.is_monotone(),
@@ -7619,13 +7517,7 @@ mod tests {
     #[test]
     fn classification_calm_requires_coordination_and_calm_is_monotone_are_mutex_over_all() {
         for populated in CalmClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: populated,
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert!(
                 !(c.calm_requires_coordination() && c.calm_is_monotone()),
                 "calm={populated:?}: calm_requires_coordination AND calm_is_monotone both true (mutex violated)",
@@ -7714,13 +7606,7 @@ mod tests {
     #[test]
     fn classification_data_is_public_matches_data_classification_projection() {
         for populated in DataClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: populated,
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.data_is_public(),
                 populated.is_public(),
@@ -7772,13 +7658,7 @@ mod tests {
     #[test]
     fn classification_data_is_regulated_and_data_is_public_are_mutex_over_all() {
         for populated in DataClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: populated,
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert!(
                 !(c.data_is_regulated() && c.data_is_public()),
                 "data_classification={populated:?}: data_is_regulated AND data_is_public both true (mutex violated)",

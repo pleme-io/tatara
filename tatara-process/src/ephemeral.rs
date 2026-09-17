@@ -1825,6 +1825,92 @@ impl EphemeralSpec {
         self.resolved_classification().point_is_convergent()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s
+    /// [`crate::classification::SubstrateType`] project to `true`
+    /// under [`crate::classification::SubstrateType::is_resource`]?
+    /// Byte-for-byte peer of
+    /// [`Classification::substrate_is_resource`] wrapped through the
+    /// [`Self::resolved_classification`] resolver so an operator-
+    /// omitted `:classification` slot on `(defephemeral …)` still
+    /// answers via the substrate default. The ONE ephemeral-surface
+    /// substrate primitive that owns the `(&EphemeralSpec) -> bool`
+    /// derived-nullary-boolean walk on the resource-plane bucket
+    /// question over the classification-`substrate` axis.
+    ///
+    /// # Ninth derived-nullary-boolean peer on the ephemeral surface
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`],
+    /// [`Self::data_is_regulated`], [`Self::data_is_restricted`],
+    /// [`Self::point_is_endomorphic`], [`Self::point_is_diffusive`],
+    /// and [`Self::point_is_convergent`] on the ephemeral surface's
+    /// (resolver-hop × derived-nullary-bool) shape — the NINTH peer
+    /// overall and the FIRST peer threading the classification-
+    /// `substrate` axis (the fourth of six classification axes
+    /// participating on this corner, after `horizon`, `calm`,
+    /// `data_classification`, and `point_type`). The resolver-hop
+    /// shape is byte-identical across all nine peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `substrate_is_resource()` returns `true` iff
+    /// `self.resolved_classification().substrate_is_resource()`. The
+    /// resolver returns the authored [`Classification`] when present
+    /// and the substrate default [`Classification::gate_compute`] on
+    /// absence. Because [`Classification::gate_compute`] carries
+    /// [`crate::classification::SubstrateType::Compute`] (the
+    /// canonical resource-plane substrate), a bare ephemeral spec
+    /// with no `:classification` slot answers `true` — a regression
+    /// that dropped the resolver hop, probed the wrong closed-set
+    /// arm, or inverted the projection fails HERE at ONE narrow
+    /// substrate site before drifting through every unadorned
+    /// ephemeral spec's plane-baseline answer.
+    ///
+    /// # Compounding — opens the substrate axis on the ephemeral surface
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `resource-substrate` on
+    /// `EPHEMERAL_FIXED_TAG_ARMS` — byte-for-byte peer of the point
+    /// surface's `resource-substrate` fixed tag on
+    /// `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::substrate_is_resource`] directly. The two-
+    /// surface parity contract holds by construction: both surfaces
+    /// route through the SAME
+    /// [`Classification::substrate_is_resource`] primitive after the
+    /// ephemeral surface pays ONE resolver hop. FIRST ephemeral-
+    /// surface peer on the `substrate` axis — future sibling
+    /// projections [`crate::classification::SubstrateType::is_policy`]
+    /// and [`crate::classification::SubstrateType::is_telemetry`]
+    /// compose byte-identically as future tenth + eleventh peers,
+    /// closing the axis into a proven-repeatable three-peer sub-
+    /// corner exactly as the `point_type` axis was closed on this
+    /// surface by
+    /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-`substrate`-axis derived-
+    /// nullary-boolean probe body composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::substrate_is_resource`]) so every
+    /// downstream (`resource-substrate` fixed tags on both surfaces
+    /// in tatara-check, future plane-baseline / compliance-baseline
+    /// selectors, future variant additions on
+    /// [`crate::classification::SubstrateType`]) binds through the
+    /// SAME `substrate_is_resource()` shape rather than restating
+    /// either the resolver walk or the closed-set projection
+    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// over composition; a future
+    /// [`crate::classification::SubstrateType`] variant lands at ONE
+    /// `ALL` entry + ONE `is_resource` arm on the closed set and
+    /// both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn substrate_is_resource(&self) -> bool {
+        self.resolved_classification().substrate_is_resource()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -4778,6 +4864,109 @@ mod tests {
             assert_eq!(
                 hits, 1,
                 "authored point_type={populated:?}: probes {buckets:?} — exactly one must be true (three-way XOR partition violated)",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::substrate_is_resource pins ────────────────────
+    //
+    // Fail-before-pass-after granularity: `substrate_is_resource` did
+    // not exist pre-lift on `impl EphemeralSpec` — every consumer
+    // walking the "does this ephemeral spec's substrate project to
+    // the resource plane?" question went through
+    // `.resolved_classification().substrate.is_resource()` or the
+    // lowered `ProcessSpec`'s
+    // `spec.classification.substrate.is_resource()`. Post-lift the
+    // NINTH derived-nullary-boolean peer on the ephemeral surface
+    // (FIRST on the `substrate` axis) routes through the SAME
+    // [`Self::resolved_classification`] resolver + the sibling
+    // substrate primitive
+    // [`crate::classification::Classification::substrate_is_resource`],
+    // so the two-surface parity contract holds by construction.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific
+    /// [`crate::classification::SubstrateType`] variant answers
+    /// [`Self::substrate_is_resource`] matching the closed set's own
+    /// [`crate::classification::SubstrateType::is_resource`] truth
+    /// table. Sweep [`crate::classification::SubstrateType::ALL`]
+    /// so a regression that (a) hard-coded the body to a fixed
+    /// answer, (b) inverted the projection, or (c) crossed the wires
+    /// with the sibling
+    /// [`crate::classification::SubstrateType::is_policy`] /
+    /// [`crate::classification::SubstrateType::is_telemetry`]
+    /// projections fails HERE at the substrate primitive before
+    /// drifting through the `resource-substrate` fixed tag or the
+    /// peer point surface.
+    #[test]
+    fn substrate_is_resource_returns_substrate_projection_per_kind() {
+        for populated in SubstrateType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.substrate = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.substrate_is_resource(),
+                populated.is_resource(),
+                "authored substrate={populated:?}: substrate_is_resource() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries
+    /// [`crate::classification::SubstrateType::Compute`] (the
+    /// canonical resource-plane substrate), and
+    /// [`crate::classification::SubstrateType::Compute::is_resource`]
+    /// projects `true`, so [`Self::substrate_is_resource`] returns
+    /// `true`. Pins the resolver's chosen-field baseline at ONE
+    /// narrow site — mirror-aligned with the sibling
+    /// `point_is_convergent_probes_true_on_absent_classification`
+    /// baseline (both projections on `gate_compute` chosen fields
+    /// answer `true`).
+    #[test]
+    fn substrate_is_resource_probes_true_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            spec.substrate_is_resource(),
+            "absent classification (defaults to gate_compute, substrate=Compute → is_resource=true)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::substrate_is_resource`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.substrate_is_resource()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`crate::classification::SubstrateType::ALL`] variant) so a
+    /// future regression on either side of the resolver fails HERE
+    /// at the parity boundary. Byte-for-byte peer of
+    /// `point_is_convergent_matches_point_peer_through_lowered_classification`
+    /// on a sibling classification axis.
+    #[test]
+    fn substrate_is_resource_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.substrate_is_resource(),
+            lowered.classification.substrate_is_resource(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in SubstrateType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.substrate = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.substrate_is_resource(),
+                lowered.classification.substrate_is_resource(),
+                "authored substrate={populated:?}: parity drift",
             );
         }
     }

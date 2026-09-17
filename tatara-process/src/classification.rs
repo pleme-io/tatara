@@ -1711,6 +1711,111 @@ impl Classification {
     pub fn point_is_convergent(&self) -> bool {
         self.point_type.is_convergent()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`]'s
+    /// [`SubstrateType`] project to `true` under
+    /// [`SubstrateType::is_resource`]? The ONE substrate primitive
+    /// that owns the `(Classification) -> bool` derived-nullary-
+    /// predicate walk shape on the `substrate` slot for the
+    /// resource-plane bucket question.
+    ///
+    /// # Ninth occupant on the (parent × derived-nullary-bool) corner
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`],
+    /// [`Self::data_is_regulated`], [`Self::data_is_restricted`],
+    /// [`Self::point_is_endomorphic`], [`Self::point_is_diffusive`],
+    /// and [`Self::point_is_convergent`] on the workspace-wide
+    /// (parent × derived-nullary-bool) corner of the closed-set-
+    /// driven presence-probe algebra — the NINTH occupant on the
+    /// corner and the FIRST peer threading the classification-
+    /// `substrate` axis (the fourth of six classification axes,
+    /// after `horizon`, `calm`, `data_classification`, and
+    /// `point_type`). Direct-scalar peer of
+    /// [`Self::point_is_endomorphic`] /
+    /// [`Self::point_is_diffusive`] /
+    /// [`Self::point_is_convergent`]: all four share the shape
+    /// (direct scalar closed-set field with no [`Default`] impl on
+    /// the child, so no default-arm short-circuit through the
+    /// child's `#[default]` chain). Distinct from the three
+    /// `point_type`-axis siblings on the parent slot walked
+    /// (`self.substrate` vs `self.point_type`) and on the closed set
+    /// carried ([`SubstrateType`] vs [`ConvergencePointType`]) — the
+    /// [`Classification::gate_compute`] baseline's chosen field
+    /// (`substrate: Compute`) projects `true` HERE
+    /// (`Compute.is_resource() = true`), mirror-aligned with the
+    /// [`Self::point_is_convergent`] sibling's `true`-on-baseline
+    /// answer and mirror-inverted from the two other `point_type`
+    /// peers.
+    ///
+    /// # Semantics — derived nullary boolean over the closed-set plane
+    ///
+    /// `substrate_is_resource()` returns `true` iff
+    /// `self.substrate.is_resource()`. The eight-variant
+    /// [`SubstrateType`] closed set publishes the truth table (via
+    /// the plane partition):
+    /// [`SubstrateType::Financial`] / [`SubstrateType::Compute`] /
+    /// [`SubstrateType::Network`] / [`SubstrateType::Storage`] →
+    /// `true` (resource plane — you allocate budgets from it);
+    /// [`SubstrateType::Security`] / [`SubstrateType::Identity`] /
+    /// [`SubstrateType::Observability`] /
+    /// [`SubstrateType::Regulatory`] → `false` (policy or telemetry
+    /// plane). A [`Classification::gate_compute`] baseline answers
+    /// `true` because its `substrate: Compute` field is deliberately
+    /// resource-plane.
+    ///
+    /// A future ninth [`SubstrateType`] variant lands at ONE `ALL`
+    /// entry + ONE `is_resource` arm on the closed set with the
+    /// probe body untouched — the nullary-predicate shape defers
+    /// every per-variant policy decision to the closed set's own
+    /// truth table ([`SubstrateType::is_resource`]) rather than
+    /// duplicating the discriminator sweep here.
+    ///
+    /// # Compounding — first substrate-axis peer, opens the three-way plane partition
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `resource-substrate` on
+    /// `POINT_FIXED_TAG_ARMS` — byte-for-byte structural peer of the
+    /// sibling `terminating-horizon` / `metric-axes-required` /
+    /// `coordination-required` / `data-regulated` / `data-restricted`
+    /// / `endomorphic-point` / `diffusive-point` / `convergent-point`
+    /// fixed tags on the (parent × derived-nullary-bool) corner. The
+    /// ephemeral surface publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::substrate_is_resource`],
+    /// which composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (resource-substrate)` audit answers the same
+    /// question on both surfaces. Sibling projections
+    /// [`SubstrateType::is_policy`] and
+    /// [`SubstrateType::is_telemetry`] compose byte-identically as
+    /// future tenth + eleventh corner occupants; when all three land
+    /// the three-way partition contract
+    /// `is_resource ⊕ is_policy ⊕ is_telemetry` sealed on the closed
+    /// set by `substrate_type_buckets_cover_every_variant` composes
+    /// through the parent-composed layer as a substrate-wide theorem
+    /// — the exact ternary lift already sealed on the sibling
+    /// `point_type` axis by
+    /// `classification_point_type_probes_form_three_way_xor_partition_over_all`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `resource-substrate` fixed tag in `tatara-check`, future
+    /// plane-baseline / compliance-baseline selectors, future
+    /// variant additions on [`SubstrateType`]) binds through the
+    /// SAME `substrate_is_resource()` shape rather than restating
+    /// the `classification.substrate.is_resource()` chain at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`SubstrateType`] variant lands at ONE `ALL` entry +
+    /// ONE `is_resource` arm on the closed set and this probe picks
+    /// it up mechanically.
+    #[must_use]
+    pub fn substrate_is_resource(&self) -> bool {
+        self.substrate.is_resource()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -6209,5 +6314,80 @@ mod tests {
                 "point_type={populated:?}: probes {buckets:?} — exactly one must be true (three-way XOR partition violated)",
             );
         }
+    }
+
+    // ── Classification::substrate_is_resource substrate pins ────────
+    //
+    // Fail-before-pass-after granularity: [`Classification::substrate_is_resource`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the scalar [`SubstrateType`]
+    // slot's [`SubstrateType::is_resource`] projection had no
+    // substrate owner. Post-lift the shape lives at ONE substrate
+    // primitive and every downstream (the `resource-substrate` fixed
+    // tag in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::substrate_is_resource`]
+    // peer, future plane-baseline / compliance-baseline selectors)
+    // composes against the SAME `substrate_is_resource()` shape.
+    // NINTH occupant of the (parent × derived-nullary-bool) corner
+    // and FIRST occupant threading the classification-`substrate`
+    // axis — opens the fourth of six classification axes on the
+    // corner after `horizon`, `calm`, `data_classification`, and
+    // `point_type`.
+
+    /// PER-VARIANT pin — for every [`SubstrateType`] variant, a
+    /// [`Classification`] whose `substrate` field carries that
+    /// variant returns `substrate_is_resource()` matching the closed
+    /// set's own [`SubstrateType::is_resource`] truth table. Sweep
+    /// [`SubstrateType::ALL`] so a regression that (a) hard-coded
+    /// the method body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with a sibling closed-
+    /// set projection ([`SubstrateType::is_policy`] /
+    /// [`SubstrateType::is_telemetry`]) fails HERE at the substrate
+    /// primitive before drifting through the `resource-substrate`
+    /// fixed tag or the peer ephemeral surface.
+    #[test]
+    fn classification_substrate_is_resource_matches_substrate_projection() {
+        for populated in SubstrateType::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: populated,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert_eq!(
+                c.substrate_is_resource(),
+                populated.is_resource(),
+                "substrate={populated:?}: substrate_is_resource() drift from SubstrateType::is_resource()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `substrate: SubstrateType::Compute` deliberately (NOT via
+    /// `#[default]` — [`SubstrateType`] has no `impl Default`), and
+    /// [`SubstrateType::Compute::is_resource`] projects `true`
+    /// (Compute is a resource-plane substrate you allocate budgets
+    /// from), so `substrate_is_resource()` returns `true`. Pins the
+    /// baseline's chosen-field answer at ONE narrow site — a
+    /// regression that promoted [`SubstrateType::Security`] (or any
+    /// non-resource plane) to the gate-compute baseline (silently
+    /// retargeting every unadorned Process's plane bucket), or that
+    /// wired [`SubstrateType::Compute`] to `is_resource() = false`,
+    /// would fail HERE before drifting through every unadorned
+    /// Process's plane-baseline answer. Structural peer of
+    /// `classification_gate_compute_point_is_convergent_is_true`:
+    /// both walk direct-scalar chosen fields with `true` baseline
+    /// answers (mirror-aligned with each other, mirror-inverted from
+    /// the two other `point_type`-axis peers whose baselines answer
+    /// `false`).
+    #[test]
+    fn classification_gate_compute_substrate_is_resource_is_true() {
+        let c = Classification::gate_compute();
+        assert!(
+            c.substrate_is_resource(),
+            "gate_compute (substrate=Compute → is_resource=true) baseline",
+        );
     }
 }

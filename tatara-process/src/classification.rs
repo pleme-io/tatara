@@ -1509,6 +1509,105 @@ impl Classification {
     pub fn point_is_endomorphic(&self) -> bool {
         self.point_type.is_endomorphic()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`]'s
+    /// [`ConvergencePointType`] project to `true` under
+    /// [`ConvergencePointType::is_diffusive`]? The ONE substrate
+    /// primitive that owns the `(Classification) -> bool` derived-
+    /// nullary-predicate walk shape on the `point_type` slot for the
+    /// 1→N fan-out topology-bucket question.
+    ///
+    /// # Seventh occupant on the (parent × derived-nullary-bool) corner
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`],
+    /// [`Self::data_is_regulated`], [`Self::data_is_restricted`], and
+    /// [`Self::point_is_endomorphic`] on the workspace-wide (parent ×
+    /// derived-nullary-bool) corner of the closed-set-driven presence-
+    /// probe algebra — the SEVENTH occupant on the corner and the
+    /// SECOND peer threading the classification-`point_type` axis,
+    /// pinning that axis as a proven-repeatable structural sub-corner
+    /// across TWO sibling projections rather than a one-off. Direct-
+    /// scalar peer of [`Self::point_is_endomorphic`]: the two share
+    /// the SAME parent slot (`self.point_type`), the SAME closed-set
+    /// carrier ([`ConvergencePointType`]), and the SAME chosen-field
+    /// baseline discipline ([`ConvergencePointType`] has no
+    /// [`Default`] impl, so the derived-nullary answer here does NOT
+    /// carry a substrate default-arm short-circuit through the
+    /// parent's `#[default]` chain — [`Self::gate_compute`] fixes
+    /// `point_type: Gate` deliberately, and `Gate.is_diffusive() =
+    /// false`).
+    ///
+    /// # Semantics — derived nullary boolean, disjoint from endomorphic
+    ///
+    /// `point_is_diffusive()` returns `true` iff
+    /// `self.point_type.is_diffusive()`. The eight-variant
+    /// [`ConvergencePointType`] closed set publishes the truth table
+    /// (via the (One, Many) arity cell): [`ConvergencePointType::Fork`]
+    /// / [`ConvergencePointType::Broadcast`] → `true` (1→N fan-out);
+    /// every other variant → `false` (endomorphic or convergent).
+    /// A [`Classification::gate_compute`] baseline answers `false`
+    /// deliberately (Gate is a convergent barrier, not a diffusive
+    /// fan-out).
+    ///
+    /// A future ninth [`ConvergencePointType`] variant lands at ONE
+    /// `ALL` entry + ONE `is_diffusive` arm on the closed set with the
+    /// probe body untouched — the nullary-predicate shape defers every
+    /// per-variant policy decision to the closed set's own truth
+    /// table ([`ConvergencePointType::is_diffusive`]) rather than
+    /// duplicating the discriminator sweep here.
+    ///
+    /// # Compounding — first corner-peer mutex on the `point_type` axis
+    ///
+    /// This is the FIRST corner-peer pair on the `point_type` axis
+    /// (with [`Self::point_is_endomorphic`]) whose two projections
+    /// carry a non-trivial closed-set-internal MUTEX relationship
+    /// (`point_is_endomorphic ⇒ ¬point_is_diffusive` — no variant
+    /// lands in both buckets, sealed on the closed set by
+    /// `convergence_point_type_buckets_cover_every_variant`). Distinct
+    /// from the FIRST corner-peer implication pair on the `data`
+    /// axis (`data_is_regulated ⇒ data_is_restricted`) by the
+    /// implication direction — regulated-⇒-restricted has one bucket
+    /// contained in the other, while endomorphic-vs-diffusive has
+    /// two disjoint buckets partitioning a common universe. When the
+    /// third sibling [`Self::point_is_convergent`] lands, the mutex
+    /// closes into the three-way XOR partition contract
+    /// `point_is_endomorphic ⊕ point_is_diffusive ⊕
+    /// point_is_convergent` sealed on the closed set by
+    /// `convergence_point_type_buckets_cover_every_variant` — a
+    /// substrate-wide theorem that composes through this corner
+    /// exactly as the closed-set XOR pair `terminates ^
+    /// requires_metric_axes` composes today.
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `diffusive-point` on `POINT_FIXED_TAG_ARMS` —
+    /// byte-for-byte peer of the sibling `endomorphic-point` fixed
+    /// tag. The ephemeral surface publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::point_is_diffusive`], which
+    /// composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`] so
+    /// the two-surface parity contract holds — the operator's
+    /// `:requires (diffusive-point)` audit answers the same question
+    /// on both surfaces.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `diffusive-point` fixed tag in `tatara-check`, future DAG
+    /// composition / edge-cardinality validators, future variant
+    /// additions on [`ConvergencePointType`]) binds through the SAME
+    /// `point_is_diffusive()` shape rather than restating the
+    /// `classification.point_type.is_diffusive()` chain at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`ConvergencePointType`] variant lands at ONE `ALL`
+    /// entry + ONE `is_diffusive` arm on the closed set and this
+    /// probe picks it up mechanically.
+    #[must_use]
+    pub fn point_is_diffusive(&self) -> bool {
+        self.point_type.is_diffusive()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -5775,5 +5874,121 @@ mod tests {
             !c.point_is_endomorphic(),
             "gate_compute (point_type=Gate → is_endomorphic=false) baseline",
         );
+    }
+
+    // ── Classification::point_is_diffusive substrate pins ───────────
+    //
+    // Fail-before-pass-after granularity: [`Classification::point_is_diffusive`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the scalar [`ConvergencePointType`]
+    // slot's [`ConvergencePointType::is_diffusive`] projection had no
+    // substrate owner. Post-lift the shape lives at ONE substrate
+    // primitive and every downstream (the `diffusive-point` fixed tag
+    // in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::point_is_diffusive`] peer,
+    // future DAG composition / edge-cardinality validators) composes
+    // against the SAME `point_is_diffusive()` shape. SEVENTH occupant
+    // of the (parent × derived-nullary-bool) corner and SECOND
+    // occupant threading the `point_type` axis, promoting that axis
+    // from a proven-repeatable one-off (endomorphic alone) to a
+    // proven-repeatable pair. FIRST corner-peer pair on the
+    // `point_type` axis whose two projections carry a non-trivial
+    // closed-set-internal MUTEX relationship (`point_is_endomorphic ⇒
+    // ¬point_is_diffusive`), distinct from the sibling `data` axis
+    // corner-peer pair whose two projections carry a non-trivial
+    // implication (`data_is_regulated ⇒ data_is_restricted`).
+
+    /// PER-VARIANT pin — for every [`ConvergencePointType`] variant, a
+    /// [`Classification`] whose `point_type` field carries that variant
+    /// returns `point_is_diffusive()` matching the closed set's own
+    /// [`ConvergencePointType::is_diffusive`] truth table. Sweep
+    /// [`ConvergencePointType::ALL`] so a regression that (a)
+    /// hard-coded the method body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with a sibling closed-set
+    /// projection ([`ConvergencePointType::is_endomorphic`] /
+    /// [`ConvergencePointType::is_convergent`]) fails HERE at the
+    /// substrate primitive before drifting through the
+    /// `diffusive-point` fixed tag or the peer ephemeral surface.
+    #[test]
+    fn classification_point_is_diffusive_matches_point_type_projection() {
+        for populated in ConvergencePointType::ALL {
+            let c = Classification {
+                point_type: populated,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert_eq!(
+                c.point_is_diffusive(),
+                populated.is_diffusive(),
+                "point_type={populated:?}: point_is_diffusive() drift from ConvergencePointType::is_diffusive()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `point_type: ConvergencePointType::Gate` deliberately (NOT via
+    /// `#[default]` — [`ConvergencePointType`] has no `impl Default`),
+    /// and [`ConvergencePointType::Gate::is_diffusive`] projects
+    /// `false` (Gate is N→1 convergent, not 1→N diffusive), so
+    /// `point_is_diffusive()` returns `false`. Pins the baseline's
+    /// chosen-field answer at ONE narrow site — a regression that
+    /// promoted [`ConvergencePointType::Fork`] to the gate-compute
+    /// baseline, or that wired [`ConvergencePointType::Gate`] to
+    /// `is_diffusive() = true`, would fail HERE before drifting
+    /// through every unadorned Process's DAG-composition answer.
+    /// SECOND direct-scalar corner peer whose parent-composed baseline
+    /// is a chosen-field answer (peer of
+    /// `classification_gate_compute_point_is_endomorphic_is_false`).
+    #[test]
+    fn classification_gate_compute_point_is_diffusive_is_false() {
+        let c = Classification::gate_compute();
+        assert!(
+            !c.point_is_diffusive(),
+            "gate_compute (point_type=Gate → is_diffusive=false) baseline",
+        );
+    }
+
+    /// MUTEX pin — [`Classification::point_is_endomorphic`] AND
+    /// [`Classification::point_is_diffusive`] are NEVER simultaneously
+    /// true for ANY [`ConvergencePointType`] variant, since the closed
+    /// set's own `is_endomorphic` / `is_diffusive` / `is_convergent`
+    /// triple carves it into THREE disjoint buckets (sealed on the
+    /// closed set by
+    /// `convergence_point_type_buckets_cover_every_variant`). Sweep
+    /// [`ConvergencePointType::ALL`] so a regression that crossed the
+    /// wires between the two corner peers at the parent-composed layer
+    /// (one probe silently composing the wrong closed-set arm) fails
+    /// HERE rather than at every downstream consumer that trusts the
+    /// two probes partition the point-type slot into disjoint buckets.
+    /// FIRST corner-peer pair on the workspace-wide (parent × derived-
+    /// nullary-bool) corner whose two projections carry a non-trivial
+    /// closed-set-internal MUTEX relationship (distinct from the
+    /// sibling `data`-axis IMPLICATION pair sealed by
+    /// `classification_data_is_regulated_implies_data_is_restricted_over_all`
+    /// — that pair contains one bucket in another; this pair
+    /// disjointly partitions two buckets of a three-way carving).
+    /// When [`Classification::point_is_convergent`] lands the mutex
+    /// closes into the full three-way XOR partition contract
+    /// `point_is_endomorphic ⊕ point_is_diffusive ⊕
+    /// point_is_convergent` composed through this corner as a
+    /// substrate-wide theorem.
+    #[test]
+    fn classification_point_is_endomorphic_and_point_is_diffusive_are_mutex_over_all() {
+        for populated in ConvergencePointType::ALL {
+            let c = Classification {
+                point_type: populated,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert!(
+                !(c.point_is_endomorphic() && c.point_is_diffusive()),
+                "point_type={populated:?}: point_is_endomorphic AND point_is_diffusive both true (mutex violated)",
+            );
+        }
     }
 }

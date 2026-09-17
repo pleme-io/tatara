@@ -1650,6 +1650,94 @@ impl EphemeralSpec {
         self.resolved_classification().point_is_endomorphic()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s
+    /// [`crate::classification::ConvergencePointType`] project to
+    /// `true` under
+    /// [`crate::classification::ConvergencePointType::is_diffusive`]?
+    /// Byte-for-byte peer of
+    /// [`Classification::point_is_diffusive`] wrapped through the
+    /// [`Self::resolved_classification`] resolver so an operator-
+    /// omitted `:classification` slot on `(defephemeral …)` still
+    /// answers via the substrate default. The ONE ephemeral-surface
+    /// substrate primitive that owns the `(&EphemeralSpec) -> bool`
+    /// derived-nullary-boolean walk on the 1→N fan-out topology-bucket
+    /// question over the classification-`point_type` axis.
+    ///
+    /// # Seventh derived-nullary-boolean peer on the ephemeral surface
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`],
+    /// [`Self::data_is_regulated`], [`Self::data_is_restricted`], and
+    /// [`Self::point_is_endomorphic`] on the ephemeral surface's
+    /// (resolver-hop × derived-nullary-bool) shape — the SEVENTH peer
+    /// overall and the SECOND peer threading the classification-
+    /// `point_type` axis. Direct-scalar peer of
+    /// [`Self::point_is_endomorphic`]: both compose the SAME resolver
+    /// hop and the SAME closed-set carrier through the SAME chosen-
+    /// field baseline discipline (`Gate.is_diffusive() = false`,
+    /// mirror-image of `Gate.is_endomorphic() = false`). The
+    /// resolver-hop shape is byte-identical across all seven peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `point_is_diffusive()` returns `true` iff
+    /// `self.resolved_classification().point_is_diffusive()`. The
+    /// resolver returns the authored [`Classification`] when present
+    /// and the substrate default [`Classification::gate_compute`] on
+    /// absence. Because [`Classification::gate_compute`] carries
+    /// [`crate::classification::ConvergencePointType::Gate`] (a
+    /// convergent barrier, not a fan-out), a bare ephemeral spec with
+    /// no `:classification` slot answers `false`. A regression that
+    /// dropped the resolver hop, probed the wrong closed-set arm, or
+    /// inverted the projection fails HERE at ONE narrow substrate
+    /// site before drifting through every unadorned ephemeral spec's
+    /// DAG-composition answer.
+    ///
+    /// # Compounding — first ephemeral-surface corner-peer mutex on the `point_type` axis
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `diffusive-point` on `EPHEMERAL_FIXED_TAG_ARMS`
+    /// — byte-for-byte peer of the point surface's `diffusive-point`
+    /// fixed tag on `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::point_is_diffusive`] directly. The two-
+    /// surface parity contract holds by construction: both surfaces
+    /// route through the SAME
+    /// [`Classification::point_is_diffusive`] primitive after the
+    /// ephemeral surface pays ONE resolver hop. FIRST ephemeral-
+    /// surface corner-peer pair on the `point_type` axis (with
+    /// [`Self::point_is_endomorphic`]) whose two projections carry a
+    /// non-trivial closed-set-internal MUTEX relationship
+    /// (`point_is_endomorphic ⇒ ¬point_is_diffusive`), distinct from
+    /// the sibling `data`-axis ephemeral corner-peer pair whose two
+    /// projections carry a non-trivial IMPLICATION relationship. When
+    /// the third sibling [`Self::point_is_convergent`] lands, the
+    /// mutex closes into the full three-way XOR partition composed
+    /// through the resolver-hop layer as a substrate-wide theorem.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-`point_type`-axis derived-
+    /// nullary-boolean probe body composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::point_is_diffusive`]) so every downstream
+    /// (`diffusive-point` fixed tags on both surfaces in tatara-check,
+    /// future DAG composition / edge-cardinality validators, future
+    /// variant additions on
+    /// [`crate::classification::ConvergencePointType`]) binds through
+    /// the SAME `point_is_diffusive()` shape rather than restating
+    /// either the resolver walk or the closed-set projection
+    /// composition at the callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future
+    /// [`crate::classification::ConvergencePointType`] variant lands
+    /// at ONE `ALL` entry + ONE `is_diffusive` arm on the closed set
+    /// and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn point_is_diffusive(&self) -> bool {
+        self.resolved_classification().point_is_diffusive()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -4319,6 +4407,140 @@ mod tests {
                 eph.point_is_endomorphic(),
                 lowered.classification.point_is_endomorphic(),
                 "authored point_type={populated:?}: parity drift",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::point_is_diffusive pins ───────────────────────
+    //
+    // Fail-before-pass-after granularity: `point_is_diffusive` did not
+    // exist pre-lift on `impl EphemeralSpec` — every consumer walking
+    // the "does this ephemeral spec's point-type project to the 1→N
+    // diffusive fan-out bucket?" question went through
+    // `.resolved_classification().point_type.is_diffusive()` or the
+    // lowered `ProcessSpec`'s
+    // `spec.classification.point_type.is_diffusive()`. Post-lift the
+    // SEVENTH derived-nullary-boolean peer on the ephemeral surface
+    // (SECOND on the `point_type` axis) routes through the SAME
+    // [`Self::resolved_classification`] resolver + the sibling
+    // substrate primitive
+    // [`crate::classification::Classification::point_is_diffusive`],
+    // so the two-surface parity contract holds by construction.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific [`ConvergencePointType`]
+    /// variant answers [`Self::point_is_diffusive`] matching the
+    /// closed set's own [`ConvergencePointType::is_diffusive`] truth
+    /// table. Sweep [`ConvergencePointType::ALL`] so a regression that
+    /// (a) hard-coded the body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with the sibling
+    /// [`ConvergencePointType::is_endomorphic`] /
+    /// [`ConvergencePointType::is_convergent`] projections fails HERE
+    /// at the substrate primitive before drifting through the
+    /// `diffusive-point` fixed tag or the peer point surface.
+    #[test]
+    fn point_is_diffusive_returns_point_type_projection_per_kind() {
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.point_is_diffusive(),
+                populated.is_diffusive(),
+                "authored point_type={populated:?}: point_is_diffusive() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries
+    /// [`ConvergencePointType::Gate`] (a convergent barrier, not a
+    /// diffusive fan-out), and
+    /// [`ConvergencePointType::Gate::is_diffusive`] projects `false`,
+    /// so [`Self::point_is_diffusive`] returns `false`. Pins the
+    /// resolver's chosen-field baseline at ONE narrow site.
+    #[test]
+    fn point_is_diffusive_probes_false_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            !spec.point_is_diffusive(),
+            "absent classification (defaults to gate_compute, point_type=Gate → is_diffusive=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::point_is_diffusive`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.point_is_diffusive()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`ConvergencePointType::ALL`] variant) so a future regression
+    /// on either side of the resolver fails HERE at the parity
+    /// boundary. Byte-for-byte peer of
+    /// `point_is_endomorphic_matches_point_peer_through_lowered_classification`
+    /// on the SAME closed-set axis via a sibling projection.
+    #[test]
+    fn point_is_diffusive_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.point_is_diffusive(),
+            lowered.classification.point_is_diffusive(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.point_is_diffusive(),
+                lowered.classification.point_is_diffusive(),
+                "authored point_type={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// MUTEX pin — [`Self::point_is_endomorphic`] AND
+    /// [`Self::point_is_diffusive`] are NEVER simultaneously true for
+    /// ANY [`EphemeralSpec`] (authored or defaulted), since the
+    /// underlying [`ConvergencePointType`] closed set carves its
+    /// eight variants into THREE disjoint buckets. Sweep the absent-
+    /// classification case + every [`ConvergencePointType::ALL`]
+    /// variant so a regression that crossed the wires between the
+    /// two ephemeral-surface corner peers (one probe silently
+    /// composing the wrong closed-set arm at the resolver-hop layer)
+    /// fails HERE rather than at every downstream consumer that
+    /// trusts the two probes partition the resolver's output into
+    /// disjoint buckets. FIRST ephemeral-surface corner-peer pair on
+    /// the `point_type` axis whose two projections carry a non-
+    /// trivial closed-set-internal MUTEX relationship (distinct from
+    /// the sibling `data`-axis pair whose two projections carry a
+    /// non-trivial IMPLICATION relationship, sealed by
+    /// `ephemeral_data_is_regulated_implies_data_is_restricted_over_all`).
+    #[test]
+    fn ephemeral_point_is_endomorphic_and_point_is_diffusive_are_mutex_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        assert!(
+            !(eph.point_is_endomorphic() && eph.point_is_diffusive()),
+            "None-classification: point_is_endomorphic AND point_is_diffusive both true (mutex violated)",
+        );
+        // Authored classification.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            assert!(
+                !(eph.point_is_endomorphic() && eph.point_is_diffusive()),
+                "authored point_type={populated:?}: point_is_endomorphic AND point_is_diffusive both true (mutex violated)",
             );
         }
     }

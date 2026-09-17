@@ -1651,6 +1651,26 @@ fn evaluate_point_require_tag(
             .lifetime
             .resolved_ephemeral()
             .is_some_and(|e| e.has_teardown_policy(k))),
+        // `teardown-fires-on-<phase>` — the derived-bool-predicate peer
+        // of `teardown-policy-<kind>` on the SAME resolved-ephemeral
+        // Option-parent × `teardown_policy` stored slot: answers
+        // whether the stored [`TeardownPolicy`] would auto-SIGTERM the
+        // Process on the queried [`ProcessPhase`] transition via
+        // [`TeardownPolicy::should_teardown_on`] (many-to-one; both
+        // `Always` and `OnAttested` fire on `Attested`; both `Always`
+        // and `OnFailed` fire on `Failed`; every non-terminal phase
+        // answers false for every policy). FIRST occupant on the
+        // (Option-parent × derived-bool-predicate-over-<closed-set>-
+        // child) corner of the workspace-wide require-tag prefix
+        // algebra — the child probe combines the stored scalar with
+        // the closed-set argument through a typed BOOLEAN predicate,
+        // not through equality on an `Option<K>` projection (the prior
+        // derived-Option-child corner opened by
+        // `sighup-target-<phase>` and `verification-gates-<phase>`).
+        ("teardown-fires-on-", ProcessPhase, |k| spec
+            .lifetime
+            .resolved_ephemeral()
+            .is_some_and(|e| e.has_teardown_firing_on(k))),
         ("routing-form-", RoutingForm, |k| spec.routing.has_form(k)),
         ("encapsulation-target-", EncapsulationTarget, |k| spec
             .encapsulates
@@ -2350,6 +2370,16 @@ fn evaluate_ephemeral_require_tag(
         ("condition-", ConditionKind, |k| spec.has_condition_kind(k)),
         ("teardown-policy-", TeardownPolicy, |k| spec
             .has_teardown_policy(k)),
+        // `teardown-fires-on-<phase>` — the derived-bool-predicate
+        // peer of `teardown-policy-<kind>` on the SAME stored
+        // `teardown` slot: byte-for-byte symmetrical with the point
+        // surface's `teardown-fires-on-<phase>` family via
+        // [`crate::lifetime::EphemeralLifetime::has_teardown_firing_on`]
+        // through the SAME [`TeardownPolicy::should_teardown_on`]
+        // projection — the sugar surface reaches the required scalar
+        // directly, without the Option-parent hop.
+        ("teardown-fires-on-", ProcessPhase, |k| spec
+            .has_teardown_firing_on(k)),
         ("export-when-", ExportTrigger, |k| spec.exports.has_when(k)),
         ("channel-", ChannelKind, |k| spec
             .exports
@@ -8084,6 +8114,250 @@ mod tests {
         );
     }
 
+    // ── teardown-fires-on-<phase> prefix family pins ─────────────────
+    //
+    // Fail-before-pass-after granularity: the `teardown-fires-on-
+    // <phase>` prefix family did not exist before this commit — the
+    // point-domain require-tag vocabulary discriminated the teardown
+    // axis only by the RAW authored [`TeardownPolicy`] variant (via
+    // `teardown-policy-<kind>`), never by the DERIVED [`ProcessPhase`]
+    // transition the stored policy fires on
+    // ([`TeardownPolicy::should_teardown_on`]: `Always` fires on both
+    // `Attested` AND `Failed`; `OnAttested` fires on `Attested` only;
+    // `OnFailed` fires on `Failed` only; `Never` fires on neither;
+    // every non-terminal phase answers false for every policy). The
+    // lift routes the TWENTY-EIGHTH closed-set-driven prefix family in
+    // the point-domain classifier and opens the (Option-parent ×
+    // derived-bool-predicate-over-<closed-set>-child) corner of the
+    // workspace-wide require-tag prefix algebra as its FIRST occupant.
+    // Composes through the newly-opened
+    // [`tatara_process::lifetime::EphemeralLifetime::has_teardown_firing_on`]
+    // substrate primitive at the classifier prefix-table row + through
+    // the existing typed [`TeardownPolicy::should_teardown_on`]
+    // projection at the closed-set discriminator boundary. A future
+    // [`TeardownPolicy`] variant reaches this classifier through ONE
+    // `ALL` entry + one `as_str` arm + one `should_teardown_on` arm
+    // alone; a future [`ProcessPhase`] paired with a policy that
+    // fires on it reaches through one match arm on the projection.
+
+    /// POPULATED-slot DIAGONAL pin — `teardown-fires-on-<phase>`
+    /// dispatches through the autoderived [`ProcessPhase`] `FromStr`
+    /// plus the substrate
+    /// [`tatara_process::lifetime::EphemeralLifetime::has_teardown_firing_on`]
+    /// primitive, returning `true` only when the resolved ephemeral
+    /// lifetime's `teardown_policy` fires on the queried phase via
+    /// [`TeardownPolicy::should_teardown_on`]. Sweep the
+    /// [`TeardownPolicy::ALL`] × [`ProcessPhase::ALL`] full cross so
+    /// a regression that (a) hard-coded the arm to a single policy
+    /// (silently returning `true` for every populated ephemeral
+    /// regardless of query phase), (b) collapsed the derived predicate
+    /// to raw variant equality (which would answer `true` for exactly
+    /// ONE policy per phase rather than the two policies that fire on
+    /// each terminal-gate phase), or (c) inverted the projection fails
+    /// HERE at the classifier before landing at the operator-facing
+    /// checks.lisp surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_teardown_fires_on_matches_predicate_per_policy_per_phase(
+    ) {
+        for populated in TeardownPolicy::ALL {
+            let spec = ProcessSpec {
+                lifetime: Lifetime::ephemeral(EphemeralLifetime {
+                    teardown_policy: populated,
+                    ..EphemeralLifetime::default()
+                }),
+                ..ProcessSpec::gate_compute_defaults()
+            };
+            for phase in ProcessPhase::ALL {
+                let tag = format!("teardown-fires-on-{}", phase.as_str());
+                let expected = populated.should_teardown_on(phase);
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "teardown_policy={populated:?}: tag {tag:?} classification drifted \
+                     from should_teardown_on projection",
+                );
+            }
+        }
+    }
+
+    /// PERMANENT-lifetime pin — a default (`Permanent`) [`ProcessSpec`]
+    /// returns `false` for every `teardown-fires-on-<phase>` tag
+    /// because the `resolved_ephemeral` gate on the parent [`Lifetime`]
+    /// short-circuits the walk before the derived predicate ever runs.
+    /// Locks the Option-parent silencing contract
+    /// (`resolved_ephemeral().is_some_and(|e| e.has_teardown_firing_on(phase))`)
+    /// so a regression that dropped the ephemeral gate (probing an
+    /// absent `teardown_policy` through the closed set's `#[default]
+    /// Always` predicate value, silently returning `true` on
+    /// `teardown-fires-on-Attested` for every Permanent Process) fails
+    /// HERE. The pair (this + the DIAGONAL pin above) pins the corner
+    /// property from both parent-arms: the unreachable-parent arm
+    /// silences EVERY phase, the reachable-child arm honors the
+    /// (policy, phase) truth table.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_permanent_lifetime_for_every_teardown_fires_on_phase(
+    ) {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for phase in ProcessPhase::ALL {
+            let tag = format!("teardown-fires-on-{}", phase.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "permanent lifetime must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `teardown-fires-on-<garbage>` classifies
+    /// as [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. The canonical [`ProcessPhase`] labels are the
+    /// PascalCase wire-format keys (`Attested`, `Failed`, …) — matching
+    /// the serde `rename_all = "PascalCase"` projection verbatim — so
+    /// lowercased / all-caps / typo spellings are UNKNOWN suffixes. A
+    /// stray suffix that IS a valid [`TeardownPolicy`] variant
+    /// (`Always`, `OnAttested`) is also UNKNOWN — the classifier keys
+    /// this family on [`ProcessPhase`], not [`TeardownPolicy`], so the
+    /// cross-family contamination is a diagnostic error, not a fall-
+    /// through.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_teardown_fires_on_suffix() {
+        let spec = ProcessSpec {
+            lifetime: Lifetime::ephemeral(EphemeralLifetime::default()),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        for garbage in [
+            "teardown-fires-on-attested",
+            "teardown-fires-on-ATTESTED",
+            "teardown-fires-on-Suspended",
+            "teardown-fires-on-typo",
+            // `Always` is a TeardownPolicy, not a ProcessPhase — the
+            // classifier keys THIS family on ProcessPhase, so the raw
+            // policy leaks are diagnostic errors.
+            "teardown-fires-on-Always",
+            "teardown-fires-on-OnAttested",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag::default()),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at
+    /// `teardown-fires-on-` classifies as [`UnknownRequireTag`],
+    /// mirroring every prior closed-set prefix family. Locks the
+    /// empty-suffix ↔ unknown-suffix correspondence at ONE narrow
+    /// classifier site for the twenty-eighth family so a regression
+    /// that special-cased the bare prefix (treating it as "any
+    /// resolved-ephemeral fires-on-any-phase") would fail HERE. On
+    /// the permanent-lifetime side the same bare prefix is ALSO
+    /// unknown — the substrate primitive rejects the empty suffix
+    /// before the ephemeral gate fires — pinning the (Option-parent
+    /// × derived-bool-predicate-child) corner's empty-suffix contract
+    /// as independent of the parent-arm branch.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_bare_teardown_fires_on_prefix() {
+        let ephemeral_spec = ProcessSpec {
+            lifetime: Lifetime::ephemeral(EphemeralLifetime::default()),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        assert_eq!(
+            evaluate_point_require_tag(&ephemeral_spec, "teardown-fires-on-"),
+            Err(UnknownRequireTag::default()),
+            "bare `teardown-fires-on-` must classify as UnknownRequireTag on an ephemeral spec",
+        );
+        let permanent_spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&permanent_spec, "teardown-fires-on-"),
+            Err(UnknownRequireTag::default()),
+            "bare `teardown-fires-on-` must classify as UnknownRequireTag on a permanent spec",
+        );
+    }
+
+    /// AXIS-SPLIT COEXISTENCE pin — a single `OnAttested` ephemeral
+    /// lifetime satisfies BOTH the fine `teardown-policy-OnAttested`
+    /// (raw variant match on the [`TeardownPolicy`] closed set) AND
+    /// the derived `teardown-fires-on-Attested` (through
+    /// [`TeardownPolicy::should_teardown_on`]). Simultaneously it must
+    /// fail `teardown-policy-Always` (wrong raw variant) BUT still
+    /// satisfy `teardown-fires-on-Attested` on an `Always`-carrying
+    /// ephemeral because the derived predicate is many-to-one at the
+    /// terminal-gate phases. Locks the raw-vs-derived semantic split
+    /// at the classifier so a regression that collapsed the two
+    /// families to share a single dispatch arm fails HERE at ONE
+    /// narrow site — same-slot, same policy, different closed sets,
+    /// different question. Also pins that the two families do NOT
+    /// contaminate each other: a variant of one closed set is not a
+    /// variant of the other, so the classifier surfaces
+    /// [`UnknownRequireTag`] on cross-family suffix leaks.
+    #[test]
+    fn evaluate_point_require_tag_teardown_policy_and_fires_on_families_are_disjoint() {
+        let on_attested = ProcessSpec {
+            lifetime: Lifetime::ephemeral(EphemeralLifetime {
+                teardown_policy: TeardownPolicy::OnAttested,
+                ..EphemeralLifetime::default()
+            }),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        // Same policy, both surfaces answer true on the matching axis.
+        assert_eq!(
+            evaluate_point_require_tag(&on_attested, "teardown-policy-OnAttested"),
+            Ok(true),
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&on_attested, "teardown-fires-on-Attested"),
+            Ok(true),
+        );
+        // Same policy, both surfaces answer false on the off-diagonal.
+        assert_eq!(
+            evaluate_point_require_tag(&on_attested, "teardown-policy-Always"),
+            Ok(false),
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&on_attested, "teardown-fires-on-Failed"),
+            Ok(false),
+        );
+        // MANY-TO-ONE — `Always` satisfies BOTH derived predicates
+        // (fires on Attested AND on Failed), a signature only the
+        // derived family exposes.
+        let always = ProcessSpec {
+            lifetime: Lifetime::ephemeral(EphemeralLifetime {
+                teardown_policy: TeardownPolicy::Always,
+                ..EphemeralLifetime::default()
+            }),
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        assert_eq!(
+            evaluate_point_require_tag(&always, "teardown-fires-on-Attested"),
+            Ok(true),
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&always, "teardown-fires-on-Failed"),
+            Ok(true),
+        );
+        // Cross-family contamination is a diagnostic error, not a
+        // false pass — `Always` is a TeardownPolicy, not a
+        // ProcessPhase, so the derived family surfaces
+        // UnknownRequireTag on the raw-variant leak.
+        assert_eq!(
+            evaluate_point_require_tag(&on_attested, "teardown-fires-on-OnAttested"),
+            Err(UnknownRequireTag::default()),
+            "`OnAttested` is a TeardownPolicy, not a ProcessPhase — \
+             the derived-predicate family must classify it as \
+             Unknown, not fall through",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&on_attested, "teardown-policy-Attested"),
+            Err(UnknownRequireTag::default()),
+            "`Attested` is a ProcessPhase, not a TeardownPolicy — \
+             the raw-variant family must classify it as Unknown, not \
+             fall through",
+        );
+    }
+
     // ── routing-form-<kind> prefix family (evaluate_point_require_tag) ─
     //
     // Fail-before-pass-after granularity: the `routing-form-<kind>`
@@ -11102,6 +11376,147 @@ mod tests {
                 "off-diagonal {tag:?} must be false: the ephemeral declares OnAttested",
             );
         }
+    }
+
+    // ── ephemeral teardown-fires-on-<phase> prefix family pins ───────
+    //
+    // Fail-before-pass-after granularity: the ephemeral surface's
+    // `teardown-fires-on-<phase>` prefix family did not exist before
+    // this commit — the ephemeral require-tag vocabulary discriminated
+    // the teardown axis only by the raw [`TeardownPolicy`] variant (via
+    // `teardown-policy-<kind>`), never by the derived [`ProcessPhase`]
+    // transition the stored policy fires on. The lift adds the
+    // EIGHTEENTH ephemeral-surface prefix family byte-for-byte
+    // symmetrical with the point surface's `teardown-fires-on-<phase>`
+    // family via
+    // [`tatara_process::ephemeral::EphemeralSpec::has_teardown_firing_on`],
+    // routing through the SAME [`TeardownPolicy::should_teardown_on`]
+    // projection — the sugar surface reaches the required scalar
+    // directly, without the Option-parent hop the point surface takes
+    // through [`crate::lifetime::Lifetime::resolved_ephemeral`].
+
+    /// POPULATED-slot DIAGONAL pin — `teardown-fires-on-<phase>`
+    /// dispatches through the autoderived [`ProcessPhase`] `FromStr`
+    /// plus the substrate
+    /// [`tatara_process::ephemeral::EphemeralSpec::has_teardown_firing_on`]
+    /// primitive on the ephemeral surface's direct `teardown` scalar
+    /// (no Option-parent hop), returning `true` only when the stored
+    /// policy fires on the queried phase via
+    /// [`TeardownPolicy::should_teardown_on`]. Sweep the
+    /// [`TeardownPolicy::ALL`] × [`ProcessPhase::ALL`] full cross so a
+    /// regression that hard-coded the arm to a single policy, wired to
+    /// the wrong field, or inverted the predicate direction fails HERE
+    /// at the ephemeral classifier before landing at the operator-
+    /// facing checks.lisp surface. Byte-for-byte peer of
+    /// [`evaluate_point_require_tag_returns_true_iff_teardown_fires_on_matches_predicate_per_policy_per_phase`]
+    /// on the point surface — the two-surface symmetry means an
+    /// operator can author identical `teardown-fires-on-<phase>`
+    /// semantics under either `:domain point` or `:domain ephemeral`
+    /// slot without a per-surface behavioral gotcha.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_iff_teardown_fires_on_matches_predicate_per_policy_per_phase(
+    ) {
+        for populated in TeardownPolicy::ALL {
+            let spec = EphemeralSpec {
+                teardown: populated,
+                ..ephemeral_fixture()
+            };
+            for phase in ProcessPhase::ALL {
+                let tag = format!("teardown-fires-on-{}", phase.as_str());
+                let expected = populated.should_teardown_on(phase);
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral teardown={populated:?}: tag {tag:?} classification drifted \
+                     from should_teardown_on projection",
+                );
+            }
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `teardown-fires-on-<garbage>` classifies
+    /// as [`UnknownRequireTag`] via the shared substrate primitive so
+    /// the caller's operator-facing `unknown :requires tag: <verbatim>`
+    /// diagnostic path fires. A stray suffix that IS a valid
+    /// [`TeardownPolicy`] variant (`Always`, `OnAttested`) is also
+    /// UNKNOWN — the classifier keys THIS family on [`ProcessPhase`],
+    /// not [`TeardownPolicy`], so the cross-family contamination is a
+    /// diagnostic error, not a fall-through.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_teardown_fires_on_suffix() {
+        let spec = ephemeral_fixture();
+        for garbage in [
+            "teardown-fires-on-attested",
+            "teardown-fires-on-ATTESTED",
+            "teardown-fires-on-Suspended",
+            "teardown-fires-on-typo",
+            "teardown-fires-on-Always",
+            "teardown-fires-on-OnAttested",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, garbage),
+                Err(UnknownRequireTag::default()),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// BARE-PREFIX pin — the empty-suffix boundary at
+    /// `teardown-fires-on-` classifies as [`UnknownRequireTag`],
+    /// mirroring every prior ephemeral-surface closed-set prefix
+    /// family. Peer of
+    /// [`evaluate_point_require_tag_returns_unknown_on_bare_teardown_fires_on_prefix`]
+    /// — the two-surface symmetry means the bare-prefix rejection
+    /// carries through both `:domain` slots at ONE narrow classifier
+    /// site.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_bare_teardown_fires_on_prefix() {
+        let spec = ephemeral_fixture();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "teardown-fires-on-"),
+            Err(UnknownRequireTag::default()),
+            "bare `teardown-fires-on-` must classify as UnknownRequireTag on an ephemeral spec",
+        );
+    }
+
+    /// RAW / DERIVED COEXISTENCE pin — an `Always`-carrying ephemeral
+    /// spec satisfies the raw `teardown-policy-Always`, both derived
+    /// `teardown-fires-on-Attested` AND `teardown-fires-on-Failed`
+    /// (many-to-one — `Always` fires on both terminal-gate phases),
+    /// and fails every off-diagonal raw variant and every non-
+    /// terminal-phase derived query. Peer to
+    /// [`evaluate_point_require_tag_teardown_policy_and_fires_on_families_are_disjoint`]
+    /// — the two-surface symmetry pins the raw-vs-derived semantic
+    /// split at the ephemeral classifier without an Option-parent
+    /// hop.
+    #[test]
+    fn evaluate_ephemeral_require_tag_teardown_policy_and_fires_on_families_are_disjoint() {
+        let always = EphemeralSpec {
+            teardown: TeardownPolicy::Always,
+            ..ephemeral_fixture()
+        };
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&always, "teardown-policy-Always"),
+            Ok(true),
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&always, "teardown-fires-on-Attested"),
+            Ok(true),
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&always, "teardown-fires-on-Failed"),
+            Ok(true),
+        );
+        // Non-terminal phase — derived predicate always answers false.
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&always, "teardown-fires-on-Running"),
+            Ok(false),
+        );
+        // Off-diagonal raw variant on the same populated policy.
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&always, "teardown-policy-Never"),
+            Ok(false),
+        );
     }
 
     // ── ephemeral export-when-<kind> prefix family pins ──────────────

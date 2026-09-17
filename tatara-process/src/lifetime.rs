@@ -732,6 +732,133 @@ impl EphemeralLifetime {
     pub fn has_teardown_policy(&self, kind: TeardownPolicy) -> bool {
         self.teardown_policy == kind
     }
+
+    /// Derived-bool-predicate presence probe on the stored
+    /// [`Self::teardown_policy`] slot — `true` iff this ephemeral
+    /// lifetime's [`TeardownPolicy`] would auto-SIGTERM the Process on
+    /// the queried [`ProcessPhase`] transition (as read through
+    /// [`TeardownPolicy::should_teardown_on`]).
+    ///
+    /// The one-line collapse of the
+    /// `<eph>.teardown_policy.should_teardown_on(phase)` closure body
+    /// lifted to ONE substrate owner past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold — the `teardown-fires-on-<phase>` require-
+    /// tag prefix family in [`tatara-check`]'s point-domain require-tag
+    /// classifier is the first workspace-wide consumer (composed
+    /// through the [`crate::lifetime::Lifetime::resolved_ephemeral`]
+    /// Option-hop), the live reconciler decision at
+    /// [`crate::lifetime_clock::evaluate`] reaches the SAME
+    /// [`TeardownPolicy::should_teardown_on`] projection independently
+    /// today — so a future normalization at the predicate body (widening
+    /// the return to `Option<TeardownReason>` for deeper diagnostics,
+    /// adding a debug-build assertion on redundant duplicate wiring, an
+    /// eventual audit hook naming the (policy, phase, decision) triad)
+    /// lands at ONE site here and every downstream picks it up
+    /// mechanically.
+    ///
+    /// # NEW representation-kind corner — Option-parent × derived-bool-predicate-over-<phase>-child
+    ///
+    /// The workspace-wide closed-set-driven presence-probe algebra
+    /// grows a new corner here: the probe body composes a
+    /// STORED-scalar's typed PREDICATE against the operator-supplied
+    /// closed-set argument, so the answer reads
+    /// `self.teardown_policy.should_teardown_on(phase)` rather than the
+    /// prior derived-Option-child shape
+    /// (`self.<field>.<projection>() == Some(phase)` on
+    /// [`crate::spec::SignalPolicy::has_sighup_target`] +
+    /// [`crate::compliance::ComplianceBindingSliceExt::has_verification_gates`]).
+    /// The projection is many-to-one via the predicate closure rather
+    /// than the closed-set match: [`TeardownPolicy::Always`] fires on
+    /// BOTH [`ProcessPhase::Attested`] AND [`ProcessPhase::Failed`], so
+    /// `has_teardown_firing_on(Attested)` returns `true` for both the
+    /// `Always` and `OnAttested` policies while
+    /// `has_teardown_policy(Always)` and `has_teardown_policy(OnAttested)`
+    /// each return `true` for exactly one policy. Both probes coexist
+    /// because they answer distinct operator questions: the raw variant
+    /// probe pins the AUTHORED policy variant; the predicate probe pins
+    /// the ACTIONABLE phase transitions that variant fires on.
+    ///
+    /// # Semantics — PREDICATE match, not raw-variant equality nor Option-projection
+    ///
+    /// * `has_teardown_firing_on(ProcessPhase::Attested)` returns
+    ///   `true` iff the stored policy is
+    ///   [`TeardownPolicy::Always`] OR [`TeardownPolicy::OnAttested`].
+    /// * `has_teardown_firing_on(ProcessPhase::Failed)` returns
+    ///   `true` iff the stored policy is
+    ///   [`TeardownPolicy::Always`] OR [`TeardownPolicy::OnFailed`].
+    /// * Every non-terminal [`ProcessPhase`] returns `false` for
+    ///   every stored policy — teardown is a terminal-phase decision
+    ///   ([`TeardownPolicy::should_teardown_on`] short-circuits every
+    ///   non-terminal arm to `false`).
+    /// * [`TeardownPolicy::Never`] returns `false` for every
+    ///   [`ProcessPhase`] — the substrate default opt-out.
+    ///
+    /// # Sibling derived-child probes
+    ///
+    /// * [`crate::spec::SignalPolicy::has_sighup_target`] — required-
+    ///   parent × derived-Option-child. Peer on the "derived child"
+    ///   axis, but the derivation is an `Option<K>`-typed projection
+    ///   read for equality (`self.<field>.<projection>() ==
+    ///   Some(phase)`), not a boolean predicate over the closed-set
+    ///   argument.
+    /// * [`crate::compliance::ComplianceBindingSliceExt::has_verification_gates`]
+    ///   — slice-parent × derived-Option-typed-projection-child. Peer
+    ///   on the "derived child" axis, walked over a slice.
+    /// * THIS — Option parent
+    ///   ([`crate::lifetime::Lifetime::resolved_ephemeral`] may return
+    ///   `None` on a `Permanent` lifetime or an ambiguous `Lifetime`,
+    ///   so the require-tag classifier reads THIS probe through the
+    ///   `is_some_and` hop) × derived-bool-predicate child. First
+    ///   occupant on the (Option-parent × derived-bool-predicate-over-
+    ///   <closed-set>-child) corner of the workspace-wide presence-
+    ///   probe algebra: the child probe combines the stored scalar
+    ///   with the closed-set argument through a typed BOOLEAN
+    ///   predicate ([`TeardownPolicy::should_teardown_on`]), not
+    ///   through equality on an [`Option<K>`] projection.
+    ///
+    /// # Compounding
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// with the closed-set [`crate::phase::ProcessPhase`]'s
+    /// autoderived `FromStr` through the
+    /// `strip_and_classify_prefixed_kind` substrate to publish the
+    /// TWENTY-EIGHTH closed-set-driven prefix family in the point-
+    /// domain classifier's dispatch table
+    /// (`teardown-fires-on-<phase>`), one axis over from the sibling
+    /// `teardown-policy-<kind>` family that composes through
+    /// [`Self::has_teardown_policy`] against the same stored slot.
+    ///
+    /// A future [`TeardownPolicy`] variant (a hypothetical `OnTimeout`
+    /// for "tear down only on TTL expiry") reaches this probe through
+    /// ONE `ALL` entry + one `as_str` arm + one `should_teardown_on`
+    /// arm alone — no per-caller edit at this composition, no per-
+    /// consumer restatement of the
+    /// `<eph>.teardown_policy.should_teardown_on(phase)` closure body.
+    /// A future [`crate::phase::ProcessPhase`] variant paired with a
+    /// [`TeardownPolicy`] variant that fires on it is reached by
+    /// extending the `should_teardown_on` match — again ONE substrate
+    /// edit and every downstream inherits the shift.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-bool-predicate presence-probe
+    /// composition (`self.teardown_policy.should_teardown_on(phase)`)
+    /// lives at ONE substrate site so every downstream
+    /// (`teardown-fires-on-<phase>` require-tag family in tatara-check,
+    /// closed-set audit dispatchers, future variant additions on
+    /// either [`TeardownPolicy`] or
+    /// [`crate::phase::ProcessPhase`]) binds through the SAME
+    /// `has_teardown_firing_on(phase)` shape rather than restating the
+    /// `<eph>.teardown_policy.should_teardown_on(phase)` chain at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; the
+    /// [`TeardownPolicy::should_teardown_on`] match is the ONE per-
+    /// (variant, phase) edit site every future policy or phase variant
+    /// reaches through, and this method inherits the shift
+    /// automatically.
+    #[must_use]
+    pub const fn has_teardown_firing_on(&self, phase: ProcessPhase) -> bool {
+        self.teardown_policy.should_teardown_on(phase)
+    }
 }
 
 impl Default for EphemeralLifetime {
@@ -1226,6 +1353,148 @@ mod tests {
                 expected,
                 "default ephemeral (teardown_policy=Always) must return {expected} for {kind:?}",
             );
+        }
+    }
+
+    // ── derived-bool-predicate presence probe on EphemeralLifetime ×
+    //    TeardownPolicy × ProcessPhase ──
+    //
+    // Fail-before-pass-after granularity:
+    // [`EphemeralLifetime::has_teardown_firing_on`] did not exist before
+    // this commit — every consumer of the
+    // `(EphemeralLifetime, ProcessPhase) -> bool` derived-bool-predicate
+    // probe shape restated the
+    // `<eph>.teardown_policy.should_teardown_on(phase)` closure body at
+    // its own call site (the point-domain require-tag classifier's
+    // future `teardown-fires-on-<phase>` prefix family; the live
+    // reconciler decision at [`crate::lifetime_clock::evaluate`], which
+    // continues to reach [`TeardownPolicy::should_teardown_on`]
+    // directly today). Post-lift the shape lives at ONE substrate
+    // owner and every downstream binds through the SAME
+    // `has_teardown_firing_on(phase)` shape. FIRST occupant on the
+    // (Option-parent × derived-bool-predicate-over-<closed-set>-child)
+    // corner of the workspace-wide presence-probe algebra — the child
+    // probe combines the stored scalar with the closed-set argument
+    // through a typed BOOLEAN predicate, not through equality on an
+    // `Option<K>` projection (the prior derived-Option-child corner).
+
+    /// TRUTH-TABLE DIAGONAL — for every [`TeardownPolicy`] variant, an
+    /// [`EphemeralLifetime`] whose `teardown_policy` field is set to
+    /// that variant returns `has_teardown_firing_on(phase)` in
+    /// agreement with [`TeardownPolicy::should_teardown_on`] for every
+    /// [`ProcessPhase`] variant. Sweep the [`TeardownPolicy::ALL`] ×
+    /// [`ProcessPhase::ALL`] full cross so a regression that (a)
+    /// hard-coded the arm to a single policy (silently returning
+    /// `true` on every populated ephemeral regardless of query phase),
+    /// (b) probed the raw stored field directly (`self.teardown_policy
+    /// == phase`, which would not even typecheck but would surface at
+    /// this test if a future variant added a `ProcessPhase`-shaped
+    /// `teardown_policy` alias), or (c) inverted the predicate
+    /// direction fails HERE at the substrate primitive before landing
+    /// at the operator-facing checks.lisp surface.
+    #[test]
+    fn ephemeral_lifetime_has_teardown_firing_on_matches_should_teardown_on_per_policy_per_phase() {
+        for populated in TeardownPolicy::ALL {
+            let eph = EphemeralLifetime {
+                teardown_policy: populated,
+                ..EphemeralLifetime::default()
+            };
+            for phase in ProcessPhase::ALL {
+                assert_eq!(
+                    eph.has_teardown_firing_on(phase),
+                    populated.should_teardown_on(phase),
+                    "teardown_policy={populated:?}, phase={phase:?}: predicate drift from \
+                     should_teardown_on projection",
+                );
+            }
+        }
+    }
+
+    /// NEVER-ARM PIN — a [`TeardownPolicy::Never`]-carrying
+    /// [`EphemeralLifetime`] returns `false` for every
+    /// [`ProcessPhase`] — the substrate default opt-out. Pins the
+    /// non-firing arm of the predicate against a regression that (a)
+    /// promoted `Never` to a firing policy at any phase, or (b)
+    /// inverted the `Never` arm to make it fire on the non-terminal
+    /// phases (a common wrongfooted rewrite when the reader assumes
+    /// `Never` means "never SIGTERM, ever" rather than "never
+    /// auto-terminate on a terminal-gate phase, TTL still applies").
+    #[test]
+    fn ephemeral_lifetime_has_teardown_firing_on_returns_false_on_never_for_every_phase() {
+        let eph = EphemeralLifetime {
+            teardown_policy: TeardownPolicy::Never,
+            ..EphemeralLifetime::default()
+        };
+        for phase in ProcessPhase::ALL {
+            assert!(
+                !eph.has_teardown_firing_on(phase),
+                "Never-carrying ephemeral must return false for phase={phase:?}",
+            );
+        }
+    }
+
+    /// PREDICATE-MANY-TO-ONE PIN — the derived predicate is many-to-
+    /// one on the (policy, phase) axis: both [`TeardownPolicy::Always`]
+    /// AND [`TeardownPolicy::OnAttested`] return `true` for
+    /// [`ProcessPhase::Attested`]; both [`TeardownPolicy::Always`] AND
+    /// [`TeardownPolicy::OnFailed`] return `true` for
+    /// [`ProcessPhase::Failed`]. Locks the raw-vs-predicate semantic
+    /// split at ONE narrow substrate site so a regression that
+    /// collapsed the predicate to raw variant equality
+    /// (`self.teardown_policy.as_str() == phase.as_str()` or similar)
+    /// would fail HERE — a raw match would answer `true` for exactly
+    /// ONE policy per phase, not for the two policies that fire on
+    /// each terminal-gate phase.
+    #[test]
+    fn ephemeral_lifetime_has_teardown_firing_on_is_many_to_one_on_terminal_gates() {
+        let always = EphemeralLifetime {
+            teardown_policy: TeardownPolicy::Always,
+            ..EphemeralLifetime::default()
+        };
+        let on_attested = EphemeralLifetime {
+            teardown_policy: TeardownPolicy::OnAttested,
+            ..EphemeralLifetime::default()
+        };
+        let on_failed = EphemeralLifetime {
+            teardown_policy: TeardownPolicy::OnFailed,
+            ..EphemeralLifetime::default()
+        };
+        // Attested is fired on by BOTH Always AND OnAttested.
+        assert!(always.has_teardown_firing_on(ProcessPhase::Attested));
+        assert!(on_attested.has_teardown_firing_on(ProcessPhase::Attested));
+        assert!(!on_failed.has_teardown_firing_on(ProcessPhase::Attested));
+        // Failed is fired on by BOTH Always AND OnFailed.
+        assert!(always.has_teardown_firing_on(ProcessPhase::Failed));
+        assert!(on_failed.has_teardown_firing_on(ProcessPhase::Failed));
+        assert!(!on_attested.has_teardown_firing_on(ProcessPhase::Failed));
+    }
+
+    /// NON-TERMINAL-PHASE PIN — every non-terminal-gate
+    /// [`ProcessPhase`] (`Pending` / `Forking` / `Execing` / `Running`
+    /// / `Reconverging` / `Releasing` / `Exiting` / `Zombie` /
+    /// `Reaped`) returns `false` for EVERY [`TeardownPolicy`],
+    /// including [`TeardownPolicy::Always`]. Locks the terminal-only
+    /// contract of the predicate so a regression that widened the
+    /// firing-arm scope to a non-terminal phase (a hypothetical
+    /// `Always fires on Running` misreading of "always") fails HERE at
+    /// the substrate primitive.
+    #[test]
+    fn ephemeral_lifetime_has_teardown_firing_on_returns_false_on_non_terminal_phases_for_every_policy(
+    ) {
+        for policy in TeardownPolicy::ALL {
+            let eph = EphemeralLifetime {
+                teardown_policy: policy,
+                ..EphemeralLifetime::default()
+            };
+            for phase in ProcessPhase::ALL {
+                if matches!(phase, ProcessPhase::Attested | ProcessPhase::Failed) {
+                    continue;
+                }
+                assert!(
+                    !eph.has_teardown_firing_on(phase),
+                    "policy={policy:?} must not fire on non-terminal phase={phase:?}",
+                );
+            }
         }
     }
 

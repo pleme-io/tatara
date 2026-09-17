@@ -282,6 +282,77 @@ impl EphemeralSpec {
         self.teardown == kind
     }
 
+    /// Derived-bool-predicate presence probe on the stored
+    /// [`Self::teardown`] slot — `true` iff this ephemeral sugar's
+    /// [`TeardownPolicy`] would auto-SIGTERM the Process on the
+    /// queried [`ProcessPhase`] transition (as read through
+    /// [`TeardownPolicy::should_teardown_on`]).
+    ///
+    /// # Sibling to [`crate::lifetime::EphemeralLifetime::has_teardown_firing_on`]
+    ///
+    /// Same shape, same axis, one refinement lower: the point-surface
+    /// peer on [`crate::lifetime::EphemeralLifetime`] composes the SAME
+    /// [`TeardownPolicy::should_teardown_on`] predicate against the
+    /// SAME stored `teardown_policy` slot; this method composes the
+    /// same predicate against the sugar surface's flattened
+    /// [`Self::teardown`] slot. Both bodies delegate to the ONE
+    /// substrate owner [`TeardownPolicy::should_teardown_on`], so a
+    /// regression at the (policy, phase) → bool truth table surfaces
+    /// at THAT primitive's tests rather than as silent drift at
+    /// either struct-level caller.
+    ///
+    /// # Corner — (required-scalar-parent × derived-bool-predicate-child)
+    ///
+    /// [`EphemeralSpec::teardown`] is a required, defaulted scalar
+    /// ([`TeardownPolicy::Always`] via `#[default]`); there is no
+    /// Option-parent hop between the sugar struct and the `teardown`
+    /// scalar (the point surface reaches
+    /// [`crate::lifetime::EphemeralLifetime::teardown_policy`]
+    /// through the Option-parent `resolved_ephemeral()` gate). The
+    /// probe body is a bare predicate application on a required
+    /// field. Distinct from [`Self::has_teardown_policy`] on this
+    /// same surface, which reads the raw stored variant for equality
+    /// (`self.teardown == kind`) rather than the derived firing-arm
+    /// predicate against a [`ProcessPhase`] argument.
+    ///
+    /// # Compounding
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// with the closed-set [`crate::phase::ProcessPhase`]'s
+    /// autoderived `FromStr` through the
+    /// `strip_and_classify_prefixed_kind` substrate to publish a
+    /// `teardown-fires-on-<phase>` prefix family byte-for-byte
+    /// symmetrical with the point surface's family via
+    /// [`crate::lifetime::EphemeralLifetime::has_teardown_firing_on`].
+    /// A future fifth [`TeardownPolicy`] variant added to `ALL` (a
+    /// hypothetical `OnTimeout` for "tear down only on TTL expiry")
+    /// reaches BOTH surfaces' `teardown-fires-on-<phase>` prefix
+    /// families through the SAME
+    /// [`TeardownPolicy::should_teardown_on`] match with no per-
+    /// caller edit — the two-surface symmetry means adding a variant
+    /// on the closed set publishes it in lockstep across every
+    /// downstream consumer.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the derived-bool-predicate presence-probe
+    /// body lives at ONE substrate site per surface, both composing
+    /// the SAME [`TeardownPolicy::should_teardown_on`] projection, so
+    /// every downstream (`teardown-fires-on-<phase>` require-tag
+    /// families on both surfaces in tatara-check, closed-set audit
+    /// dispatchers, future variant additions on either
+    /// [`TeardownPolicy`] or [`crate::phase::ProcessPhase`]) binds
+    /// through the SAME `has_teardown_firing_on(phase)` shape rather
+    /// than restating the `<eph>.teardown.should_teardown_on(phase)`
+    /// closure body at each call site). THEORY.md §VI.1 (generation
+    /// over composition — a future variant lands at ONE `ALL` entry +
+    /// one `as_str` arm + one `should_teardown_on` arm on the closed
+    /// set and the probe picks it up mechanically without further
+    /// per-consumer edits).
+    #[must_use]
+    pub const fn has_teardown_firing_on(&self, phase: ProcessPhase) -> bool {
+        self.teardown.should_teardown_on(phase)
+    }
+
     /// Resolve the operator-authored [`Self::classification`] slot to
     /// the concrete [`Classification`] the point surface sees, filling
     /// `None` through the same [`default_ephemeral_class`] baseline the
@@ -1733,6 +1804,85 @@ mod tests {
                 expected,
                 "default ephemeral (teardown=Always) baseline: query {kind:?} must be {expected}",
             );
+        }
+    }
+
+    // ── derived-bool-predicate presence probe on EphemeralSpec ×
+    //    TeardownPolicy × ProcessPhase ──
+    //
+    // Fail-before-pass-after granularity:
+    // [`EphemeralSpec::has_teardown_firing_on`] did not exist before
+    // this commit — the ephemeral sugar surface's require-tag algebra
+    // discriminated the teardown axis only by the RAW authored variant
+    // (via `teardown-policy-<kind>`), never by the derived
+    // [`ProcessPhase`] transition the stored policy fires on
+    // ([`TeardownPolicy::should_teardown_on`]). Post-lift the shape
+    // lives at ONE inherent method that byte-for-byte parallels
+    // [`crate::lifetime::EphemeralLifetime::has_teardown_firing_on`]
+    // on the point-surface carrier, and both surfaces' require-tag
+    // classifiers publish a symmetric `teardown-fires-on-<phase>`
+    // family through the SAME predicate.
+
+    /// TRUTH-TABLE DIAGONAL — for every [`TeardownPolicy`] variant,
+    /// an [`EphemeralSpec`] whose `teardown` slot is set to that
+    /// variant returns `has_teardown_firing_on(phase)` in agreement
+    /// with [`TeardownPolicy::should_teardown_on`] for every
+    /// [`ProcessPhase`] variant. Sweep [`TeardownPolicy::ALL`] ×
+    /// [`ProcessPhase::ALL`] full cross so a regression that hard-
+    /// coded the arm to a single policy, wired to the wrong field, or
+    /// inverted the predicate direction fails HERE at the substrate
+    /// primitive on the sugar surface (byte-for-byte peer of
+    /// [`crate::lifetime::tests::ephemeral_lifetime_has_teardown_firing_on_matches_should_teardown_on_per_policy_per_phase`]
+    /// on the point carrier).
+    #[test]
+    fn has_teardown_firing_on_matches_should_teardown_on_per_policy_per_phase_on_ephemeral() {
+        for populated in TeardownPolicy::ALL {
+            let spec = EphemeralSpec {
+                teardown: populated,
+                ..empty_ephemeral()
+            };
+            for phase in ProcessPhase::ALL {
+                assert_eq!(
+                    spec.has_teardown_firing_on(phase),
+                    populated.should_teardown_on(phase),
+                    "teardown={populated:?}, phase={phase:?}: predicate drift from \
+                     should_teardown_on projection",
+                );
+            }
+        }
+    }
+
+    /// TWO-SURFACE PARITY PIN — for every [`TeardownPolicy`] variant
+    /// and every [`ProcessPhase`] variant, the sugar-surface probe
+    /// and the lowered point-surface probe agree. The `EphemeralSpec
+    /// → ProcessSpec` lowering routes the stored `teardown` slot
+    /// through the SAME [`TeardownPolicy::should_teardown_on`]
+    /// projection on both sides, so the sugar caller and the lowered
+    /// caller can never disagree — a regression that (a) drifted
+    /// [`Self::teardown`] between sugar and lowered, (b) rewired
+    /// either probe body to bypass the shared substrate primitive, or
+    /// (c) skewed the (policy, phase) truth table between the two
+    /// surfaces fails HERE at the two-surface boundary rather than at
+    /// the operator-facing require-tag classifier.
+    #[test]
+    fn has_teardown_firing_on_matches_point_peer_through_lowered_teardown_policy() {
+        for populated in TeardownPolicy::ALL {
+            let sugar = EphemeralSpec {
+                teardown: populated,
+                ..empty_ephemeral()
+            };
+            let lowered: ProcessSpec = sugar.clone().into();
+            let lowered_eph = lowered
+                .lifetime
+                .resolved_ephemeral()
+                .expect("lowered spec must be ephemeral");
+            for phase in ProcessPhase::ALL {
+                assert_eq!(
+                    sugar.has_teardown_firing_on(phase),
+                    lowered_eph.has_teardown_firing_on(phase),
+                    "sugar-vs-lowered predicate drift for teardown={populated:?}, phase={phase:?}",
+                );
+            }
         }
     }
 

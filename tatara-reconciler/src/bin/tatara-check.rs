@@ -1577,6 +1577,16 @@ fn evaluate_point_require_tag(
         ("must-reach-", MustReachPhase, |k| spec
             .depends_on
             .has_must_reach(k)),
+        // `sighup-target-<phase>` is scanned BEFORE `sighup-<kind>` so
+        // the more specific compound prefix binds first — otherwise
+        // `strip_and_classify_prefixed_kind` on the bare `sighup-`
+        // prefix would strip a `sighup-target-Reconverging` tag down
+        // to a `"target-Reconverging"` suffix and reject it as an
+        // unknown SighupStrategy (the classifier design "first prefix
+        // match wins outright", not "first successful parse wins").
+        ("sighup-target-", ProcessPhase, |k| spec
+            .signals
+            .has_sighup_target(k)),
         ("sighup-", SighupStrategy, |k| spec
             .signals
             .has_sighup_strategy(k)),
@@ -4775,6 +4785,192 @@ mod tests {
             evaluate_point_require_tag(&spec, "sighup-Restart"),
             Ok(false),
             "fine `sighup-Restart` must be false when strategy is Reconverge",
+        );
+    }
+
+    // ── sighup-target-<phase> prefix family pins ─────────────────────
+    //
+    // Fail-before-pass-after granularity: the `sighup-target-<phase>`
+    // prefix family did not exist before this commit — the point-domain
+    // require-tag vocabulary carried only the sibling `sighup-<kind>`
+    // prefix family which answered "does this spec CARRY the queried
+    // SighupStrategy variant" (raw stored-scalar equality). The lift
+    // adds a derived-Option-child family that answers "would this
+    // spec's SIGHUP strategy TRANSITION the Process into the queried
+    // ProcessPhase" — a compound projection through
+    // `SighupStrategy::sighup_target()` that maps `Reconverge →
+    // Reconverging`, `Restart → Exiting`, and `Noop → None`. TWENTY-SIXTH
+    // closed-set-driven prefix family in the point-domain classifier;
+    // FIRST occupant on the (required-parent × derived-Option-child)
+    // corner of the workspace-wide presence-probe algebra (parent is
+    // required-scalar `SignalPolicy` on `ProcessSpec::signals`; child is
+    // `Option<ProcessPhase>` derived from the stored `sighup_strategy`
+    // scalar via `SighupStrategy::sighup_target`). Composes through the
+    // ONE substrate primitive `SignalPolicy::has_sighup_target` at the
+    // point-classifier prefix-table row + through the ONE substrate
+    // primitive `SighupStrategy::has_target` at the strategy-level
+    // projection. A future SighupStrategy variant reaches this
+    // classifier through ONE `ALL` entry + one `as_str` arm + one
+    // `sighup_target` arm alone.
+
+    /// POPULATED-slot DIAGONAL pin — `sighup-target-<phase>` dispatches
+    /// through the autoderived [`ProcessPhase`] `FromStr` + the
+    /// substrate
+    /// [`tatara_process::spec::SignalPolicy::has_sighup_target`]
+    /// primitive, returning `true` only when this spec's SIGHUP
+    /// strategy projects to the queried phase through
+    /// [`SighupStrategy::sighup_target`]. Sweep the
+    /// [`SighupStrategy::ALL`] × [`ProcessPhase::ALL`] cross so a
+    /// regression that hard-coded the arm to a single kind (silently
+    /// returning `true` for every strategy regardless of query phase)
+    /// or wired the closure to a fixed unrelated field (e.g.
+    /// `signals.sigterm_grace_seconds`) fails HERE at the classifier
+    /// before landing at the operator-facing checks.lisp surface. The
+    /// `Noop`-arm's `None` projection is separately pinned by
+    /// [`evaluate_point_require_tag_sighup_target_returns_false_on_noop_for_every_phase`].
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_sighup_target_projects_to_phase() {
+        for strat in SighupStrategy::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.signals.sighup_strategy = strat;
+            let expected_target = strat.sighup_target();
+            for phase in ProcessPhase::ALL {
+                let tag = format!("sighup-target-{}", phase.as_str());
+                let expected = expected_target == Some(phase);
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "sighup_strategy={strat:?}: tag {tag:?} classification drifted \
+                     from sighup_target() projection {expected_target:?}",
+                );
+            }
+        }
+    }
+
+    /// NOOP-ARM PIN — a [`ProcessSpec`] whose SIGHUP strategy is
+    /// [`SighupStrategy::Noop`] projects to `None` through
+    /// [`SighupStrategy::sighup_target`], so every
+    /// `sighup-target-<phase>` tag classifies as `Ok(false)` on it —
+    /// even for the phases the sibling `Reconverge` / `Restart`
+    /// variants target. Pins the derived-Option-child vs
+    /// stored-scalar semantic split at the classifier boundary so a
+    /// regression that projected `Noop` onto a spurious target
+    /// (Zombie / Failed / Pending) fails HERE.
+    #[test]
+    fn evaluate_point_require_tag_sighup_target_returns_false_on_noop_for_every_phase() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.signals.sighup_strategy = SighupStrategy::Noop;
+        for phase in ProcessPhase::ALL {
+            let tag = format!("sighup-target-{}", phase.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "Noop-carrying spec must classify {tag:?} as Ok(false)",
+            );
+        }
+    }
+
+    /// DEFAULT — a default [`ProcessSpec`] carries
+    /// `signals.sighup_strategy: SighupStrategy::default() =
+    /// Reconverge`, whose [`SighupStrategy::sighup_target`] projection
+    /// is `Some(ProcessPhase::Reconverging)`. So
+    /// `sighup-target-Reconverging` classifies `Ok(true)` and every
+    /// other `sighup-target-<phase>` tag classifies `Ok(false)`.
+    /// Distinct from the sibling `sighup-<kind>` family (which returns
+    /// `true` on `sighup-Reconverge` for the same default spec) —
+    /// pins the raw-vs-derived semantic split at the classifier
+    /// boundary so a regression that collapsed the two families to
+    /// share a single dispatch arm fails HERE.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_default_signals_for_sighup_target_reconverging_only(
+    ) {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for phase in ProcessPhase::ALL {
+            let tag = format!("sighup-target-{}", phase.as_str());
+            let expected = phase == ProcessPhase::Reconverging;
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(expected),
+                "default signals (sighup_strategy=Reconverge, target=Reconverging): \
+                 tag {tag:?} must return {expected}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `sighup-target-<garbage>` classifies as
+    /// [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. A regression that fell through to `Ok(false)` would
+    /// silently reclassify a `sighup-target-reconverging` casing typo
+    /// (PascalCase-only closed set) as `definition missing required`,
+    /// which reads as "the spec is wrong" rather than "your check is
+    /// wrong". Pin the distinction.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_sighup_target_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for garbage in [
+            "sighup-target-",
+            "sighup-target-reconverging",
+            "sighup-target-EXITING",
+            "sighup-target-Suspended",
+            "sighup-target-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag::default()),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// SIBLING COEXISTENCE pin — the raw stored-scalar family
+    /// `sighup-<kind>` and the derived-Option-child family
+    /// `sighup-target-<phase>` classify a SINGLE spec (default
+    /// [`ProcessSpec`], strategy=Reconverge, target=Reconverging) on
+    /// their respective axes independently. Pins the semantic split
+    /// between the two families so a regression that collapsed
+    /// `sighup-target-<phase>` to raw discriminator equality on
+    /// [`SighupStrategy`] (or vice versa) fails HERE at ONE narrow
+    /// site. Also pins that the two families do NOT contaminate each
+    /// other: `sighup-Reconverging` is unknown (`Reconverging` isn't
+    /// a [`SighupStrategy`] variant) and `sighup-target-Reconverge`
+    /// is unknown (`Reconverge` isn't a [`ProcessPhase`] variant).
+    #[test]
+    fn evaluate_point_require_tag_sighup_and_sighup_target_families_are_disjoint() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        // Both families answer independently on the default spec.
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-Reconverge"),
+            Ok(true),
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-target-Reconverging"),
+            Ok(true),
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-Restart"),
+            Ok(false),
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-target-Exiting"),
+            Ok(false),
+        );
+        // Cross-family contamination is a diagnostic error, not a
+        // false pass — a variant of one closed set is not a variant
+        // of the other, so the classifier surfaces UnknownRequireTag.
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-Reconverging"),
+            Err(UnknownRequireTag::default()),
+            "`Reconverging` is a ProcessPhase, not a SighupStrategy — \
+             the raw family must classify it as Unknown, not fall through",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "sighup-target-Reconverge"),
+            Err(UnknownRequireTag::default()),
+            "`Reconverge` is a SighupStrategy, not a ProcessPhase — \
+             the derived-Option-child family must classify it as \
+             Unknown, not fall through",
         );
     }
 

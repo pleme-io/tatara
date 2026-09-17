@@ -178,6 +178,85 @@ impl SighupStrategy {
             Self::Noop => None,
         }
     }
+
+    /// Closed-set-driven presence probe on the derived
+    /// [`Self::sighup_target`] projection — `true` iff this strategy's
+    /// SIGHUP-target [`ProcessPhase`] (as read through
+    /// [`Self::sighup_target`]) equals `phase`.
+    ///
+    /// # NEW representation-kind corner — required-parent × derived-Option-child
+    ///
+    /// The workspace-wide closed-set-driven presence-probe algebra
+    /// grows a new corner here: the child projection returns an
+    /// `Option<K>` (not a raw `K`), so the probe body reads
+    /// `self.sighup_target() == Some(phase)` rather than the
+    /// stored-scalar `self.<field> == kind` shape the sibling scalar-
+    /// carrier probes ([`crate::spec::SignalPolicy::has_sighup_strategy`],
+    /// [`crate::routing::RoutingSpec::has_form`],
+    /// [`crate::classification::Classification::has_calm`], …) publish.
+    /// The [`Self::Noop`] arm's `None` projection answers `false` for
+    /// every `phase` query — the operator's `:requires
+    /// (sighup-target-<phase>)` tag reads "does this Process's SIGHUP
+    /// strategy transition INTO that phase," and `Noop` transitions
+    /// into no phase at all, so the tag never matches on `Noop`.
+    ///
+    /// # Semantics — DERIVED sighup_target, not raw variant equality
+    ///
+    /// `has_target(ProcessPhase::Reconverging)` returns `true` iff
+    /// `self == SighupStrategy::Reconverge` (via
+    /// [`Self::sighup_target`] = `Some(Reconverging)`);
+    /// `has_target(ProcessPhase::Exiting)` returns `true` iff
+    /// `self == SighupStrategy::Restart`. The two probes coexist with
+    /// the sibling stored-scalar `has_sighup_strategy` because they
+    /// answer distinct operator questions: `has_sighup_strategy` asks
+    /// "does this policy CARRY this strategy literal" (raw
+    /// discriminator equality), while `has_target` asks "would SIGHUP
+    /// TRANSITION this Process into that phase" (compound
+    /// `sighup_target` projection). A future
+    /// [`SighupStrategy`] variant that projects to a phase already
+    /// reachable from an existing variant (a hypothetical `Refresh`
+    /// mapping to `Reconverging`) would satisfy
+    /// `has_target(Reconverging)` alongside `Reconverge` — distinct
+    /// stored variants, same derived target — while
+    /// `has_sighup_strategy(Reconverge)` stays keyed strictly on the
+    /// stored variant.
+    ///
+    /// # Compounding
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// with the closed-set [`ProcessPhase`]'s autoderived `FromStr`
+    /// through the `strip_and_classify_prefixed_kind` substrate to
+    /// publish a `sighup-target-<phase>` prefix family byte-for-byte
+    /// symmetrical with the sibling `sighup-<kind>` family that
+    /// composes through [`crate::spec::SignalPolicy::has_sighup_strategy`].
+    /// A future [`SighupStrategy`] variant reaches this probe through
+    /// ONE `ALL` entry + one `as_str` arm + one `sighup_target` arm on
+    /// the closed set — the require-tag classifier picks the new
+    /// projection up mechanically without further per-consumer edits.
+    ///
+    /// A future [`ProcessPhase`] variant paired with a future
+    /// [`SighupStrategy`] variant that targets it lands as a fresh
+    /// `sighup_target` arm on this closed set — the probe body stays
+    /// unchanged, and the ONE match inside [`Self::sighup_target`]
+    /// serves as the arity gate that a compiler catches at the
+    /// exhaustiveness check.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-Option-child presence-probe body
+    /// lives at ONE substrate site so every downstream (the future
+    /// `sighup-target-<phase>` require-tag family in tatara-check,
+    /// closed-set audit dispatchers walking [`ProcessPhase::ALL`],
+    /// future variant additions on either closed set) binds through
+    /// the SAME `has_target(phase)` shape rather than restating the
+    /// `self.sighup_target() == Some(phase)` chain at each callsite.
+    /// THEORY.md §VI.1 — generation over composition; the closed-set
+    /// match in [`Self::sighup_target`] is the ONE per-variant edit
+    /// site a future strategy variant reaches through.
+    #[must_use]
+    pub fn has_target(self, phase: ProcessPhase) -> bool {
+        self.sighup_target() == Some(phase)
+    }
 }
 
 // `impl FromStr for SighupStrategy` +
@@ -383,6 +462,69 @@ mod tests {
                     "two variants project to the same ProcessPhase: {target:?}",
                 );
             }
+        }
+    }
+
+    // ── derived-Option-child presence probe on SighupStrategy ×
+    //    ProcessPhase ──────────────────────────────────────────────────
+    //
+    // Fail-before-pass-after granularity: [`SighupStrategy::has_target`]
+    // did not exist before this commit — every consumer of the
+    // `(SighupStrategy, ProcessPhase) -> bool` derived-Option-child probe
+    // shape restated the `strat.sighup_target() == Some(phase)` chain at
+    // its own callsite. Post-lift the shape lives at ONE substrate owner
+    // and every downstream (the `sighup-target-<phase>` require-tag
+    // family in `tatara-check`, future audit dispatchers walking
+    // [`ProcessPhase::ALL`] against SIGHUP transition semantics, any
+    // future closed-set-discriminator projection whose codomain is
+    // `Option<K>`) binds through the SAME `has_target(phase)` shape.
+
+    /// DIAGONAL — for every [`SighupStrategy`] variant, `has_target`
+    /// returns `true` on the phase [`SighupStrategy::sighup_target`]
+    /// projects to (via `Some`) AND `false` on every other phase in
+    /// [`ProcessPhase::ALL`]. Sweep the [`SighupStrategy::ALL`] ×
+    /// [`ProcessPhase::ALL`] cross so a regression that hard-coded the
+    /// arm to a single variant (silently returning `true` on every
+    /// populated strategy regardless of query phase) or wired the
+    /// projection to a fixed unrelated field fails HERE at the
+    /// substrate primitive before landing at the operator-facing
+    /// checks.lisp surface. The `Noop` arm's `None` projection is
+    /// separately pinned by
+    /// [`sighup_strategy_has_target_returns_false_on_noop_for_every_phase`].
+    #[test]
+    fn sighup_strategy_has_target_returns_true_iff_projection_matches() {
+        for strat in SighupStrategy::ALL {
+            let expected_target = strat.sighup_target();
+            for phase in ProcessPhase::ALL {
+                let expected = expected_target == Some(phase);
+                assert_eq!(
+                    strat.has_target(phase),
+                    expected,
+                    "strategy={strat:?}: query phase={phase:?} classification drifted \
+                     from sighup_target() projection {expected_target:?}",
+                );
+            }
+        }
+    }
+
+    /// NONE-ARM PIN — [`SighupStrategy::Noop`] projects to `None`
+    /// through [`SighupStrategy::sighup_target`], so `has_target`
+    /// returns `false` for every phase in [`ProcessPhase::ALL`].
+    /// Distinct from the sibling stored-scalar
+    /// [`crate::spec::SignalPolicy::has_sighup_strategy`], which
+    /// returns `true` on the [`SighupStrategy::Noop`] variant when
+    /// queried on `SighupStrategy::Noop` itself — pins the
+    /// derived-Option-child vs stored-scalar semantic split at ONE
+    /// narrow substrate site so a regression that projected `Noop`
+    /// onto a "target Zombie" or "target Pending" arm fails HERE.
+    #[test]
+    fn sighup_strategy_has_target_returns_false_on_noop_for_every_phase() {
+        assert_eq!(SighupStrategy::Noop.sighup_target(), None);
+        for phase in ProcessPhase::ALL {
+            assert!(
+                !SighupStrategy::Noop.has_target(phase),
+                "Noop must return false for phase {phase:?}",
+            );
         }
     }
 }

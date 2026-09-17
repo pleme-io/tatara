@@ -322,6 +322,103 @@ impl SignalPolicy {
     pub fn has_sighup_strategy(&self, kind: SighupStrategy) -> bool {
         self.sighup_strategy == kind
     }
+
+    /// Derived-Option-child presence probe on the SIGHUP-target
+    /// projection — `true` iff this policy's stored
+    /// [`Self::sighup_strategy`] transitions this Process INTO
+    /// `phase` on SIGHUP reception (as read through
+    /// [`SighupStrategy::has_target`], which composes
+    /// [`SighupStrategy::sighup_target`] with an
+    /// `== Some(phase)` gate).
+    ///
+    /// The one-line collapse of the `signals.sighup_strategy.sighup_target()
+    /// == Some(phase)` closure body lifted to ONE substrate owner past
+    /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold — the
+    /// `sighup-target-<phase>` require-tag prefix family in
+    /// [`tatara-check`]'s point-domain require-tag classifier is the
+    /// first workspace-wide consumer. Composes through
+    /// [`SighupStrategy::has_target`] so a regression in the
+    /// [`SighupStrategy::sighup_target`] projection surfaces at ONE
+    /// substrate site and every downstream (this method, the
+    /// require-tag classifier, closed-set audit dispatchers walking
+    /// [`crate::phase::ProcessPhase::ALL`] against SIGHUP transition
+    /// semantics) inherits the shift.
+    ///
+    /// # Semantics — DERIVED sighup_target, not raw strategy equality
+    ///
+    /// Sibling to [`Self::has_sighup_strategy`] on the SAME
+    /// [`Self::sighup_strategy`] field: `has_sighup_strategy` asks
+    /// "does this policy CARRY the queried strategy literal" (raw
+    /// stored-scalar equality); `has_sighup_target` asks "would this
+    /// policy TRANSITION the Process into the queried phase on
+    /// SIGHUP" (compound `sighup_target` projection). The two probes
+    /// coexist because a future
+    /// [`SighupStrategy`] variant that reuses an existing target
+    /// (a hypothetical `Refresh` mapping to `Reconverging`) would
+    /// satisfy `has_sighup_target(Reconverging)` alongside the
+    /// existing `Reconverge`-carrying policies — distinct stored
+    /// variants, same derived target — while
+    /// `has_sighup_strategy(Reconverge)` stays keyed strictly on
+    /// the stored variant.
+    ///
+    /// # Sibling scalar-carrier probes
+    ///
+    /// * [`Self::has_sighup_strategy`] — required parent × defaulted
+    ///   scalar child (stored). SAME parent, SAME field, RAW
+    ///   discriminator equality.
+    /// * [`crate::routing::RoutingSpec::has_form`] — Option-parent ×
+    ///   derived-scalar-child. Peer on the "derived child" axis, but
+    ///   the derived projection returns raw [`RoutingForm`] rather
+    ///   than `Option<RoutingForm>` (there is no `None`-projecting
+    ///   variant).
+    /// * THIS — required-parent × derived-Option-child. First
+    ///   occupant on the (required-parent × derived-Option-child)
+    ///   corner of the presence-probe algebra: the child projection
+    ///   returns `Option<K>` because one variant
+    ///   ([`SighupStrategy::Noop`]) transitions into no phase at all,
+    ///   and the `None` arm short-circuits every query to `false`.
+    ///
+    /// # Compounding
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// with the closed-set [`crate::phase::ProcessPhase`]'s
+    /// autoderived `FromStr` through the
+    /// `strip_and_classify_prefixed_kind` substrate to publish the
+    /// TWENTY-SIXTH closed-set-driven prefix family in the point-
+    /// domain classifier's dispatch table
+    /// (`sighup-target-<phase>`), byte-for-byte symmetrical with the
+    /// sibling `sighup-<kind>` family that composes through
+    /// [`Self::has_sighup_strategy`].
+    ///
+    /// A future [`SighupStrategy`] variant reaches this probe
+    /// through ONE `ALL` entry + one `as_str` arm + one
+    /// `sighup_target` arm alone — no per-caller edit at this
+    /// composition, no per-consumer restatement of the
+    /// `signals.sighup_strategy.sighup_target() == Some(phase)` closure
+    /// body. A future [`crate::phase::ProcessPhase`] variant that a
+    /// hypothetical fresh strategy targets is reached by pairing a
+    /// new `sighup_target` arm with a new `ALL` entry — again ONE
+    /// substrate edit and every downstream inherits the shift.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-Option-child presence-probe
+    /// composition (`self.sighup_strategy.has_target(phase)`) lives
+    /// at ONE substrate site so every downstream
+    /// (`sighup-target-<phase>` require-tag family in tatara-check,
+    /// closed-set audit dispatchers, future variant additions on
+    /// either [`SighupStrategy`] or
+    /// [`crate::phase::ProcessPhase`]) binds through the SAME
+    /// `has_sighup_target(phase)` shape rather than restating the
+    /// `signals.sighup_strategy.sighup_target() == Some(phase)` chain at
+    /// each callsite. THEORY.md §VI.1 — generation over composition;
+    /// the [`SighupStrategy::sighup_target`] projection is the ONE
+    /// per-variant edit site every future strategy variant reaches
+    /// through, and this method inherits the shift automatically.
+    #[must_use]
+    pub fn has_sighup_target(&self, phase: ProcessPhase) -> bool {
+        self.sighup_strategy.has_target(phase)
+    }
 }
 
 #[cfg(test)]
@@ -401,6 +498,100 @@ mod tests {
                 policy.has_sighup_strategy(kind),
                 expected,
                 "default policy (sighup_strategy=Reconverge) must return {expected} for {kind:?}",
+            );
+        }
+    }
+
+    // ── derived-Option-child presence probe on SignalPolicy ×
+    //    ProcessPhase (via SighupStrategy::sighup_target) ────────────────
+    //
+    // Fail-before-pass-after granularity: [`SignalPolicy::has_sighup_target`]
+    // did not exist before this commit — every consumer of the compound
+    // `(SignalPolicy, ProcessPhase) -> bool` probe over the derived
+    // SIGHUP-target codomain restated the
+    // `signals.sighup_strategy.sighup_target() == Some(phase)` chain at
+    // its own callsite. Post-lift the shape lives at ONE substrate owner
+    // and every downstream (the `sighup-target-<phase>` require-tag
+    // family in `tatara-check`, future audit dispatchers, future closed-
+    // set-discriminator projections whose codomain is `Option<K>`) binds
+    // through the SAME `has_sighup_target(phase)` shape.
+
+    /// DIAGONAL — for every [`SighupStrategy`] variant, a
+    /// [`SignalPolicy`] carrying that variant returns `true` from
+    /// `has_sighup_target` on the phase [`SighupStrategy::sighup_target`]
+    /// projects to AND `false` on every other phase in
+    /// [`ProcessPhase::ALL`]. Sweep the [`SighupStrategy::ALL`] ×
+    /// [`ProcessPhase::ALL`] cross so a regression that hard-coded the
+    /// composition to a single variant / phase pair (silently returning
+    /// `true` regardless of query phase, or wired the equality to a
+    /// fixed unrelated field) fails HERE at the substrate primitive
+    /// before landing at the operator-facing checks.lisp surface.
+    #[test]
+    fn signal_policy_has_sighup_target_returns_true_iff_projection_matches() {
+        for populated in SighupStrategy::ALL {
+            let policy = SignalPolicy {
+                sighup_strategy: populated,
+                ..SignalPolicy::default()
+            };
+            let expected_target = populated.sighup_target();
+            for phase in ProcessPhase::ALL {
+                let expected = expected_target == Some(phase);
+                assert_eq!(
+                    policy.has_sighup_target(phase),
+                    expected,
+                    "sighup_strategy={populated:?}: query phase={phase:?} \
+                     classification drifted from sighup_target() projection \
+                     {expected_target:?}",
+                );
+            }
+        }
+    }
+
+    /// DEFAULT — a [`SignalPolicy::default`] carries
+    /// `sighup_strategy: SighupStrategy::default() = Reconverge`, whose
+    /// [`SighupStrategy::sighup_target`] projection is
+    /// `Some(ProcessPhase::Reconverging)`. So `has_sighup_target`
+    /// returns `true` on `Reconverging` and `false` on every other
+    /// phase in [`ProcessPhase::ALL`]. Pins the composition through the
+    /// default's canonical `Reconverge` variant so a regression that
+    /// swapped [`Self::has_sighup_target`]'s inner projection (e.g.
+    /// wiring it to a fixed `Exiting`, or to `has_sighup_strategy`
+    /// itself) fails HERE.
+    #[test]
+    fn signal_policy_has_sighup_target_default_probes_reconverging_only() {
+        let policy = SignalPolicy::default();
+        for phase in ProcessPhase::ALL {
+            let expected = phase == ProcessPhase::Reconverging;
+            assert_eq!(
+                policy.has_sighup_target(phase),
+                expected,
+                "default policy (sighup_strategy=Reconverge, target=Reconverging) \
+                 must return {expected} for phase={phase:?}",
+            );
+        }
+    }
+
+    /// NOOP-ARM PIN — a [`SignalPolicy`] carrying
+    /// [`SighupStrategy::Noop`] projects to `None` through
+    /// [`SighupStrategy::sighup_target`], so `has_sighup_target`
+    /// returns `false` for EVERY phase. Distinct from the sibling
+    /// stored-scalar [`Self::has_sighup_strategy`], which returns
+    /// `true` on a `Noop`-carrying policy when queried on
+    /// `SighupStrategy::Noop` itself — pins the derived-Option-child
+    /// vs stored-scalar semantic split at ONE narrow substrate site
+    /// so a regression that projected `Noop` onto a spurious target
+    /// (Zombie / Pending / Failed) fails HERE.
+    #[test]
+    fn signal_policy_has_sighup_target_returns_false_on_noop_for_every_phase() {
+        let policy = SignalPolicy {
+            sighup_strategy: SighupStrategy::Noop,
+            ..SignalPolicy::default()
+        };
+        assert!(policy.has_sighup_strategy(SighupStrategy::Noop));
+        for phase in ProcessPhase::ALL {
+            assert!(
+                !policy.has_sighup_target(phase),
+                "Noop-carrying policy must return false for phase {phase:?}",
             );
         }
     }

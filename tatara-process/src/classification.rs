@@ -2272,6 +2272,123 @@ impl Classification {
     pub fn data_is_public(&self) -> bool {
         self.data_classification.is_public()
     }
+
+    /// Compose the workspace-baseline [`Self::gate_compute`] with a
+    /// single-axis mutation — return `Self::gate_compute()` with the
+    /// axis slot carrying `axis`'s classification-axis type overwritten
+    /// by `axis`. The ONE substrate primitive that owns the
+    /// (Classification, single-axis variant) → Classification
+    /// baseline-with-axis-mutated composition shape.
+    ///
+    /// # Substrate ergonomics
+    ///
+    /// Pre-lift the shape `Classification::gate_compute()` with a
+    /// single axis slot overwritten by a per-test swept variant
+    /// recurred at ≥ 40 hand-authored test-fixture callsites past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, each restating the
+    /// SAME six-line struct-literal that names FOUR baseline slots
+    /// verbatim and mutates ONE. Post-lift every callsite reads
+    /// `Classification::gate_compute_with_axis(populated)` — one line,
+    /// ONE substrate primitive owns the four-baseline-slot restatement,
+    /// and a future workspace-wide baseline shift lands at ONE site
+    /// via [`Self::gate_compute`] rather than at every downstream
+    /// test fixture that names the four unmutated slots explicitly.
+    ///
+    /// # Compounding
+    ///
+    /// A future SIXTH classification axis (foreshadowed by the
+    /// six-axis lattice language on the CRD-facing prose) lands as
+    /// ONE peer `impl ClassificationAxis` on the new axis's closed
+    /// set + ONE new slot on [`Classification`] itself — every test
+    /// fixture using `gate_compute_with_axis` picks up the sixth axis
+    /// mechanically without touching the callsite. A future audit
+    /// dispatcher walking every classification axis (the "walk every
+    /// classification axis through its XOR partition landmark" shape
+    /// the FIFTH-axis-closure commit `2c74fab` explicitly named as
+    /// the next-lift target) binds through the SAME trait rather than
+    /// a five-arm dispatch on axis identity.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the four-baseline-slot restatement is the
+    /// composition proof `gate_compute` already carries at ONE site;
+    /// this primitive extends the ONE-site composition guarantee
+    /// through the per-axis mutation shape). THEORY.md §VI.1
+    /// (generation over composition — a future sixth axis lands as
+    /// ONE ClassificationAxis impl and every test fixture picks it
+    /// up mechanically).
+    #[must_use]
+    pub fn gate_compute_with_axis<A: ClassificationAxis>(axis: A) -> Self {
+        let mut c = Self::gate_compute();
+        axis.overlay(&mut c);
+        c
+    }
+}
+
+/// Test/audit helper — a closed-set variant that can overlay its
+/// classification-axis slot onto a base [`Classification`]. Unifies
+/// the five per-axis assignments (`horizon = Horizon { kind: self, ..
+/// default() }`, `calm = self`, `data_classification = self`,
+/// `point_type = self`, `substrate = self`) under ONE substrate
+/// shape so [`Classification::gate_compute_with_axis`] can compose
+/// the workspace baseline with a single-axis mutation generically
+/// over any of the five classification axes.
+///
+/// # Compounding
+///
+/// A future SIXTH classification axis lands as ONE peer `impl
+/// ClassificationAxis` on the new axis's closed set — every
+/// downstream test fixture and audit dispatcher that binds through
+/// [`Classification::gate_compute_with_axis`] picks up the sixth
+/// axis mechanically without a five-arm-becomes-six-arm dispatch
+/// edit. A future workspace-wide "walk every classification axis"
+/// audit primitive binds through the SAME trait rather than
+/// restating the five-per-axis assignment shape at its own body.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+/// preserves proofs. The five per-axis assignments each carry an
+/// axis-local composition proof (nested-struct `horizon.kind` gets
+/// a fresh `Horizon::default()` around the mutation; direct-scalar
+/// axes get a bare `self` assignment); this trait promotes the
+/// five proofs to ONE shape so a downstream composer binds through
+/// the same primitive regardless of which axis it targets.
+pub trait ClassificationAxis {
+    /// Overlay this axis-variant onto `c`, replacing the corresponding
+    /// classification-axis slot with `self`. Leaves every other slot
+    /// on `c` untouched.
+    fn overlay(self, c: &mut Classification);
+}
+
+impl ClassificationAxis for HorizonKind {
+    fn overlay(self, c: &mut Classification) {
+        c.horizon = Horizon {
+            kind: self,
+            ..Horizon::default()
+        };
+    }
+}
+
+impl ClassificationAxis for CalmClassification {
+    fn overlay(self, c: &mut Classification) {
+        c.calm = self;
+    }
+}
+
+impl ClassificationAxis for DataClassification {
+    fn overlay(self, c: &mut Classification) {
+        c.data_classification = self;
+    }
+}
+
+impl ClassificationAxis for ConvergencePointType {
+    fn overlay(self, c: &mut Classification) {
+        c.point_type = self;
+    }
+}
+
+impl ClassificationAxis for SubstrateType {
+    fn overlay(self, c: &mut Classification) {
+        c.substrate = self;
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -3681,6 +3798,114 @@ mod tests {
         let b = Classification::gate_compute();
         assert_eq!(a, b);
         assert!(!std::ptr::eq(&a, &b));
+    }
+
+    // ── Classification::gate_compute_with_axis substrate pins ────────
+    //
+    // Fail-before-pass-after granularity: `gate_compute_with_axis` did
+    // not exist before this commit — the (`gate_compute()` with ONE
+    // axis slot overwritten by a per-test swept variant) shape recurred
+    // at ≥ 40 hand-authored test-fixture callsites, each restating the
+    // SAME six-line struct-literal that names FOUR baseline slots
+    // verbatim and mutates ONE. Post-lift the shape lives at ONE
+    // substrate primitive that composes `Self::gate_compute` with a
+    // per-axis overlay through the [`ClassificationAxis`] trait. The
+    // two pins below fence the primitive's contract:
+    // (1) at every axis, feeding the baseline-of-that-axis variant
+    //     reconstructs exactly `gate_compute()` byte-for-byte, so the
+    //     overlay is the IDENTITY under baseline input;
+    // (2) at every axis, feeding a variant mutates ONLY that axis
+    //     slot and leaves the other four at their baseline.
+    // A regression that crossed the wires between the five per-axis
+    // impls (silently overlaying the wrong slot) or that broke the
+    // identity under baseline input (silently drifting the baseline
+    // slot on a non-baseline overlay) fails HERE at the substrate
+    // primitive rather than at each of the ≥ 40 downstream test
+    // callsites that would otherwise silently key an assertion on the
+    // wrong axis's variant.
+
+    #[test]
+    fn gate_compute_with_axis_is_identity_under_axis_baseline_input() {
+        // For each axis, feeding the baseline-of-that-axis variant
+        // reconstructs exactly `gate_compute()`. On the two axes with
+        // no `Default` (`ConvergencePointType`, `SubstrateType`) the
+        // baseline is the `gate_compute` chosen value (`Gate`,
+        // `Compute`); on the three defaulted axes the baseline is the
+        // sibling closed-set `#[default]` (`Bounded`, `Monotone`,
+        // `Internal`).
+        let baseline = Classification::gate_compute();
+        assert_eq!(
+            Classification::gate_compute_with_axis(HorizonKind::Bounded),
+            baseline,
+        );
+        assert_eq!(
+            Classification::gate_compute_with_axis(CalmClassification::Monotone),
+            baseline,
+        );
+        assert_eq!(
+            Classification::gate_compute_with_axis(DataClassification::Internal),
+            baseline,
+        );
+        assert_eq!(
+            Classification::gate_compute_with_axis(ConvergencePointType::Gate),
+            baseline,
+        );
+        assert_eq!(
+            Classification::gate_compute_with_axis(SubstrateType::Compute),
+            baseline,
+        );
+    }
+
+    #[test]
+    fn gate_compute_with_axis_mutates_only_the_named_axis_slot() {
+        // For each axis, sweep every variant and pin that the four
+        // sibling axis slots stay at their `gate_compute` baseline
+        // while only the named axis slot carries the swept variant.
+        // A regression that crossed the per-axis impls (a
+        // `ClassificationAxis for HorizonKind` body that mutated
+        // `c.calm` instead of `c.horizon.kind`, or a swap between
+        // `data_classification` and `calm` impls) fails HERE.
+        let baseline = Classification::gate_compute();
+        for populated in HorizonKind::ALL {
+            let c = Classification::gate_compute_with_axis(populated);
+            assert_eq!(c.horizon.kind, populated);
+            assert_eq!(c.calm, baseline.calm);
+            assert_eq!(c.data_classification, baseline.data_classification);
+            assert_eq!(c.point_type, baseline.point_type);
+            assert_eq!(c.substrate, baseline.substrate);
+        }
+        for populated in CalmClassification::ALL {
+            let c = Classification::gate_compute_with_axis(populated);
+            assert_eq!(c.calm, populated);
+            assert_eq!(c.horizon, baseline.horizon);
+            assert_eq!(c.data_classification, baseline.data_classification);
+            assert_eq!(c.point_type, baseline.point_type);
+            assert_eq!(c.substrate, baseline.substrate);
+        }
+        for populated in DataClassification::ALL {
+            let c = Classification::gate_compute_with_axis(populated);
+            assert_eq!(c.data_classification, populated);
+            assert_eq!(c.horizon, baseline.horizon);
+            assert_eq!(c.calm, baseline.calm);
+            assert_eq!(c.point_type, baseline.point_type);
+            assert_eq!(c.substrate, baseline.substrate);
+        }
+        for populated in ConvergencePointType::ALL {
+            let c = Classification::gate_compute_with_axis(populated);
+            assert_eq!(c.point_type, populated);
+            assert_eq!(c.horizon, baseline.horizon);
+            assert_eq!(c.calm, baseline.calm);
+            assert_eq!(c.data_classification, baseline.data_classification);
+            assert_eq!(c.substrate, baseline.substrate);
+        }
+        for populated in SubstrateType::ALL {
+            let c = Classification::gate_compute_with_axis(populated);
+            assert_eq!(c.substrate, populated);
+            assert_eq!(c.horizon, baseline.horizon);
+            assert_eq!(c.calm, baseline.calm);
+            assert_eq!(c.data_classification, baseline.data_classification);
+            assert_eq!(c.point_type, baseline.point_type);
+        }
     }
 
     // ── closed-set algebra contracts for DataClassification
@@ -6380,16 +6605,7 @@ mod tests {
     #[test]
     fn classification_horizon_probes_form_binary_xor_partition_over_all() {
         for populated in HorizonKind::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon {
-                    kind: populated,
-                    ..Horizon::default()
-                },
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             let buckets = [c.horizon_terminates(), c.horizon_requires_metric_axes()];
             let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
             assert_eq!(
@@ -6971,13 +7187,7 @@ mod tests {
     #[test]
     fn classification_point_type_probes_form_three_way_xor_partition_over_all() {
         for populated in ConvergencePointType::ALL {
-            let c = Classification {
-                point_type: populated,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             let buckets = [
                 c.point_is_endomorphic(),
                 c.point_is_diffusive(),
@@ -7333,13 +7543,7 @@ mod tests {
     #[test]
     fn classification_substrate_probes_form_three_way_xor_partition_over_all() {
         for populated in SubstrateType::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: populated,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             let buckets = [
                 c.substrate_is_resource(),
                 c.substrate_is_policy(),
@@ -7493,13 +7697,7 @@ mod tests {
     #[test]
     fn classification_calm_probes_form_binary_xor_partition_over_all() {
         for populated in CalmClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: populated,
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             let buckets = [c.calm_is_monotone(), c.calm_requires_coordination()];
             let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
             assert_eq!(
@@ -7649,13 +7847,7 @@ mod tests {
     #[test]
     fn classification_data_probes_form_binary_xor_partition_over_all() {
         for populated in DataClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: populated,
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             let buckets = [c.data_is_public(), c.data_is_restricted()];
             let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
             assert_eq!(

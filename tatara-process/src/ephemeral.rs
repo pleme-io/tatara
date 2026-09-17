@@ -1266,6 +1266,98 @@ impl EphemeralSpec {
             .horizon_requires_metric_axes()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s [`crate::classification::CalmClassification`]
+    /// project to `true` under
+    /// [`crate::classification::CalmClassification::requires_coordination`]?
+    /// Byte-for-byte peer of
+    /// [`Classification::calm_requires_coordination`] wrapped through
+    /// the [`Self::resolved_classification`] resolver so an operator-
+    /// omitted `:classification` slot on `(defephemeral …)` still
+    /// answers via the substrate default. The ONE ephemeral-surface
+    /// substrate primitive that owns the `(&EphemeralSpec) -> bool`
+    /// derived-nullary-boolean walk on the coordination-required
+    /// question over the classification-calm axis.
+    ///
+    /// # Third derived-nullary-boolean peer on the ephemeral surface
+    ///
+    /// Peer of [`Self::horizon_terminates`] and
+    /// [`Self::horizon_requires_metric_axes`] on the ephemeral
+    /// surface's (resolver-hop × derived-nullary-bool) shape — the
+    /// FIRST peer threading the classification-calm axis rather than
+    /// the classification-horizon axis. Distinct from both prior
+    /// derived-nullary peers by ONE structural degree at the underlying
+    /// [`Classification`] primitive: [`Self::horizon_terminates`] +
+    /// [`Self::horizon_requires_metric_axes`] both walk the nested
+    /// `.horizon.kind` sub-slot's derived projection, while this probe
+    /// walks the direct scalar `.calm` field's derived projection.
+    /// The resolver-hop shape is byte-identical.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `calm_requires_coordination()` returns `true` iff
+    /// `self.resolved_classification().calm_requires_coordination()`.
+    /// The resolver returns the authored [`Classification`] when
+    /// present and the substrate default
+    /// [`Classification::gate_compute`] on absence. Because
+    /// [`Classification::gate_compute`] carries
+    /// [`crate::classification::CalmClassification::default = Monotone`],
+    /// a bare ephemeral spec with no `:classification` slot answers
+    /// `false` — the default-arm short-circuit propagates through TWO
+    /// layers of `Default` ([`Classification::gate_compute`] →
+    /// [`crate::classification::CalmClassification::default`]) to this
+    /// predicate's answer. Distinct from the two `horizon_*` peers on
+    /// this surface, which short-circuit through THREE layers of
+    /// `Default` ([`Classification::gate_compute`] → [`Horizon::default`]
+    /// → [`HorizonKind::default`]) because the horizon axis has a
+    /// nested-struct wrapper between the classification field and the
+    /// closed-set discriminator. A regression that dropped the
+    /// resolver hop, probed [`Classification::has_calm`] directly
+    /// (dropping the `.requires_coordination()` projection), or
+    /// inverted the projection (silently promoting the Monotone
+    /// baseline to "requires coordination") fails HERE at ONE narrow
+    /// substrate site before drifting through every unadorned
+    /// ephemeral spec's baseline coordination-mode answer.
+    ///
+    /// # Compounding
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `coordination-required` on
+    /// `EPHEMERAL_FIXED_TAG_ARMS` — byte-for-byte peer of the point
+    /// surface's `coordination-required` fixed tag on
+    /// `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::calm_requires_coordination`] directly. The
+    /// two-surface parity contract holds by construction: both
+    /// surfaces route through the SAME
+    /// [`Classification::calm_requires_coordination`] primitive after
+    /// the ephemeral surface pays ONE resolver hop — a future
+    /// [`crate::classification::CalmClassification`] variant or a
+    /// future normalization at the substrate primitive lands at ONE
+    /// site and both surfaces' `coordination-required` fixed tags
+    /// inherit the shift mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-axis derived-nullary-
+    /// boolean probe body composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::calm_requires_coordination`]) so every
+    /// downstream (`coordination-required` fixed tags on both
+    /// surfaces in tatara-check, future scheduler / coordination-mode
+    /// validators, future variant additions on
+    /// [`crate::classification::CalmClassification`]) binds through
+    /// the SAME `calm_requires_coordination()` shape rather than
+    /// restating either the resolver walk or the closed-set
+    /// projection composition at the callsite. THEORY.md §VI.1 —
+    /// generation over composition; a future
+    /// [`crate::classification::CalmClassification`] variant lands at
+    /// ONE `ALL` entry + ONE `requires_coordination` arm on the
+    /// closed set and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn calm_requires_coordination(&self) -> bool {
+        self.resolved_classification().calm_requires_coordination()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -3454,6 +3546,115 @@ mod tests {
                 eph.horizon_requires_metric_axes(),
                 lowered.classification.horizon_requires_metric_axes(),
                 "authored horizon.kind={populated:?}: parity drift",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::calm_requires_coordination pins ───────────────
+    //
+    // Fail-before-pass-after granularity: `calm_requires_coordination`
+    // did not exist pre-lift on `impl EphemeralSpec` — every consumer
+    // walking the "does this ephemeral spec require coordination?"
+    // question went through
+    // `.resolved_classification().calm.requires_coordination()` or
+    // through the lowered `ProcessSpec`'s
+    // `spec.classification.calm.requires_coordination()`. Post-lift the
+    // THIRD derived-nullary-boolean peer on the ephemeral surface
+    // (first on the calm axis, after the two horizon-axis peers)
+    // routes through the SAME [`Self::resolved_classification`]
+    // resolver + the sibling substrate primitive
+    // [`crate::classification::Classification::calm_requires_coordination`],
+    // so the two-surface parity contract holds by construction — a
+    // regression on either side of the resolver fails at these pins
+    // before landing at the operator-facing `coordination-required`
+    // fixed tag in `tatara-check`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific [`CalmClassification`]
+    /// variant answers [`Self::calm_requires_coordination`] matching
+    /// the closed set's own
+    /// [`CalmClassification::requires_coordination`] truth table.
+    /// Sweep [`CalmClassification::ALL`] so a regression that (a)
+    /// hard-coded the body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with a sibling
+    /// classification-axis probe fails HERE at the substrate primitive
+    /// before drifting through the `coordination-required` fixed tag
+    /// or the peer point surface.
+    #[test]
+    fn calm_requires_coordination_returns_calm_projection_per_kind() {
+        for populated in CalmClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.calm = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.calm_requires_coordination(),
+                populated.requires_coordination(),
+                "authored calm={populated:?}: calm_requires_coordination() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries
+    /// [`CalmClassification::default = Monotone`], and
+    /// [`CalmClassification::Monotone::requires_coordination`] projects
+    /// `false`, so [`Self::calm_requires_coordination`] returns
+    /// `false`. Pins the default-arm short-circuit through TWO layers
+    /// of `Default` ([`Classification::gate_compute`] →
+    /// [`CalmClassification::default`]) reaching this derived-nullary
+    /// predicate — distinct from the sibling `horizon_*` absent-
+    /// classification pins by ONE structural degree (those walk THREE
+    /// layers of `Default` because horizon has a nested-struct wrapper;
+    /// this walks TWO because `calm` is a direct scalar). A regression
+    /// that dropped the resolver hop (silently answering `true` on an
+    /// absent classification, as if the operator's absence meant
+    /// "requires coordination") fails HERE at ONE narrow ephemeral-
+    /// surface site.
+    #[test]
+    fn calm_requires_coordination_probes_false_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            !spec.calm_requires_coordination(),
+            "absent classification (defaults to gate_compute, calm=Monotone → requires_coordination=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::calm_requires_coordination`] AND
+    /// through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.calm_requires_coordination()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`CalmClassification::ALL`] variant) so a future regression on
+    /// either side of the resolver fails HERE at the parity boundary.
+    /// Byte-for-byte peer of the sibling
+    /// `horizon_terminates_matches_point_peer_through_lowered_classification`
+    /// on the calm axis.
+    #[test]
+    fn calm_requires_coordination_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.calm_requires_coordination(),
+            lowered.classification.calm_requires_coordination(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in CalmClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.calm = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.calm_requires_coordination(),
+                lowered.classification.calm_requires_coordination(),
+                "authored calm={populated:?}: parity drift",
             );
         }
     }

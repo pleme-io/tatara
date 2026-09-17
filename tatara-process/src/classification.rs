@@ -1070,6 +1070,100 @@ impl Classification {
     pub fn horizon_requires_metric_axes(&self) -> bool {
         self.horizon.kind.requires_metric_axes()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`] carry a
+    /// [`CalmClassification`] whose variant projects to `true` under
+    /// [`CalmClassification::requires_coordination`]? The ONE substrate
+    /// primitive that owns the `(Classification) -> bool` derived-
+    /// nullary-predicate walk shape on the `calm` slot.
+    ///
+    /// # Third occupant on the (parent × derived-nullary-bool) corner
+    ///
+    /// Peer of [`Self::horizon_terminates`] and
+    /// [`Self::horizon_requires_metric_axes`] on the workspace-wide
+    /// (parent × derived-nullary-bool) corner of the closed-set-driven
+    /// presence-probe algebra — the FIRST occupant threading the
+    /// `calm` axis rather than the `horizon.kind` sub-axis. Distinct
+    /// from the two `horizon.*` peers by ONE structural degree: this
+    /// probe reads a DIRECT scalar closed-set field
+    /// ([`Self::calm`]) rather than the NESTED-STRUCT projection
+    /// (`self.horizon.kind`) both `horizon_*` peers walk; the derived-
+    /// nullary shape and the truth-table composition style match
+    /// exactly. Populates the corner as a proven-repeatable primitive
+    /// shape across TWO distinct closed-set axes (`HorizonKind`,
+    /// `CalmClassification`) rather than an axis-local curiosity.
+    ///
+    /// # Semantics — derived nullary boolean, not variant equality
+    ///
+    /// `calm_requires_coordination()` returns `true` iff
+    /// `self.calm.requires_coordination()`. The two-variant
+    /// [`CalmClassification`] closed set publishes the truth table
+    /// (the CALM theorem's typed image, Hellerstein 2010):
+    /// [`CalmClassification::Monotone`] → `false` (can be distributed
+    /// without coordination); [`CalmClassification::NonMonotone`] →
+    /// `true` (requires coordination). A
+    /// [`Classification::gate_compute`] baseline (which uses
+    /// [`CalmClassification::default = Monotone`] via `#[default]`)
+    /// answers `false` — the substrate's default-arm short-circuit
+    /// propagates through the scalar closed-set field's own
+    /// [`Default`] impl to this predicate's answer. The mirror-image
+    /// distinguishing feature vs the two `horizon_*` peers: those
+    /// short-circuit through TWO layers of `Default`
+    /// ([`Horizon::default`] → [`HorizonKind::default`]); this probe
+    /// short-circuits through ONE layer of `Default`
+    /// ([`CalmClassification::default`]) because `Self::calm` is a
+    /// direct scalar rather than a nested struct wrapper.
+    ///
+    /// A future third [`CalmClassification`] variant (a hypothetical
+    /// `ConditionallyMonotone` sentinel — pre-flagged on the closed
+    /// set's `ALL` docstring) reaches this probe through ONE
+    /// `requires_coordination` arm on the closed set with the probe
+    /// body untouched — the nullary-predicate shape defers every
+    /// per-variant policy decision to the closed set's own truth
+    /// table ([`CalmClassification::requires_coordination`]) rather
+    /// than duplicating the discriminator sweep here.
+    ///
+    /// # Compounding
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `coordination-required` on
+    /// `POINT_FIXED_TAG_ARMS` — byte-for-byte peer of the sibling
+    /// `terminating-horizon` and `metric-axes-required` fixed tags on
+    /// the (parent × derived-nullary-bool) corner. The ephemeral
+    /// surface publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::calm_requires_coordination`],
+    /// which composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (coordination-required)` audit answers the same
+    /// question on both surfaces.
+    ///
+    /// Future scheduler dispatch between Raft writes and gossip
+    /// propagation (documented on
+    /// [`CalmClassification::requires_coordination`] itself) reads
+    /// THIS predicate rather than re-deriving from the variant name
+    /// at each callsite — the classification-axis lattice-typed
+    /// image of the CALM theorem lives at ONE substrate site and
+    /// every scheduler / coordination-mode chooser downstream binds
+    /// through the SAME `calm_requires_coordination()` shape.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `coordination-required` fixed tag in `tatara-check`, future
+    /// scheduler / coordination-mode validators, future variant
+    /// additions on [`CalmClassification`]) binds through the SAME
+    /// `calm_requires_coordination()` shape rather than restating the
+    /// `classification.calm.requires_coordination()` chain at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`CalmClassification`] variant lands at ONE `ALL` entry +
+    /// ONE `requires_coordination` arm on the closed set and this probe
+    /// picks it up mechanically.
+    #[must_use]
+    pub fn calm_requires_coordination(&self) -> bool {
+        self.calm.requires_coordination()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -4976,5 +5070,82 @@ mod tests {
                 "{kind:?}: horizon_terminates() XOR horizon_requires_metric_axes() must hold",
             );
         }
+    }
+
+    // ── Classification::calm_requires_coordination substrate pins ────
+    //
+    // Fail-before-pass-after granularity: [`Classification::calm_requires_coordination`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the scalar [`CalmClassification`]
+    // slot's [`CalmClassification::requires_coordination`] projection
+    // had no substrate owner. Post-lift the shape lives at ONE
+    // substrate primitive and every downstream (the
+    // `coordination-required` fixed tag in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::calm_requires_coordination`]
+    // peer, future scheduler / coordination-mode validators) composes
+    // against the SAME `calm_requires_coordination()` shape rather than
+    // restating the `classification.calm.requires_coordination()` chain
+    // at its own callsite. THIRD occupant of the (parent × derived-
+    // nullary-bool) corner across TWO closed-set axes (`HorizonKind`,
+    // `CalmClassification`), pinning the corner as a proven-repeatable
+    // primitive shape rather than a single-axis curiosity.
+
+    /// PER-VARIANT pin — for every [`CalmClassification`] variant, a
+    /// [`Classification`] whose `calm` field carries that variant
+    /// returns `calm_requires_coordination()` matching the closed
+    /// set's own [`CalmClassification::requires_coordination`] truth
+    /// table. Sweep [`CalmClassification::ALL`] so a regression that
+    /// (a) hard-coded the method body to a fixed answer (silently
+    /// returning `true` regardless of the stored variant, silently
+    /// forcing every Monotone Process onto the Raft coordination path
+    /// and eliminating the CALM theorem's practical dividend), (b)
+    /// inverted the projection (silently promoting Monotone to
+    /// "requires coordination"), or (c) crossed the wires with a
+    /// sibling classification-axis probe fails HERE at the substrate
+    /// primitive before drifting through the `coordination-required`
+    /// fixed tag or the peer ephemeral surface.
+    #[test]
+    fn classification_calm_requires_coordination_matches_calm_classification_projection() {
+        for populated in CalmClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: populated,
+                data_classification: DataClassification::default(),
+            };
+            assert_eq!(
+                c.calm_requires_coordination(),
+                populated.requires_coordination(),
+                "calm={populated:?}: calm_requires_coordination() drift from CalmClassification::requires_coordination()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `calm: CalmClassification::default()` which defaults to
+    /// [`CalmClassification::Monotone`] via `#[default]`, and
+    /// [`CalmClassification::Monotone::requires_coordination`] projects
+    /// `false`, so `calm_requires_coordination()` returns `false`. Pins
+    /// the default-arm short-circuit through ONE layer of `Default`
+    /// (`CalmClassification`'s) at ONE narrow site — a regression that
+    /// promoted [`CalmClassification::NonMonotone`] to `#[default]`, or
+    /// that wired [`CalmClassification::Monotone`] to
+    /// `requires_coordination() = true`, would fail HERE before
+    /// drifting through every unadorned Process's scheduler-facing
+    /// coordination-mode answer. Distinct from the two sibling
+    /// `horizon_*` gate-compute-baseline pins by ONE structural
+    /// degree: those short-circuit through TWO layers of `Default`
+    /// (`Horizon`'s + `HorizonKind`'s); this pin walks ONE layer of
+    /// `Default` because [`Classification::calm`] is a scalar rather
+    /// than a nested-struct wrapper.
+    #[test]
+    fn classification_gate_compute_calm_requires_coordination_is_false() {
+        let c = Classification::gate_compute();
+        assert!(
+            !c.calm_requires_coordination(),
+            "gate_compute (calm=Monotone → requires_coordination=false) baseline",
+        );
     }
 }

@@ -2033,6 +2033,29 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "metric-axes-required",
         probe: |s| s.classification.horizon_requires_metric_axes(),
     },
+    // `coordination-required` — THIRD occupant on the (parent × derived-
+    // nullary-bool) corner of the workspace-wide fixed-tag algebra
+    // after the two `horizon.*` arms opened + populated the corner;
+    // FIRST occupant threading the classification-calm axis rather
+    // than the classification-horizon axis. Composes the ONE substrate
+    // primitive [`Classification::calm_requires_coordination`] that
+    // walks `self.calm.requires_coordination()` — the CALM theorem's
+    // typed image (Hellerstein 2010) as a fixed-tag audit surface.
+    // Answers the scheduler-facing question "must this Process's
+    // distributed state changes go through Raft rather than gossip?"
+    // — `false` on the `Monotone` default (can be distributed without
+    // coordination per CALM), `true` on `NonMonotone` (requires
+    // coordination). Byte-for-byte symmetrical with the ephemeral
+    // surface's `coordination-required` arm on
+    // [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::calm_requires_coordination`]
+    // — both surfaces route through the SAME
+    // [`Classification::calm_requires_coordination`] primitive after
+    // the ephemeral surface pays ONE resolver hop.
+    FixedTagArm {
+        tag: "coordination-required",
+        probe: |s| s.classification.calm_requires_coordination(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2107,6 +2130,29 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "metric-axes-required",
         probe: |s| s.horizon_requires_metric_axes(),
+    },
+    // `coordination-required` — byte-for-byte peer of the point
+    // surface's `coordination-required` arm on [`POINT_FIXED_TAG_ARMS`]
+    // via [`Classification::calm_requires_coordination`] reached
+    // through the ephemeral surface's
+    // [`EphemeralSpec::resolved_classification`] resolver. Answers the
+    // same CALM-theorem-facing question on the ephemeral surface —
+    // `false` on the absent-`:classification` default (routes through
+    // [`Classification::gate_compute`] → [`CalmClassification::default =
+    // Monotone`] → `requires_coordination() = false`) and on any
+    // operator-authored `Monotone` classification, `true` on
+    // `NonMonotone`. The two-surface parity contract holds by
+    // construction: both surfaces route through the SAME
+    // [`Classification::calm_requires_coordination`] primitive after
+    // the ephemeral surface pays ONE resolver hop. Distinct from the
+    // sibling `terminating-horizon` + `metric-axes-required` arms on
+    // this surface by ONE structural degree at the underlying
+    // [`Classification`] primitive: those two arms walk the nested
+    // `.horizon.kind` sub-slot's derived projection, while this arm
+    // walks the direct scalar `.calm` field's derived projection.
+    FixedTagArm {
+        tag: "coordination-required",
+        probe: |s| s.calm_requires_coordination(),
     },
 ];
 
@@ -10913,6 +10959,7 @@ mod tests {
                 "signals",
                 "terminating-horizon",
                 "metric-axes-required",
+                "coordination-required",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -10928,6 +10975,7 @@ mod tests {
                 "closed-loop-auth",
                 "terminating-horizon",
                 "metric-axes-required",
+                "coordination-required",
             ],
         );
     }
@@ -15756,6 +15804,189 @@ mod tests {
                 "point horizon.kind={populated:?}: terminating-horizon XOR metric-axes-required must hold at the classifier",
             );
         }
+    }
+
+    // ── coordination-required fixed tag substrate pins ───────────────
+    //
+    // Fail-before-pass-after granularity: the `coordination-required`
+    // fixed tag did not exist before this commit — the (parent ×
+    // derived-nullary-bool) corner of the fixed-tag algebra carried
+    // only the two `horizon.*` peers on the classification-horizon
+    // sub-axis. This lift opens the THIRD occupant on the corner and
+    // the FIRST threading the classification-calm axis via ONE
+    // substrate primitive
+    // [`tatara_process::classification::Classification::calm_requires_coordination`].
+    // Every test below binds through the SAME substrate primitive so
+    // a regression that (a) hard-coded either surface's arm to a
+    // fixed answer, (b) inverted the projection, (c) dropped the
+    // ephemeral surface's resolver hop, or (d) drifted the two-
+    // surface parity contract fails HERE at ONE narrow classifier
+    // site per pin before landing at the operator-facing checks.lisp
+    // surface.
+
+    /// POINT SURFACE per-variant pin — for every [`CalmClassification`]
+    /// variant, a [`ProcessSpec`] whose `classification.calm` field
+    /// carries that variant answers the `coordination-required` fixed
+    /// tag matching the closed set's own
+    /// [`CalmClassification::requires_coordination`] truth table.
+    /// Sweep [`CalmClassification::ALL`] so a regression that probed
+    /// a fixed variant or inverted the projection fails HERE at the
+    /// classifier before landing at the operator-facing surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_calm_requires_coordination_projection_per_calm_kind() {
+        for populated in CalmClassification::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.calm = populated;
+            assert_eq!(
+                evaluate_point_require_tag(&spec, "coordination-required"),
+                Ok(populated.requires_coordination()),
+                "point calm={populated:?}: coordination-required drift from CalmClassification::requires_coordination()",
+            );
+        }
+    }
+
+    /// POINT SURFACE DEFAULT-ARM SHORT-CIRCUIT pin — a Process built
+    /// through [`ProcessSpec::gate_compute_defaults`] (which carries
+    /// `calm: CalmClassification::default()` = `Monotone` via
+    /// `#[default]`) answers `Ok(false)` on `coordination-required`
+    /// WITHOUT the operator naming the calm axis. Pins the default-
+    /// arm short-circuit through ONE layer of `Default`
+    /// (`CalmClassification`'s) at ONE narrow classifier site — a
+    /// regression that promoted [`CalmClassification::NonMonotone`]
+    /// to `#[default]`, or that wired the fixed tag's probe to a
+    /// fixed positive answer, would fail HERE before drifting through
+    /// every unadorned Process's scheduler-facing coordination-mode
+    /// check.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_default_coordination_required() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "coordination-required"),
+            Ok(false),
+            "default (calm=Monotone → requires_coordination=false) baseline",
+        );
+    }
+
+    /// EPHEMERAL SURFACE per-variant pin — for every
+    /// [`CalmClassification`] variant, an [`EphemeralSpec`] whose
+    /// authored [`Classification`] carries that variant answers the
+    /// `coordination-required` fixed tag matching the closed set's own
+    /// [`CalmClassification::requires_coordination`] truth table.
+    /// Byte-for-byte peer of the point-surface per-variant pin above
+    /// via the SAME [`Classification::calm_requires_coordination`]
+    /// primitive reached through the ephemeral surface's
+    /// `resolved_classification()` resolver.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_calm_requires_coordination_projection_per_calm_kind()
+    {
+        for populated in CalmClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.calm = populated;
+            let spec = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, "coordination-required"),
+                Ok(populated.requires_coordination()),
+                "ephemeral calm={populated:?}: coordination-required drift",
+            );
+        }
+    }
+
+    /// EPHEMERAL SURFACE ABSENT-CLASSIFICATION SHORT-CIRCUIT pin —
+    /// an [`EphemeralSpec`] whose `classification` slot is `None`
+    /// routes through the resolver's substrate default
+    /// [`Classification::gate_compute`] (whose calm defaults to
+    /// [`CalmClassification::Monotone`] → `requires_coordination() =
+    /// false`), so the `coordination-required` fixed tag answers
+    /// `Ok(false)` WITHOUT the operator naming the classification
+    /// axis on `(defephemeral …)`. Pins the default-arm short-circuit
+    /// through TWO layers of `Default` at ONE narrow classifier site
+    /// — distinct from the sibling `terminating-horizon` +
+    /// `metric-axes-required` ephemeral absent-classification pins by
+    /// ONE structural degree (those walk THREE layers because horizon
+    /// has a nested-struct wrapper; this walks TWO because `calm` is
+    /// a direct scalar).
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_absent_classification_for_coordination_required(
+    ) {
+        let spec = ephemeral_fixture();
+        assert!(spec.classification.is_none());
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "coordination-required"),
+            Ok(false),
+            "absent classification (defaults to gate_compute, calm=Monotone → requires_coordination=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME classification (across
+    /// (`None`, `Some(_)` on every [`CalmClassification::ALL`] variant))
+    /// classifies IDENTICALLY through the point-surface
+    /// `coordination-required` fixed tag AND the ephemeral-surface
+    /// `coordination-required` fixed tag when the ephemeral spec is
+    /// mechanically lowered to a [`ProcessSpec`] via `From`. Byte-
+    /// for-byte peer of
+    /// `evaluate_terminating_horizon_matches_across_surfaces_through_lowered_ephemeral`
+    /// on the classification-calm axis.
+    #[test]
+    fn evaluate_coordination_required_matches_across_surfaces_through_lowered_ephemeral() {
+        // Absent classification.
+        let eph = ephemeral_fixture();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&eph, "coordination-required"),
+            evaluate_point_require_tag(&lowered, "coordination-required"),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in CalmClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.calm = populated;
+            let eph = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph, "coordination-required"),
+                evaluate_point_require_tag(&lowered, "coordination-required"),
+                "authored calm={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// COARSE / FINE COEXISTENCE pin — a Process with
+    /// `classification.calm = NonMonotone` MUST answer `Ok(true)` on
+    /// the `coordination-required` fixed tag AND simultaneously
+    /// satisfy the fine `calm-NonMonotone` closed-set prefix tag.
+    /// Locks the semantic split between the coarse nullary boolean
+    /// and the fine variant-equality tag at ONE narrow site — a
+    /// regression that collapsed `coordination-required` to always
+    /// match `calm-Monotone` (or vice versa, silently answering the
+    /// classifier's fine-variant question through the coarse
+    /// derived-boolean predicate) fails HERE. Peer of
+    /// `evaluate_point_require_tag_terminating_horizon_and_horizon_asymptotic_coexist`
+    /// on the classification-calm axis.
+    #[test]
+    fn evaluate_point_require_tag_coordination_required_and_calm_nonmonotone_coexist() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.classification.calm = CalmClassification::NonMonotone;
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "coordination-required"),
+            Ok(true),
+            "NonMonotone-calm Process must satisfy the coarse `coordination-required` fixed tag",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "calm-NonMonotone"),
+            Ok(true),
+            "NonMonotone-calm Process must satisfy the fine `calm-NonMonotone` prefix tag",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "calm-Monotone"),
+            Ok(false),
+            "NonMonotone-calm Process must fail the mismatched `calm-Monotone` prefix tag",
+        );
     }
 
     // ── RequireTagDomain trait dispatch pins ─────────────────────────

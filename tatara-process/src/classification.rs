@@ -1816,6 +1816,113 @@ impl Classification {
     pub fn substrate_is_resource(&self) -> bool {
         self.substrate.is_resource()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`]'s
+    /// [`SubstrateType`] project to `true` under
+    /// [`SubstrateType::is_policy`]? The ONE substrate primitive
+    /// that owns the `(Classification) -> bool` derived-nullary-
+    /// predicate walk shape on the `substrate` slot for the
+    /// policy-plane bucket question.
+    ///
+    /// # Tenth occupant on the (parent × derived-nullary-bool) corner
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`],
+    /// [`Self::data_is_regulated`], [`Self::data_is_restricted`],
+    /// [`Self::point_is_endomorphic`], [`Self::point_is_diffusive`],
+    /// [`Self::point_is_convergent`], and
+    /// [`Self::substrate_is_resource`] on the workspace-wide
+    /// (parent × derived-nullary-bool) corner of the closed-set-
+    /// driven presence-probe algebra — the TENTH occupant on the
+    /// corner and the SECOND peer threading the classification-
+    /// `substrate` axis, promoting that axis from a proven-repeatable
+    /// one-off (`substrate_is_resource` alone) to a proven-repeatable
+    /// pair. FIRST corner-peer pair on the `substrate` axis whose
+    /// two projections carry a non-trivial closed-set-internal
+    /// MUTEX relationship (`substrate_is_resource ⇒ ¬substrate_is_policy`
+    /// — the eight-variant [`SubstrateType`] closed set carves its
+    /// variants into THREE disjoint buckets sealed by
+    /// `substrate_type_buckets_cover_every_variant`), structural
+    /// twin of the sibling `point_type`-axis MUTEX pair sealed by
+    /// `classification_point_is_endomorphic_and_point_is_diffusive_are_mutex_over_all`.
+    /// Direct-scalar peer of [`Self::substrate_is_resource`] and the
+    /// three sibling `point_type`-axis arms: all five share the
+    /// shape (direct scalar closed-set field with no [`Default`]
+    /// impl on the child, so no default-arm short-circuit through
+    /// the child's `#[default]` chain). The
+    /// [`Classification::gate_compute`] baseline's chosen field
+    /// (`substrate: Compute`) projects `false` HERE
+    /// (`Compute.is_policy() = false`), mirror-inverted from the
+    /// sibling `substrate_is_resource` baseline's `true`.
+    ///
+    /// # Semantics — derived nullary boolean over the closed-set plane
+    ///
+    /// `substrate_is_policy()` returns `true` iff
+    /// `self.substrate.is_policy()`. The eight-variant
+    /// [`SubstrateType`] closed set publishes the truth table (via
+    /// the plane partition):
+    /// [`SubstrateType::Security`] / [`SubstrateType::Identity`] /
+    /// [`SubstrateType::Regulatory`] → `true` (policy plane — you
+    /// enforce constraints on it); [`SubstrateType::Financial`] /
+    /// [`SubstrateType::Compute`] / [`SubstrateType::Network`] /
+    /// [`SubstrateType::Storage`] / [`SubstrateType::Observability`]
+    /// → `false` (resource or telemetry plane). A
+    /// [`Classification::gate_compute`] baseline answers `false`
+    /// because its `substrate: Compute` field is deliberately
+    /// resource-plane, not policy-plane.
+    ///
+    /// A future ninth [`SubstrateType`] variant lands at ONE `ALL`
+    /// entry + ONE `is_policy` arm on the closed set with the
+    /// probe body untouched — the nullary-predicate shape defers
+    /// every per-variant policy decision to the closed set's own
+    /// truth table ([`SubstrateType::is_policy`]) rather than
+    /// duplicating the discriminator sweep here.
+    ///
+    /// # Compounding — second substrate-axis peer, opens the substrate MUTEX pair
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `policy-substrate` on
+    /// `POINT_FIXED_TAG_ARMS` — byte-for-byte structural peer of the
+    /// sibling `resource-substrate` / `terminating-horizon` /
+    /// `metric-axes-required` / `coordination-required` /
+    /// `data-regulated` / `data-restricted` / `endomorphic-point` /
+    /// `diffusive-point` / `convergent-point` fixed tags on the
+    /// (parent × derived-nullary-bool) corner. The ephemeral surface
+    /// publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::substrate_is_policy`],
+    /// which composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (policy-substrate)` audit answers the same
+    /// question on both surfaces. Sibling projection
+    /// [`SubstrateType::is_telemetry`] composes byte-identically as
+    /// a future eleventh corner occupant; when it lands the
+    /// three-way partition contract
+    /// `is_resource ⊕ is_policy ⊕ is_telemetry` sealed on the closed
+    /// set by `substrate_type_buckets_cover_every_variant` composes
+    /// through the parent-composed layer as a substrate-wide theorem
+    /// — the exact ternary lift already sealed on the sibling
+    /// `point_type` axis by
+    /// `classification_point_type_probes_form_three_way_xor_partition_over_all`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `policy-substrate` fixed tag in `tatara-check`, future
+    /// plane-baseline / compliance-baseline selectors, future
+    /// variant additions on [`SubstrateType`]) binds through the
+    /// SAME `substrate_is_policy()` shape rather than restating
+    /// the `classification.substrate.is_policy()` chain at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`SubstrateType`] variant lands at ONE `ALL` entry +
+    /// ONE `is_policy` arm on the closed set and this probe picks
+    /// it up mechanically.
+    #[must_use]
+    pub fn substrate_is_policy(&self) -> bool {
+        self.substrate.is_policy()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -6389,5 +6496,117 @@ mod tests {
             c.substrate_is_resource(),
             "gate_compute (substrate=Compute → is_resource=true) baseline",
         );
+    }
+
+    // ── Classification::substrate_is_policy substrate pins ──────────
+    //
+    // Fail-before-pass-after granularity: [`Classification::substrate_is_policy`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the scalar [`SubstrateType`]
+    // slot's [`SubstrateType::is_policy`] projection had no
+    // substrate owner. Post-lift the shape lives at ONE substrate
+    // primitive and every downstream (the `policy-substrate` fixed
+    // tag in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::substrate_is_policy`] peer,
+    // future plane-baseline / compliance-baseline selectors)
+    // composes against the SAME `substrate_is_policy()` shape.
+    // TENTH occupant of the (parent × derived-nullary-bool) corner
+    // and SECOND occupant threading the classification-`substrate`
+    // axis, promoting that axis from a proven-repeatable one-off
+    // (`substrate_is_resource` alone) to a proven-repeatable pair.
+    // FIRST substrate-axis corner-peer pair carrying a non-trivial
+    // closed-set-internal MUTEX relationship
+    // (`substrate_is_resource ⇒ ¬substrate_is_policy`).
+
+    /// PER-VARIANT pin — for every [`SubstrateType`] variant, a
+    /// [`Classification`] whose `substrate` field carries that
+    /// variant returns `substrate_is_policy()` matching the closed
+    /// set's own [`SubstrateType::is_policy`] truth table. Sweep
+    /// [`SubstrateType::ALL`] so a regression that (a) hard-coded
+    /// the method body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with a sibling closed-
+    /// set projection ([`SubstrateType::is_resource`] /
+    /// [`SubstrateType::is_telemetry`]) fails HERE at the substrate
+    /// primitive before drifting through the `policy-substrate`
+    /// fixed tag or the peer ephemeral surface.
+    #[test]
+    fn classification_substrate_is_policy_matches_substrate_projection() {
+        for populated in SubstrateType::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: populated,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert_eq!(
+                c.substrate_is_policy(),
+                populated.is_policy(),
+                "substrate={populated:?}: substrate_is_policy() drift from SubstrateType::is_policy()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `substrate: SubstrateType::Compute` deliberately (NOT via
+    /// `#[default]` — [`SubstrateType`] has no `impl Default`), and
+    /// [`SubstrateType::Compute::is_policy`] projects `false`
+    /// (Compute is a resource-plane substrate, not a policy plane),
+    /// so `substrate_is_policy()` returns `false`. Pins the
+    /// baseline's chosen-field answer at ONE narrow site — a
+    /// regression that promoted [`SubstrateType::Security`] (or any
+    /// policy plane) to the gate-compute baseline, or that wired
+    /// [`SubstrateType::Compute`] to `is_policy() = true`, would
+    /// fail HERE before drifting through every unadorned Process's
+    /// plane-baseline answer. Mirror-inverted from the sibling
+    /// `classification_gate_compute_substrate_is_resource_is_true`
+    /// baseline (both walk the SAME chosen `substrate: Compute`
+    /// field, so `is_resource = true` ⇒ `is_policy = false` on the
+    /// closed set's disjoint plane partition).
+    #[test]
+    fn classification_gate_compute_substrate_is_policy_is_false() {
+        let c = Classification::gate_compute();
+        assert!(
+            !c.substrate_is_policy(),
+            "gate_compute (substrate=Compute → is_policy=false) baseline",
+        );
+    }
+
+    /// MUTEX pin — [`Classification::substrate_is_resource`] AND
+    /// [`Classification::substrate_is_policy`] are NEVER simultaneously
+    /// true for ANY [`SubstrateType`] variant, since the closed set's
+    /// own `is_resource` / `is_policy` / `is_telemetry` triple carves
+    /// it into THREE disjoint buckets (sealed on the closed set by
+    /// `substrate_type_buckets_cover_every_variant`). Sweep
+    /// [`SubstrateType::ALL`] so a regression that crossed the wires
+    /// between the two corner peers at the parent-composed layer (one
+    /// probe silently composing the wrong closed-set arm) fails HERE
+    /// rather than at every downstream consumer that trusts the two
+    /// probes partition the substrate slot into disjoint buckets.
+    /// FIRST substrate-axis corner-peer pair whose two projections
+    /// carry a non-trivial closed-set-internal MUTEX relationship —
+    /// structural twin of the sibling `point_type`-axis MUTEX pair
+    /// sealed by
+    /// `classification_point_is_endomorphic_and_point_is_diffusive_are_mutex_over_all`.
+    /// When [`Classification::substrate_is_telemetry`] lands the
+    /// mutex closes into the full three-way XOR partition contract
+    /// `substrate_is_resource ⊕ substrate_is_policy ⊕ substrate_is_telemetry`
+    /// composed through this corner as a substrate-wide theorem.
+    #[test]
+    fn classification_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all() {
+        for populated in SubstrateType::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: populated,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert!(
+                !(c.substrate_is_resource() && c.substrate_is_policy()),
+                "substrate={populated:?}: substrate_is_resource AND substrate_is_policy both true (mutex violated)",
+            );
+        }
     }
 }

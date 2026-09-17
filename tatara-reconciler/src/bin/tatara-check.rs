@@ -2275,6 +2275,54 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "resource-substrate",
         probe: |s| s.classification.substrate_is_resource(),
     },
+    // `policy-substrate` — TENTH occupant on the (parent × derived-
+    // nullary-bool) corner of the workspace-wide fixed-tag algebra
+    // after the two `horizon.*`, one `coordination-required`, two
+    // `data-*`, three `point-*`, and one `resource-substrate` arms
+    // opened + populated the corner; SECOND occupant threading the
+    // classification-`substrate` axis, promoting that axis on the
+    // corner from a proven-repeatable one-off (`resource-substrate`
+    // alone) to a proven-repeatable pair. Composes the ONE substrate
+    // primitive
+    // [`tatara_process::classification::Classification::substrate_is_policy`]
+    // that walks `self.substrate.is_policy()` — the eight-variant
+    // [`tatara_process::classification::SubstrateType`] closed set's
+    // policy-plane bucket partition (Security | Identity |
+    // Regulatory) as a fixed-tag audit surface. Answers the
+    // constraint-enforcement-facing question "does this Process live
+    // on a substrate you enforce policy on (rather than a resource
+    // or telemetry substrate)?" — `false` on the `Compute` default
+    // (workspace baseline is resource-plane, not policy-plane) and
+    // on `Financial | Compute | Network | Storage | Observability`,
+    // `true` on `Security | Identity | Regulatory`. Byte-for-byte
+    // symmetrical with the ephemeral surface's `policy-substrate`
+    // arm on [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::substrate_is_policy`]
+    // — both surfaces route through the SAME
+    // [`Classification::substrate_is_policy`] primitive after the
+    // ephemeral surface pays ONE resolver hop. Structural byte-for-
+    // byte peer of the sibling `resource-substrate` arm above and
+    // the three `point-*` arms: all five walk a DIRECT scalar
+    // closed-set field's derived projection through TWO layers of
+    // `Default` short-circuit (the parent `Classification` defaults,
+    // but the scalar child has no `#[default]` — the `substrate`
+    // field on `gate_compute` is chosen, not defaulted). SECOND
+    // substrate-axis peer opens the FIRST corner-peer MUTEX pair on
+    // the substrate axis (`resource-substrate ⇒ ¬policy-substrate` —
+    // sealed on the closed set by
+    // `substrate_type_buckets_cover_every_variant` and composed
+    // through the parent-composed layer by
+    // `classification_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all`);
+    // sibling [`SubstrateType::is_telemetry`] composes byte-
+    // identically as a future eleventh corner occupant that will
+    // close the substrate axis into the FULL three-way XOR
+    // partition `is_resource ⊕ is_policy ⊕ is_telemetry`, exactly
+    // as the sibling `point_type` axis was closed on the corner by
+    // `classification_point_type_probes_form_three_way_xor_partition_over_all`.
+    FixedTagArm {
+        tag: "policy-substrate",
+        probe: |s| s.classification.substrate_is_policy(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2528,6 +2576,37 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "resource-substrate",
         probe: |s| s.substrate_is_resource(),
+    },
+    // `policy-substrate` — byte-for-byte peer of the point surface's
+    // `policy-substrate` arm on [`POINT_FIXED_TAG_ARMS`] via
+    // [`Classification::substrate_is_policy`] reached through the
+    // resolver primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    // Composes the ONE ephemeral-surface substrate primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::substrate_is_policy`]
+    // that walks
+    // `self.resolved_classification().substrate.is_policy()`. Both
+    // surfaces route through the SAME
+    // [`Classification::substrate_is_policy`] primitive after the
+    // ephemeral surface pays ONE resolver hop. SECOND ephemeral-
+    // surface peer on the substrate axis — promotes the axis on this
+    // surface from a proven-repeatable one-off (`resource-substrate`
+    // alone) to a proven-repeatable pair AND opens the FIRST
+    // corner-peer MUTEX pair on the ephemeral surface's substrate
+    // axis (`resource-substrate ⇒ ¬policy-substrate`, sealed by
+    // `ephemeral_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all`),
+    // structural twin of the sibling `point_type`-axis MUTEX pair
+    // opened on this surface by `endomorphic-point ⇒ ¬diffusive-point`
+    // via
+    // `ephemeral_point_is_endomorphic_and_point_is_diffusive_are_mutex_over_all`.
+    // Sibling [`SubstrateType::is_telemetry`] projection will
+    // compose as a future eleventh peer, closing the axis into the
+    // FULL three-way XOR partition contract exactly as the
+    // `point_type` axis was closed on this surface by
+    // `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`.
+    FixedTagArm {
+        tag: "policy-substrate",
+        probe: |s| s.substrate_is_policy(),
     },
 ];
 
@@ -11341,6 +11420,7 @@ mod tests {
                 "diffusive-point",
                 "convergent-point",
                 "resource-substrate",
+                "policy-substrate",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -11363,6 +11443,7 @@ mod tests {
                 "diffusive-point",
                 "convergent-point",
                 "resource-substrate",
+                "policy-substrate",
             ],
         );
     }

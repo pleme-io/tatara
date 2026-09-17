@@ -1911,6 +1911,97 @@ impl EphemeralSpec {
         self.resolved_classification().substrate_is_resource()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s
+    /// [`crate::classification::SubstrateType`] project to `true`
+    /// under [`crate::classification::SubstrateType::is_policy`]?
+    /// Byte-for-byte peer of
+    /// [`Classification::substrate_is_policy`] wrapped through the
+    /// [`Self::resolved_classification`] resolver so an operator-
+    /// omitted `:classification` slot on `(defephemeral …)` still
+    /// answers via the substrate default. The ONE ephemeral-surface
+    /// substrate primitive that owns the `(&EphemeralSpec) -> bool`
+    /// derived-nullary-boolean walk on the policy-plane bucket
+    /// question over the classification-`substrate` axis.
+    ///
+    /// # Tenth derived-nullary-boolean peer on the ephemeral surface
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`],
+    /// [`Self::data_is_regulated`], [`Self::data_is_restricted`],
+    /// [`Self::point_is_endomorphic`], [`Self::point_is_diffusive`],
+    /// [`Self::point_is_convergent`], and
+    /// [`Self::substrate_is_resource`] on the ephemeral surface's
+    /// (resolver-hop × derived-nullary-bool) shape — the TENTH peer
+    /// overall and the SECOND peer threading the classification-
+    /// `substrate` axis, promoting that axis on this surface from a
+    /// proven-repeatable one-off to a proven-repeatable pair.
+    /// FIRST ephemeral-surface substrate-axis corner-peer pair
+    /// carrying a non-trivial closed-set-internal MUTEX relationship
+    /// (`substrate_is_resource ⇒ ¬substrate_is_policy`), structural
+    /// twin of the sibling `point_type`-axis MUTEX pair sealed on
+    /// this surface by
+    /// `ephemeral_point_is_endomorphic_and_point_is_diffusive_are_mutex_over_all`.
+    /// The resolver-hop shape is byte-identical across all ten peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `substrate_is_policy()` returns `true` iff
+    /// `self.resolved_classification().substrate_is_policy()`. The
+    /// resolver returns the authored [`Classification`] when present
+    /// and the substrate default [`Classification::gate_compute`] on
+    /// absence. Because [`Classification::gate_compute`] carries
+    /// [`crate::classification::SubstrateType::Compute`] (the
+    /// canonical resource-plane substrate, NOT a policy plane), a
+    /// bare ephemeral spec with no `:classification` slot answers
+    /// `false` — a regression that dropped the resolver hop, probed
+    /// the wrong closed-set arm, or inverted the projection fails
+    /// HERE at ONE narrow substrate site before drifting through
+    /// every unadorned ephemeral spec's plane-baseline answer.
+    ///
+    /// # Compounding — second substrate-axis peer on the ephemeral surface
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `policy-substrate` on
+    /// `EPHEMERAL_FIXED_TAG_ARMS` — byte-for-byte peer of the point
+    /// surface's `policy-substrate` fixed tag on
+    /// `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::substrate_is_policy`] directly. The two-
+    /// surface parity contract holds by construction: both surfaces
+    /// route through the SAME
+    /// [`Classification::substrate_is_policy`] primitive after the
+    /// ephemeral surface pays ONE resolver hop. SECOND ephemeral-
+    /// surface peer on the `substrate` axis — sibling projection
+    /// [`crate::classification::SubstrateType::is_telemetry`]
+    /// composes byte-identically as a future eleventh peer, closing
+    /// the axis into a proven-repeatable three-peer sub-corner
+    /// exactly as the `point_type` axis was closed on this surface
+    /// by
+    /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-`substrate`-axis derived-
+    /// nullary-boolean probe body composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::substrate_is_policy`]) so every
+    /// downstream (`policy-substrate` fixed tags on both surfaces
+    /// in tatara-check, future plane-baseline / compliance-baseline
+    /// selectors, future variant additions on
+    /// [`crate::classification::SubstrateType`]) binds through the
+    /// SAME `substrate_is_policy()` shape rather than restating
+    /// either the resolver walk or the closed-set projection
+    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// over composition; a future
+    /// [`crate::classification::SubstrateType`] variant lands at ONE
+    /// `ALL` entry + ONE `is_policy` arm on the closed set and
+    /// both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn substrate_is_policy(&self) -> bool {
+        self.resolved_classification().substrate_is_policy()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -4967,6 +5058,152 @@ mod tests {
                 eph.substrate_is_resource(),
                 lowered.classification.substrate_is_resource(),
                 "authored substrate={populated:?}: parity drift",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::substrate_is_policy pins ──────────────────────
+    //
+    // Fail-before-pass-after granularity: `substrate_is_policy` did
+    // not exist pre-lift on `impl EphemeralSpec` — every consumer
+    // walking the "does this ephemeral spec's substrate project to
+    // the policy plane?" question went through
+    // `.resolved_classification().substrate.is_policy()` or the
+    // lowered `ProcessSpec`'s
+    // `spec.classification.substrate.is_policy()`. Post-lift the
+    // TENTH derived-nullary-boolean peer on the ephemeral surface
+    // (SECOND on the `substrate` axis) routes through the SAME
+    // [`Self::resolved_classification`] resolver + the sibling
+    // substrate primitive
+    // [`crate::classification::Classification::substrate_is_policy`],
+    // so the two-surface parity contract holds by construction, AND
+    // the two `substrate`-axis peers on this surface open the
+    // MUTEX pair on the axis via
+    // `ephemeral_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific
+    /// [`crate::classification::SubstrateType`] variant answers
+    /// [`Self::substrate_is_policy`] matching the closed set's own
+    /// [`crate::classification::SubstrateType::is_policy`] truth
+    /// table. Sweep [`crate::classification::SubstrateType::ALL`]
+    /// so a regression that (a) hard-coded the body to a fixed
+    /// answer, (b) inverted the projection, or (c) crossed the wires
+    /// with the sibling
+    /// [`crate::classification::SubstrateType::is_resource`] /
+    /// [`crate::classification::SubstrateType::is_telemetry`]
+    /// projections fails HERE at the substrate primitive before
+    /// drifting through the `policy-substrate` fixed tag or the
+    /// peer point surface.
+    #[test]
+    fn substrate_is_policy_returns_substrate_projection_per_kind() {
+        for populated in SubstrateType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.substrate = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.substrate_is_policy(),
+                populated.is_policy(),
+                "authored substrate={populated:?}: substrate_is_policy() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries
+    /// [`crate::classification::SubstrateType::Compute`] (the
+    /// canonical resource-plane substrate, NOT a policy plane), and
+    /// [`crate::classification::SubstrateType::Compute::is_policy`]
+    /// projects `false`, so [`Self::substrate_is_policy`] returns
+    /// `false`. Pins the resolver's chosen-field baseline at ONE
+    /// narrow site — mirror-inverted from the sibling
+    /// `substrate_is_resource_probes_true_on_absent_classification`
+    /// (both projections on `gate_compute`'s chosen `substrate`
+    /// field, but the sibling answers `true` where this one
+    /// answers `false` — the closed set's disjoint plane partition
+    /// forbids both being true).
+    #[test]
+    fn substrate_is_policy_probes_false_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            !spec.substrate_is_policy(),
+            "absent classification (defaults to gate_compute, substrate=Compute → is_policy=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::substrate_is_policy`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.substrate_is_policy()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`crate::classification::SubstrateType::ALL`] variant) so a
+    /// future regression on either side of the resolver fails HERE
+    /// at the parity boundary. Byte-for-byte peer of
+    /// `substrate_is_resource_matches_point_peer_through_lowered_classification`
+    /// on the SAME closed-set axis via a sibling projection.
+    #[test]
+    fn substrate_is_policy_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.substrate_is_policy(),
+            lowered.classification.substrate_is_policy(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in SubstrateType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.substrate = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.substrate_is_policy(),
+                lowered.classification.substrate_is_policy(),
+                "authored substrate={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// MUTEX pin — [`Self::substrate_is_resource`] AND
+    /// [`Self::substrate_is_policy`] are NEVER simultaneously true
+    /// for ANY [`EphemeralSpec`] (authored or defaulted), since the
+    /// underlying [`crate::classification::SubstrateType`] closed set
+    /// carves its eight variants into THREE disjoint buckets. Sweep
+    /// the absent-classification case + every
+    /// [`crate::classification::SubstrateType::ALL`] variant so a
+    /// regression that crossed the wires between the two ephemeral-
+    /// surface corner peers (one probe silently composing the wrong
+    /// closed-set arm at the resolver-hop layer) fails HERE rather
+    /// than at every downstream consumer that trusts the two probes
+    /// partition the resolver's output into disjoint buckets.
+    /// FIRST ephemeral-surface `substrate`-axis corner-peer pair
+    /// carrying a non-trivial MUTEX relationship — structural twin
+    /// of the sibling `point_type`-axis MUTEX pair sealed on this
+    /// surface by
+    /// `ephemeral_point_is_endomorphic_and_point_is_diffusive_are_mutex_over_all`.
+    #[test]
+    fn ephemeral_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        assert!(
+            !(eph.substrate_is_resource() && eph.substrate_is_policy()),
+            "None-classification: substrate_is_resource AND substrate_is_policy both true (mutex violated)",
+        );
+        // Authored classification.
+        for populated in SubstrateType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.substrate = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            assert!(
+                !(eph.substrate_is_resource() && eph.substrate_is_policy()),
+                "authored substrate={populated:?}: substrate_is_resource AND substrate_is_policy both true (mutex violated)",
             );
         }
     }

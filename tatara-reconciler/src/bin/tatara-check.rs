@@ -2413,6 +2413,48 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "monotone-calm",
         probe: |s| s.classification.calm_is_monotone(),
     },
+    // `public-data` — THIRTEENTH occupant on the (parent × derived-
+    // nullary-bool) corner of the workspace-wide fixed-tag algebra
+    // after the twelve prior arms opened + populated the corner;
+    // THIRD occupant threading the classification-`data_classification`
+    // axis — CLOSES the data axis on the corner into the FULL binary
+    // XOR partition contract `public-data ⊕ data-restricted`. Composes
+    // the ONE substrate primitive
+    // [`tatara_process::classification::Classification::data_is_public`]
+    // that walks `self.data_classification.is_public()` — the positive
+    // distribution-framing image (freely-distributable ↔ no access-
+    // control regime applies) as a fixed-tag audit surface. Answers
+    // the compliance-auditor-facing question "is this Process's
+    // dataset publicly distributable (bearing no access-control
+    // regime)?" — `false` on the `Internal` default (unadorned
+    // Process is access-controlled by baseline compliance posture),
+    // `true` on `Public` only. Byte-for-byte symmetrical with the
+    // ephemeral surface's `public-data` arm on
+    // [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::data_is_public`]
+    // — both surfaces route through the SAME
+    // [`Classification::data_is_public`] primitive after the
+    // ephemeral surface pays ONE resolver hop. Structural byte-for-
+    // byte peer of the sibling `data-restricted` arm above (the
+    // antisymmetric partner on the same axis) and of the calm-axis
+    // `monotone-calm` arm (the positive-framing peer on the sibling
+    // binary-XOR closed set): both walk the same scalar slot through
+    // ONE layer of `Default` (`DataClassification::default = Internal`
+    // for this arm; `CalmClassification::default = Monotone` for the
+    // calm arm). THIRD data-axis peer CLOSES the data-axis MUTEX pin
+    // (`data-regulated ⇒ ¬public-data`) into the FULL binary XOR
+    // partition sealed on the closed set by
+    // `data_classification_public_xor_restricted` and composed
+    // through the parent-composed layer by
+    // `classification_data_probes_form_binary_xor_partition_over_all`,
+    // the second binary-XOR-partition closure landmark on this
+    // corner (after the calm axis) that structurally twins the
+    // ternary partitions already sealed on the sibling `point_type`
+    // and `substrate` axes.
+    FixedTagArm {
+        tag: "public-data",
+        probe: |s| s.classification.data_is_public(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2748,6 +2790,35 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "monotone-calm",
         probe: |s| s.calm_is_monotone(),
+    },
+    // `public-data` — byte-for-byte peer of the point surface's
+    // `public-data` arm on [`POINT_FIXED_TAG_ARMS`] via
+    // [`Classification::data_is_public`] reached through the
+    // resolver primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    // Composes the ONE ephemeral-surface substrate primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::data_is_public`]
+    // that walks `self.resolved_classification().data_classification.is_public()`.
+    // Both surfaces route through the SAME
+    // [`Classification::data_is_public`] primitive after the
+    // ephemeral surface pays ONE resolver hop. THIRD ephemeral-
+    // surface peer on the data axis — CLOSES the axis into the FULL
+    // binary XOR partition contract sealed on this surface by
+    // `ephemeral_data_probes_form_binary_xor_partition_over_all`,
+    // the resolver-hop peer of the parent-composed
+    // `classification_data_probes_form_binary_xor_partition_over_all`.
+    // Binary counterpart of the ternary XOR partitions sealed on
+    // the sibling `point_type` and `substrate` axes on this surface
+    // by
+    // `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`
+    // and
+    // `ephemeral_substrate_probes_form_three_way_xor_partition_over_all`
+    // and structural twin of the calm-axis binary XOR closure
+    // `ephemeral_calm_probes_form_binary_xor_partition_over_all` on
+    // this surface.
+    FixedTagArm {
+        tag: "public-data",
+        probe: |s| s.data_is_public(),
     },
 ];
 
@@ -11564,6 +11635,7 @@ mod tests {
                 "policy-substrate",
                 "telemetry-substrate",
                 "monotone-calm",
+                "public-data",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -11589,6 +11661,7 @@ mod tests {
                 "policy-substrate",
                 "telemetry-substrate",
                 "monotone-calm",
+                "public-data",
             ],
         );
     }

@@ -2190,6 +2190,107 @@ impl EphemeralSpec {
         self.resolved_classification().calm_is_monotone()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s
+    /// [`crate::classification::DataClassification`] project to `true`
+    /// under [`crate::classification::DataClassification::is_public`]?
+    /// Byte-for-byte peer of [`Classification::data_is_public`]
+    /// wrapped through the [`Self::resolved_classification`] resolver
+    /// so an operator-omitted `:classification` slot on
+    /// `(defephemeral …)` still answers via the substrate default.
+    /// The ONE ephemeral-surface substrate primitive that owns the
+    /// `(&EphemeralSpec) -> bool` derived-nullary-boolean walk on the
+    /// freely-distributable-data question — the positive framing peer
+    /// of [`Self::data_is_restricted`].
+    ///
+    /// # Thirteenth derived-nullary-boolean peer on the ephemeral surface — CLOSES the data axis
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], [`Self::data_is_regulated`],
+    /// [`Self::data_is_restricted`], [`Self::point_is_endomorphic`],
+    /// [`Self::point_is_diffusive`], [`Self::point_is_convergent`],
+    /// [`Self::substrate_is_resource`], [`Self::substrate_is_policy`],
+    /// [`Self::substrate_is_telemetry`], and [`Self::calm_is_monotone`]
+    /// on the ephemeral surface's (resolver-hop × derived-nullary-bool)
+    /// shape — the THIRTEENTH peer overall and the THIRD peer
+    /// threading the classification-`data_classification` axis. This
+    /// peer CLOSES the data axis on the ephemeral surface into the
+    /// FULL binary XOR partition contract
+    /// `data_is_public ⊕ data_is_restricted` — sealed on this surface
+    /// by `ephemeral_data_probes_form_binary_xor_partition_over_all`,
+    /// the resolver-hop peer of the parent-composed
+    /// `classification_data_probes_form_binary_xor_partition_over_all`.
+    /// Structural twin of the sibling calm-axis binary XOR sealed on
+    /// this surface by
+    /// `ephemeral_calm_probes_form_binary_xor_partition_over_all`,
+    /// lifted through the resolver hop from the six-variant data-axis
+    /// closed set to the ephemeral surface. The resolver-hop shape is
+    /// byte-identical across all thirteen peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `data_is_public()` returns `true` iff
+    /// `self.resolved_classification().data_is_public()`. The
+    /// resolver returns the authored [`Classification`] when present
+    /// and the substrate default [`Classification::gate_compute`] on
+    /// absence. Because [`Classification::gate_compute`] carries
+    /// [`crate::classification::DataClassification::default =
+    /// Internal`] via `#[default]`, a bare ephemeral spec with no
+    /// `:classification` slot answers `false` — every unadorned
+    /// `(defephemeral …)` reads as access-controlled by default (safe
+    /// under compliance baseline: an operator must deliberately opt
+    /// the dataset into public distribution rather than the substrate
+    /// silently promoting an unadorned Process onto the freely-
+    /// distributable path). A regression that dropped the resolver
+    /// hop, probed the wrong closed-set arm, or inverted the
+    /// projection fails HERE at ONE narrow substrate site before
+    /// drifting through every unadorned ephemeral spec's positive-
+    /// distribution-framing answer. Mirror-inverted from the sibling
+    /// `data_is_restricted_probes_true_on_absent_classification`
+    /// (both walk the SAME defaulted `data_classification` field, so
+    /// `is_restricted = true` ⇒ `is_public = false` on the closed
+    /// set's disjoint XOR partition).
+    ///
+    /// # Compounding — CLOSES the data axis on the ephemeral surface
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `public-data` on `EPHEMERAL_FIXED_TAG_ARMS`
+    /// — byte-for-byte peer of the point surface's `public-data`
+    /// fixed tag on `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::data_is_public`] directly. The two-
+    /// surface parity contract holds by construction: both surfaces
+    /// route through the SAME [`Classification::data_is_public`]
+    /// primitive after the ephemeral surface pays ONE resolver hop.
+    /// THIRD ephemeral-surface peer on the `data_classification` axis
+    /// — CLOSES the axis into a proven-repeatable three-peer sub-
+    /// corner (data_is_regulated, data_is_restricted, data_is_public)
+    /// whose complementary XOR partition seals on the closed set by
+    /// `data_classification_public_xor_restricted` and composes
+    /// through the resolver hop as a substrate-wide theorem.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-`data_classification`-axis
+    /// derived-nullary-boolean probe body composes ONE resolver
+    /// primitive ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::data_is_public`]) so every downstream
+    /// (`public-data` fixed tags on both surfaces in tatara-check,
+    /// future compliance-baseline / audit-log-optional validators
+    /// reading the positive distribution framing, future variant
+    /// additions on
+    /// [`crate::classification::DataClassification`]) binds through
+    /// the SAME `data_is_public()` shape rather than restating either
+    /// the resolver walk or the closed-set projection composition at
+    /// the callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`crate::classification::DataClassification`] variant
+    /// lands at ONE `ALL` entry + ONE `is_public` arm on the closed
+    /// set and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn data_is_public(&self) -> bool {
+        self.resolved_classification().data_is_public()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -5795,6 +5896,192 @@ mod tests {
             assert_eq!(
                 hits, 1,
                 "authored calm={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::data_is_public pins ───────────────────────────
+    //
+    // Fail-before-pass-after granularity: `data_is_public` did not
+    // exist pre-lift on `impl EphemeralSpec` — every consumer walking
+    // the "is this ephemeral spec's dataset publicly distributable?"
+    // question went through the antisymmetric
+    // `!self.data_is_restricted()` or through
+    // `.resolved_classification().data_classification.is_public()`.
+    // Post-lift the THIRTEENTH derived-nullary-boolean peer on the
+    // ephemeral surface (THIRD on the data axis, closing that axis
+    // into a binary XOR partition on this surface) routes through the
+    // SAME [`Self::resolved_classification`] resolver + the sibling
+    // substrate primitive
+    // [`crate::classification::Classification::data_is_public`], so
+    // the two-surface parity contract holds by construction, AND the
+    // two-way public/restricted split on this surface CLOSES the
+    // data axis into the FULL binary XOR partition contract via
+    // `ephemeral_data_probes_form_binary_xor_partition_over_all`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific
+    /// [`crate::classification::DataClassification`] variant answers
+    /// [`Self::data_is_public`] matching the closed set's own
+    /// [`crate::classification::DataClassification::is_public`] truth
+    /// table. Sweep
+    /// [`crate::classification::DataClassification::ALL`] so a
+    /// regression that (a) hard-coded the body to a fixed answer,
+    /// (b) inverted the projection, or (c) crossed the wires with
+    /// the sibling
+    /// [`crate::classification::DataClassification::is_restricted`]
+    /// projection fails HERE at the substrate primitive before
+    /// drifting through the `public-data` fixed tag or the peer
+    /// point surface.
+    #[test]
+    fn data_is_public_returns_data_projection_per_kind() {
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.data_is_public(),
+                populated.is_public(),
+                "authored data_classification={populated:?}: data_is_public() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries
+    /// [`crate::classification::DataClassification::default = Internal`]
+    /// via `#[default]`, and
+    /// [`crate::classification::DataClassification::Internal::is_public`]
+    /// projects `false`, so [`Self::data_is_public`] returns `false`.
+    /// Pins the resolver's default-arm short-circuit through TWO
+    /// layers of `Default` ([`Classification::gate_compute`] →
+    /// [`crate::classification::DataClassification::default`])
+    /// reaching this derived-nullary predicate. Mirror-inverted from
+    /// the sibling
+    /// `data_is_restricted_probes_true_on_absent_classification`
+    /// (both walk the SAME defaulted `data_classification` field, so
+    /// `is_restricted = true` ⇒ `is_public = false` on the closed
+    /// set's disjoint XOR partition). Guarantees every unadorned
+    /// `(defephemeral …)` audits under the access-controlled default
+    /// rather than silently promoting an unadorned dataset onto the
+    /// freely-distributable path.
+    #[test]
+    fn data_is_public_probes_false_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            !spec.data_is_public(),
+            "absent classification (defaults to gate_compute, data_classification=Internal → is_public=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::data_is_public`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.data_is_public()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`crate::classification::DataClassification::ALL`] variant) so
+    /// a future regression on either side of the resolver fails HERE
+    /// at the parity boundary. Byte-for-byte peer of
+    /// `data_is_restricted_matches_point_peer_through_lowered_classification`
+    /// on the SAME closed-set axis via the antisymmetric projection.
+    #[test]
+    fn data_is_public_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.data_is_public(),
+            lowered.classification.data_is_public(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.data_is_public(),
+                lowered.classification.data_is_public(),
+                "authored data_classification={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// MUTEX pin — [`Self::data_is_regulated`] AND
+    /// [`Self::data_is_public`] are NEVER simultaneously true for ANY
+    /// [`EphemeralSpec`] (authored or defaulted). FIRST ephemeral-
+    /// surface data-axis antisymmetric MUTEX pin against the
+    /// positive-distribution framing: sealed on the closed set by
+    /// `data_classification_regulated_implies_not_public` and lifted
+    /// through the resolver hop as a substrate-wide contract on this
+    /// surface.
+    #[test]
+    fn ephemeral_data_is_regulated_and_data_is_public_are_mutex_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        assert!(
+            !(eph.data_is_regulated() && eph.data_is_public()),
+            "None-classification: data_is_regulated AND data_is_public both true (mutex violated)",
+        );
+        // Authored classification.
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            assert!(
+                !(eph.data_is_regulated() && eph.data_is_public()),
+                "authored data_classification={populated:?}: data_is_regulated AND data_is_public both true (mutex violated)",
+            );
+        }
+    }
+
+    /// BINARY XOR PARTITION pin — for the absent-classification
+    /// baseline AND every
+    /// [`crate::classification::DataClassification::ALL`] variant,
+    /// EXACTLY ONE of [`Self::data_is_public`] and
+    /// [`Self::data_is_restricted`] returns `true`. CLOSES the data-
+    /// axis MUTEX pin (`data_is_regulated ⇒ ¬data_is_public`) into
+    /// the FULL binary XOR partition contract on the ephemeral
+    /// surface — the resolver-hop peer of the parent-composed
+    /// `classification_data_probes_form_binary_xor_partition_over_all`
+    /// test. Binary counterpart of the ternary XOR partitions sealed
+    /// on the sibling `point_type` and `substrate` axes by
+    /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`
+    /// and
+    /// `ephemeral_substrate_probes_form_three_way_xor_partition_over_all`.
+    /// Guarantees the absent-classification case lands in the
+    /// access-controlled bucket (`gate_compute` →
+    /// DataClassification::Internal → is_public = false,
+    /// is_restricted = true), so every unadorned `(defephemeral …)`
+    /// audits under a definite non-empty distribution bucket.
+    #[test]
+    fn ephemeral_data_probes_form_binary_xor_partition_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let buckets = [eph.data_is_public(), eph.data_is_restricted()];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
+        );
+        // Authored classification.
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let buckets = [eph.data_is_public(), eph.data_is_restricted()];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "authored data_classification={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
             );
         }
     }

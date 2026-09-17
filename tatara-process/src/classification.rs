@@ -2142,6 +2142,136 @@ impl Classification {
     pub fn calm_is_monotone(&self) -> bool {
         self.calm.is_monotone()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`]'s
+    /// [`DataClassification`] project to `true` under
+    /// [`DataClassification::is_public`]? The ONE substrate primitive
+    /// that owns the `(Classification) -> bool` derived-nullary-
+    /// predicate walk shape on the `data_classification` slot for the
+    /// freely-distributable-data question — the positive framing peer
+    /// of [`Self::data_is_restricted`].
+    ///
+    /// # Thirteenth occupant on the (parent × derived-nullary-bool) corner — CLOSES the data axis
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], [`Self::data_is_regulated`],
+    /// [`Self::data_is_restricted`], [`Self::point_is_endomorphic`],
+    /// [`Self::point_is_diffusive`], [`Self::point_is_convergent`],
+    /// [`Self::substrate_is_resource`], [`Self::substrate_is_policy`],
+    /// [`Self::substrate_is_telemetry`], and [`Self::calm_is_monotone`]
+    /// on the workspace-wide (parent × derived-nullary-bool) corner of
+    /// the closed-set-driven presence-probe algebra — the THIRTEENTH
+    /// occupant on the corner and the THIRD peer threading the
+    /// classification-`data_classification` axis. This peer CLOSES
+    /// the data axis on the corner into the FULL binary XOR partition
+    /// contract `data_is_public ⊕ data_is_restricted` — the closed-set
+    /// partition sealed on [`DataClassification`] by
+    /// `data_classification_public_xor_restricted` now composes
+    /// through the parent-composed layer as a substrate-wide theorem
+    /// pinned by
+    /// `classification_data_probes_form_binary_xor_partition_over_all`.
+    /// Structural twin of the calm-axis binary XOR partition sealed at
+    /// the parent-composed layer by
+    /// `classification_calm_probes_form_binary_xor_partition_over_all`
+    /// on the sibling `calm` axis — both axes carve into a `is_X /
+    /// requires_X` (positive/negative-framing) complementary bucket
+    /// pair whose union covers every closed-set variant. The data axis
+    /// becomes the FOURTH classification axis (after `point_type`,
+    /// `substrate`, `calm`) to reach the closed XOR partition landmark
+    /// on this corner, promoting the axis-closure milestone from a
+    /// proven-repeatable triple (ternary on `point_type` + `substrate`
+    /// plus binary on `calm`) to a proven-repeatable quadruple (adding
+    /// a SECOND binary on `data_classification`). Direct-scalar peer
+    /// of [`Self::data_is_regulated`] and [`Self::data_is_restricted`]:
+    /// all three walk the same scalar `data_classification` slot on the
+    /// parent — TWO layers of `Default` short-circuit reaching the
+    /// derived-nullary predicate ([`Classification::gate_compute`] →
+    /// [`DataClassification::default`]). The
+    /// [`Classification::gate_compute`] baseline's default-arm answer
+    /// projects `false` HERE (Internal default →
+    /// `is_public() = false`), mirror-inverted from
+    /// [`Self::data_is_restricted`]'s Internal-default `true` on the
+    /// SAME defaulted `data_classification` slot.
+    ///
+    /// # Semantics — derived nullary boolean over the closed-set plane
+    ///
+    /// `data_is_public()` returns `true` iff
+    /// `self.data_classification.is_public()`. The six-variant
+    /// [`DataClassification`] closed set publishes the truth table:
+    /// [`DataClassification::Public`] → `true` (freely distributable —
+    /// no access control required); [`DataClassification::Internal`] /
+    /// [`DataClassification::Confidential`] / [`DataClassification::Pii`]
+    /// / [`DataClassification::Phi`] / [`DataClassification::Pci`] →
+    /// `false` (some access-control regime applies). A
+    /// [`Classification::gate_compute`] baseline answers `false`
+    /// because its `data_classification:
+    /// DataClassification::default() = Internal` field defaults via
+    /// [`DataClassification`]'s `#[default]`, so every unadorned
+    /// Process reads as access-controlled (safe under the compliance
+    /// baseline: an operator must deliberately opt into public
+    /// distribution).
+    ///
+    /// The closed-set-internal pin
+    /// `data_classification_regulated_implies_not_public` seals the
+    /// implication `is_regulated() ⇒ ¬is_public()` on every variant, so
+    /// [`Self::data_is_regulated`] returning `true` implies THIS
+    /// predicate returns `false`; this is the ANTISYMMETRIC pair to
+    /// the sibling `data_classification_regulated_implies_restricted`
+    /// on the same closed set, and the FIRST substrate-primitive pair
+    /// on the (parent × derived-nullary-bool) corner whose two
+    /// predicates project ONE closed set into the pair of
+    /// complementary buckets whose union is a full binary XOR
+    /// partition AND whose intersection is empty on every variant.
+    ///
+    /// A future seventh [`DataClassification`] variant (a hypothetical
+    /// `TradeSecret` bucket for competitive-sensitive data, or an
+    /// `Anonymized` bucket for pseudonymized-PII whose regulatory
+    /// posture differs from raw PII) reaches this probe through ONE
+    /// `is_public` arm on the closed set with the probe body untouched
+    /// — the nullary-predicate shape defers every per-variant policy
+    /// decision to the closed set's own truth table
+    /// ([`DataClassification::is_public`]) rather than duplicating the
+    /// discriminator sweep here.
+    ///
+    /// # Compounding — CLOSES the data axis into a binary XOR partition
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `public-data` on `POINT_FIXED_TAG_ARMS` —
+    /// byte-for-byte structural peer of the sibling `data-restricted`
+    /// fixed tag (the antisymmetric partner on the same axis) and of
+    /// every other `(parent × derived-nullary-bool)` corner arm. The
+    /// ephemeral surface publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::data_is_public`], which
+    /// composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (public-data)` audit answers the same question on
+    /// both surfaces. THIRD data-axis peer CLOSES the binary XOR
+    /// partition contract `is_public ⊕ is_restricted` sealed on the
+    /// closed set by `data_classification_public_xor_restricted`
+    /// through the parent-composed layer as a substrate-wide theorem
+    /// — mirror of the calm axis's parent-composed binary XOR closure
+    /// `classification_calm_probes_form_binary_xor_partition_over_all`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `public-data` fixed tag in `tatara-check`, future compliance-
+    /// baseline / audit-log-optional validators reading the positive
+    /// distribution framing, future variant additions on
+    /// [`DataClassification`]) binds through the SAME
+    /// `data_is_public()` shape rather than restating either
+    /// `!self.data_is_restricted()` or `self.data_classification.is_public()`
+    /// at the callsite. THEORY.md §VI.1 — generation over composition;
+    /// a future [`DataClassification`] variant lands at ONE `ALL`
+    /// entry + ONE `is_public` arm on the closed set and this probe
+    /// picks it up mechanically.
+    #[must_use]
+    pub fn data_is_public(&self) -> bool {
+        self.data_classification.is_public()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -3249,6 +3379,43 @@ impl DataClassification {
             Self::Internal | Self::Confidential | Self::Pii | Self::Phi | Self::Pci => true,
         }
     }
+
+    /// POSITIVE-FRAMING PEER of [`Self::is_restricted`] — is this
+    /// classification freely distributable (i.e. bearing no access-
+    /// control requirement)? Closed-set match (not `matches!`) so a
+    /// future variant triggers the compiler's exhaustiveness check at
+    /// this site rather than silently defaulting to `false` (silently
+    /// marking a genuinely-public dataset as restricted and paying the
+    /// access-control tax indefinitely) or `true` (silently shipping a
+    /// restricted or regulated dataset onto the freely-distributable
+    /// path — a compliance-catastrophic mislabel). The typed image of
+    /// the "freely distributable?" question: `Public ⇒ true` and every
+    /// other variant `⇒ false` is the antisymmetric partner of
+    /// [`Self::is_restricted`] — exactly one of
+    /// `(is_public, is_restricted)` is true per variant — pinned by
+    /// `data_classification_public_xor_restricted`. Mirror of
+    /// [`CalmClassification::is_monotone`] /
+    /// [`CalmClassification::requires_coordination`] on the calm axis
+    /// and [`HorizonKind::terminates`] /
+    /// [`HorizonKind::requires_metric_axes`] on the horizon axis: each
+    /// closed set publishes its two derived-nullary-bool projections
+    /// at ONE site each so the axis carves into complementary buckets
+    /// by construction. The positive framing is the substrate primitive
+    /// a compliance auditor asks first ("is this dataset publicly
+    /// distributable?"); a future consumer answering that question
+    /// reads [`Self::is_public`] rather than re-deriving via
+    /// `!is_restricted()` at the callsite. Sealed further against
+    /// [`Self::is_regulated`] by
+    /// `data_classification_regulated_implies_not_public` — regulated
+    /// data is by definition not publicly distributable, the exact
+    /// closed-set-internal implication that composes forward through
+    /// both the parent-composed and resolver-hop layers on this axis.
+    pub const fn is_public(self) -> bool {
+        match self {
+            Self::Public => true,
+            Self::Internal | Self::Confidential | Self::Pii | Self::Phi | Self::Pci => false,
+        }
+    }
 }
 
 // `impl FromStr for DataClassification` +
@@ -3600,21 +3767,27 @@ mod tests {
     /// reads the same projection that the reconciler writes.
     #[test]
     fn data_classification_predicate_truth_tables() {
+        assert!(DataClassification::Public.is_public());
         assert!(!DataClassification::Public.is_restricted());
         assert!(!DataClassification::Public.is_regulated());
 
+        assert!(!DataClassification::Internal.is_public());
         assert!(DataClassification::Internal.is_restricted());
         assert!(!DataClassification::Internal.is_regulated());
 
+        assert!(!DataClassification::Confidential.is_public());
         assert!(DataClassification::Confidential.is_restricted());
         assert!(!DataClassification::Confidential.is_regulated());
 
+        assert!(!DataClassification::Pii.is_public());
         assert!(DataClassification::Pii.is_restricted());
         assert!(DataClassification::Pii.is_regulated());
 
+        assert!(!DataClassification::Phi.is_public());
         assert!(DataClassification::Phi.is_restricted());
         assert!(DataClassification::Phi.is_regulated());
 
+        assert!(!DataClassification::Pci.is_public());
         assert!(DataClassification::Pci.is_restricted());
         assert!(DataClassification::Pci.is_regulated());
     }
@@ -3636,6 +3809,78 @@ mod tests {
             assert!(
                 !class.is_regulated() || class.is_restricted(),
                 "{class:?} is regulated but not restricted — \
+                 regulated data is by definition not freely distributable",
+            );
+        }
+    }
+
+    /// POSITIVE-FRAMING TRUTH-TABLE CONTRACT: `is_public` implements
+    /// the antisymmetric partner of `is_restricted` — `Public ⇒ true`
+    /// and every other variant `⇒ false`. Pinning this table at one
+    /// site means any future consumer asking the positive
+    /// distribution framing ("is this dataset publicly distributable?")
+    /// reads the same projection the compliance auditor reads. A
+    /// future variant that flipped this mapping would have to renumber
+    /// every consumer deliberately rather than silently promoting an
+    /// access-controlled dataset onto the freely-distributable path.
+    #[test]
+    fn data_classification_is_public_truth_table() {
+        assert!(DataClassification::Public.is_public());
+        assert!(!DataClassification::Internal.is_public());
+        assert!(!DataClassification::Confidential.is_public());
+        assert!(!DataClassification::Pii.is_public());
+        assert!(!DataClassification::Phi.is_public());
+        assert!(!DataClassification::Pci.is_public());
+    }
+
+    /// XOR PARTITION CONTRACT: for every [`DataClassification`]
+    /// variant, EXACTLY ONE of `is_public` / `is_restricted` is true
+    /// — the two predicates carve the closed set into COMPLEMENTARY
+    /// buckets (publicly distributable ↔ no access-control regime
+    /// applies; access-controlled ↔ some regime applies), the exact
+    /// binary partition already sealed on the sibling calm axis by
+    /// `calm_classification_monotone_xor_requires_coordination` on the
+    /// two-variant closed set, now lifted through the projection layer
+    /// to the six-variant data axis. A future variant that returned
+    /// `true` for both (publicly distributable AND access-controlled —
+    /// a category error) or `false` for both (an inert variant with
+    /// no distribution classification — nothing to dispatch on) would
+    /// fail here, forcing the author to extend either the predicates
+    /// or the [`DataClassification`] enum deliberately. Structural
+    /// twin of `calm_classification_monotone_xor_requires_coordination`
+    /// and `horizon_kind_terminate_xor_requires_metric_axes` on the
+    /// sibling calm + horizon axes — all three binary XOR partitions
+    /// publish their two derived-nullary-bool projections as
+    /// complementary XOR pairs at ONE site each so the axis carves
+    /// into disjoint buckets by construction.
+    #[test]
+    fn data_classification_public_xor_restricted() {
+        for class in DataClassification::ALL {
+            assert!(
+                class.is_public() ^ class.is_restricted(),
+                "{class:?}: is_public() XOR is_restricted() must hold",
+            );
+        }
+    }
+
+    /// ANTISYMMETRIC IMPLICATION CONTRACT: every regulated
+    /// classification is NEVER publicly distributable — the impossible
+    /// bucket (regulated AND public) is pinned empty on the closed
+    /// set. Paired with `data_classification_regulated_implies_restricted`
+    /// this is the antisymmetric MUTEX pin against the positive
+    /// framing peer — a future variant that returned `(true, true)`
+    /// from `(is_regulated, is_public)` would fail HERE, forcing the
+    /// author to either flip `is_public` or extend the consumer
+    /// dispatch sites (compliance-baseline auto-selector, audit-log
+    /// mandatory-fields validator) deliberately rather than silently
+    /// producing a regulated class the API server would accept as
+    /// freely distributable.
+    #[test]
+    fn data_classification_regulated_implies_not_public() {
+        for class in DataClassification::ALL {
+            assert!(
+                !class.is_regulated() || !class.is_public(),
+                "{class:?} is regulated AND public — \
                  regulated data is by definition not freely distributable",
             );
         }
@@ -7233,6 +7478,162 @@ mod tests {
             assert_eq!(
                 hits, 1,
                 "calm={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
+            );
+        }
+    }
+
+    // ── Classification::data_is_public substrate pins ───────────────
+    //
+    // Fail-before-pass-after granularity: [`Classification::data_is_public`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the scalar [`DataClassification`]
+    // slot's [`DataClassification::is_public`] projection had no
+    // substrate owner. Post-lift the shape lives at ONE substrate
+    // primitive and every downstream (the `public-data` fixed tag
+    // in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::data_is_public`] peer,
+    // future compliance-baseline / audit-log-optional validators
+    // reading the positive distribution framing) composes against the
+    // SAME `data_is_public()` shape rather than restating either
+    // `!self.data_is_restricted()` or the `self.data_classification.is_public()`
+    // chain at its own callsite. THIRTEENTH occupant of the (parent ×
+    // derived-nullary-bool) corner and THIRD occupant threading the
+    // classification-`data_classification` axis — CLOSES the data axis
+    // on the corner into the FULL binary XOR partition contract
+    // `data_is_public ⊕ data_is_restricted` sealed on the closed set
+    // by `data_classification_public_xor_restricted` and composed
+    // through the parent-composed layer by
+    // `classification_data_probes_form_binary_xor_partition_over_all`.
+
+    /// PER-VARIANT pin — for every [`DataClassification`] variant, a
+    /// [`Classification`] whose `data_classification` field carries
+    /// that variant returns `data_is_public()` matching the closed
+    /// set's own [`DataClassification::is_public`] truth table. Sweep
+    /// [`DataClassification::ALL`] so a regression that (a) hard-
+    /// coded the method body to a fixed answer (silently returning
+    /// `true` regardless of the stored variant, silently promoting
+    /// every dataset onto the freely-distributable path and shipping
+    /// PII/PHI/PCI content past every compliance gate), (b) inverted
+    /// the projection (silently demoting `Public` to access-controlled),
+    /// or (c) crossed the wires with a sibling classification-axis
+    /// probe fails HERE at the substrate primitive before drifting
+    /// through the `public-data` fixed tag or the peer ephemeral
+    /// surface.
+    #[test]
+    fn classification_data_is_public_matches_data_classification_projection() {
+        for populated in DataClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: populated,
+            };
+            assert_eq!(
+                c.data_is_public(),
+                populated.is_public(),
+                "data_classification={populated:?}: data_is_public() drift from DataClassification::is_public()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `data_classification: DataClassification::default()` which
+    /// defaults to [`DataClassification::Internal`] via `#[default]`,
+    /// and [`DataClassification::Internal::is_public`] projects
+    /// `false`, so `data_is_public()` returns `false`. Pins the
+    /// default-arm short-circuit through ONE layer of `Default`
+    /// ([`DataClassification`]'s) at ONE narrow site — a regression
+    /// that promoted [`DataClassification::Public`] to `#[default]`
+    /// (silently ballooning the workspace's default compliance
+    /// posture from access-controlled to publicly-distributable), or
+    /// that wired [`DataClassification::Internal`] to
+    /// `is_public() = true`, would fail HERE before drifting through
+    /// every unadorned Process's positive-distribution-framing
+    /// answer. Mirror-inverted from the sibling
+    /// `classification_gate_compute_data_is_restricted_is_true`
+    /// baseline (both walk the SAME defaulted `data_classification`
+    /// field, so `is_restricted = true` ⇒ `is_public = false` on the
+    /// closed set's disjoint XOR partition).
+    #[test]
+    fn classification_gate_compute_data_is_public_is_false() {
+        let c = Classification::gate_compute();
+        assert!(
+            !c.data_is_public(),
+            "gate_compute (data_classification=Internal → is_public=false) baseline",
+        );
+    }
+
+    /// MUTEX pin — [`Classification::data_is_regulated`] AND
+    /// [`Classification::data_is_public`] are NEVER simultaneously
+    /// true for ANY [`DataClassification`] variant, since the closed
+    /// set's own `is_public` / `is_regulated` pair carves it into
+    /// disjoint buckets sealed by
+    /// `data_classification_regulated_implies_not_public`. FIRST
+    /// substrate-composed antisymmetric MUTEX pin against the
+    /// positive-distribution framing: complementary to
+    /// `data_is_regulated ⇒ data_is_restricted` on the sibling
+    /// projection, this seals `data_is_regulated ⇒ ¬data_is_public`
+    /// at the parent-composed layer, closing the closed-set-internal
+    /// implication into the substrate primitive's own contract.
+    #[test]
+    fn classification_data_is_regulated_and_data_is_public_are_mutex_over_all() {
+        for populated in DataClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: populated,
+            };
+            assert!(
+                !(c.data_is_regulated() && c.data_is_public()),
+                "data_classification={populated:?}: data_is_regulated AND data_is_public both true (mutex violated)",
+            );
+        }
+    }
+
+    /// BINARY XOR PARTITION pin — for every [`DataClassification`]
+    /// variant, EXACTLY ONE of [`Classification::data_is_public`] and
+    /// [`Classification::data_is_restricted`] returns `true` on a
+    /// [`Classification`] carrying that variant. CLOSES the data-axis
+    /// MUTEX pin (`data_is_regulated ⇒ ¬data_is_public`) into the
+    /// FULL binary XOR partition contract sealed on the closed set
+    /// by `data_classification_public_xor_restricted` AND now
+    /// composed through the parent-composed layer as a substrate-wide
+    /// theorem. Binary counterpart of the ternary XOR partitions
+    /// sealed on the sibling `point_type` and `substrate` axes by
+    /// `classification_point_type_probes_form_three_way_xor_partition_over_all`
+    /// and
+    /// `classification_substrate_probes_form_three_way_xor_partition_over_all`
+    /// — where those axes carve the closed set into THREE disjoint
+    /// buckets, the data axis carves into TWO. Structural twin of
+    /// the calm-axis binary XOR partition
+    /// `classification_calm_probes_form_binary_xor_partition_over_all`
+    /// on the sibling calm axis — both bind a two-bucket (positive-
+    /// framing/negative-framing) closed-set partition through the
+    /// parent-composed layer. A regression that crossed the wires
+    /// between the two parent-composed probes (one probe silently
+    /// composing the wrong closed-set arm) fails HERE rather than at
+    /// every downstream consumer that trusts the two probes partition
+    /// the data slot into disjoint buckets whose union covers every
+    /// variant.
+    #[test]
+    fn classification_data_probes_form_binary_xor_partition_over_all() {
+        for populated in DataClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: populated,
+            };
+            let buckets = [c.data_is_public(), c.data_is_restricted()];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "data_classification={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
             );
         }
     }

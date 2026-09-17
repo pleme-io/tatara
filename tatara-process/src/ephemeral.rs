@@ -2002,6 +2002,97 @@ impl EphemeralSpec {
         self.resolved_classification().substrate_is_policy()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s
+    /// [`crate::classification::SubstrateType`] project to `true`
+    /// under [`crate::classification::SubstrateType::is_telemetry`]?
+    /// Byte-for-byte peer of
+    /// [`Classification::substrate_is_telemetry`] wrapped through
+    /// the [`Self::resolved_classification`] resolver so an operator-
+    /// omitted `:classification` slot on `(defephemeral …)` still
+    /// answers via the substrate default. The ONE ephemeral-surface
+    /// substrate primitive that owns the `(&EphemeralSpec) -> bool`
+    /// derived-nullary-boolean walk on the telemetry-plane bucket
+    /// question over the classification-`substrate` axis.
+    ///
+    /// # Eleventh derived-nullary-boolean peer on the ephemeral surface — CLOSES the substrate axis
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`],
+    /// [`Self::data_is_regulated`], [`Self::data_is_restricted`],
+    /// [`Self::point_is_endomorphic`], [`Self::point_is_diffusive`],
+    /// [`Self::point_is_convergent`], [`Self::substrate_is_resource`],
+    /// and [`Self::substrate_is_policy`] on the ephemeral surface's
+    /// (resolver-hop × derived-nullary-bool) shape — the ELEVENTH
+    /// peer overall and the THIRD peer threading the classification-
+    /// `substrate` axis. This peer CLOSES the substrate axis on the
+    /// ephemeral surface into the FULL three-way XOR partition
+    /// contract `substrate_is_resource ⊕ substrate_is_policy ⊕
+    /// substrate_is_telemetry` — sealed on this surface by
+    /// `ephemeral_substrate_probes_form_three_way_xor_partition_over_all`,
+    /// the resolver-hop peer of the parent-composed
+    /// `classification_substrate_probes_form_three_way_xor_partition_over_all`.
+    /// Structural twin of the sibling `point_type`-axis ternary lift
+    /// sealed on this surface by
+    /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`.
+    /// The resolver-hop shape is byte-identical across all eleven
+    /// peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `substrate_is_telemetry()` returns `true` iff
+    /// `self.resolved_classification().substrate_is_telemetry()`.
+    /// The resolver returns the authored [`Classification`] when
+    /// present and the substrate default [`Classification::gate_compute`]
+    /// on absence. Because [`Classification::gate_compute`] carries
+    /// [`crate::classification::SubstrateType::Compute`] (the
+    /// canonical resource-plane substrate, NOT a telemetry plane),
+    /// a bare ephemeral spec with no `:classification` slot answers
+    /// `false` — a regression that dropped the resolver hop, probed
+    /// the wrong closed-set arm, or inverted the projection fails
+    /// HERE at ONE narrow substrate site before drifting through
+    /// every unadorned ephemeral spec's plane-baseline answer.
+    ///
+    /// # Compounding — CLOSES the substrate axis on the ephemeral surface
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `telemetry-substrate` on
+    /// `EPHEMERAL_FIXED_TAG_ARMS` — byte-for-byte peer of the point
+    /// surface's `telemetry-substrate` fixed tag on
+    /// `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::substrate_is_telemetry`] directly. The two-
+    /// surface parity contract holds by construction: both surfaces
+    /// route through the SAME
+    /// [`Classification::substrate_is_telemetry`] primitive after the
+    /// ephemeral surface pays ONE resolver hop. THIRD ephemeral-
+    /// surface peer on the `substrate` axis — closes the axis into a
+    /// proven-repeatable three-peer sub-corner exactly as the
+    /// `point_type` axis was closed on this surface by
+    /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-`substrate`-axis derived-
+    /// nullary-boolean probe body composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::substrate_is_telemetry`]) so every
+    /// downstream (`telemetry-substrate` fixed tags on both surfaces
+    /// in tatara-check, future plane-baseline / compliance-baseline
+    /// selectors, future variant additions on
+    /// [`crate::classification::SubstrateType`]) binds through the
+    /// SAME `substrate_is_telemetry()` shape rather than restating
+    /// either the resolver walk or the closed-set projection
+    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// over composition; a future
+    /// [`crate::classification::SubstrateType`] variant lands at ONE
+    /// `ALL` entry + ONE `is_telemetry` arm on the closed set and
+    /// both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn substrate_is_telemetry(&self) -> bool {
+        self.resolved_classification().substrate_is_telemetry()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -5204,6 +5295,225 @@ mod tests {
             assert!(
                 !(eph.substrate_is_resource() && eph.substrate_is_policy()),
                 "authored substrate={populated:?}: substrate_is_resource AND substrate_is_policy both true (mutex violated)",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::substrate_is_telemetry pins ───────────────────
+    //
+    // Fail-before-pass-after granularity: `substrate_is_telemetry`
+    // did not exist pre-lift on `impl EphemeralSpec` — every consumer
+    // walking the "does this ephemeral spec's substrate project to
+    // the telemetry plane?" question went through
+    // `.resolved_classification().substrate.is_telemetry()` or the
+    // lowered `ProcessSpec`'s
+    // `spec.classification.substrate.is_telemetry()`. Post-lift the
+    // ELEVENTH derived-nullary-boolean peer on the ephemeral surface
+    // (THIRD on the `substrate` axis) routes through the SAME
+    // [`Self::resolved_classification`] resolver + the sibling
+    // substrate primitive
+    // [`crate::classification::Classification::substrate_is_telemetry`],
+    // so the two-surface parity contract holds by construction, AND
+    // the three `substrate`-axis peers on this surface CLOSE the
+    // axis into the FULL three-way XOR partition contract via
+    // `ephemeral_substrate_probes_form_three_way_xor_partition_over_all`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific
+    /// [`crate::classification::SubstrateType`] variant answers
+    /// [`Self::substrate_is_telemetry`] matching the closed set's own
+    /// [`crate::classification::SubstrateType::is_telemetry`] truth
+    /// table. Sweep [`crate::classification::SubstrateType::ALL`]
+    /// so a regression that (a) hard-coded the body to a fixed
+    /// answer, (b) inverted the projection, or (c) crossed the wires
+    /// with the sibling
+    /// [`crate::classification::SubstrateType::is_resource`] /
+    /// [`crate::classification::SubstrateType::is_policy`]
+    /// projections fails HERE at the substrate primitive before
+    /// drifting through the `telemetry-substrate` fixed tag or the
+    /// peer point surface.
+    #[test]
+    fn substrate_is_telemetry_returns_substrate_projection_per_kind() {
+        for populated in SubstrateType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.substrate = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.substrate_is_telemetry(),
+                populated.is_telemetry(),
+                "authored substrate={populated:?}: substrate_is_telemetry() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries
+    /// [`crate::classification::SubstrateType::Compute`] (the
+    /// canonical resource-plane substrate, NOT a telemetry plane),
+    /// and
+    /// [`crate::classification::SubstrateType::Compute::is_telemetry`]
+    /// projects `false`, so [`Self::substrate_is_telemetry`] returns
+    /// `false`. Pins the resolver's chosen-field baseline at ONE
+    /// narrow site — aligned with the sibling
+    /// `substrate_is_policy_probes_false_on_absent_classification`
+    /// (both projections on `gate_compute`'s chosen `substrate`
+    /// field project `false` since `Compute` lives in the resource
+    /// plane), mirror-inverted from
+    /// `substrate_is_resource_probes_true_on_absent_classification`.
+    #[test]
+    fn substrate_is_telemetry_probes_false_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            !spec.substrate_is_telemetry(),
+            "absent classification (defaults to gate_compute, substrate=Compute → is_telemetry=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::substrate_is_telemetry`] AND
+    /// through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.substrate_is_telemetry()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`crate::classification::SubstrateType::ALL`] variant) so a
+    /// future regression on either side of the resolver fails HERE
+    /// at the parity boundary. Byte-for-byte peer of
+    /// `substrate_is_policy_matches_point_peer_through_lowered_classification`
+    /// on the SAME closed-set axis via a sibling projection.
+    #[test]
+    fn substrate_is_telemetry_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.substrate_is_telemetry(),
+            lowered.classification.substrate_is_telemetry(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in SubstrateType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.substrate = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.substrate_is_telemetry(),
+                lowered.classification.substrate_is_telemetry(),
+                "authored substrate={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// MUTEX pin — [`Self::substrate_is_resource`] AND
+    /// [`Self::substrate_is_telemetry`] are NEVER simultaneously true
+    /// for ANY [`EphemeralSpec`] (authored or defaulted). Second
+    /// ephemeral-surface `substrate`-axis corner-peer MUTEX pin —
+    /// peer of
+    /// `ephemeral_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all`
+    /// on a sibling closed-set projection.
+    #[test]
+    fn ephemeral_substrate_is_resource_and_substrate_is_telemetry_are_mutex_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        assert!(
+            !(eph.substrate_is_resource() && eph.substrate_is_telemetry()),
+            "None-classification: substrate_is_resource AND substrate_is_telemetry both true (mutex violated)",
+        );
+        // Authored classification.
+        for populated in SubstrateType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.substrate = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            assert!(
+                !(eph.substrate_is_resource() && eph.substrate_is_telemetry()),
+                "authored substrate={populated:?}: substrate_is_resource AND substrate_is_telemetry both true (mutex violated)",
+            );
+        }
+    }
+
+    /// MUTEX pin — [`Self::substrate_is_policy`] AND
+    /// [`Self::substrate_is_telemetry`] are NEVER simultaneously true
+    /// for ANY [`EphemeralSpec`] (authored or defaulted). Third
+    /// ephemeral-surface `substrate`-axis corner-peer MUTEX pin —
+    /// completes the three pairwise MUTEX relations alongside
+    /// `ephemeral_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all`
+    /// and
+    /// `ephemeral_substrate_is_resource_and_substrate_is_telemetry_are_mutex_over_all`.
+    #[test]
+    fn ephemeral_substrate_is_policy_and_substrate_is_telemetry_are_mutex_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        assert!(
+            !(eph.substrate_is_policy() && eph.substrate_is_telemetry()),
+            "None-classification: substrate_is_policy AND substrate_is_telemetry both true (mutex violated)",
+        );
+        // Authored classification.
+        for populated in SubstrateType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.substrate = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            assert!(
+                !(eph.substrate_is_policy() && eph.substrate_is_telemetry()),
+                "authored substrate={populated:?}: substrate_is_policy AND substrate_is_telemetry both true (mutex violated)",
+            );
+        }
+    }
+
+    /// THREE-WAY XOR PARTITION pin — for the absent-classification
+    /// baseline AND every [`crate::classification::SubstrateType::ALL`]
+    /// variant, EXACTLY ONE of [`Self::substrate_is_resource`],
+    /// [`Self::substrate_is_policy`], and
+    /// [`Self::substrate_is_telemetry`] returns `true`. CLOSES the
+    /// three pairwise MUTEX pins on the substrate axis
+    /// (`substrate_is_resource ⇒ ¬substrate_is_policy`,
+    /// `substrate_is_resource ⇒ ¬substrate_is_telemetry`,
+    /// `substrate_is_policy ⇒ ¬substrate_is_telemetry`) into the
+    /// FULL ternary XOR partition contract on the ephemeral surface
+    /// — the resolver-hop peer of the parent-composed
+    /// `classification_substrate_probes_form_three_way_xor_partition_over_all`
+    /// test. Structural twin of the sibling `point_type`-axis
+    /// ternary lift sealed on this surface by
+    /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`.
+    /// Guarantees the absent-classification case lands in the
+    /// resource bucket (`gate_compute` → Compute → is_resource =
+    /// true), so every unadorned `(defephemeral …)` audits under a
+    /// definite non-empty plane bucket.
+    #[test]
+    fn ephemeral_substrate_probes_form_three_way_xor_partition_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let buckets = [
+            eph.substrate_is_resource(),
+            eph.substrate_is_policy(),
+            eph.substrate_is_telemetry(),
+        ];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: probes {buckets:?} — exactly one must be true (three-way XOR partition violated)",
+        );
+        // Authored classification.
+        for populated in SubstrateType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.substrate = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let buckets = [
+                eph.substrate_is_resource(),
+                eph.substrate_is_policy(),
+                eph.substrate_is_telemetry(),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "authored substrate={populated:?}: probes {buckets:?} — exactly one must be true (three-way XOR partition violated)",
             );
         }
     }

@@ -2323,6 +2323,54 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "policy-substrate",
         probe: |s| s.classification.substrate_is_policy(),
     },
+    // `telemetry-substrate` — ELEVENTH occupant on the (parent ×
+    // derived-nullary-bool) corner of the workspace-wide fixed-tag
+    // algebra after the two `horizon.*`, one `coordination-required`,
+    // two `data-*`, three `point-*`, one `resource-substrate`, and
+    // one `policy-substrate` arms opened + populated the corner;
+    // THIRD occupant threading the classification-`substrate` axis —
+    // CLOSES the substrate axis on the corner into the FULL three-
+    // way XOR partition contract
+    // `resource-substrate ⊕ policy-substrate ⊕ telemetry-substrate`.
+    // Composes the ONE substrate primitive
+    // [`tatara_process::classification::Classification::substrate_is_telemetry`]
+    // that walks `self.substrate.is_telemetry()` — the eight-variant
+    // [`tatara_process::classification::SubstrateType`] closed set's
+    // telemetry-plane bucket partition (Observability alone) as a
+    // fixed-tag audit surface. Answers the passive-observation-
+    // facing question "does this Process live on a telemetry
+    // substrate (rather than a resource or policy substrate)?" —
+    // `false` on the `Compute` default (workspace baseline is
+    // resource-plane, not telemetry-plane) and on every non-
+    // `Observability` variant, `true` on `Observability` alone.
+    // Byte-for-byte symmetrical with the ephemeral surface's
+    // `telemetry-substrate` arm on [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::substrate_is_telemetry`]
+    // — both surfaces route through the SAME
+    // [`Classification::substrate_is_telemetry`] primitive after the
+    // ephemeral surface pays ONE resolver hop. Structural byte-for-
+    // byte peer of the sibling `resource-substrate` /
+    // `policy-substrate` arms above and the three `point-*` arms:
+    // all six walk a DIRECT scalar closed-set field's derived
+    // projection through TWO layers of `Default` short-circuit (the
+    // parent `Classification` defaults, but the scalar child has no
+    // `#[default]` — the `substrate` field on `gate_compute` is
+    // chosen, not defaulted). THIRD substrate-axis peer CLOSES the
+    // three pairwise corner-peer MUTEX pins on the substrate axis
+    // (`resource-substrate ⇒ ¬policy-substrate`,
+    // `resource-substrate ⇒ ¬telemetry-substrate`,
+    // `policy-substrate ⇒ ¬telemetry-substrate`) into the FULL
+    // three-way XOR partition sealed on the closed set by
+    // `substrate_type_buckets_cover_every_variant` and composed
+    // through the parent-composed layer by
+    // `classification_substrate_probes_form_three_way_xor_partition_over_all`,
+    // exactly as the sibling `point_type` axis was closed on the
+    // corner by
+    // `classification_point_type_probes_form_three_way_xor_partition_over_all`.
+    FixedTagArm {
+        tag: "telemetry-substrate",
+        probe: |s| s.classification.substrate_is_telemetry(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2607,6 +2655,31 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "policy-substrate",
         probe: |s| s.substrate_is_policy(),
+    },
+    // `telemetry-substrate` — byte-for-byte peer of the point
+    // surface's `telemetry-substrate` arm on [`POINT_FIXED_TAG_ARMS`]
+    // via [`Classification::substrate_is_telemetry`] reached through
+    // the resolver primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    // Composes the ONE ephemeral-surface substrate primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::substrate_is_telemetry`]
+    // that walks
+    // `self.resolved_classification().substrate.is_telemetry()`.
+    // Both surfaces route through the SAME
+    // [`Classification::substrate_is_telemetry`] primitive after the
+    // ephemeral surface pays ONE resolver hop. THIRD ephemeral-
+    // surface peer on the substrate axis — CLOSES the axis into the
+    // FULL three-way XOR partition contract sealed on this surface
+    // by
+    // `ephemeral_substrate_probes_form_three_way_xor_partition_over_all`,
+    // the resolver-hop peer of the parent-composed
+    // `classification_substrate_probes_form_three_way_xor_partition_over_all`,
+    // structural twin of the sibling `point_type`-axis ternary lift
+    // sealed on this surface by
+    // `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`.
+    FixedTagArm {
+        tag: "telemetry-substrate",
+        probe: |s| s.substrate_is_telemetry(),
     },
 ];
 
@@ -11421,6 +11494,7 @@ mod tests {
                 "convergent-point",
                 "resource-substrate",
                 "policy-substrate",
+                "telemetry-substrate",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -11444,6 +11518,7 @@ mod tests {
                 "convergent-point",
                 "resource-substrate",
                 "policy-substrate",
+                "telemetry-substrate",
             ],
         );
     }

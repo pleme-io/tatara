@@ -1923,6 +1923,111 @@ impl Classification {
     pub fn substrate_is_policy(&self) -> bool {
         self.substrate.is_policy()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`]'s
+    /// [`SubstrateType`] project to `true` under
+    /// [`SubstrateType::is_telemetry`]? The ONE substrate primitive
+    /// that owns the `(Classification) -> bool` derived-nullary-
+    /// predicate walk shape on the `substrate` slot for the
+    /// telemetry-plane bucket question.
+    ///
+    /// # Eleventh occupant on the (parent × derived-nullary-bool) corner — CLOSES the substrate axis
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`],
+    /// [`Self::data_is_regulated`], [`Self::data_is_restricted`],
+    /// [`Self::point_is_endomorphic`], [`Self::point_is_diffusive`],
+    /// [`Self::point_is_convergent`], [`Self::substrate_is_resource`],
+    /// and [`Self::substrate_is_policy`] on the workspace-wide
+    /// (parent × derived-nullary-bool) corner of the closed-set-
+    /// driven presence-probe algebra — the ELEVENTH occupant on the
+    /// corner and the THIRD peer threading the classification-
+    /// `substrate` axis. This peer CLOSES the substrate axis on the
+    /// corner into the FULL three-way XOR partition contract
+    /// `substrate_is_resource ⊕ substrate_is_policy ⊕
+    /// substrate_is_telemetry` — the closed-set partition already
+    /// sealed on [`SubstrateType`] by
+    /// `substrate_type_buckets_cover_every_variant` now composes
+    /// through the parent-composed layer as a substrate-wide theorem
+    /// pinned by
+    /// `classification_substrate_probes_form_three_way_xor_partition_over_all`.
+    /// The ternary lift on the substrate axis is the structural
+    /// twin of the sibling `point_type`-axis ternary lift sealed by
+    /// `classification_point_type_probes_form_three_way_xor_partition_over_all`.
+    /// Direct-scalar peer of [`Self::substrate_is_resource`],
+    /// [`Self::substrate_is_policy`], and the three sibling
+    /// `point_type`-axis arms: all six share the shape (direct scalar
+    /// closed-set field with no [`Default`] impl on the child, so no
+    /// default-arm short-circuit through the child's `#[default]`
+    /// chain). The [`Classification::gate_compute`] baseline's chosen
+    /// field (`substrate: Compute`) projects `false` HERE
+    /// (`Compute.is_telemetry() = false`), mirror-inverted from the
+    /// sibling `substrate_is_resource` baseline's `true` and aligned
+    /// with the sibling `substrate_is_policy` baseline's `false`.
+    ///
+    /// # Semantics — derived nullary boolean over the closed-set plane
+    ///
+    /// `substrate_is_telemetry()` returns `true` iff
+    /// `self.substrate.is_telemetry()`. The eight-variant
+    /// [`SubstrateType`] closed set publishes the truth table (via
+    /// the plane partition): [`SubstrateType::Observability`] →
+    /// `true` (telemetry plane — the singleton bucket that passively
+    /// observes other workloads without carrying their payload or
+    /// gating their access); every other variant → `false`
+    /// (resource or policy plane). A [`Classification::gate_compute`]
+    /// baseline answers `false` because its `substrate: Compute`
+    /// field is deliberately resource-plane, not telemetry-plane.
+    ///
+    /// A future ninth [`SubstrateType`] variant lands at ONE `ALL`
+    /// entry + ONE `is_telemetry` arm on the closed set with the
+    /// probe body untouched — the nullary-predicate shape defers
+    /// every per-variant telemetry decision to the closed set's own
+    /// truth table ([`SubstrateType::is_telemetry`]) rather than
+    /// duplicating the discriminator sweep here.
+    ///
+    /// # Compounding — CLOSES the substrate axis into a three-way XOR partition
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `telemetry-substrate` on
+    /// `POINT_FIXED_TAG_ARMS` — byte-for-byte structural peer of the
+    /// sibling `resource-substrate` / `policy-substrate` /
+    /// `terminating-horizon` / `metric-axes-required` /
+    /// `coordination-required` / `data-regulated` / `data-restricted`
+    /// / `endomorphic-point` / `diffusive-point` / `convergent-point`
+    /// fixed tags on the (parent × derived-nullary-bool) corner. The
+    /// ephemeral surface publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::substrate_is_telemetry`],
+    /// which composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (telemetry-substrate)` audit answers the same
+    /// question on both surfaces. THIRD substrate-axis peer CLOSES
+    /// the three-way XOR partition contract
+    /// `is_resource ⊕ is_policy ⊕ is_telemetry` sealed on the closed
+    /// set by `substrate_type_buckets_cover_every_variant` through
+    /// the parent-composed layer as a substrate-wide theorem — the
+    /// exact ternary lift already sealed on the sibling `point_type`
+    /// axis by
+    /// `classification_point_type_probes_form_three_way_xor_partition_over_all`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `telemetry-substrate` fixed tag in `tatara-check`, future
+    /// plane-baseline / compliance-baseline selectors, future
+    /// variant additions on [`SubstrateType`]) binds through the
+    /// SAME `substrate_is_telemetry()` shape rather than restating
+    /// the `classification.substrate.is_telemetry()` chain at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`SubstrateType`] variant lands at ONE `ALL` entry +
+    /// ONE `is_telemetry` arm on the closed set and this probe picks
+    /// it up mechanically.
+    #[must_use]
+    pub fn substrate_is_telemetry(&self) -> bool {
+        self.substrate.is_telemetry()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -6606,6 +6711,181 @@ mod tests {
             assert!(
                 !(c.substrate_is_resource() && c.substrate_is_policy()),
                 "substrate={populated:?}: substrate_is_resource AND substrate_is_policy both true (mutex violated)",
+            );
+        }
+    }
+
+    // ── Classification::substrate_is_telemetry substrate pins ───────
+    //
+    // Fail-before-pass-after granularity: [`Classification::substrate_is_telemetry`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the scalar [`SubstrateType`]
+    // slot's [`SubstrateType::is_telemetry`] projection had no
+    // substrate owner. Post-lift the shape lives at ONE substrate
+    // primitive and every downstream (the `telemetry-substrate` fixed
+    // tag in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::substrate_is_telemetry`]
+    // peer, future plane-baseline / compliance-baseline selectors)
+    // composes against the SAME `substrate_is_telemetry()` shape.
+    // ELEVENTH occupant of the (parent × derived-nullary-bool) corner
+    // and THIRD occupant threading the classification-`substrate`
+    // axis — CLOSES the substrate axis on the corner into the FULL
+    // three-way XOR partition contract
+    // `substrate_is_resource ⊕ substrate_is_policy ⊕ substrate_is_telemetry`
+    // sealed on the closed set by
+    // `substrate_type_buckets_cover_every_variant` and composed
+    // through the parent-composed layer by
+    // `classification_substrate_probes_form_three_way_xor_partition_over_all`.
+
+    /// PER-VARIANT pin — for every [`SubstrateType`] variant, a
+    /// [`Classification`] whose `substrate` field carries that
+    /// variant returns `substrate_is_telemetry()` matching the closed
+    /// set's own [`SubstrateType::is_telemetry`] truth table. Sweep
+    /// [`SubstrateType::ALL`] so a regression that (a) hard-coded
+    /// the method body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with a sibling closed-
+    /// set projection ([`SubstrateType::is_resource`] /
+    /// [`SubstrateType::is_policy`]) fails HERE at the substrate
+    /// primitive before drifting through the `telemetry-substrate`
+    /// fixed tag or the peer ephemeral surface.
+    #[test]
+    fn classification_substrate_is_telemetry_matches_substrate_projection() {
+        for populated in SubstrateType::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: populated,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert_eq!(
+                c.substrate_is_telemetry(),
+                populated.is_telemetry(),
+                "substrate={populated:?}: substrate_is_telemetry() drift from SubstrateType::is_telemetry()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `substrate: SubstrateType::Compute` deliberately (NOT via
+    /// `#[default]` — [`SubstrateType`] has no `impl Default`), and
+    /// [`SubstrateType::Compute::is_telemetry`] projects `false`
+    /// (Compute is a resource-plane substrate, not a telemetry
+    /// plane), so `substrate_is_telemetry()` returns `false`. Pins
+    /// the baseline's chosen-field answer at ONE narrow site — a
+    /// regression that promoted [`SubstrateType::Observability`] to
+    /// the gate-compute baseline, or that wired
+    /// [`SubstrateType::Compute`] to `is_telemetry() = true`, would
+    /// fail HERE before drifting through every unadorned Process's
+    /// plane-baseline answer. Mirror-inverted from the sibling
+    /// `classification_gate_compute_substrate_is_resource_is_true`
+    /// baseline (both walk the SAME chosen `substrate: Compute`
+    /// field, so `is_resource = true` ⇒ `is_telemetry = false` on the
+    /// closed set's disjoint plane partition), aligned with the
+    /// sibling `substrate_is_policy` baseline's `false`.
+    #[test]
+    fn classification_gate_compute_substrate_is_telemetry_is_false() {
+        let c = Classification::gate_compute();
+        assert!(
+            !c.substrate_is_telemetry(),
+            "gate_compute (substrate=Compute → is_telemetry=false) baseline",
+        );
+    }
+
+    /// MUTEX pin — [`Classification::substrate_is_resource`] AND
+    /// [`Classification::substrate_is_telemetry`] are NEVER
+    /// simultaneously true for ANY [`SubstrateType`] variant, since
+    /// the closed set's own `is_resource` / `is_policy` /
+    /// `is_telemetry` triple carves it into THREE disjoint buckets
+    /// (sealed on the closed set by
+    /// `substrate_type_buckets_cover_every_variant`). Second
+    /// substrate-axis corner-peer MUTEX pin — peer of
+    /// `classification_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all`
+    /// on a sibling closed-set projection.
+    #[test]
+    fn classification_substrate_is_resource_and_substrate_is_telemetry_are_mutex_over_all() {
+        for populated in SubstrateType::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: populated,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert!(
+                !(c.substrate_is_resource() && c.substrate_is_telemetry()),
+                "substrate={populated:?}: substrate_is_resource AND substrate_is_telemetry both true (mutex violated)",
+            );
+        }
+    }
+
+    /// MUTEX pin — [`Classification::substrate_is_policy`] AND
+    /// [`Classification::substrate_is_telemetry`] are NEVER
+    /// simultaneously true for ANY [`SubstrateType`] variant. Third
+    /// substrate-axis corner-peer MUTEX pin — completes the three
+    /// pairwise MUTEX relations on the substrate axis alongside
+    /// `classification_substrate_is_resource_and_substrate_is_policy_are_mutex_over_all`
+    /// and
+    /// `classification_substrate_is_resource_and_substrate_is_telemetry_are_mutex_over_all`.
+    #[test]
+    fn classification_substrate_is_policy_and_substrate_is_telemetry_are_mutex_over_all() {
+        for populated in SubstrateType::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: populated,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert!(
+                !(c.substrate_is_policy() && c.substrate_is_telemetry()),
+                "substrate={populated:?}: substrate_is_policy AND substrate_is_telemetry both true (mutex violated)",
+            );
+        }
+    }
+
+    /// THREE-WAY XOR PARTITION pin — for every [`SubstrateType`]
+    /// variant, EXACTLY ONE of
+    /// [`Classification::substrate_is_resource`],
+    /// [`Classification::substrate_is_policy`], and
+    /// [`Classification::substrate_is_telemetry`] returns `true` on
+    /// a [`Classification`] carrying that variant. CLOSES the three
+    /// pairwise MUTEX pins on the substrate axis
+    /// (`substrate_is_resource ⇒ ¬substrate_is_policy`,
+    /// `substrate_is_resource ⇒ ¬substrate_is_telemetry`,
+    /// `substrate_is_policy ⇒ ¬substrate_is_telemetry`) into the FULL
+    /// ternary XOR partition contract sealed on the closed set by
+    /// `substrate_type_buckets_cover_every_variant` AND now composed
+    /// through the parent-composed layer as a substrate-wide theorem.
+    /// Structural twin of the sibling `point_type`-axis ternary lift
+    /// sealed on this surface by
+    /// `classification_point_type_probes_form_three_way_xor_partition_over_all`.
+    /// A regression that crossed the wires between any two of the
+    /// three parent-composed probes (one probe silently composing the
+    /// wrong closed-set arm) fails HERE rather than at every
+    /// downstream consumer that trusts the three probes partition the
+    /// substrate slot into disjoint buckets whose union covers every
+    /// variant.
+    #[test]
+    fn classification_substrate_probes_form_three_way_xor_partition_over_all() {
+        for populated in SubstrateType::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: populated,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            let buckets = [
+                c.substrate_is_resource(),
+                c.substrate_is_policy(),
+                c.substrate_is_telemetry(),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "substrate={populated:?}: probes {buckets:?} — exactly one must be true (three-way XOR partition violated)",
             );
         }
     }

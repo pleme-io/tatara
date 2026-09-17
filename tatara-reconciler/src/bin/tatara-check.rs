@@ -1574,6 +1574,35 @@ fn evaluate_point_require_tag(
         ("condition-", ConditionKind, |k| spec
             .boundary
             .has_condition_kind(k)),
+        // `precondition-<kind>` + `postcondition-<kind>` — the two typed
+        // arms of the `condition-<kind>` union. `precondition-<kind>`
+        // dispatches on `spec.boundary.preconditions.has_kind(k)`;
+        // `postcondition-<kind>` on `spec.boundary.postconditions.has_kind(k)`.
+        // Both compose against the SAME slice-level substrate primitive
+        // [`ConditionSliceExt::has_kind`] that
+        // [`Boundary::has_condition_kind`] composes twice in a union — so
+        // by construction `condition-<K>` = `precondition-<K> ∨
+        // postcondition-<K>` for every [`ConditionKind`] variant. FIRST
+        // occupant on the (slice-selector-parent × closed-set-child)
+        // corner of the workspace-wide require-tag prefix algebra — the
+        // parent is a specific SIDE of the pre/post boundary, and the
+        // child is the discriminator's `Kind`. Turns the existing
+        // ephemeral-side `closed-loop-auth` fixed tag (postcondition-only
+        // alias) into a special-case alias for
+        // `postcondition-ClosedLoopAuth`, closing a diagnostic-uniformity
+        // gap between the coarse union-probe and the fine per-side probe.
+        // No ordering constraint against `condition-` because
+        // `strip_prefix("condition-")` returns `None` on `precondition-…`
+        // + `postcondition-…` (leading char differs); the three prefixes
+        // partition their respective input classes cleanly.
+        ("precondition-", ConditionKind, |k| spec
+            .boundary
+            .preconditions
+            .has_kind(k)),
+        ("postcondition-", ConditionKind, |k| spec
+            .boundary
+            .postconditions
+            .has_kind(k)),
         ("must-reach-", MustReachPhase, |k| spec
             .depends_on
             .has_must_reach(k)),
@@ -2368,6 +2397,29 @@ fn evaluate_ephemeral_require_tag(
     if let Some(res) = dispatch_prefixed_kind!(
         tag,
         ("condition-", ConditionKind, |k| spec.has_condition_kind(k)),
+        // `precondition-<kind>` + `postcondition-<kind>` — the two typed
+        // arms of the ephemeral `condition-<kind>` union. Byte-for-byte
+        // peers of the point surface's `precondition-<kind>` +
+        // `postcondition-<kind>` families via the SAME slice-level
+        // [`ConditionSliceExt::has_kind`] substrate primitive — the
+        // ephemeral surface reaches `preconditions` + `postconditions`
+        // directly on [`EphemeralSpec`] (no `Boundary` nested slot). By
+        // construction `condition-<K>` = `precondition-<K> ∨
+        // postcondition-<K>` on this surface too; and the fixed
+        // `closed-loop-auth` arm is now the exact alias
+        // `postcondition-ClosedLoopAuth`, closing the diagnostic-
+        // uniformity gap where a post-only kind had a bespoke fixed tag
+        // but no closed-set-driven prefix peer that generalized to every
+        // future [`ConditionKind`] variant. FIRST occupant on the (slice-
+        // selector-parent × closed-set-child) corner of the ephemeral
+        // require-tag prefix algebra, byte-symmetrical with the point
+        // surface's twin lift.
+        ("precondition-", ConditionKind, |k| spec
+            .preconditions
+            .has_kind(k)),
+        ("postcondition-", ConditionKind, |k| spec
+            .postconditions
+            .has_kind(k)),
         ("teardown-policy-", TeardownPolicy, |k| spec
             .has_teardown_policy(k)),
         // `teardown-fires-on-<phase>` — the derived-bool-predicate
@@ -4559,6 +4611,197 @@ mod tests {
             Ok(false),
             "an absent kind must return false even with populated halves",
         );
+    }
+
+    // ── precondition-<kind> / postcondition-<kind> prefix families ───
+    //
+    // Fail-before-pass-after granularity: the two side-selected peers of
+    // `condition-<kind>` did not exist before this commit — the require-
+    // tag vocabulary carried only the union probe (`condition-<kind>`
+    // via [`Boundary::has_condition_kind`]) and coarse per-side presence
+    // (`boundary-pre` / `boundary-post` fixed tags), so an operator
+    // could ask "does this spec carry a `ClosedLoopAuth` predicate
+    // anywhere" (union) or "does this side carry ANY predicate" (coarse
+    // per-side), but NOT "does THIS side carry THIS specific kind" (the
+    // fine per-side probe the ephemeral-side `closed-loop-auth` fixed
+    // tag had already published as a special case of postconditions ×
+    // ClosedLoopAuth without a closed-set-driven prefix peer). The lift
+    // adds the twin `precondition-<kind>` + `postcondition-<kind>`
+    // families that both compose against the SAME slice-level substrate
+    // primitive [`ConditionSliceExt::has_kind`] that
+    // [`Boundary::has_condition_kind`] composes twice in a union — so by
+    // construction the AXIOM `condition-<K>` = `precondition-<K>` OR
+    // `postcondition-<K>` holds for every [`ConditionKind`] variant.
+
+    /// POPULATED-slot pin — `precondition-<kind>` dispatches through
+    /// the autoderived [`ConditionKind`] `FromStr` + the substrate
+    /// [`ConditionSliceExt::has_kind`] primitive on
+    /// `spec.boundary.preconditions` (the pre-side slice only, not
+    /// unioned with post). Sweep the [`ConditionKind::ALL`] × ALL cross
+    /// so a regression that wired the closure to the post-side slice,
+    /// or restated the union body of [`Boundary::has_condition_kind`]
+    /// instead of the per-side walk, fails HERE at the classifier.
+    /// Byte-for-byte peer of
+    /// [`evaluate_point_require_tag_returns_true_on_populated_condition_slot_per_kind`]
+    /// on the union family, one refinement lower on the slice-selector
+    /// axis.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_populated_precondition_slot_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.boundary.preconditions.push(condition_with(populated));
+            for query in ConditionKind::ALL {
+                let tag = format!("precondition-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "precondition populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// POPULATED-slot pin — peer of the `precondition-` sweep on the
+    /// post-side slice `spec.boundary.postconditions`. A regression
+    /// that wired the closure to the pre-side slice (silently reading
+    /// the wrong half of the union) fails HERE.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_populated_postcondition_slot_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.boundary.postconditions.push(condition_with(populated));
+            for query in ConditionKind::ALL {
+                let tag = format!("postcondition-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "postcondition populated={populated:?}: tag {tag:?} classification drifted",
+                );
+            }
+        }
+    }
+
+    /// SIDE-SPLIT pin — a kind that appears on ONE side of the boundary
+    /// answers `Ok(true)` for THAT side's per-side prefix and `Ok(false)`
+    /// for the OTHER side's. A regression that collapsed either
+    /// per-side probe onto the union body (silently accepting a pre-only
+    /// kind on `postcondition-<K>` or vice versa) fails HERE. The
+    /// union family still reads `Ok(true)` for both — the three-way
+    /// coexistence is what pins the AXIOM `condition = precondition ∨
+    /// postcondition` on the operator surface.
+    #[test]
+    fn evaluate_point_require_tag_precondition_and_postcondition_partition_condition_union() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.boundary
+            .preconditions
+            .push(condition_with(ConditionKind::KustomizationHealthy));
+        spec.boundary
+            .postconditions
+            .push(condition_with(ConditionKind::ClosedLoopAuth));
+        // pre-only kind: precondition-K = true, postcondition-K = false,
+        // condition-K = true
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "precondition-KustomizationHealthy"),
+            Ok(true),
+            "pre-only kind must satisfy precondition-<K>",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "postcondition-KustomizationHealthy"),
+            Ok(false),
+            "pre-only kind must NOT satisfy postcondition-<K>",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "condition-KustomizationHealthy"),
+            Ok(true),
+            "pre-only kind must satisfy the union condition-<K>",
+        );
+        // post-only kind: precondition-K = false, postcondition-K = true,
+        // condition-K = true
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "precondition-ClosedLoopAuth"),
+            Ok(false),
+            "post-only kind must NOT satisfy precondition-<K>",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "postcondition-ClosedLoopAuth"),
+            Ok(true),
+            "post-only kind must satisfy postcondition-<K>",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "condition-ClosedLoopAuth"),
+            Ok(true),
+            "post-only kind must satisfy the union condition-<K>",
+        );
+        // absent kind: all three probes read false
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "precondition-PromQL"),
+            Ok(false),
+            "absent kind must not satisfy precondition-<K>",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "postcondition-PromQL"),
+            Ok(false),
+            "absent kind must not satisfy postcondition-<K>",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "condition-PromQL"),
+            Ok(false),
+            "absent kind must not satisfy the union condition-<K>",
+        );
+    }
+
+    /// EMPTY-BOUNDARY pin — a default [`ProcessSpec`] (empty pre + post)
+    /// returns `Ok(false)` for every `precondition-<K>` +
+    /// `postcondition-<K>` pair. Locks the write-side / read-side split
+    /// so an operator authoring `:requires (postcondition-JobAttested)`
+    /// against a Process with no such postcondition gets the
+    /// `definition missing required` diagnostic, not a false-positive
+    /// pass.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_empty_boundary_for_every_per_side_kind() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for kind in ConditionKind::ALL {
+            let pre_tag = format!("precondition-{}", kind.as_str());
+            let post_tag = format!("postcondition-{}", kind.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &pre_tag),
+                Ok(false),
+                "default boundary must return false for {pre_tag:?}",
+            );
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &post_tag),
+                Ok(false),
+                "default boundary must return false for {post_tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `precondition-<garbage>` +
+    /// `postcondition-<garbage>` classify as [`UnknownRequireTag`] via
+    /// the shared `strip_and_classify_prefixed_kind` primitive so the
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// fires (not `definition missing required`). Also pins the bare-
+    /// prefix path (empty suffix) — the closed set's own FromStr
+    /// rejection is inherited here at the prefix-family boundary.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_per_side_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for garbage in [
+            "precondition-",
+            "postcondition-",
+            "precondition-jobAttested",
+            "postcondition-jobAttested",
+            "precondition-typo",
+            "postcondition-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag::default()),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
     }
 
     // ── must-reach-<kind> prefix family pins ─────────────────────────
@@ -11074,6 +11317,191 @@ mod tests {
             Ok(false),
             "pre-only ClosedLoopAuth must NOT satisfy the post-only tag",
         );
+    }
+
+    // ── ephemeral precondition-/postcondition-<kind> prefix families ─
+    //
+    // Byte-symmetrical peers of the point surface's twin lift on the
+    // ephemeral domain axis. Both classifiers now route through the
+    // SAME slice-level substrate primitive [`ConditionSliceExt::has_kind`]
+    // on their respective sides — a regression at the per-slice walk
+    // fails at that primitive's tests rather than as silent drift at
+    // either surface. The ephemeral surface reaches
+    // `preconditions` / `postconditions` directly on [`EphemeralSpec`]
+    // (no `Boundary` nested slot). The lift also makes the fixed
+    // `closed-loop-auth` arm equivalent to `postcondition-ClosedLoopAuth`
+    // — closing the diagnostic-uniformity gap where the closed-loop
+    // path had a bespoke fixed tag but no closed-set-driven peer that
+    // generalized to every future [`ConditionKind`] variant.
+
+    /// POPULATED-slot pin — `precondition-<kind>` dispatches through
+    /// the autoderived [`ConditionKind`] `FromStr` + the substrate
+    /// [`ConditionSliceExt::has_kind`] primitive on
+    /// `spec.preconditions` (the pre-side slice only, not unioned with
+    /// post). Byte-for-byte peer of
+    /// [`evaluate_point_require_tag_returns_true_on_populated_precondition_slot_per_kind`]
+    /// on the point surface.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_populated_precondition_slot_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut spec = ephemeral_fixture();
+            spec.preconditions.push(Condition {
+                kind: populated,
+                params: serde_json::Value::Null,
+            });
+            for query in ConditionKind::ALL {
+                let tag = format!("precondition-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral precondition populated={populated:?}: tag {tag:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// POPULATED-slot pin — peer of the ephemeral `precondition-` sweep
+    /// on `spec.postconditions`.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_populated_postcondition_slot_per_kind() {
+        for populated in ConditionKind::ALL {
+            let mut spec = ephemeral_fixture();
+            spec.postconditions.push(Condition {
+                kind: populated,
+                params: serde_json::Value::Null,
+            });
+            for query in ConditionKind::ALL {
+                let tag = format!("postcondition-{}", query.as_str());
+                let expected = query == populated;
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "ephemeral postcondition populated={populated:?}: tag {tag:?} drifted",
+                );
+            }
+        }
+    }
+
+    /// SIDE-SPLIT pin — a kind on ONE side answers `Ok(true)` for that
+    /// side's per-side prefix and `Ok(false)` for the other's; the
+    /// union tag `condition-<K>` still reads `Ok(true)` on either
+    /// half. Also cross-checks that the fixed `closed-loop-auth` arm
+    /// is now byte-equivalent to `postcondition-ClosedLoopAuth` — a
+    /// pre-only ClosedLoopAuth answers `Ok(true)` for
+    /// `precondition-ClosedLoopAuth`, `Ok(true)` for the union
+    /// `condition-ClosedLoopAuth`, `Ok(false)` for
+    /// `postcondition-ClosedLoopAuth`, and `Ok(false)` for
+    /// `closed-loop-auth` — the two post-only probes must agree. A
+    /// regression that widened the closed-loop-auth fixed tag to
+    /// preconditions OR narrowed the postcondition-<K> prefix family
+    /// to exclude ClosedLoopAuth fails HERE.
+    #[test]
+    fn evaluate_ephemeral_require_tag_precondition_and_postcondition_partition_condition_union() {
+        let mut spec = ephemeral_fixture();
+        spec.preconditions
+            .push(ephemeral_condition(ConditionKind::KustomizationHealthy));
+        spec.postconditions
+            .push(ephemeral_condition(ConditionKind::ClosedLoopAuth));
+        // pre-only kind (KustomizationHealthy on preconditions)
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "precondition-KustomizationHealthy"),
+            Ok(true),
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "postcondition-KustomizationHealthy"),
+            Ok(false),
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "condition-KustomizationHealthy"),
+            Ok(true),
+        );
+        // post-only kind (ClosedLoopAuth on postconditions)
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "precondition-ClosedLoopAuth"),
+            Ok(false),
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "postcondition-ClosedLoopAuth"),
+            Ok(true),
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "condition-ClosedLoopAuth"),
+            Ok(true),
+        );
+        // AXIOM cross-check: `postcondition-ClosedLoopAuth` is now the
+        // typed closed-set-driven alias for the fixed `closed-loop-auth`
+        // tag. Both must publish the same answer on every spec.
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "postcondition-ClosedLoopAuth"),
+            evaluate_ephemeral_require_tag(&spec, "closed-loop-auth"),
+            "postcondition-ClosedLoopAuth must be byte-equivalent to closed-loop-auth",
+        );
+        // Same on a pre-only ClosedLoopAuth: both post-side probes read
+        // Ok(false), the pre-side probe reads Ok(true), the union reads
+        // Ok(true).
+        let mut pre_only = ephemeral_fixture();
+        pre_only
+            .preconditions
+            .push(ephemeral_condition(ConditionKind::ClosedLoopAuth));
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&pre_only, "postcondition-ClosedLoopAuth"),
+            evaluate_ephemeral_require_tag(&pre_only, "closed-loop-auth"),
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&pre_only, "postcondition-ClosedLoopAuth"),
+            Ok(false),
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&pre_only, "precondition-ClosedLoopAuth"),
+            Ok(true),
+        );
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&pre_only, "condition-ClosedLoopAuth"),
+            Ok(true),
+        );
+    }
+
+    /// EMPTY-SPEC pin — a default ephemeral fixture returns `Ok(false)`
+    /// for every `precondition-<K>` + `postcondition-<K>` pair.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_empty_slots_for_every_per_side_kind() {
+        let spec = ephemeral_fixture();
+        for kind in ConditionKind::ALL {
+            let pre_tag = format!("precondition-{}", kind.as_str());
+            let post_tag = format!("postcondition-{}", kind.as_str());
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &pre_tag),
+                Ok(false),
+                "empty ephemeral spec must return false for {pre_tag:?}",
+            );
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, &post_tag),
+                Ok(false),
+                "empty ephemeral spec must return false for {post_tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `precondition-<garbage>` +
+    /// `postcondition-<garbage>` classify as [`UnknownRequireTag`].
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_unknown_on_unknown_per_side_suffix() {
+        let spec = ephemeral_fixture();
+        for garbage in [
+            "precondition-",
+            "postcondition-",
+            "precondition-jobAttested",
+            "postcondition-jobAttested",
+            "precondition-typo",
+            "postcondition-typo",
+        ] {
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, garbage),
+                Err(UnknownRequireTag::default()),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
     }
 
     // ── EphemeralSpec::has_condition_kind substrate pins ─────────────

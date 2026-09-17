@@ -264,6 +264,99 @@ impl RoutingSpec {
     }
 }
 
+/// Extension trait collapsing the Option-carrier arm on
+/// `Option<RoutingSpec>` — the ONE substrate primitive that owns the
+/// "collapse the parent `routing` Option-carrier before probing the
+/// inner spec's derived form" discipline the point-domain require-tag
+/// classifier in `tatara-reconciler::bin::tatara-check` composed by
+/// hand pre-lift at `("routing-form-", RoutingForm, |k| spec.routing
+/// .as_ref().is_some_and(|r| r.has_form(k)))`.
+///
+/// Peer to [`crate::encapsulates::EncapsulatesSpecOptionExt`] on the
+/// sibling `Option<EncapsulatesSpec>` slot of
+/// [`crate::crd::ProcessSpec`] — both extension traits live on
+/// `Option<<parent-spec>>`, both own the `.as_ref().is_some_and(|p|
+/// p.<probe>(k))` chain at ONE substrate site, and both return
+/// `false` on the outer `None` arm (a Process that DECLINED the
+/// respective surface — in-cluster-only for routing, unencapsulated
+/// for encapsulates). Together they close the pattern's blast radius
+/// across the two Option-parent presence-probe families whose parent
+/// is `Option<<inner-spec>>` directly on [`crate::crd::ProcessSpec`],
+/// so every current + future presence probe on THOSE parents inherits
+/// the collapse mechanically through the SAME trait-method shape.
+///
+/// Sibling Option-parent collapse whose parent is instead a compound
+/// projection: [`crate::lifetime::Lifetime::ephemeral_exports`] —
+/// walks `Lifetime → resolved_ephemeral() → exports` and returns
+/// `&[]` on the `None` arm (as a slice, not a bool) so the six
+/// slice-level `ExportSpecSliceExt::*` probes compose without a
+/// bespoke Option-arm at the caller. This trait is the direct
+/// analogue for the Option-parent whose inner spec ITSELF carries
+/// the probe (no intermediate slice).
+///
+/// # Semantics — COLLAPSED-NONE vs DELEGATED-SOME
+///
+/// * `None` (an in-cluster-only Process that DECLINED the routing
+///   surface entirely) → returns `false` for EVERY [`RoutingForm`]
+///   kind. The absent-carrier arm is NOT the derived
+///   [`RoutingForm::Instance`] default that a POPULATED
+///   [`RoutingSpec`] with `stable_name_claim: false` (its serde
+///   default) would publish — the derived-scalar default only fires
+///   when the operator OPTED INTO the routing surface and left the
+///   discriminating slot at its default, not when they declined the
+///   surface entirely.
+/// * `Some(r)` → delegates to [`RoutingSpec::has_form`] byte-
+///   identically. The populated arm is the ONLY behavioral surface
+///   the collapse preserves through the SAME
+///   [`RoutingForm::from_is_stable`] projection over the
+///   `stable_name_claim` bool.
+///
+/// # Compounding
+///
+/// A future second presence-probe axis on [`RoutingSpec`] (a
+/// hypothetical `has_backend_kind` on a widened
+/// [`RoutingBackend`] closed set, a
+/// `has_priority_tier(TierKind)` reaching through a typed
+/// projection over the raw `priority: i32` slot, a future
+/// discriminator on a widened `stable_name_claim` typed enum) lands
+/// as ONE more method on this trait + ONE more prefix-table row in
+/// the classifier — no per-caller `.as_ref().is_some_and(...)`
+/// restatement, no per-caller `spec.routing.as_ref()` walk. A future
+/// diagnostic shift on the Option-carrier collapse (surfacing
+/// "routing declined" as a distinct near-miss from "routing set but
+/// axis absent") reaches THIS ONE substrate owner, and every present
+/// or future require-tag family on the SAME
+/// [`crate::crd::ProcessSpec::routing`] parent inherits the shift by
+/// construction.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the Option-carrier collapse lives at ONE substrate site
+/// so every downstream `routing-<axis>` require-tag family binds
+/// through the SAME shape). THEORY.md §VI.1 (generation over
+/// composition — a new probe on [`RoutingSpec`] reaches this trait
+/// through a peer method without a bespoke Option-arm at the caller).
+///
+/// Pinned by
+/// [`tests::routing_spec_option_ext_has_form_returns_false_on_none_for_every_kind`]
+/// and
+/// [`tests::routing_spec_option_ext_has_form_matches_inner_probe_when_present`].
+pub trait RoutingSpecOptionExt {
+    /// True iff this `Option<RoutingSpec>` is `Some(r)` AND
+    /// [`RoutingSpec::has_form`] on the inner spec answers `true`
+    /// for the given [`RoutingForm`]. Returns `false` on `None` (an
+    /// in-cluster-only Process that declined the routing surface
+    /// entirely) — INCLUDING for the derived default
+    /// [`RoutingForm::Instance`], because the operator DECLINED the
+    /// routing surface rather than defaulting into it.
+    fn has_form(&self, kind: RoutingForm) -> bool;
+}
+
+impl RoutingSpecOptionExt for Option<RoutingSpec> {
+    fn has_form(&self, kind: RoutingForm) -> bool {
+        self.as_ref().is_some_and(|r| r.has_form(kind))
+    }
+}
+
 impl RoutingHostname {
     /// True iff this entry resolves to a named slot (vs content-hash).
     pub fn is_named(&self) -> bool {
@@ -1308,6 +1401,68 @@ mod tests {
             assert!(!r_empty.has_hostnames());
             assert!(r_with_hostnames.has_form(form));
             assert!(r_empty.has_form(form));
+        }
+    }
+
+    // ── RoutingSpecOptionExt — Option-carrier collapse contract ──
+
+    /// COLLAPSED-NONE CONTRACT: a `None` outer Option carries no
+    /// routing surface, so [`RoutingSpecOptionExt::has_form`] returns
+    /// `false` for every [`RoutingForm`] — INCLUDING the derived
+    /// default [`RoutingForm::Instance`] that a POPULATED
+    /// [`RoutingSpec`] with `stable_name_claim` at its
+    /// `#[serde(default)] = false` would publish. An operator who
+    /// declined the routing surface entirely is NOT configured for
+    /// `Instance`; the derived-scalar default only fires when the
+    /// parent Option is `Some(_)` and the discriminating slot is at
+    /// its default. Pre-lift the require-tag classifier restated
+    /// `spec.routing.as_ref().is_some_and(|r| r.has_form(k))`
+    /// inline; post-lift the collapse is a peer to
+    /// [`crate::encapsulates::EncapsulatesSpecOptionExt`] on the
+    /// sibling Option-parent axis of [`crate::crd::ProcessSpec`].
+    #[test]
+    fn routing_spec_option_ext_has_form_returns_false_on_none_for_every_kind() {
+        let opt: Option<RoutingSpec> = None;
+        for kind in RoutingForm::ALL {
+            assert!(
+                !opt.has_form(kind),
+                "None carrier reported has_form({kind:?}) = true; \
+                 the Option-carrier collapse arm must return false \
+                 for every RoutingForm kind, including the derived \
+                 default RoutingForm::Instance (an in-cluster-only \
+                 Process declined the routing surface — it did NOT \
+                 opt into Instance by omission)"
+            );
+        }
+    }
+
+    /// DELEGATED-SOME CONTRACT: a `Some(r)` outer Option forwards
+    /// to [`RoutingSpec::has_form`] byte-identically across the full
+    /// (populated `stable_name_claim` bool × query kind) cross. Pins
+    /// that the extension trait's projection on the populated arm
+    /// equals the inner-spec probe's answer for every combination —
+    /// so the collapse-arm's `false` on `None` is the ONLY
+    /// behavioral change introduced by the lift. A regression that
+    /// (a) inverted the delegation, (b) dropped the closure, or
+    /// (c) wired the arm to a fixed answer would fail HERE.
+    #[test]
+    fn routing_spec_option_ext_has_form_matches_inner_probe_when_present() {
+        for is_stable in [true, false] {
+            let inner = RoutingSpec {
+                hostnames: vec![RoutingHostname::content_hashed("api")],
+                backend: RoutingBackend::plain("svc", 80),
+                stable_name_claim: is_stable,
+                priority: 0,
+            };
+            let opt: Option<RoutingSpec> = Some(inner.clone());
+            for probe in RoutingForm::ALL {
+                assert_eq!(
+                    opt.has_form(probe),
+                    inner.has_form(probe),
+                    "Some-arm projection diverged from inner probe: \
+                     is_stable={is_stable} probe={probe:?}"
+                );
+            }
         }
     }
 

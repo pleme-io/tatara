@@ -25,7 +25,7 @@ use tatara_process::export::{
 use tatara_process::intent::{IntentKind, WorkloadKind};
 use tatara_process::lifetime::{LifetimeKind, TeardownPolicy};
 use tatara_process::phase::ProcessPhase;
-use tatara_process::routing::RoutingForm;
+use tatara_process::routing::{RoutingForm, RoutingSpecOptionExt};
 use tatara_process::signal::SighupStrategy;
 use tatara_process::spec::{DependsOnSliceExt, MustReachPhase};
 use tatara_reconciler::known_crd::KnownCrd;
@@ -1332,12 +1332,15 @@ macro_rules! dispatch_prefixed_kind {
 ///   directly at the checks.lisp surface as the three-axis probe of
 ///   the point's ephemeral lifetime shape.
 /// - `routing-form-<kind>` — [`RoutingForm`] closed set →
-///   [`tatara_process::routing::RoutingSpec::has_form`] (a derived-
-///   scalar-carrier variant-equality probe on
-///   `spec.routing.as_ref().is_some_and(|r| r.form() == kind)`, where
-///   `RoutingSpec::form()` composes through the ONE substrate
-///   projection [`RoutingForm::from_is_stable`] over the
-///   `stable_name_claim` bool). The operator's `:requires
+///   [`tatara_process::routing::RoutingSpecOptionExt::has_form`] (a
+///   derived-scalar-carrier variant-equality probe on
+///   `spec.routing.has_form(kind)` — the extension trait on
+///   `Option<RoutingSpec>` owning the outer `None` short-circuit at
+///   ONE substrate site, composing through
+///   [`tatara_process::routing::RoutingSpec::has_form`] on the
+///   populated arm, which in turn routes through
+///   [`RoutingForm::from_is_stable`] over the `stable_name_claim`
+///   bool). The operator's `:requires
 ///   (routing-form-stable)` pins that a Process declares intent to
 ///   hold the ProcessTable claim for `(cluster, app)` and emit the
 ///   unprefixed `${app}.${cluster}.${loc}.${domain}` FQDN, `:requires
@@ -1622,10 +1625,7 @@ fn evaluate_point_require_tag(
             .lifetime
             .resolved_ephemeral()
             .is_some_and(|e| e.has_teardown_policy(k))),
-        ("routing-form-", RoutingForm, |k| spec
-            .routing
-            .as_ref()
-            .is_some_and(|r| r.has_form(k))),
+        ("routing-form-", RoutingForm, |k| spec.routing.has_form(k)),
         ("encapsulation-target-", EncapsulationTarget, |k| spec
             .encapsulates
             .has_target(k)),

@@ -982,6 +982,94 @@ impl Classification {
     pub fn horizon_terminates(&self) -> bool {
         self.horizon.kind.terminates()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`] carry a
+    /// [`Horizon`] whose kind projects to `true` under
+    /// [`HorizonKind::requires_metric_axes`]? The ONE substrate
+    /// primitive that owns the `(Classification) -> bool` derived-
+    /// nullary-predicate walk shape on the `horizon.kind` slot for
+    /// the metric-axes-required question.
+    ///
+    /// # Second occupant on the (required-parent × nested-struct-derived-nullary-bool) corner
+    ///
+    /// Byte-for-byte peer of [`Self::horizon_terminates`] via the SAME
+    /// closed set [`HorizonKind`] reached through the SAME nested
+    /// [`Horizon`] struct: [`Self::horizon_terminates`] composes
+    /// [`HorizonKind::terminates`] as `self.horizon.kind.terminates()`;
+    /// this method composes the ANTISYMMETRIC partner
+    /// [`HorizonKind::requires_metric_axes`] as
+    /// `self.horizon.kind.requires_metric_axes()`. The closed set
+    /// pins the XOR contract
+    /// `terminates() ^ requires_metric_axes()` on every variant (see
+    /// `horizon_kind_terminate_xor_requires_metric_axes` on the closed
+    /// set itself), so exactly ONE of the two derived-nullary probes
+    /// answers `true` per [`Classification`] and the two probes
+    /// together partition [`HorizonKind::ALL`] into two disjoint
+    /// buckets. This POPULATES the (required-parent × nested-struct-
+    /// derived-nullary-bool) corner of the workspace-wide closed-set-
+    /// driven presence-probe algebra at its SECOND substrate primitive
+    /// after [`Self::horizon_terminates`] opened the corner, pinning
+    /// the corner as a proven-repeatable primitive shape rather than
+    /// a single-example curiosity.
+    ///
+    /// # Semantics — derived nullary boolean, not variant equality
+    ///
+    /// `horizon_requires_metric_axes()` returns `true` iff
+    /// `self.horizon.kind.requires_metric_axes()`. The two-variant
+    /// [`HorizonKind`] closed set publishes the truth table:
+    /// [`HorizonKind::Bounded`] → `false` (has a fixed point, no
+    /// asymptotic metric axes required); [`HorizonKind::Asymptotic`]
+    /// → `true` (runs in perpetuity, `rate` and `oscillation` are the
+    /// health signal and must be measured). A
+    /// [`Classification::gate_compute`] baseline (which uses
+    /// [`Horizon::default`] with `kind = HorizonKind::Bounded` via
+    /// `#[default]`) answers `false` — the substrate's default-arm
+    /// short-circuit propagates through the nested [`Horizon`]
+    /// struct's own [`Default`] impl to this predicate's answer, the
+    /// mirror image of [`Self::horizon_terminates`]'s default-arm
+    /// answer.
+    ///
+    /// A future third [`HorizonKind`] variant (a hypothetical
+    /// `Periodic` sentinel for "terminates on each window boundary
+    /// then re-arms" — pre-flagged on the closed set's `ALL`
+    /// docstring) reaches this probe through ONE `requires_metric_axes`
+    /// arm on the closed set with the probe body untouched — the
+    /// nullary-predicate shape defers every per-variant policy
+    /// decision to the closed set's own truth table
+    /// ([`HorizonKind::requires_metric_axes`]) rather than duplicating
+    /// the discriminator sweep here.
+    ///
+    /// # Compounding
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `metric-axes-required` on
+    /// `POINT_FIXED_TAG_ARMS` — byte-for-byte antisymmetric peer of
+    /// the sibling `terminating-horizon` fixed tag. The ephemeral
+    /// surface publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::horizon_requires_metric_axes`],
+    /// which composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (metric-axes-required)` audit answers the same
+    /// question on both surfaces.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `metric-axes-required` fixed tag in `tatara-check`, future
+    /// scheduler / metric-provisioning validators, future variant
+    /// additions on [`HorizonKind`]) binds through the SAME
+    /// `horizon_requires_metric_axes()` shape rather than restating
+    /// the `classification.horizon.kind.requires_metric_axes()` chain
+    /// at each callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future [`HorizonKind`] variant lands at ONE
+    /// `ALL` entry + ONE `requires_metric_axes` arm on the closed set
+    /// and this probe picks it up mechanically.
+    #[must_use]
+    pub fn horizon_requires_metric_axes(&self) -> bool {
+        self.horizon.kind.requires_metric_axes()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -4786,6 +4874,106 @@ mod tests {
             assert!(
                 c.horizon_terminates() ^ kind.requires_metric_axes(),
                 "{kind:?}: horizon_terminates() XOR requires_metric_axes() must hold",
+            );
+        }
+    }
+
+    // ── Classification::horizon_requires_metric_axes substrate pins ──
+    //
+    // Fail-before-pass-after granularity: [`Classification::horizon_requires_metric_axes`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the nested [`Horizon`] slot's
+    // [`HorizonKind::requires_metric_axes`] projection had no substrate
+    // owner. Post-lift the shape lives at ONE substrate primitive and
+    // every downstream (the `metric-axes-required` fixed tag in
+    // `tatara-check`, the [`crate::ephemeral::EphemeralSpec::horizon_requires_metric_axes`]
+    // peer, future scheduler / metric-provisioning validators)
+    // composes against the SAME `horizon_requires_metric_axes()` shape
+    // rather than restating the
+    // `classification.horizon.kind.requires_metric_axes()` chain at
+    // its own callsite.
+
+    /// PER-VARIANT pin — for every [`HorizonKind`] variant, a
+    /// [`Classification`] whose `horizon.kind` field carries that
+    /// variant returns `horizon_requires_metric_axes()` matching the
+    /// closed set's own [`HorizonKind::requires_metric_axes`] truth
+    /// table. Sweep [`HorizonKind::ALL`] so a regression that (a)
+    /// hard-coded the method body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with the antisymmetric
+    /// partner [`HorizonKind::terminates`] fails HERE at the substrate
+    /// primitive before drifting through the `metric-axes-required`
+    /// fixed tag or the peer ephemeral surface.
+    #[test]
+    fn classification_horizon_requires_metric_axes_matches_horizon_kind_projection() {
+        for populated in HorizonKind::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon {
+                    kind: populated,
+                    ..Horizon::default()
+                },
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert_eq!(
+                c.horizon_requires_metric_axes(),
+                populated.requires_metric_axes(),
+                "horizon.kind={populated:?}: horizon_requires_metric_axes() drift from HorizonKind::requires_metric_axes()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `horizon: Horizon::default()` whose `kind` field defaults to
+    /// [`HorizonKind::Bounded`] via `#[default]`, and
+    /// [`HorizonKind::Bounded::requires_metric_axes`] projects `false`,
+    /// so `horizon_requires_metric_axes()` returns `false`. Pins the
+    /// default-arm short-circuit through TWO layers of `Default`
+    /// (`Horizon`'s + `HorizonKind`'s) at ONE narrow site — a
+    /// regression that promoted [`HorizonKind::Asymptotic`] to
+    /// `#[default]`, or that swapped `Horizon::default`'s stored
+    /// `kind`, or that wired [`HorizonKind::Bounded`] to
+    /// `requires_metric_axes() = true`, would fail HERE before
+    /// drifting through every unadorned Process's metric-provisioning
+    /// answer. Mirror image of
+    /// `classification_gate_compute_horizon_terminates_is_true`.
+    #[test]
+    fn classification_gate_compute_horizon_requires_metric_axes_is_false() {
+        let c = Classification::gate_compute();
+        assert!(
+            !c.horizon_requires_metric_axes(),
+            "gate_compute (horizon.kind=Bounded → requires_metric_axes=false) baseline",
+        );
+    }
+
+    /// ANTISYMMETRY pin — [`Self::horizon_terminates`] XOR
+    /// [`Self::horizon_requires_metric_axes`] holds on every variant.
+    /// Sibling of
+    /// `classification_horizon_terminates_xor_horizon_kind_requires_metric_axes`
+    /// (which walks the XOR through the closed set primitive
+    /// directly); this test walks the SAME XOR through BOTH
+    /// derived-nullary predicates on [`Classification`] so a
+    /// regression that crossed the wires (either predicate silently
+    /// composing the wrong closed-set arm) surfaces here rather than
+    /// at every downstream consumer that trusts the shape.
+    #[test]
+    fn classification_horizon_terminates_xor_horizon_requires_metric_axes() {
+        for kind in HorizonKind::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon {
+                    kind,
+                    ..Horizon::default()
+                },
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert!(
+                c.horizon_terminates() ^ c.horizon_requires_metric_axes(),
+                "{kind:?}: horizon_terminates() XOR horizon_requires_metric_axes() must hold",
             );
         }
     }

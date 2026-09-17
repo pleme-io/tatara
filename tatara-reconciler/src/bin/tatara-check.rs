@@ -2013,6 +2013,26 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "terminating-horizon",
         probe: |s| s.classification.horizon_terminates(),
     },
+    // `metric-axes-required` — byte-for-byte antisymmetric peer of the
+    // `terminating-horizon` fixed tag above, composing the ONE
+    // substrate primitive
+    // [`Classification::horizon_requires_metric_axes`] that walks
+    // `self.horizon.kind.requires_metric_axes()`. Answers the
+    // metric-provisioning-facing question "must this Process publish
+    // its `rate` and `oscillation` axes for the scheduler to reason
+    // about progress?" — `false` on the `Bounded` default (has a
+    // fixed point, distance is enough), `true` on `Asymptotic` (never
+    // terminates, only rate + oscillation reveal health). The closed
+    // set's own `horizon_kind_terminate_xor_requires_metric_axes`
+    // pin guarantees exactly ONE of `terminating-horizon` and
+    // `metric-axes-required` answers `true` per Process. Byte-for-
+    // byte symmetrical with the ephemeral surface's
+    // `metric-axes-required` arm on [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::horizon_requires_metric_axes`].
+    FixedTagArm {
+        tag: "metric-axes-required",
+        probe: |s| s.classification.horizon_requires_metric_axes(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2070,6 +2090,23 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "terminating-horizon",
         probe: |s| s.horizon_terminates(),
+    },
+    // `metric-axes-required` — byte-for-byte antisymmetric peer of the
+    // ephemeral surface's `terminating-horizon` arm above via
+    // [`Classification::horizon_requires_metric_axes`] reached through
+    // the ephemeral surface's [`EphemeralSpec::resolved_classification`]
+    // resolver. Answers the same metric-provisioning-facing question
+    // on the ephemeral surface — `false` on the absent-`:classification`
+    // default (routes through [`Classification::gate_compute`] →
+    // [`Horizon::default`] → [`HorizonKind::default = Bounded`] →
+    // `requires_metric_axes() = false`) and on any operator-authored
+    // `Bounded` horizon, `true` on `Asymptotic`. The two-surface
+    // parity contract holds by construction: both surfaces route
+    // through the SAME
+    // [`Classification::horizon_requires_metric_axes`] primitive.
+    FixedTagArm {
+        tag: "metric-axes-required",
+        probe: |s| s.horizon_requires_metric_axes(),
     },
 ];
 
@@ -10875,6 +10912,7 @@ mod tests {
                 "compliance",
                 "signals",
                 "terminating-horizon",
+                "metric-axes-required",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -10889,6 +10927,7 @@ mod tests {
                 "preconditions",
                 "closed-loop-auth",
                 "terminating-horizon",
+                "metric-axes-required",
             ],
         );
     }
@@ -15528,6 +15567,195 @@ mod tests {
             Ok(false),
             "Asymptotic-horizon Process must fail the mismatched `horizon-Bounded` prefix tag",
         );
+    }
+
+    // ── metric-axes-required fixed tag substrate pins ────────────────
+    //
+    // Fail-before-pass-after granularity: the `metric-axes-required`
+    // fixed tag did not exist before this commit — the (parent ×
+    // derived-nullary-bool) corner of the fixed-tag algebra was
+    // opened by `terminating-horizon` and now populated by this
+    // antisymmetric peer via ONE substrate primitive
+    // [`tatara_process::classification::Classification::horizon_requires_metric_axes`].
+    // Every test below binds through the SAME substrate primitive AND
+    // pins the two probes' XOR contract at the classifier boundary so
+    // a regression that (a) hard-coded either surface's arm to a
+    // fixed answer, (b) crossed the wires with the antisymmetric
+    // partner `terminating-horizon`, (c) dropped the ephemeral
+    // surface's resolver hop, or (d) drifted the two-surface parity
+    // contract fails HERE at ONE narrow classifier site per pin
+    // before landing at the operator-facing checks.lisp surface.
+
+    /// POINT SURFACE per-variant pin — for every [`HorizonKind`]
+    /// variant, a [`ProcessSpec`] whose `classification.horizon.kind`
+    /// carries that variant answers the `metric-axes-required` fixed
+    /// tag matching the closed set's own
+    /// [`HorizonKind::requires_metric_axes`] truth table. Sweep
+    /// [`HorizonKind::ALL`] so a regression that probed a fixed
+    /// variant, inverted the projection, or crossed the wires with
+    /// [`HorizonKind::terminates`] fails HERE at the classifier
+    /// before landing at the operator-facing surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_horizon_requires_metric_axes_projection_per_horizon_kind()
+    {
+        for populated in HorizonKind::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.horizon = Horizon {
+                kind: populated,
+                ..Horizon::default()
+            };
+            assert_eq!(
+                evaluate_point_require_tag(&spec, "metric-axes-required"),
+                Ok(populated.requires_metric_axes()),
+                "point horizon.kind={populated:?}: metric-axes-required drift from HorizonKind::requires_metric_axes()",
+            );
+        }
+    }
+
+    /// POINT SURFACE DEFAULT-ARM SHORT-CIRCUIT pin — a Process built
+    /// through [`ProcessSpec::gate_compute_defaults`] (which carries
+    /// `horizon: Horizon::default()` whose `kind` field defaults to
+    /// [`HorizonKind::Bounded`] via `#[default]`) answers `Ok(false)`
+    /// on `metric-axes-required` WITHOUT the operator naming the
+    /// horizon axis. Pins the default-arm short-circuit through TWO
+    /// layers of `Default` at ONE narrow classifier site — mirror
+    /// image of
+    /// `evaluate_point_require_tag_returns_true_on_default_terminating_horizon`.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_default_metric_axes_required() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "metric-axes-required"),
+            Ok(false),
+            "default (horizon.kind=Bounded → requires_metric_axes=false) baseline",
+        );
+    }
+
+    /// EPHEMERAL SURFACE per-variant pin — for every [`HorizonKind`]
+    /// variant, an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries that variant answers the
+    /// `metric-axes-required` fixed tag matching the closed set's
+    /// own [`HorizonKind::requires_metric_axes`] truth table. Byte-
+    /// for-byte peer of the point-surface per-variant pin above via
+    /// the SAME [`Classification::horizon_requires_metric_axes`]
+    /// primitive reached through the ephemeral surface's
+    /// `resolved_classification()` resolver.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_horizon_requires_metric_axes_projection_per_horizon_kind(
+    ) {
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = Horizon {
+                kind: populated,
+                ..Horizon::default()
+            };
+            let spec = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, "metric-axes-required"),
+                Ok(populated.requires_metric_axes()),
+                "ephemeral horizon.kind={populated:?}: metric-axes-required drift",
+            );
+        }
+    }
+
+    /// EPHEMERAL SURFACE ABSENT-CLASSIFICATION SHORT-CIRCUIT pin —
+    /// an [`EphemeralSpec`] whose `classification` slot is `None`
+    /// routes through the resolver's substrate default
+    /// [`Classification::gate_compute`] (whose horizon defaults to
+    /// [`HorizonKind::Bounded`] → `requires_metric_axes() = false`),
+    /// so the `metric-axes-required` fixed tag answers `Ok(false)`
+    /// WITHOUT the operator naming the classification axis on
+    /// `(defephemeral …)`. Mirror image of
+    /// `evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_terminating_horizon`.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_absent_classification_for_metric_axes_required(
+    ) {
+        let spec = ephemeral_fixture();
+        assert!(spec.classification.is_none());
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "metric-axes-required"),
+            Ok(false),
+            "absent classification (defaults to gate_compute, horizon.kind=Bounded → requires_metric_axes=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME classification (across
+    /// (`None`, `Some(_)` on every [`HorizonKind::ALL`] variant))
+    /// classifies IDENTICALLY through the point-surface
+    /// `metric-axes-required` fixed tag AND the ephemeral-surface
+    /// `metric-axes-required` fixed tag when the ephemeral spec is
+    /// mechanically lowered to a [`ProcessSpec`] via `From`. Byte-
+    /// for-byte peer of
+    /// `evaluate_terminating_horizon_matches_across_surfaces_through_lowered_ephemeral`.
+    #[test]
+    fn evaluate_metric_axes_required_matches_across_surfaces_through_lowered_ephemeral() {
+        // Absent classification.
+        let eph = ephemeral_fixture();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&eph, "metric-axes-required"),
+            evaluate_point_require_tag(&lowered, "metric-axes-required"),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = Horizon {
+                kind: populated,
+                ..Horizon::default()
+            };
+            let eph = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph, "metric-axes-required"),
+                evaluate_point_require_tag(&lowered, "metric-axes-required"),
+                "authored horizon.kind={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// CLASSIFIER-LEVEL ANTISYMMETRY pin — [`HorizonKind`]'s closed-
+    /// set XOR contract (`terminates() ^ requires_metric_axes()`)
+    /// walks all the way through to the classifier surface: for
+    /// every variant, a Process carrying that horizon kind returns
+    /// exactly ONE `Ok(true)` between `terminating-horizon` and
+    /// `metric-axes-required`. Locks the composition-level XOR at
+    /// the CLASSIFIER boundary — a regression that crossed either
+    /// arm's probe body (e.g. `metric-axes-required` silently
+    /// composing `horizon_terminates` instead of
+    /// `horizon_requires_metric_axes`) fails HERE before drifting
+    /// through checks.lisp.
+    #[test]
+    fn evaluate_point_terminating_horizon_and_metric_axes_required_are_antisymmetric() {
+        for populated in HorizonKind::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.horizon = Horizon {
+                kind: populated,
+                ..Horizon::default()
+            };
+            let terminates = evaluate_point_require_tag(&spec, "terminating-horizon");
+            let metric = evaluate_point_require_tag(&spec, "metric-axes-required");
+            assert_eq!(
+                terminates,
+                Ok(populated.terminates()),
+                "point horizon.kind={populated:?}: terminating-horizon drift",
+            );
+            assert_eq!(
+                metric,
+                Ok(populated.requires_metric_axes()),
+                "point horizon.kind={populated:?}: metric-axes-required drift",
+            );
+            assert!(
+                matches!((terminates, metric), (Ok(a), Ok(b)) if a ^ b),
+                "point horizon.kind={populated:?}: terminating-horizon XOR metric-axes-required must hold at the classifier",
+            );
+        }
     }
 
     // ── RequireTagDomain trait dispatch pins ─────────────────────────

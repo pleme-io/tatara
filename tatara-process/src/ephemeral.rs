@@ -1168,6 +1168,104 @@ impl EphemeralSpec {
         self.resolved_classification().horizon_terminates()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s [`Horizon`] project to `true`
+    /// under [`crate::classification::HorizonKind::requires_metric_axes`]?
+    /// Byte-for-byte peer of
+    /// [`Classification::horizon_requires_metric_axes`] wrapped
+    /// through the [`Self::resolved_classification`] resolver so an
+    /// operator-omitted `:classification` slot on `(defephemeral …)`
+    /// still answers via the substrate default. The ONE ephemeral-
+    /// surface substrate primitive that owns the
+    /// `(&EphemeralSpec) -> bool` derived-nullary-boolean walk on
+    /// the metric-axes-required question over the classification-
+    /// horizon axis.
+    ///
+    /// # Antisymmetric peer of [`Self::horizon_terminates`]
+    ///
+    /// Byte-for-byte antisymmetric peer of [`Self::horizon_terminates`]
+    /// via the SAME [`Self::resolved_classification`] resolver hop
+    /// and the SAME closed set [`crate::classification::HorizonKind`]:
+    /// [`Self::horizon_terminates`] composes
+    /// [`Classification::horizon_terminates`] (walking
+    /// [`crate::classification::HorizonKind::terminates`]); this
+    /// method composes the ANTISYMMETRIC partner
+    /// [`Classification::horizon_requires_metric_axes`] (walking
+    /// [`crate::classification::HorizonKind::requires_metric_axes`]).
+    /// The closed set pins the XOR contract
+    /// `terminates() ^ requires_metric_axes()` on every variant, so
+    /// exactly ONE of these two ephemeral-surface derived-nullary
+    /// probes answers `true` per resolved [`Classification`] and the
+    /// two probes together partition the resolver's output space into
+    /// two disjoint buckets on every ephemeral spec — authored or
+    /// defaulted.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `horizon_requires_metric_axes()` returns `true` iff
+    /// `self.resolved_classification().horizon_requires_metric_axes()`.
+    /// The resolver returns the authored [`Classification`] when
+    /// present and the substrate default
+    /// [`Classification::gate_compute`] on absence. Because
+    /// [`Classification::gate_compute`] uses [`Horizon::default`]
+    /// (whose `kind` field defaults to
+    /// [`crate::classification::HorizonKind::Bounded`] via
+    /// `#[default]`), a bare ephemeral spec with no `:classification`
+    /// slot answers `false` — the default-arm short-circuit
+    /// propagates through THREE layers of `Default`
+    /// ([`Classification::gate_compute`] → [`Horizon::default`] →
+    /// [`crate::classification::HorizonKind::default`]) to this
+    /// predicate's answer, the mirror image of
+    /// [`Self::horizon_terminates`]'s default-arm `true` answer. A
+    /// regression that dropped the resolver hop, probed
+    /// [`Classification::has_horizon_kind`] directly (dropping the
+    /// `.requires_metric_axes()` projection), or crossed the wires
+    /// with the antisymmetric partner
+    /// [`crate::classification::HorizonKind::terminates`] fails HERE
+    /// at ONE narrow substrate site before drifting through every
+    /// unadorned ephemeral spec's baseline metric-provisioning
+    /// answer.
+    ///
+    /// # Compounding
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `metric-axes-required` on
+    /// `EPHEMERAL_FIXED_TAG_ARMS` — byte-for-byte peer of the point
+    /// surface's `metric-axes-required` fixed tag on
+    /// `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::horizon_requires_metric_axes`] directly. The
+    /// two-surface parity contract holds by construction: both
+    /// surfaces route through the SAME
+    /// [`Classification::horizon_requires_metric_axes`] primitive
+    /// after the ephemeral surface pays ONE resolver hop — a future
+    /// [`crate::classification::HorizonKind`] variant or a future
+    /// normalization at the substrate primitive lands at ONE site and
+    /// both surfaces' `metric-axes-required` fixed tags inherit the
+    /// shift mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-axis derived-nullary-
+    /// boolean probe body composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::horizon_requires_metric_axes`]) so every
+    /// downstream (`metric-axes-required` fixed tags on both
+    /// surfaces in tatara-check, future scheduler / metric-
+    /// provisioning validators, future variant additions on
+    /// [`crate::classification::HorizonKind`]) binds through the
+    /// SAME `horizon_requires_metric_axes()` shape rather than
+    /// restating either the resolver walk or the closed-set
+    /// projection composition at the callsite. THEORY.md §VI.1 —
+    /// generation over composition; a future
+    /// [`crate::classification::HorizonKind`] variant lands at ONE
+    /// `ALL` entry + ONE `requires_metric_axes` arm on the closed
+    /// set and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn horizon_requires_metric_axes(&self) -> bool {
+        self.resolved_classification()
+            .horizon_requires_metric_axes()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -3249,6 +3347,145 @@ mod tests {
                 eph.horizon_terminates(),
                 lowered.classification.horizon_terminates(),
                 "authored horizon.kind={populated:?}: parity drift",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::horizon_requires_metric_axes pins ─────────────
+    //
+    // Fail-before-pass-after granularity: `horizon_requires_metric_axes`
+    // did not exist pre-lift on `impl EphemeralSpec` — every consumer
+    // walking the "does this ephemeral spec's horizon require metric
+    // axes?" question went through
+    // `.resolved_classification().horizon.kind.requires_metric_axes()`
+    // or through the lowered `ProcessSpec`'s
+    // `spec.classification.horizon.kind.requires_metric_axes()`. Post-
+    // lift the antisymmetric peer of `horizon_terminates` routes
+    // through the SAME [`Self::resolved_classification`] resolver +
+    // the sibling substrate primitive
+    // [`crate::classification::Classification::horizon_requires_metric_axes`],
+    // so the two-surface parity contract holds by construction — a
+    // regression on either side of the resolver fails at these pins
+    // before landing at the operator-facing `metric-axes-required`
+    // fixed tag in `tatara-check`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific [`HorizonKind`] variant
+    /// answers [`Self::horizon_requires_metric_axes`] matching the
+    /// closed set's own [`HorizonKind::requires_metric_axes`] truth
+    /// table. Sweep [`HorizonKind::ALL`] so a regression that (a)
+    /// hard-coded the body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with the antisymmetric
+    /// partner [`HorizonKind::terminates`] fails HERE at the
+    /// substrate primitive before drifting through the
+    /// `metric-axes-required` fixed tag or the peer point surface.
+    #[test]
+    fn horizon_requires_metric_axes_returns_horizon_kind_projection_per_kind() {
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = crate::classification::Horizon {
+                kind: populated,
+                ..crate::classification::Horizon::default()
+            };
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.horizon_requires_metric_axes(),
+                populated.requires_metric_axes(),
+                "authored horizon.kind={populated:?}: horizon_requires_metric_axes() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which uses
+    /// [`crate::classification::Horizon::default`] whose `kind`
+    /// defaults to [`HorizonKind::Bounded`] via `#[default]`, and
+    /// [`HorizonKind::Bounded::requires_metric_axes`] projects
+    /// `false`, so [`Self::horizon_requires_metric_axes`] returns
+    /// `false`. Pins the default-arm short-circuit through THREE
+    /// layers of `Default` ([`Classification::gate_compute`] →
+    /// [`Horizon::default`] → [`HorizonKind::default`]) reaching this
+    /// derived-nullary predicate — mirror image of
+    /// `horizon_terminates_probes_true_on_absent_classification`.
+    #[test]
+    fn horizon_requires_metric_axes_probes_false_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            !spec.horizon_requires_metric_axes(),
+            "absent classification (defaults to gate_compute, horizon.kind=Bounded → requires_metric_axes=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::horizon_requires_metric_axes`]
+    /// AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.horizon_requires_metric_axes()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`HorizonKind::ALL`] variant) so a future regression on
+    /// either side of the resolver fails HERE at the parity
+    /// boundary. Byte-for-byte peer of the sibling
+    /// `horizon_terminates_matches_point_peer_through_lowered_classification`.
+    #[test]
+    fn horizon_requires_metric_axes_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.horizon_requires_metric_axes(),
+            lowered.classification.horizon_requires_metric_axes(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = crate::classification::Horizon {
+                kind: populated,
+                ..crate::classification::Horizon::default()
+            };
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.horizon_requires_metric_axes(),
+                lowered.classification.horizon_requires_metric_axes(),
+                "authored horizon.kind={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// ANTISYMMETRY pin — [`Self::horizon_terminates`] XOR
+    /// [`Self::horizon_requires_metric_axes`] holds on every
+    /// [`EphemeralSpec`], authored or defaulted. Locks the
+    /// composition-level XOR contract at ONE narrow ephemeral-surface
+    /// site — a regression that crossed either surface's wires (one
+    /// probe silently composing the wrong closed-set arm) surfaces
+    /// here rather than at every downstream consumer that trusts the
+    /// two probes partition the resolver's output.
+    #[test]
+    fn ephemeral_horizon_terminates_xor_horizon_requires_metric_axes() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        assert!(
+            eph.horizon_terminates() ^ eph.horizon_requires_metric_axes(),
+            "None-classification: XOR must hold",
+        );
+        // Authored classification.
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = crate::classification::Horizon {
+                kind: populated,
+                ..crate::classification::Horizon::default()
+            };
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            assert!(
+                eph.horizon_terminates() ^ eph.horizon_requires_metric_axes(),
+                "authored horizon.kind={populated:?}: XOR must hold",
             );
         }
     }

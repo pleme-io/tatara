@@ -500,6 +500,116 @@ impl EncapsulationMode {
 // [`crate::boundary::UnknownConditionKind`], and
 // [`crate::phase::UnknownPhase`].
 
+/// Extension trait on `Option<EncapsulatesSpec>` — the ONE substrate
+/// primitive that owns the "collapse the parent `encapsulates`
+/// Option-carrier before probing the inner spec" shape shared by every
+/// downstream require-tag family whose vocabulary reads through
+/// [`crate::crd::ProcessSpec::encapsulates`].
+///
+/// # Why lift
+///
+/// The point-domain require-tag classifier in
+/// `tatara-reconciler::bin::tatara-check` composed the SAME two-step
+/// chain (`spec.encapsulates.as_ref().is_some_and(|e| e.<probe>(k))`)
+/// at TWO consecutive rows in `evaluate_point_require_tag`'s prefix
+/// table:
+///
+/// * `encapsulation-mode-<kind>` — projects onto the
+///   [`EncapsulatesSpec::has_mode`] scalar-carrier probe.
+/// * `encapsulation-target-<kind>` — projects onto the
+///   [`crate::tagged_union::TaggedUnion::has`] presence probe over the
+///   nested [`EncapsulationKind`] tagged union.
+///
+/// Two restatements of the ONE Option-carrier collapse past the
+/// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold — post-lift ONE
+/// substrate primitive owns the `(Option<EncapsulatesSpec>) → probe`
+/// discipline, and every current + future presence probe threaded
+/// through `spec.encapsulates` plugs into it through the SAME trait
+/// shape without a bespoke Option-arm at the caller.
+///
+/// # Semantics vs. the pre-lift chain
+///
+/// `.as_ref().is_some_and(|e| e.has_mode(k))` returns `false` on the
+/// "no encapsulation" outcome (`spec.encapsulates == None`, e.g., a
+/// greenfield Process that declined the encapsulation surface entirely)
+/// AND on the "encapsulation set but the probed axis doesn't match"
+/// outcome. The lifted [`Self::has_mode`] projection returns `false` on
+/// the "no encapsulation" outcome and delegates to the inner
+/// [`EncapsulatesSpec::has_mode`] on the "encapsulation set" outcome —
+/// observationally equivalent to the pre-lift chain at every callsite.
+/// Symmetric shape for [`Self::has_target`] over the nested
+/// [`EncapsulationKind`] tagged-union probe.
+///
+/// # Peer to [`crate::lifetime::Lifetime::ephemeral_exports`]
+///
+/// Both lifts collapse an Option-carrier at ONE substrate site so
+/// downstream presence probes on the same nested carrier compose
+/// through a uniform shape. `ephemeral_exports` returns `&[ExportSpec]`
+/// (empty slice on the collapsed arm; slice methods return `false` on
+/// empty via `.iter().any(...)`); this trait returns `bool` directly
+/// because the two probes on `EncapsulatesSpec` are not slice-shaped
+/// (a scalar-carrier equality and a tagged-union `.has()`). Both bind
+/// their respective require-tag families' probes to a `spec.<field>
+/// .<probe>(k)` shape without an `.as_ref().is_some_and(...)` chain at
+/// the callsite.
+///
+/// # Compounding
+///
+/// A future third closed-set-driven presence probe reaching through
+/// `spec.encapsulates` (a hypothetical `SubmodeKind` scalar on
+/// [`EncapsulatesSpec`], a `HandoffPhase` closed-set on a new nested
+/// carrier, a further tagged-union discriminator on
+/// [`EncapsulationKind`]) lands as ONE more method on this trait +
+/// ONE more `if let Some(res) = strip_and_classify_prefixed_kind::<K,
+/// _>(tag, "prefix-", |k| spec.encapsulates.<new-probe>(k)) { return
+/// res; }` branch in the require-tag classifier's prefix table — no
+/// per-caller `.as_ref().is_some_and(...)` restatement, no per-caller
+/// `spec.encapsulates.as_ref()` walk. A future diagnostic shift on the
+/// Option-carrier collapse (surfacing "encapsulation declined" as a
+/// distinct near-miss from "encapsulation set but axis absent") lands
+/// at THIS ONE substrate owner and every current + future require-tag
+/// family inherits the shift by construction.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the Option-carrier collapse lives at ONE substrate site so
+/// every downstream `encapsulation-<axis>` require-tag family binds
+/// through the SAME shape). THEORY.md §VI.1 (generation over
+/// composition — a new probe on `EncapsulatesSpec` reaches this trait
+/// through a peer method without a bespoke Option-arm at the caller).
+///
+/// Pinned by
+/// [`tests::encapsulates_option_ext_has_mode_returns_false_on_none_for_every_kind`],
+/// [`tests::encapsulates_option_ext_has_mode_matches_inner_probe_when_present`],
+/// [`tests::encapsulates_option_ext_has_target_returns_false_on_none_for_every_target`],
+/// and
+/// [`tests::encapsulates_option_ext_has_target_matches_inner_kind_probe_when_present`].
+pub trait EncapsulatesSpecOptionExt {
+    /// True iff this `Option<EncapsulatesSpec>` is `Some(e)` AND
+    /// [`EncapsulatesSpec::has_mode`] on the inner spec answers `true`
+    /// for the given [`EncapsulationMode`]. Returns `false` on `None`
+    /// (a greenfield Process that declined encapsulation entirely) —
+    /// including for the default [`EncapsulationMode::Manage`],
+    /// because the operator DECLINED the encapsulation surface rather
+    /// than defaulting into it.
+    fn has_mode(&self, kind: EncapsulationMode) -> bool;
+
+    /// True iff this `Option<EncapsulatesSpec>` is `Some(e)` AND the
+    /// inner [`EncapsulatesSpec::kind`] tagged union carries a
+    /// populated slot addressed by the given [`EncapsulationTarget`].
+    /// Returns `false` on `None`.
+    fn has_target(&self, kind: EncapsulationTarget) -> bool;
+}
+
+impl EncapsulatesSpecOptionExt for Option<EncapsulatesSpec> {
+    fn has_mode(&self, kind: EncapsulationMode) -> bool {
+        self.as_ref().is_some_and(|e| e.has_mode(kind))
+    }
+
+    fn has_target(&self, kind: EncapsulationTarget) -> bool {
+        self.as_ref().is_some_and(|e| e.kind.has(kind))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1069,6 +1179,115 @@ mod tests {
     #[test]
     fn encapsulation_kind_two_slots_is_ambiguous_across_every_pair() {
         crate::tagged_union::assert_two_slots_ambiguous::<EncapsulationKind, _>(two_slot_kind);
+    }
+
+    // ── EncapsulatesSpecOptionExt — Option-carrier collapse contract ──
+
+    /// COLLAPSED-NONE CONTRACT (mode axis): a `None` outer Option
+    /// carries no encapsulation surface, so
+    /// [`EncapsulatesSpecOptionExt::has_mode`] returns `false` for
+    /// every [`EncapsulationMode`] — INCLUDING the substrate default
+    /// [`EncapsulationMode::Manage`]. An operator who declined the
+    /// encapsulation surface entirely is NOT configured for `Manage`;
+    /// the default only fires when the parent Option is `Some(_)` and
+    /// the inner `mode` slot is unset. Pre-lift the require-tag
+    /// classifier restated `spec.encapsulates.as_ref().is_some_and(|e|
+    /// e.has_mode(k))` inline; post-lift the collapse is a peer to
+    /// [`crate::lifetime::Lifetime::ephemeral_exports`] (both own the
+    /// Option-carrier arm at ONE substrate site).
+    #[test]
+    fn encapsulates_option_ext_has_mode_returns_false_on_none_for_every_kind() {
+        let opt: Option<EncapsulatesSpec> = None;
+        for m in EncapsulationMode::ALL {
+            assert!(
+                !opt.has_mode(m),
+                "None carrier reported has_mode({m:?}) = true; \
+                 the Option-carrier collapse arm must return false \
+                 for every EncapsulationMode kind, including the \
+                 substrate default"
+            );
+        }
+    }
+
+    /// DELEGATED-SOME CONTRACT (mode axis): a `Some(e)` outer Option
+    /// forwards to [`EncapsulatesSpec::has_mode`] byte-identically.
+    /// This test pins that the extension trait's projection on the
+    /// populated arm equals the inner-spec probe's answer for every
+    /// [`EncapsulationMode`] kind on a spec whose `mode` slot is set
+    /// to a specific variant — so the collapse-arm's `false` on `None`
+    /// is the ONLY behavioral change introduced by the lift.
+    #[test]
+    fn encapsulates_option_ext_has_mode_matches_inner_probe_when_present() {
+        for set_mode in EncapsulationMode::ALL {
+            let inner = EncapsulatesSpec {
+                kind: single_slot_kind(EncapsulationTarget::ExistingHelmRelease),
+                mode: set_mode,
+            };
+            let opt: Option<EncapsulatesSpec> = Some(inner.clone());
+            for probe in EncapsulationMode::ALL {
+                assert_eq!(
+                    opt.has_mode(probe),
+                    inner.has_mode(probe),
+                    "Some-arm projection diverged from inner probe: \
+                     set_mode={set_mode:?} probe={probe:?}"
+                );
+            }
+        }
+    }
+
+    /// COLLAPSED-NONE CONTRACT (target axis): a `None` outer Option
+    /// carries no encapsulation surface, so
+    /// [`EncapsulatesSpecOptionExt::has_target`] returns `false` for
+    /// every [`EncapsulationTarget`]. Symmetric to the mode-axis
+    /// collapse; the two axes route through the SAME Option-carrier
+    /// arm so this test AND the mode-axis peer must both stay `false`
+    /// on `None` — a regression that leaked `true` on one axis would
+    /// diverge the two require-tag families' truth tables.
+    #[test]
+    fn encapsulates_option_ext_has_target_returns_false_on_none_for_every_target() {
+        let opt: Option<EncapsulatesSpec> = None;
+        for t in EncapsulationTarget::ALL {
+            assert!(
+                !opt.has_target(t),
+                "None carrier reported has_target({t:?}) = true; \
+                 the Option-carrier collapse arm must return false \
+                 for every EncapsulationTarget"
+            );
+        }
+    }
+
+    /// DELEGATED-SOME CONTRACT (target axis): a `Some(e)` outer Option
+    /// forwards to the inner
+    /// [`crate::tagged_union::TaggedUnion::has`] presence probe over
+    /// [`EncapsulatesSpec::kind`] byte-identically. Pins that populated
+    /// slots answer `true` on their own target and `false` on the
+    /// other two — the `select`-populated arm of the closed-set sweep
+    /// is what the collapsed-`Some` path delegates to.
+    #[test]
+    fn encapsulates_option_ext_has_target_matches_inner_kind_probe_when_present() {
+        for set_target in EncapsulationTarget::ALL {
+            let inner = EncapsulatesSpec {
+                kind: single_slot_kind(set_target),
+                mode: EncapsulationMode::default(),
+            };
+            let opt: Option<EncapsulatesSpec> = Some(inner.clone());
+            for probe in EncapsulationTarget::ALL {
+                let expected = probe == set_target;
+                assert_eq!(
+                    opt.has_target(probe),
+                    expected,
+                    "Some-arm target projection wrong: \
+                     set_target={set_target:?} probe={probe:?}"
+                );
+                assert_eq!(
+                    opt.has_target(probe),
+                    inner.kind.has(probe),
+                    "Some-arm target projection diverged from inner \
+                     tagged-union probe: set_target={set_target:?} \
+                     probe={probe:?}"
+                );
+            }
+        }
     }
 
     // Per-implementor `unknown_X_message_matches_substrate_convention`

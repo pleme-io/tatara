@@ -16,7 +16,9 @@ use tatara_process::classification::{
     OptimizationDirection, SubstrateType,
 };
 use tatara_process::compliance::{ComplianceBindingSliceExt, VerificationPhase};
-use tatara_process::encapsulates::{EncapsulationMode, EncapsulationTarget};
+use tatara_process::encapsulates::{
+    EncapsulatesSpecOptionExt, EncapsulationMode, EncapsulationTarget,
+};
 use tatara_process::export::{
     ArtifactKind, ChannelKind, ExportSpecSliceExt, ExportTrigger, ReportFormat, ReportPayloadShape,
 };
@@ -1597,8 +1599,7 @@ fn evaluate_point_require_tag(
             .has_artifact_kind(k)),
         ("encapsulation-mode-", EncapsulationMode, |k| spec
             .encapsulates
-            .as_ref()
-            .is_some_and(|e| e.has_mode(k))),
+            .has_mode(k)),
         ("point-type-", ConvergencePointType, |k| spec
             .classification
             .has_point_type(k)),
@@ -1627,8 +1628,7 @@ fn evaluate_point_require_tag(
             .is_some_and(|r| r.has_form(k))),
         ("encapsulation-target-", EncapsulationTarget, |k| spec
             .encapsulates
-            .as_ref()
-            .is_some_and(|e| e.kind.has(k))),
+            .has_target(k)),
         ("workload-kind-", WorkloadKind, |k| spec
             .intent
             .has_workload_kind(k)),

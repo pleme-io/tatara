@@ -2322,6 +2322,74 @@ impl Classification {
         axis.overlay(&mut c);
         c
     }
+
+    /// Fluent per-axis overlay — post-composes ONE additional
+    /// [`ClassificationAxis`] variant on top of `self`, returning
+    /// the mutated [`Classification`] by value. Sibling to
+    /// [`Self::gate_compute_with_axis`] on the (baseline-composer ×
+    /// per-axis-overlay) axis: `gate_compute_with_axis(a)` is the
+    /// (start-from-baseline, overlay-one-axis) shape; `with_axis(a)`
+    /// is the (start-from-arbitrary-classification, overlay-one-more-
+    /// axis) shape. Together they compose the workspace-wide
+    /// (Classification, N-axis-conjunction) construction algebra:
+    /// `Classification::gate_compute_with_axis(a).with_axis(b).with_axis(c)`
+    /// chains an arbitrary N-axis conjunction onto the [`Self::gate_compute`]
+    /// baseline through ONE substrate primitive per axis rather than
+    /// restating the FIVE-field struct-literal (`point_type`,
+    /// `substrate`, `horizon`, `calm`, `data_classification`) verbatim
+    /// at every N-axis-conjunction test-fixture callsite.
+    ///
+    /// # Substrate ergonomics
+    ///
+    /// Pre-lift the shape `Classification { <mutated-axes>,
+    /// ..(remaining-baselines) }` recurred at ≥ 5 hand-authored
+    /// multi-axis-conjunction test-fixture callsites in this file
+    /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold,
+    /// each restating the FIVE-field struct-literal with distinct
+    /// (Fork+Storage), (Fork+Storage+NonMonotone),
+    /// (Fork+Storage+NonMonotone+Pii),
+    /// (Fork+Storage+NonMonotone+Pii+HorizonKind::Asymptotic), and
+    /// (Fork+Storage+NonMonotone+Pii+HorizonKind::Asymptotic+
+    /// direction=Maximize) conjunctions. Post-lift each callsite
+    /// reads
+    /// `Classification::gate_compute_with_axis(Fork).with_axis(Storage)`
+    /// … (chained per axis), and the four/three/two/one-baseline-slot
+    /// restatement binds through the ONE substrate composer at every
+    /// callsite. The prior lift onto [`Self::gate_compute_with_axis`]
+    /// (`76d469c` + `08714f6` + `7f14656`) closed the SINGLE-axis-
+    /// overlay shape; this primitive extends the same trait dispatch
+    /// through arbitrary N-axis conjunctions without introducing a
+    /// variadic-tuple-overlay dispatch path.
+    ///
+    /// # Compounding
+    ///
+    /// A future SIXTH classification axis (foreshadowed by the
+    /// six-axis lattice language on the CRD-facing prose) lands as
+    /// ONE peer `impl ClassificationAxis` on the new axis's closed
+    /// set — every multi-axis-conjunction test fixture using
+    /// `.with_axis(...)` picks up the sixth axis mechanically by
+    /// appending ONE more `.with_axis(new_variant)` call rather than
+    /// growing an N-field struct-literal to N+1 fields at every
+    /// site. A future audit dispatcher walking a fixed N-axis
+    /// conjunction on every classification axis binds through the
+    /// SAME chained-overlay shape rather than a per-N-arity
+    /// composer family (`gate_compute_with_axes2`,
+    /// `gate_compute_with_axes3`, …).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the per-axis overlay is the axis-local
+    /// composition proof [`ClassificationAxis::overlay`] owns at ONE
+    /// site; this primitive lifts the ONE-axis composition guarantee
+    /// through arbitrary chaining without a per-arity dispatch
+    /// path). THEORY.md §VI.1 (generation over composition — a
+    /// future N-axis-conjunction test lands as ONE chained
+    /// `.with_axis(...)` sequence versus a fresh N+1-field struct-
+    /// literal per callsite).
+    #[must_use]
+    pub fn with_axis<A: ClassificationAxis>(mut self, axis: A) -> Self {
+        axis.overlay(&mut self);
+        self
+    }
 }
 
 /// Test/audit helper — a closed-set variant that can overlay its
@@ -2360,10 +2428,37 @@ pub trait ClassificationAxis {
 
 impl ClassificationAxis for HorizonKind {
     fn overlay(self, c: &mut Classification) {
-        c.horizon = Horizon {
-            kind: self,
-            ..Horizon::default()
-        };
+        // Sub-slot overlay — set ONLY the `kind` field on the nested
+        // `Horizon` struct, preserving any `direction` / `metric` /
+        // `healthy_rate_threshold` a prior [`Classification::with_axis`]
+        // overlay may have populated. Byte-symmetric with the previous
+        // whole-`Horizon` reset shape (`c.horizon = Horizon { kind: self,
+        // ..Horizon::default() }`) when the base carrier is
+        // [`Classification::gate_compute`] (whose `horizon` is
+        // `Horizon::default()` — every sub-slot already `None`), but
+        // order-independent under chaining: a downstream
+        // `.with_axis(OptimizationDirection::Maximize).with_axis(HorizonKind::Asymptotic)`
+        // no longer stomps the prior `direction: Some(Maximize)` overlay.
+        c.horizon.kind = self;
+    }
+}
+
+impl ClassificationAxis for OptimizationDirection {
+    fn overlay(self, c: &mut Classification) {
+        // Nested-struct-Option sub-slot overlay — set ONLY the
+        // `direction` field on the nested `Horizon` struct as
+        // `Some(self)`, preserving `kind` / `metric` /
+        // `healthy_rate_threshold`. Peer to the direct-nested-scalar
+        // [`ClassificationAxis for HorizonKind`] overlay: both hop into
+        // the nested `Horizon` struct, but this overlay wraps its assign
+        // in `Some(...)` per the `Horizon::direction: Option<OptimizationDirection>`
+        // typed slot. Chain
+        // `.with_axis(HorizonKind::Asymptotic).with_axis(OptimizationDirection::Maximize)`
+        // to compose the (kind, direction) pair the
+        // [`crate::export`]-facing rate-window Asymptotic-horizon
+        // fixtures otherwise restate as `Horizon { kind: Asymptotic,
+        // direction: Some(Maximize), ..Horizon::default() }` inline.
+        c.horizon.direction = Some(self);
     }
 }
 
@@ -3908,6 +4003,172 @@ mod tests {
         }
     }
 
+    // ── Classification::with_axis chaining primitive pins ────────────
+    //
+    // Fail-before-pass-after granularity: `with_axis` did not exist
+    // before this commit — the (Classification, N-axis-conjunction)
+    // construction shape recurred at ≥ 5 hand-authored test-fixture
+    // callsites in this file (Fork+Storage, Fork+Storage+NonMonotone,
+    // Fork+Storage+NonMonotone+Pii, +HorizonKind::Asymptotic,
+    // +direction=Maximize) each restating the FIVE-field struct-
+    // literal (`point_type`, `substrate`, `horizon`, `calm`,
+    // `data_classification`) verbatim with distinct axis conjunctions.
+    // Post-lift the shape lives at ONE substrate primitive that
+    // post-composes ONE additional [`ClassificationAxis`] overlay onto
+    // an arbitrary [`Classification`] carrier through the SAME trait
+    // dispatch [`Classification::gate_compute_with_axis`] uses for the
+    // start-from-baseline single-axis overlay. The pins below fence
+    // the primitive's contract:
+    // (1) chaining N distinct-slot axes onto `gate_compute_with_axis(x)`
+    //     produces the SAME [`Classification`] as populating every
+    //     slot at once via a hand-authored struct-literal;
+    // (2) chaining any permutation of a fixed set of distinct-slot
+    //     axes produces the SAME [`Classification`] (order-independent
+    //     across distinct slots);
+    // (3) the [`OptimizationDirection`] sub-slot overlay PRESERVES the
+    //     [`HorizonKind`] sub-slot's prior overlay (both slots live on
+    //     the nested `Horizon` struct — a stomping overlay would drop
+    //     `direction` to `None` on `.with_axis(HorizonKind::_)`).
+
+    #[test]
+    fn with_axis_chains_multi_axis_overlays_matching_open_coded_struct_literal() {
+        // Chain the six-axis conjunction (point_type + substrate +
+        // calm + data_classification + horizon.kind + horizon.direction)
+        // through `with_axis` and pin byte-identical parity with the
+        // open-coded FIVE-field struct-literal + nested `Horizon`
+        // struct-literal that recurred at the six-axis-independence
+        // test-fixture callsite. A regression that (a) mis-routed one
+        // `ClassificationAxis::overlay` impl (a stray slot assignment),
+        // (b) stomped a prior overlay (the [`HorizonKind`] impl
+        // resetting the whole nested `Horizon`), or (c) collapsed the
+        // fluent chain onto a single-axis overlay (only the last axis
+        // takes effect) would drop parity here.
+        let composed = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage)
+            .with_axis(CalmClassification::NonMonotone)
+            .with_axis(DataClassification::Pii)
+            .with_axis(HorizonKind::Asymptotic)
+            .with_axis(OptimizationDirection::Maximize);
+        let hand_authored = Classification {
+            point_type: ConvergencePointType::Fork,
+            substrate: SubstrateType::Storage,
+            horizon: Horizon {
+                kind: HorizonKind::Asymptotic,
+                direction: Some(OptimizationDirection::Maximize),
+                ..Horizon::default()
+            },
+            calm: CalmClassification::NonMonotone,
+            data_classification: DataClassification::Pii,
+        };
+        assert_eq!(composed, hand_authored);
+    }
+
+    #[test]
+    fn with_axis_is_order_independent_across_distinct_slot_axes() {
+        // Chain the same set of five distinct-slot axes in TWO
+        // permutations and pin byte-identical parity. A regression
+        // that leaked cross-slot dependency into an overlay impl (a
+        // stray [`ConvergencePointType`] impl mutating `c.substrate`,
+        // a stray [`DataClassification`] impl mutating `c.calm`, or
+        // any impl that read from another slot before writing its
+        // own) would drop parity here — an order-dependent overlay
+        // means the impls are not commutative, which the
+        // (distinct-slot × per-slot-overlay) contract requires. The
+        // horizon-nested (`HorizonKind`, `OptimizationDirection`)
+        // pair is deliberately NOT included in either permutation
+        // here — that pair lives on the SAME nested-struct slot and
+        // has an ordering constraint tested by
+        // `with_axis_optimization_direction_overlay_preserves_horizon_kind_overlay`
+        // below.
+        let axes_forward = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage)
+            .with_axis(CalmClassification::NonMonotone)
+            .with_axis(DataClassification::Pii)
+            .with_axis(HorizonKind::Asymptotic);
+        let axes_reversed = Classification::gate_compute_with_axis(HorizonKind::Asymptotic)
+            .with_axis(DataClassification::Pii)
+            .with_axis(CalmClassification::NonMonotone)
+            .with_axis(SubstrateType::Storage)
+            .with_axis(ConvergencePointType::Fork);
+        assert_eq!(axes_forward, axes_reversed);
+    }
+
+    #[test]
+    fn with_axis_optimization_direction_overlay_preserves_horizon_kind_overlay() {
+        // Chain `HorizonKind::Asymptotic` THEN
+        // `OptimizationDirection::Maximize` — both overlays live on
+        // the SAME nested `Horizon` struct's distinct sub-slots
+        // (`kind`, `direction`). Pin that the second overlay
+        // PRESERVES the first. A regression that either (a) reverted
+        // [`ClassificationAxis for HorizonKind`] to the pre-change
+        // whole-`Horizon`-reset shape (which would drop `direction`
+        // to `None` if that overlay ran after `direction` was set) —
+        // pinned via `.with_axis(Maximize).with_axis(Asymptotic)`
+        // below — or (b) wrote `OptimizationDirection::overlay`
+        // through a whole-`Horizon` reset (which would drop `kind`
+        // to `HorizonKind::default()` — Bounded — on this call
+        // sequence) would fail HERE. Also pins the byte-symmetric
+        // reverse ordering `.with_axis(Maximize).with_axis(Asymptotic)`
+        // preserves `direction: Some(Maximize)` — the sub-slot
+        // overlays are commutative on the nested struct.
+        let forward = Classification::gate_compute_with_axis(HorizonKind::Asymptotic)
+            .with_axis(OptimizationDirection::Maximize);
+        assert_eq!(forward.horizon.kind, HorizonKind::Asymptotic);
+        assert_eq!(
+            forward.horizon.direction,
+            Some(OptimizationDirection::Maximize),
+        );
+
+        let reversed = Classification::gate_compute_with_axis(OptimizationDirection::Maximize)
+            .with_axis(HorizonKind::Asymptotic);
+        assert_eq!(reversed.horizon.kind, HorizonKind::Asymptotic);
+        assert_eq!(
+            reversed.horizon.direction,
+            Some(OptimizationDirection::Maximize),
+        );
+
+        // Byte-parity across the two orderings — both produce the
+        // identical (kind, direction) pair AND both preserve every
+        // other slot at its `gate_compute` baseline.
+        assert_eq!(forward, reversed);
+        let baseline = Classification::gate_compute();
+        assert_eq!(forward.point_type, baseline.point_type);
+        assert_eq!(forward.substrate, baseline.substrate);
+        assert_eq!(forward.calm, baseline.calm);
+        assert_eq!(forward.data_classification, baseline.data_classification);
+        assert_eq!(forward.horizon.metric, baseline.horizon.metric);
+        assert_eq!(
+            forward.horizon.healthy_rate_threshold,
+            baseline.horizon.healthy_rate_threshold,
+        );
+    }
+
+    #[test]
+    fn with_axis_optimization_direction_overlay_wraps_variant_in_some() {
+        // For every `OptimizationDirection` variant, `with_axis`
+        // sets `horizon.direction = Some(variant)`. A regression
+        // that dropped the `Some(...)` wrap (a stray `c.horizon.direction
+        // = self.into()` that only compiles because
+        // [`Option<OptimizationDirection>: From<OptimizationDirection>`]
+        // is derived, but which would silently answer `None` on
+        // some variants), or that wrote through the wrong nested
+        // slot, fails HERE.
+        for populated in OptimizationDirection::ALL {
+            let c = Classification::gate_compute_with_axis(HorizonKind::Asymptotic)
+                .with_axis(populated);
+            assert_eq!(
+                c.horizon.direction,
+                Some(populated),
+                "OptimizationDirection::{populated:?} overlay must set horizon.direction = Some({populated:?})",
+            );
+            assert_eq!(
+                c.horizon.kind,
+                HorizonKind::Asymptotic,
+                "OptimizationDirection::{populated:?} overlay must preserve prior HorizonKind::Asymptotic overlay",
+            );
+        }
+    }
+
     // ── closed-set algebra contracts for DataClassification
     //    (ALL × as_str × FromStr × rank × predicate pair) ────────────
 
@@ -5433,13 +5694,8 @@ mod tests {
     /// six-axis classification lattice.
     #[test]
     fn classification_has_point_type_and_has_substrate_are_independent() {
-        let c = Classification {
-            point_type: ConvergencePointType::Fork,
-            substrate: SubstrateType::Storage,
-            horizon: Horizon::default(),
-            calm: CalmClassification::default(),
-            data_classification: DataClassification::default(),
-        };
+        let c = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage);
         assert!(c.has_point_type(ConvergencePointType::Fork));
         assert!(c.has_substrate(SubstrateType::Storage));
         assert!(!c.has_point_type(ConvergencePointType::Gate));
@@ -5562,13 +5818,9 @@ mod tests {
     /// the six-axis classification lattice.
     #[test]
     fn classification_has_point_type_and_has_substrate_and_has_calm_are_independent() {
-        let c = Classification {
-            point_type: ConvergencePointType::Fork,
-            substrate: SubstrateType::Storage,
-            horizon: Horizon::default(),
-            calm: CalmClassification::NonMonotone,
-            data_classification: DataClassification::default(),
-        };
+        let c = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage)
+            .with_axis(CalmClassification::NonMonotone);
         assert!(c.has_point_type(ConvergencePointType::Fork));
         assert!(c.has_substrate(SubstrateType::Storage));
         assert!(c.has_calm(CalmClassification::NonMonotone));
@@ -5700,13 +5952,10 @@ mod tests {
     /// independent presence probes through the same shape.
     #[test]
     fn classification_four_scalar_carrier_probes_are_independent() {
-        let c = Classification {
-            point_type: ConvergencePointType::Fork,
-            substrate: SubstrateType::Storage,
-            horizon: Horizon::default(),
-            calm: CalmClassification::NonMonotone,
-            data_classification: DataClassification::Pii,
-        };
+        let c = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage)
+            .with_axis(CalmClassification::NonMonotone)
+            .with_axis(DataClassification::Pii);
         assert!(c.has_point_type(ConvergencePointType::Fork));
         assert!(c.has_substrate(SubstrateType::Storage));
         assert!(c.has_calm(CalmClassification::NonMonotone));
@@ -5850,16 +6099,11 @@ mod tests {
     /// nested-struct-child corner `has_horizon_kind` opens).
     #[test]
     fn classification_five_presence_probes_are_independent() {
-        let c = Classification {
-            point_type: ConvergencePointType::Fork,
-            substrate: SubstrateType::Storage,
-            horizon: Horizon {
-                kind: HorizonKind::Asymptotic,
-                ..Horizon::default()
-            },
-            calm: CalmClassification::NonMonotone,
-            data_classification: DataClassification::Pii,
-        };
+        let c = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage)
+            .with_axis(CalmClassification::NonMonotone)
+            .with_axis(DataClassification::Pii)
+            .with_axis(HorizonKind::Asymptotic);
         assert!(c.has_point_type(ConvergencePointType::Fork));
         assert!(c.has_substrate(SubstrateType::Storage));
         assert!(c.has_calm(CalmClassification::NonMonotone));
@@ -5926,17 +6170,8 @@ mod tests {
     #[test]
     fn classification_has_optimization_direction_returns_true_iff_variant_matches() {
         for populated in OptimizationDirection::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon {
-                    kind: HorizonKind::Asymptotic,
-                    direction: Some(populated),
-                    ..Horizon::default()
-                },
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(HorizonKind::Asymptotic)
+                .with_axis(populated);
             for query in OptimizationDirection::ALL {
                 assert_eq!(
                     c.has_optimization_direction(query),
@@ -6026,17 +6261,12 @@ mod tests {
     /// (`has_optimization_direction`).
     #[test]
     fn classification_six_presence_probes_are_independent() {
-        let c = Classification {
-            point_type: ConvergencePointType::Fork,
-            substrate: SubstrateType::Storage,
-            horizon: Horizon {
-                kind: HorizonKind::Asymptotic,
-                direction: Some(OptimizationDirection::Maximize),
-                ..Horizon::default()
-            },
-            calm: CalmClassification::NonMonotone,
-            data_classification: DataClassification::Pii,
-        };
+        let c = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage)
+            .with_axis(CalmClassification::NonMonotone)
+            .with_axis(DataClassification::Pii)
+            .with_axis(HorizonKind::Asymptotic)
+            .with_axis(OptimizationDirection::Maximize);
         assert!(c.has_point_type(ConvergencePointType::Fork));
         assert!(c.has_substrate(SubstrateType::Storage));
         assert!(c.has_calm(CalmClassification::NonMonotone));
@@ -6180,13 +6410,7 @@ mod tests {
     /// Vec-child × nested-Option-carrier) corner.
     #[test]
     fn classification_has_input_arity_and_has_point_type_coexist_via_projection() {
-        let c = Classification {
-            point_type: ConvergencePointType::Fork,
-            substrate: SubstrateType::Compute,
-            horizon: Horizon::default(),
-            calm: CalmClassification::default(),
-            data_classification: DataClassification::default(),
-        };
+        let c = Classification::gate_compute_with_axis(ConvergencePointType::Fork);
         assert!(c.has_point_type(ConvergencePointType::Fork));
         assert!(c.has_input_arity(Arity::One));
         assert!(!c.has_point_type(ConvergencePointType::Broadcast));
@@ -6318,25 +6542,13 @@ mod tests {
     /// pins on the source projection functions themselves.
     #[test]
     fn classification_has_input_arity_and_has_output_arity_pin_dag_composition_pair() {
-        let fork = Classification {
-            point_type: ConvergencePointType::Fork,
-            substrate: SubstrateType::Compute,
-            horizon: Horizon::default(),
-            calm: CalmClassification::default(),
-            data_classification: DataClassification::default(),
-        };
+        let fork = Classification::gate_compute_with_axis(ConvergencePointType::Fork);
         assert!(fork.has_input_arity(Arity::One));
         assert!(fork.has_output_arity(Arity::Many));
         assert!(!fork.has_input_arity(Arity::Many));
         assert!(!fork.has_output_arity(Arity::One));
 
-        let transform = Classification {
-            point_type: ConvergencePointType::Transform,
-            substrate: SubstrateType::Compute,
-            horizon: Horizon::default(),
-            calm: CalmClassification::default(),
-            data_classification: DataClassification::default(),
-        };
+        let transform = Classification::gate_compute_with_axis(ConvergencePointType::Transform);
         assert!(transform.has_input_arity(Arity::One));
         assert!(transform.has_output_arity(Arity::One));
         assert!(!transform.has_input_arity(Arity::Many));
@@ -6379,16 +6591,7 @@ mod tests {
     #[test]
     fn classification_horizon_terminates_matches_horizon_kind_projection() {
         for populated in HorizonKind::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon {
-                    kind: populated,
-                    ..Horizon::default()
-                },
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.horizon_terminates(),
                 populated.terminates(),
@@ -6435,16 +6638,7 @@ mod tests {
     #[test]
     fn classification_horizon_terminates_xor_horizon_kind_requires_metric_axes() {
         for kind in HorizonKind::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon {
-                    kind,
-                    ..Horizon::default()
-                },
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(kind);
             assert!(
                 c.horizon_terminates() ^ kind.requires_metric_axes(),
                 "{kind:?}: horizon_terminates() XOR requires_metric_axes() must hold",
@@ -6480,16 +6674,7 @@ mod tests {
     #[test]
     fn classification_horizon_requires_metric_axes_matches_horizon_kind_projection() {
         for populated in HorizonKind::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon {
-                    kind: populated,
-                    ..Horizon::default()
-                },
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 c.horizon_requires_metric_axes(),
                 populated.requires_metric_axes(),

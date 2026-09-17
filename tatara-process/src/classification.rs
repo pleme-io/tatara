@@ -6342,32 +6342,59 @@ mod tests {
         );
     }
 
-    /// ANTISYMMETRY pin — [`Self::horizon_terminates`] XOR
-    /// [`Self::horizon_requires_metric_axes`] holds on every variant.
-    /// Sibling of
-    /// `classification_horizon_terminates_xor_horizon_kind_requires_metric_axes`
-    /// (which walks the XOR through the closed set primitive
-    /// directly); this test walks the SAME XOR through BOTH
-    /// derived-nullary predicates on [`Classification`] so a
-    /// regression that crossed the wires (either predicate silently
-    /// composing the wrong closed-set arm) surfaces here rather than
-    /// at every downstream consumer that trusts the shape.
+    /// BINARY XOR PARTITION pin — for every [`HorizonKind`] variant,
+    /// EXACTLY ONE of [`Classification::horizon_terminates`] and
+    /// [`Classification::horizon_requires_metric_axes`] returns `true`
+    /// on a [`Classification`] whose `horizon.kind` field carries that
+    /// variant. CLOSES the horizon axis into the FULL binary XOR
+    /// partition contract sealed on the closed set by
+    /// `horizon_kind_terminate_xor_requires_metric_axes` AND now
+    /// composed through the parent-composed layer as a substrate-wide
+    /// theorem. Binary counterpart of the ternary XOR partitions
+    /// sealed on the sibling `point_type` and `substrate` axes by
+    /// `classification_point_type_probes_form_three_way_xor_partition_over_all`
+    /// and
+    /// `classification_substrate_probes_form_three_way_xor_partition_over_all`
+    /// — where those axes carve the closed set into THREE disjoint
+    /// buckets, the horizon axis carves into TWO. Structural twin of
+    /// the calm-axis and data-axis binary XOR partitions
+    /// `classification_calm_probes_form_binary_xor_partition_over_all`
+    /// and
+    /// `classification_data_probes_form_binary_xor_partition_over_all`
+    /// on the sibling axes — this pin is the FIFTH (and final)
+    /// classification axis to reach the closed XOR partition landmark
+    /// on the (parent × derived-nullary-bool) corner, promoting the
+    /// axis-closure milestone from a proven-repeatable quadruple
+    /// (`point_type` + `substrate` ternary; `calm` + `data` binary)
+    /// to a proven-repeatable QUINTUPLE that spans every axis of
+    /// [`Classification`]. Rewritten from the earlier binary-XOR-only
+    /// form (walked as `a ^ b`) into the canonical bucket-array
+    /// `hits == 1` shape shared with the calm/data partitions so
+    /// downstream N-ary consumers (audit dispatchers, coverage
+    /// checkers) walk every axis through the SAME contract. A
+    /// regression that crossed the wires between the two parent-
+    /// composed probes (one probe silently composing the wrong
+    /// closed-set arm) fails HERE rather than at every downstream
+    /// consumer that trusts the two probes partition the horizon
+    /// slot into disjoint buckets whose union covers every variant.
     #[test]
-    fn classification_horizon_terminates_xor_horizon_requires_metric_axes() {
-        for kind in HorizonKind::ALL {
+    fn classification_horizon_probes_form_binary_xor_partition_over_all() {
+        for populated in HorizonKind::ALL {
             let c = Classification {
                 point_type: ConvergencePointType::Gate,
                 substrate: SubstrateType::Compute,
                 horizon: Horizon {
-                    kind,
+                    kind: populated,
                     ..Horizon::default()
                 },
                 calm: CalmClassification::default(),
                 data_classification: DataClassification::default(),
             };
-            assert!(
-                c.horizon_terminates() ^ c.horizon_requires_metric_axes(),
-                "{kind:?}: horizon_terminates() XOR horizon_requires_metric_axes() must hold",
+            let buckets = [c.horizon_terminates(), c.horizon_requires_metric_axes()];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "horizon.kind={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
             );
         }
     }

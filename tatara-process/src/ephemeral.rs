@@ -6086,21 +6086,44 @@ mod tests {
         }
     }
 
-    /// ANTISYMMETRY pin — [`Self::horizon_terminates`] XOR
-    /// [`Self::horizon_requires_metric_axes`] holds on every
-    /// [`EphemeralSpec`], authored or defaulted. Locks the
-    /// composition-level XOR contract at ONE narrow ephemeral-surface
-    /// site — a regression that crossed either surface's wires (one
-    /// probe silently composing the wrong closed-set arm) surfaces
-    /// here rather than at every downstream consumer that trusts the
-    /// two probes partition the resolver's output.
+    /// BINARY XOR PARTITION pin — for the absent-classification
+    /// baseline AND every
+    /// [`crate::classification::HorizonKind::ALL`] variant, EXACTLY
+    /// ONE of [`Self::horizon_terminates`] and
+    /// [`Self::horizon_requires_metric_axes`] returns `true`. CLOSES
+    /// the horizon axis into the FULL binary XOR partition contract
+    /// on the ephemeral surface — the resolver-hop peer of the
+    /// parent-composed
+    /// `classification_horizon_probes_form_binary_xor_partition_over_all`
+    /// test. Binary counterpart of the ternary XOR partitions sealed
+    /// on the sibling `point_type` and `substrate` axes by
+    /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`
+    /// and
+    /// `ephemeral_substrate_probes_form_three_way_xor_partition_over_all`,
+    /// structural twin of the calm/data binary partitions
+    /// `ephemeral_calm_probes_form_binary_xor_partition_over_all`
+    /// and
+    /// `ephemeral_data_probes_form_binary_xor_partition_over_all`.
+    /// This pin is the FIFTH (and final) classification axis to reach
+    /// the closed XOR partition landmark on the ephemeral resolver-
+    /// hop surface, sealing every classification axis under the
+    /// SAME `hits == 1` bucket-array contract. Guarantees the absent-
+    /// classification case lands in the definite terminating bucket
+    /// (`gate_compute` → HorizonKind::Bounded → terminates = true,
+    /// requires_metric_axes = false), so every unadorned
+    /// `(defephemeral …)` audits under a definite non-empty horizon
+    /// bucket. Rewritten from the earlier binary-XOR-only form
+    /// (walked as `a ^ b`) into the canonical bucket-array shape
+    /// shared with the calm/data partitions.
     #[test]
-    fn ephemeral_horizon_terminates_xor_horizon_requires_metric_axes() {
+    fn ephemeral_horizon_probes_form_binary_xor_partition_over_all() {
         // Absent classification.
         let eph = empty_ephemeral();
-        assert!(
-            eph.horizon_terminates() ^ eph.horizon_requires_metric_axes(),
-            "None-classification: XOR must hold",
+        let buckets = [eph.horizon_terminates(), eph.horizon_requires_metric_axes()];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
         );
         // Authored classification.
         for populated in HorizonKind::ALL {
@@ -6111,9 +6134,11 @@ mod tests {
             };
             let mut eph = empty_ephemeral();
             eph.classification = Some(classification);
-            assert!(
-                eph.horizon_terminates() ^ eph.horizon_requires_metric_axes(),
-                "authored horizon.kind={populated:?}: XOR must hold",
+            let buckets = [eph.horizon_terminates(), eph.horizon_requires_metric_axes()];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "authored horizon.kind={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
             );
         }
     }

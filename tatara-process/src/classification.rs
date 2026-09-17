@@ -1399,6 +1399,116 @@ impl Classification {
     pub fn data_is_restricted(&self) -> bool {
         self.data_classification.is_restricted()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`]'s
+    /// [`ConvergencePointType`] project to `true` under
+    /// [`ConvergencePointType::is_endomorphic`]? The ONE substrate
+    /// primitive that owns the `(Classification) -> bool` derived-
+    /// nullary-predicate walk shape on the `point_type` slot for the
+    /// 1→1 topology-bucket question.
+    ///
+    /// # Sixth occupant on the (parent × derived-nullary-bool) corner
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`],
+    /// [`Self::data_is_regulated`], and [`Self::data_is_restricted`]
+    /// on the workspace-wide (parent × derived-nullary-bool) corner of
+    /// the closed-set-driven presence-probe algebra — the SIXTH
+    /// occupant on the corner and the FIRST peer threading the
+    /// classification-`point_type` axis rather than the horizon,
+    /// calm, or data axes. Direct-scalar peer of
+    /// [`Self::calm_requires_coordination`] /
+    /// [`Self::data_is_regulated`] / [`Self::data_is_restricted`]:
+    /// walks a DIRECT scalar closed-set field's derived projection on
+    /// the [`Classification`] parent (no nested-struct hop like the
+    /// two `horizon_*` peers), but distinct from all three by ONE
+    /// structural degree — [`ConvergencePointType`] has NO
+    /// [`Default`] impl, so the derived-nullary answer here does NOT
+    /// carry a substrate default-arm short-circuit through the
+    /// parent's `#[default]` chain. The [`Self::gate_compute`]
+    /// baseline still fixes an answer (`Gate.is_endomorphic() =
+    /// false`), pinned by
+    /// `classification_gate_compute_point_is_endomorphic_is_false`,
+    /// but that answer is chosen deliberately by the baseline's
+    /// `point_type: Gate` field rather than reached through a
+    /// closed-set-side `#[default]`. Populates the corner as a
+    /// proven-repeatable primitive shape across FOUR distinct
+    /// classification-axis closed sets ([`HorizonKind`],
+    /// [`CalmClassification`], [`DataClassification`],
+    /// [`ConvergencePointType`]) rather than a three-axis curiosity.
+    ///
+    /// # Semantics — derived nullary boolean, not variant equality
+    ///
+    /// `point_is_endomorphic()` returns `true` iff
+    /// `self.point_type.is_endomorphic()`. The eight-variant
+    /// [`ConvergencePointType`] closed set publishes the truth table
+    /// (via the shape-preserving-topology (1,1) arity partition):
+    /// [`ConvergencePointType::Transform`] /
+    /// [`ConvergencePointType::Observe`] → `true` (1→1 shape);
+    /// [`ConvergencePointType::Fork`] /
+    /// [`ConvergencePointType::Broadcast`] → `false` (1→N diffusive);
+    /// [`ConvergencePointType::Join`] / [`ConvergencePointType::Gate`]
+    /// / [`ConvergencePointType::Select`] /
+    /// [`ConvergencePointType::Reduce`] → `false` (N→1 convergent).
+    /// A [`Classification::gate_compute`] baseline (which uses
+    /// [`ConvergencePointType::Gate`] deliberately as the baseline
+    /// convergent barrier point) answers `false` — this is NOT a
+    /// [`Default`]-arm short-circuit (unlike the four earlier
+    /// direct-scalar / nested-struct corner peers), because
+    /// [`ConvergencePointType`] has no `impl Default`; the baseline
+    /// is a chosen field value, not a defaulted one.
+    ///
+    /// A future ninth [`ConvergencePointType`] variant lands at ONE
+    /// `ALL` entry + ONE `is_endomorphic` arm on the closed set with
+    /// the probe body untouched — the nullary-predicate shape defers
+    /// every per-variant policy decision to the closed set's own
+    /// truth table ([`ConvergencePointType::is_endomorphic`]) rather
+    /// than duplicating the discriminator sweep here.
+    ///
+    /// # Compounding
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `endomorphic-point` on
+    /// `POINT_FIXED_TAG_ARMS` — byte-for-byte peer of the sibling
+    /// `terminating-horizon` / `metric-axes-required` /
+    /// `coordination-required` / `data-regulated` / `data-restricted`
+    /// fixed tags on the (parent × derived-nullary-bool) corner. The
+    /// ephemeral surface publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::point_is_endomorphic`],
+    /// which composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (endomorphic-point)` audit answers the same
+    /// question on both surfaces. Sibling projections
+    /// [`ConvergencePointType::is_diffusive`] and
+    /// [`ConvergencePointType::is_convergent`] compose byte-
+    /// identically as future seventh + eighth corner occupants; when
+    /// all three land the three-way partition contract
+    /// `is_endomorphic ⊕ is_diffusive ⊕ is_convergent` sealed on the
+    /// closed set by `convergence_point_type_buckets_cover_every_variant`
+    /// composes through the parent-composed layer as a substrate-
+    /// wide theorem exactly as the closed-set XOR pair
+    /// `terminates ^ requires_metric_axes` composes through this
+    /// corner today.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `endomorphic-point` fixed tag in `tatara-check`, future DAG
+    /// composition / edge-cardinality validators, future variant
+    /// additions on [`ConvergencePointType`]) binds through the SAME
+    /// `point_is_endomorphic()` shape rather than restating the
+    /// `classification.point_type.is_endomorphic()` chain at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`ConvergencePointType`] variant lands at ONE `ALL`
+    /// entry + ONE `is_endomorphic` arm on the closed set and this
+    /// probe picks it up mechanically.
+    #[must_use]
+    pub fn point_is_endomorphic(&self) -> bool {
+        self.point_type.is_endomorphic()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -5584,5 +5694,86 @@ mod tests {
                 "data_classification={populated:?}: data_is_regulated ⇒ data_is_restricted violated",
             );
         }
+    }
+
+    // ── Classification::point_is_endomorphic substrate pins ──────────
+    //
+    // Fail-before-pass-after granularity: [`Classification::point_is_endomorphic`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the scalar [`ConvergencePointType`]
+    // slot's [`ConvergencePointType::is_endomorphic`] projection had no
+    // substrate owner. Post-lift the shape lives at ONE substrate
+    // primitive and every downstream (the `endomorphic-point` fixed
+    // tag in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::point_is_endomorphic`] peer,
+    // future DAG composition / edge-cardinality validators) composes
+    // against the SAME `point_is_endomorphic()` shape rather than
+    // restating the `classification.point_type.is_endomorphic()` chain
+    // at its own callsite. SIXTH occupant of the (parent × derived-
+    // nullary-bool) corner across FOUR closed-set axes, and the FIRST
+    // occupant threading the `point_type` axis, pinning the axis as a
+    // proven-repeatable structural sub-corner rather than a horizon /
+    // calm / data curiosity. FIRST direct-scalar corner peer whose
+    // parent-composed baseline is NOT a substrate-`#[default]` short-
+    // circuit — [`ConvergencePointType`] has no `impl Default`, so the
+    // [`Classification::gate_compute`] baseline's `false` answer comes
+    // from the chosen `point_type: Gate` field rather than a
+    // defaulted-chain projection.
+
+    /// PER-VARIANT pin — for every [`ConvergencePointType`] variant, a
+    /// [`Classification`] whose `point_type` field carries that variant
+    /// returns `point_is_endomorphic()` matching the closed set's own
+    /// [`ConvergencePointType::is_endomorphic`] truth table. Sweep
+    /// [`ConvergencePointType::ALL`] so a regression that (a)
+    /// hard-coded the method body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with a sibling closed-set
+    /// projection ([`ConvergencePointType::is_diffusive`] /
+    /// [`ConvergencePointType::is_convergent`]) fails HERE at the
+    /// substrate primitive before drifting through the
+    /// `endomorphic-point` fixed tag or the peer ephemeral surface.
+    #[test]
+    fn classification_point_is_endomorphic_matches_point_type_projection() {
+        for populated in ConvergencePointType::ALL {
+            let c = Classification {
+                point_type: populated,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert_eq!(
+                c.point_is_endomorphic(),
+                populated.is_endomorphic(),
+                "point_type={populated:?}: point_is_endomorphic() drift from ConvergencePointType::is_endomorphic()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `point_type: ConvergencePointType::Gate` deliberately (NOT via
+    /// `#[default]` — [`ConvergencePointType`] has no `impl Default`),
+    /// and [`ConvergencePointType::Gate::is_endomorphic`] projects
+    /// `false` (Gate is N→1 convergent, not 1→1 endomorphic), so
+    /// `point_is_endomorphic()` returns `false`. Pins the baseline's
+    /// chosen-field answer at ONE narrow site — a regression that
+    /// promoted [`ConvergencePointType::Transform`] to the gate-compute
+    /// baseline (silently retargeting every unadorned Process's
+    /// topology bucket), or that wired [`ConvergencePointType::Gate`]
+    /// to `is_endomorphic() = true`, would fail HERE before drifting
+    /// through every unadorned Process's DAG-composition answer.
+    /// FIRST direct-scalar corner peer whose parent-composed baseline
+    /// is a chosen-field answer (not a substrate-`#[default]` short-
+    /// circuit): distinct from the two `horizon_*` baselines (which
+    /// short-circuit through TWO layers of `Default`), the sibling
+    /// `calm_requires_coordination` baseline (ONE layer of `Default`),
+    /// and the two `data_is_*` baselines (ONE layer of `Default`).
+    #[test]
+    fn classification_gate_compute_point_is_endomorphic_is_false() {
+        let c = Classification::gate_compute();
+        assert!(
+            !c.point_is_endomorphic(),
+            "gate_compute (point_type=Gate → is_endomorphic=false) baseline",
+        );
     }
 }

@@ -1555,6 +1555,101 @@ impl EphemeralSpec {
         self.resolved_classification().data_is_restricted()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s
+    /// [`crate::classification::ConvergencePointType`] project to
+    /// `true` under
+    /// [`crate::classification::ConvergencePointType::is_endomorphic`]?
+    /// Byte-for-byte peer of
+    /// [`Classification::point_is_endomorphic`] wrapped through the
+    /// [`Self::resolved_classification`] resolver so an operator-
+    /// omitted `:classification` slot on `(defephemeral …)` still
+    /// answers via the substrate default. The ONE ephemeral-surface
+    /// substrate primitive that owns the `(&EphemeralSpec) -> bool`
+    /// derived-nullary-boolean walk on the 1→1 topology-bucket
+    /// question over the classification-`point_type` axis.
+    ///
+    /// # Sixth derived-nullary-boolean peer on the ephemeral surface
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`],
+    /// [`Self::data_is_regulated`], and [`Self::data_is_restricted`]
+    /// on the ephemeral surface's (resolver-hop × derived-nullary-bool)
+    /// shape — the FIRST peer threading the classification-`point_type`
+    /// axis after the two `horizon_*`, one `calm_*`, and two `data_*`
+    /// peers populated the horizon, calm, and data axes. Direct-scalar
+    /// peer of the sibling `data_*` and `calm_*` arms but distinct by
+    /// ONE structural degree at the underlying [`Classification`]
+    /// primitive: [`crate::classification::ConvergencePointType`] has
+    /// NO [`Default`] impl, so the absent-`:classification` baseline
+    /// answers `false` via the resolver's substrate default
+    /// [`Classification::gate_compute`] carrying its chosen
+    /// `point_type: Gate` field (not via a `#[default]` short-circuit
+    /// on the point-type axis itself). The resolver-hop shape is
+    /// byte-identical across all six peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `point_is_endomorphic()` returns `true` iff
+    /// `self.resolved_classification().point_is_endomorphic()`. The
+    /// resolver returns the authored [`Classification`] when present
+    /// and the substrate default [`Classification::gate_compute`] on
+    /// absence. Because [`Classification::gate_compute`] carries
+    /// [`crate::classification::ConvergencePointType::Gate`] (a
+    /// convergent barrier point, not a 1→1 endomorphism), a bare
+    /// ephemeral spec with no `:classification` slot answers `false`.
+    /// A regression that dropped the resolver hop, probed the wrong
+    /// closed-set arm, or inverted the projection fails HERE at ONE
+    /// narrow substrate site before drifting through every unadorned
+    /// ephemeral spec's DAG-composition answer.
+    ///
+    /// # Compounding
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `endomorphic-point` on
+    /// `EPHEMERAL_FIXED_TAG_ARMS` — byte-for-byte peer of the point
+    /// surface's `endomorphic-point` fixed tag on
+    /// `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::point_is_endomorphic`] directly. The two-
+    /// surface parity contract holds by construction: both surfaces
+    /// route through the SAME
+    /// [`Classification::point_is_endomorphic`] primitive after the
+    /// ephemeral surface pays ONE resolver hop — a future
+    /// [`crate::classification::ConvergencePointType`] variant or a
+    /// future normalization at the substrate primitive lands at ONE
+    /// site and both surfaces' `endomorphic-point` fixed tags inherit
+    /// the shift mechanically. Sibling projections
+    /// [`crate::classification::ConvergencePointType::is_diffusive`]
+    /// and [`crate::classification::ConvergencePointType::is_convergent`]
+    /// compose byte-identically as future seventh + eighth ephemeral-
+    /// surface peers; when all three land the three-way partition
+    /// contract sealed on the closed set by
+    /// `convergence_point_type_buckets_cover_every_variant` composes
+    /// through the resolver-hop layer as a substrate-wide theorem.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-`point_type`-axis derived-
+    /// nullary-boolean probe body composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::point_is_endomorphic`]) so every downstream
+    /// (`endomorphic-point` fixed tags on both surfaces in tatara-check,
+    /// future DAG composition / edge-cardinality validators, future
+    /// variant additions on
+    /// [`crate::classification::ConvergencePointType`]) binds through
+    /// the SAME `point_is_endomorphic()` shape rather than restating
+    /// either the resolver walk or the closed-set projection
+    /// composition at the callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future
+    /// [`crate::classification::ConvergencePointType`] variant lands
+    /// at ONE `ALL` entry + ONE `is_endomorphic` arm on the closed
+    /// set and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn point_is_endomorphic(&self) -> bool {
+        self.resolved_classification().point_is_endomorphic()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -4115,6 +4210,115 @@ mod tests {
             assert!(
                 !eph.data_is_regulated() || eph.data_is_restricted(),
                 "authored data_classification={populated:?}: data_is_regulated ⇒ data_is_restricted violated",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::point_is_endomorphic pins ─────────────────────
+    //
+    // Fail-before-pass-after granularity: `point_is_endomorphic` did
+    // not exist pre-lift on `impl EphemeralSpec` — every consumer
+    // walking the "does this ephemeral spec's point-type project to
+    // the 1→1 endomorphic bucket?" question went through
+    // `.resolved_classification().point_type.is_endomorphic()` or the
+    // lowered `ProcessSpec`'s
+    // `spec.classification.point_type.is_endomorphic()`. Post-lift the
+    // SIXTH derived-nullary-boolean peer on the ephemeral surface
+    // (first on the `point_type` axis) routes through the SAME
+    // [`Self::resolved_classification`] resolver + the sibling
+    // substrate primitive
+    // [`crate::classification::Classification::point_is_endomorphic`],
+    // so the two-surface parity contract holds by construction — a
+    // regression on either side of the resolver fails at these pins
+    // before landing at the operator-facing `endomorphic-point` fixed
+    // tag in `tatara-check`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific [`ConvergencePointType`]
+    /// variant answers [`Self::point_is_endomorphic`] matching the
+    /// closed set's own [`ConvergencePointType::is_endomorphic`] truth
+    /// table. Sweep [`ConvergencePointType::ALL`] so a regression that
+    /// (a) hard-coded the body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with the sibling
+    /// [`ConvergencePointType::is_diffusive`] /
+    /// [`ConvergencePointType::is_convergent`] projections fails
+    /// HERE at the substrate primitive before drifting through the
+    /// `endomorphic-point` fixed tag or the peer point surface.
+    #[test]
+    fn point_is_endomorphic_returns_point_type_projection_per_kind() {
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.point_is_endomorphic(),
+                populated.is_endomorphic(),
+                "authored point_type={populated:?}: point_is_endomorphic() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries
+    /// [`ConvergencePointType::Gate`] (a convergent barrier, not an
+    /// endomorphism), and
+    /// [`ConvergencePointType::Gate::is_endomorphic`] projects `false`,
+    /// so [`Self::point_is_endomorphic`] returns `false`. Pins the
+    /// resolver's chosen-field baseline at ONE narrow site — a
+    /// regression that dropped the resolver hop, or that promoted
+    /// [`ConvergencePointType::Transform`] to the gate-compute
+    /// baseline (silently retargeting every unadorned ephemeral
+    /// spec's topology bucket), fails HERE at ONE narrow ephemeral-
+    /// surface site. FIRST direct-scalar ephemeral-surface peer whose
+    /// absent-classification baseline is a chosen-field answer on the
+    /// resolver's [`Classification::gate_compute`] default rather
+    /// than a substrate-`#[default]` short-circuit on the closed-set
+    /// side ([`ConvergencePointType`] has no `impl Default`).
+    #[test]
+    fn point_is_endomorphic_probes_false_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            !spec.point_is_endomorphic(),
+            "absent classification (defaults to gate_compute, point_type=Gate → is_endomorphic=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::point_is_endomorphic`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.point_is_endomorphic()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`ConvergencePointType::ALL`] variant) so a future regression
+    /// on either side of the resolver fails HERE at the parity
+    /// boundary. Byte-for-byte peer of the sibling
+    /// `data_is_restricted_matches_point_peer_through_lowered_classification`
+    /// on a DIFFERENT closed-set axis, published a first time through
+    /// the `point_type` closed-set projection.
+    #[test]
+    fn point_is_endomorphic_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.point_is_endomorphic(),
+            lowered.classification.point_is_endomorphic(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.point_is_endomorphic(),
+                lowered.classification.point_is_endomorphic(),
+                "authored point_type={populated:?}: parity drift",
             );
         }
     }

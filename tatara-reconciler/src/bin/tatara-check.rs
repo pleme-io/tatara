@@ -2123,6 +2123,42 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "data-restricted",
         probe: |s| s.classification.data_is_restricted(),
     },
+    // `endomorphic-point` — SIXTH occupant on the (parent × derived-
+    // nullary-bool) corner of the workspace-wide fixed-tag algebra
+    // after the two `horizon.*`, one `coordination-required`, and two
+    // `data-*` arms opened + populated the corner; FIRST occupant
+    // threading the classification-`point_type` axis rather than the
+    // horizon, calm, or data axes. Composes the ONE substrate
+    // primitive
+    // [`tatara_process::classification::Classification::point_is_endomorphic`]
+    // that walks `self.point_type.is_endomorphic()` — the eight-
+    // variant [`ConvergencePointType`] closed set's 1→1 topology-
+    // bucket partition as a fixed-tag audit surface. Answers the
+    // DAG-composition-facing question "is this Process an
+    // endomorphism (1→1 shape) on its dataflow graph?" — `true` on
+    // `Transform | Observe`, `false` on `Fork | Join | Gate | Select |
+    // Broadcast | Reduce` (the union of the diffusive + convergent
+    // buckets). Byte-for-byte symmetrical with the ephemeral surface's
+    // `endomorphic-point` arm on [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::point_is_endomorphic`]
+    // — both surfaces route through the SAME
+    // [`Classification::point_is_endomorphic`] primitive after the
+    // ephemeral surface pays ONE resolver hop. Distinct from the four
+    // earlier direct-scalar / nested-struct arms on the corner by ONE
+    // structural degree: [`ConvergencePointType`] has NO `impl Default`,
+    // so the gate-compute-baseline `false` answer is a chosen-field
+    // answer (the baseline's `point_type: Gate` field) rather than a
+    // substrate-`#[default]` short-circuit through the closed-set
+    // side. Sibling projections [`ConvergencePointType::is_diffusive`]
+    // and [`ConvergencePointType::is_convergent`] compose byte-
+    // identically as future seventh + eighth corner occupants; when
+    // all three land the three-way partition contract sealed on the
+    // closed set by `convergence_point_type_buckets_cover_every_variant`
+    // composes through this corner as a substrate-wide theorem.
+    FixedTagArm {
+        tag: "endomorphic-point",
+        probe: |s| s.classification.point_is_endomorphic(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2271,6 +2307,31 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "data-restricted",
         probe: |s| s.data_is_restricted(),
+    },
+    // `endomorphic-point` — byte-for-byte peer of the point surface's
+    // `endomorphic-point` arm on [`POINT_FIXED_TAG_ARMS`] via
+    // [`Classification::point_is_endomorphic`] reached through the
+    // ephemeral surface's [`EphemeralSpec::resolved_classification`]
+    // resolver. Answers the same DAG-composition-facing question on
+    // the ephemeral surface — `false` on the absent-`:classification`
+    // default (routes through [`Classification::gate_compute`] →
+    // `point_type = Gate` → `is_endomorphic() = false`) and on any
+    // operator-authored `Fork | Join | Gate | Select | Broadcast |
+    // Reduce` classification, `true` only on `Transform | Observe`.
+    // The two-surface parity contract holds by construction: both
+    // surfaces route through the SAME
+    // [`Classification::point_is_endomorphic`] primitive after the
+    // ephemeral surface pays ONE resolver hop. Distinct from the four
+    // earlier direct-scalar / nested-struct arms on this surface by
+    // ONE structural degree: [`ConvergencePointType`] has NO
+    // `impl Default`, so the absent-`:classification` `false` answer
+    // is a chosen-field answer through
+    // [`Classification::gate_compute`]'s deliberate `point_type: Gate`
+    // rather than a substrate-`#[default]` short-circuit on the
+    // closed-set side.
+    FixedTagArm {
+        tag: "endomorphic-point",
+        probe: |s| s.point_is_endomorphic(),
     },
 ];
 
@@ -11080,6 +11141,7 @@ mod tests {
                 "coordination-required",
                 "data-regulated",
                 "data-restricted",
+                "endomorphic-point",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -11098,6 +11160,7 @@ mod tests {
                 "coordination-required",
                 "data-regulated",
                 "data-restricted",
+                "endomorphic-point",
             ],
         );
     }
@@ -16485,6 +16548,168 @@ mod tests {
             assert!(
                 !regulated || restricted,
                 "point data_classification={populated:?}: data-regulated ⇒ data-restricted violated ({regulated} ⇒ {restricted})",
+            );
+        }
+    }
+
+    // ── endomorphic-point fixed tag substrate pins ───────────────────
+    //
+    // Fail-before-pass-after granularity: the `endomorphic-point` fixed
+    // tag did not exist before this commit — the (parent × derived-
+    // nullary-bool) corner of the fixed-tag algebra carried five peers
+    // (`terminating-horizon`, `metric-axes-required`,
+    // `coordination-required`, `data-regulated`, `data-restricted`)
+    // across THREE axes (horizon, calm, data). This lift opens the
+    // SIXTH occupant on the corner (FIRST on the `point_type` axis)
+    // via ONE substrate primitive
+    // [`tatara_process::classification::Classification::point_is_endomorphic`].
+    // Every test below binds through the SAME substrate primitive so
+    // a regression that (a) hard-coded either surface's arm to a
+    // fixed answer, (b) crossed the wires with a sibling closed-set
+    // projection ([`ConvergencePointType::is_diffusive`] /
+    // [`ConvergencePointType::is_convergent`]), (c) dropped the
+    // ephemeral surface's resolver hop, or (d) drifted the two-
+    // surface parity contract fails HERE at ONE narrow classifier
+    // site per pin before landing at the operator-facing checks.lisp
+    // surface. FIRST fixed-tag corner peer whose parent-composed
+    // point-surface baseline is a chosen-field answer through
+    // [`Classification::gate_compute`]'s deliberate `point_type: Gate`
+    // rather than a substrate-`#[default]` short-circuit
+    // ([`ConvergencePointType`] has no `impl Default`).
+
+    /// POINT SURFACE per-variant pin — for every
+    /// [`ConvergencePointType`] variant, a [`ProcessSpec`] whose
+    /// `classification.point_type` field carries that variant answers
+    /// the `endomorphic-point` fixed tag matching the closed set's
+    /// own [`ConvergencePointType::is_endomorphic`] truth table.
+    /// Sweep [`ConvergencePointType::ALL`] so a regression that probed
+    /// a fixed variant, inverted the projection, or crossed the wires
+    /// with a sibling closed-set projection fails HERE at the
+    /// classifier before landing at the operator-facing surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_point_is_endomorphic_projection_per_point_kind() {
+        for populated in ConvergencePointType::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.point_type = populated;
+            assert_eq!(
+                evaluate_point_require_tag(&spec, "endomorphic-point"),
+                Ok(populated.is_endomorphic()),
+                "point point_type={populated:?}: endomorphic-point drift from ConvergencePointType::is_endomorphic()",
+            );
+        }
+    }
+
+    /// POINT SURFACE DEFAULT-ARM CHOSEN-FIELD pin — a Process built
+    /// through [`ProcessSpec::gate_compute_defaults`] (which carries
+    /// `point_type: ConvergencePointType::Gate` deliberately — NOT
+    /// via `#[default]` because [`ConvergencePointType`] has no
+    /// `impl Default`) answers `Ok(false)` on `endomorphic-point`
+    /// WITHOUT the operator naming the point-type axis. Pins the
+    /// chosen-field baseline at ONE narrow classifier site. FIRST
+    /// fixed-tag corner peer whose point-surface baseline is a
+    /// chosen-field answer rather than a `#[default]` short-circuit.
+    /// A regression that promoted [`ConvergencePointType::Transform`]
+    /// to the gate-compute baseline, or that wired
+    /// [`ConvergencePointType::Gate`] to `is_endomorphic() = true`,
+    /// or that wired the fixed tag's probe to a fixed positive
+    /// answer, would fail HERE.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_default_endomorphic_point() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "endomorphic-point"),
+            Ok(false),
+            "default (point_type=Gate → is_endomorphic=false) baseline",
+        );
+    }
+
+    /// EPHEMERAL SURFACE per-variant pin — for every
+    /// [`ConvergencePointType`] variant, an [`EphemeralSpec`] whose
+    /// authored [`Classification`] carries that variant answers the
+    /// `endomorphic-point` fixed tag matching the closed set's own
+    /// [`ConvergencePointType::is_endomorphic`] truth table. Byte-for-
+    /// byte peer of the point-surface per-variant pin above via the
+    /// SAME [`Classification::point_is_endomorphic`] primitive reached
+    /// through the ephemeral surface's `resolved_classification()`
+    /// resolver.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_point_is_endomorphic_projection_per_point_kind() {
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let spec = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, "endomorphic-point"),
+                Ok(populated.is_endomorphic()),
+                "ephemeral point_type={populated:?}: endomorphic-point drift",
+            );
+        }
+    }
+
+    /// EPHEMERAL SURFACE ABSENT-CLASSIFICATION CHOSEN-FIELD pin — an
+    /// [`EphemeralSpec`] whose `classification` slot is `None` routes
+    /// through the resolver's substrate default
+    /// [`Classification::gate_compute`] (whose `point_type` is
+    /// deliberately [`ConvergencePointType::Gate`] →
+    /// `is_endomorphic() = false`), so the `endomorphic-point` fixed
+    /// tag answers `Ok(false)` WITHOUT the operator naming the
+    /// classification axis on `(defephemeral …)`. Pins the resolver's
+    /// chosen-field baseline at ONE narrow classifier site. FIRST
+    /// fixed-tag corner peer whose ephemeral-surface baseline is a
+    /// chosen-field answer through
+    /// [`Classification::gate_compute`]'s deliberate `point_type: Gate`
+    /// rather than a substrate-`#[default]` short-circuit on the
+    /// closed-set side ([`ConvergencePointType`] has no
+    /// `impl Default`).
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_absent_classification_for_endomorphic_point()
+    {
+        let spec = ephemeral_fixture();
+        assert!(spec.classification.is_none());
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "endomorphic-point"),
+            Ok(false),
+            "absent classification (defaults to gate_compute, point_type=Gate → is_endomorphic=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME classification (across
+    /// (`None`, `Some(_)` on every [`ConvergencePointType::ALL`]
+    /// variant)) classifies IDENTICALLY through the point-surface
+    /// `endomorphic-point` fixed tag AND the ephemeral-surface
+    /// `endomorphic-point` fixed tag when the ephemeral spec is
+    /// mechanically lowered to a [`ProcessSpec`] via `From`. Byte-
+    /// for-byte peer of
+    /// `evaluate_data_restricted_matches_across_surfaces_through_lowered_ephemeral`
+    /// on a DIFFERENT closed-set axis (`point_type` rather than
+    /// `data_classification`), published a first time through the
+    /// `ConvergencePointType` closed-set projection.
+    #[test]
+    fn evaluate_endomorphic_point_matches_across_surfaces_through_lowered_ephemeral() {
+        // Absent classification.
+        let eph = ephemeral_fixture();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&eph, "endomorphic-point"),
+            evaluate_point_require_tag(&lowered, "endomorphic-point"),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let eph = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph, "endomorphic-point"),
+                evaluate_point_require_tag(&lowered, "endomorphic-point"),
+                "authored point_type={populated:?}: parity drift",
             );
         }
     }

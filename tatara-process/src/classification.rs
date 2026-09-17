@@ -5302,13 +5302,7 @@ mod tests {
     #[test]
     fn classification_has_point_type_returns_true_iff_variant_matches() {
         for populated in ConvergencePointType::ALL {
-            let c = Classification {
-                point_type: populated,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             for query in ConvergencePointType::ALL {
                 assert_eq!(
                     c.has_point_type(query),
@@ -5380,13 +5374,7 @@ mod tests {
     #[test]
     fn classification_has_substrate_returns_true_iff_variant_matches() {
         for populated in SubstrateType::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: populated,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             for query in SubstrateType::ALL {
                 assert_eq!(
                     c.has_substrate(query),
@@ -5504,13 +5492,7 @@ mod tests {
     #[test]
     fn classification_has_calm_returns_true_iff_variant_matches() {
         for populated in CalmClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: populated,
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             for query in CalmClassification::ALL {
                 assert_eq!(
                     c.has_calm(query),
@@ -5637,13 +5619,7 @@ mod tests {
     #[test]
     fn classification_has_data_classification_returns_true_iff_variant_matches() {
         for populated in DataClassification::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon::default(),
-                calm: CalmClassification::default(),
-                data_classification: populated,
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             for query in DataClassification::ALL {
                 assert_eq!(
                     c.has_data_classification(query),
@@ -5792,16 +5768,7 @@ mod tests {
     #[test]
     fn classification_has_horizon_kind_returns_true_iff_variant_matches() {
         for populated in HorizonKind::ALL {
-            let c = Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Horizon {
-                    kind: populated,
-                    ..Horizon::default()
-                },
-                calm: CalmClassification::default(),
-                data_classification: DataClassification::default(),
-            };
+            let c = Classification::gate_compute_with_axis(populated);
             for query in HorizonKind::ALL {
                 assert_eq!(
                     c.has_horizon_kind(query),

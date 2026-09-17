@@ -879,6 +879,109 @@ impl Classification {
     pub fn has_output_arity(&self, kind: Arity) -> bool {
         self.point_type.output_arity() == kind
     }
+
+    /// Derived-boolean predicate — does this [`Classification`] carry a
+    /// [`Horizon`] whose kind projects to `true` under
+    /// [`HorizonKind::terminates`]? The ONE substrate primitive that
+    /// owns the `(Classification) -> bool` derived-nullary-predicate
+    /// walk shape on the `horizon.kind` slot.
+    ///
+    /// # First occupant on the (required-parent × nested-struct-derived-nullary-bool) corner
+    ///
+    /// Distinct from every prior presence-probe method on
+    /// [`Classification`] — those all admit a closed-set `kind`
+    /// argument that the probe compares against the stored /
+    /// projected discriminator ([`Self::has_horizon_kind`] walks
+    /// `horizon.kind == kind`, [`Self::has_optimization_direction`]
+    /// walks `horizon.direction.unwrap_or_default() == kind`,
+    /// [`Self::has_input_arity`] / [`Self::has_output_arity`] walk
+    /// `point_type.<projection>() == kind`). This probe has NO
+    /// argument at all: it collapses [`HorizonKind::ALL`] onto a
+    /// single boolean question ("does this horizon terminate?") via
+    /// the closed set's own [`HorizonKind::terminates`] predicate,
+    /// so callers asking the workspace-wide scheduler-facing
+    /// question "will this Process ever reach [`crate::phase::ProcessPhase::Reaped`]
+    /// via natural termination" reach the answer through a nullary
+    /// substrate call rather than restating
+    /// `classification.horizon.kind.terminates()` at every consumer.
+    ///
+    /// # Semantics — derived nullary boolean, not variant equality
+    ///
+    /// `horizon_terminates()` returns `true` iff
+    /// `self.horizon.kind.terminates()`. The two-variant
+    /// [`HorizonKind`] closed set publishes the truth table:
+    /// [`HorizonKind::Bounded`] → `true` (has a fixed point,
+    /// distance reaches 0, terminates naturally);
+    /// [`HorizonKind::Asymptotic`] → `false` (runs in perpetuity,
+    /// rate is the health signal, never terminates on its own). A
+    /// [`Classification::gate_compute`] baseline (which uses
+    /// [`Horizon::default`] with `kind = HorizonKind::Bounded` via
+    /// `#[default]`) answers `true` — the substrate's default-arm
+    /// short-circuit propagates through the nested [`Horizon`]
+    /// struct's own [`Default`] impl to this predicate's answer
+    /// the same way it propagates through
+    /// [`Self::has_horizon_kind`]'s `HorizonKind::Bounded` arm.
+    ///
+    /// A future third [`HorizonKind`] variant (a hypothetical
+    /// `Periodic` sentinel for "terminates on each window boundary
+    /// then re-arms" — pre-flagged on the closed set's `ALL`
+    /// docstring) reaches this probe through ONE `terminates` arm
+    /// on the closed set with the probe body untouched — the
+    /// nullary-predicate shape defers every per-variant policy
+    /// decision to the closed set's own truth table
+    /// ([`HorizonKind::terminates`]) rather than duplicating the
+    /// discriminator sweep here.
+    ///
+    /// # Compounding
+    ///
+    /// This method OPENS the (required-parent ×
+    /// nested-struct-derived-nullary-bool) corner of the workspace-
+    /// wide closed-set-driven presence-probe algebra at its FIRST
+    /// substrate primitive — distinct from every prior corner
+    /// occupant on [`Classification`] (which all take a closed-set
+    /// `kind` argument). A future co-tenant on this fresh corner (a
+    /// peer nullary predicate on another nested-struct's derived
+    /// boolean projection — a hypothetical `horizon_requires_metric_axes`
+    /// composing [`HorizonKind::requires_metric_axes`] as the
+    /// antisymmetric partner of `horizon_terminates`; a hypothetical
+    /// `intent_is_helm_driven` composing over the tagged-union
+    /// intent variants; a peer collapsing a routing form's
+    /// [`crate::routing::RoutingForm::ALL`] → bool) lands as ONE
+    /// peer inherent method with the same nullary derived body and
+    /// routes through the same fixed-tag substrate in
+    /// [`tatara-check`]'s classifier — no per-consumer restatement
+    /// of the `classification.<field>.<projection>()` chain.
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `terminating-horizon` on
+    /// [`POINT_FIXED_TAG_ARMS`] — byte-for-byte peer of the fixed
+    /// tags [`FixedTagArm`] already publishes (`depends-on`,
+    /// `boundary-pre`, `boundary-post`, `compliance`, `signals`).
+    /// The ephemeral surface publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::horizon_terminates`], which
+    /// composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (terminating-horizon)` audit answers the same
+    /// question on both surfaces.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `terminating-horizon` fixed tag in [`tatara-check`], future
+    /// scheduler / termination-shape validators, future variant
+    /// additions on [`HorizonKind`]) binds through the SAME
+    /// `horizon_terminates()` shape rather than restating the
+    /// `classification.horizon.kind.terminates()` chain at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`HorizonKind`] variant lands at ONE `ALL` entry +
+    /// ONE `terminates` arm on the closed set and this probe picks
+    /// it up mechanically.
+    #[must_use]
+    pub fn horizon_terminates(&self) -> bool {
+        self.horizon.kind.terminates()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -4582,5 +4685,108 @@ mod tests {
         assert!(gate.has_output_arity(Arity::One));
         assert!(!gate.has_input_arity(Arity::One));
         assert!(!gate.has_output_arity(Arity::Many));
+    }
+
+    // ── Classification::horizon_terminates substrate pins ─────────────
+    //
+    // Fail-before-pass-after granularity: [`Classification::horizon_terminates`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the nested [`Horizon`] slot's
+    // [`HorizonKind::terminates`] projection had no substrate owner.
+    // Post-lift the shape lives at ONE substrate primitive and every
+    // downstream (the `terminating-horizon` fixed tag in
+    // `tatara-check`, the [`crate::ephemeral::EphemeralSpec::horizon_terminates`]
+    // peer, future scheduler / termination-shape validators) composes
+    // against the SAME `horizon_terminates()` shape rather than
+    // restating the `classification.horizon.kind.terminates()` chain
+    // at its own callsite.
+
+    /// PER-VARIANT pin — for every [`HorizonKind`] variant, a
+    /// [`Classification`] whose `horizon.kind` field carries that
+    /// variant returns `horizon_terminates()` matching the closed
+    /// set's own [`HorizonKind::terminates`] truth table. Sweep
+    /// [`HorizonKind::ALL`] so a regression that (a) hard-coded the
+    /// method body to a fixed answer (silently returning `true`
+    /// regardless of the stored variant, silently rejecting every
+    /// Asymptotic Process's scheduler-facing termination check), (b)
+    /// inverted the projection (silently promoting Asymptotic to
+    /// "terminates"), or (c) crossed the wires with the antisymmetric
+    /// partner [`HorizonKind::requires_metric_axes`] fails HERE at
+    /// the substrate primitive before drifting through the
+    /// `terminating-horizon` fixed tag or the peer ephemeral surface.
+    #[test]
+    fn classification_horizon_terminates_matches_horizon_kind_projection() {
+        for populated in HorizonKind::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon {
+                    kind: populated,
+                    ..Horizon::default()
+                },
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert_eq!(
+                c.horizon_terminates(),
+                populated.terminates(),
+                "horizon.kind={populated:?}: horizon_terminates() drift from HorizonKind::terminates()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `horizon: Horizon::default()` whose `kind` field defaults to
+    /// [`HorizonKind::Bounded`] via `#[default]`, and
+    /// [`HorizonKind::Bounded::terminates`] projects `true`, so
+    /// `horizon_terminates()` returns `true`. Pins the default-arm
+    /// short-circuit through TWO layers of `Default` (`Horizon`'s +
+    /// `HorizonKind`'s) at ONE narrow site — a regression that
+    /// promoted [`HorizonKind::Asymptotic`] to `#[default]`, or that
+    /// swapped `Horizon::default`'s stored `kind`, or that wired
+    /// [`HorizonKind::Bounded`] to `terminates() = false` would fail
+    /// HERE before drifting through every unadorned Process's
+    /// scheduler-facing termination answer.
+    #[test]
+    fn classification_gate_compute_horizon_terminates_is_true() {
+        let c = Classification::gate_compute();
+        assert!(
+            c.horizon_terminates(),
+            "gate_compute (horizon.kind=Bounded → terminates=true) baseline",
+        );
+    }
+
+    /// ANTISYMMETRY pin — [`HorizonKind::terminates`] XOR
+    /// [`HorizonKind::requires_metric_axes`] holds on every variant
+    /// (pinned by `horizon_kind_terminate_xor_requires_metric_axes`
+    /// on the closed set itself); this composition-level test walks
+    /// the same XOR contract through THIS derived-nullary predicate
+    /// to prove the composition is faithful — a
+    /// [`Classification`] answering `horizon_terminates() = true`
+    /// implies its horizon does NOT require metric axes and vice
+    /// versa. Pins the composition-level XOR at ONE narrow site so
+    /// a regression that crossed the wires (`horizon_terminates`
+    /// silently composed [`HorizonKind::requires_metric_axes`]
+    /// instead of [`HorizonKind::terminates`]) surfaces here rather
+    /// than at every downstream consumer that trusts the shape.
+    #[test]
+    fn classification_horizon_terminates_xor_horizon_kind_requires_metric_axes() {
+        for kind in HorizonKind::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon {
+                    kind,
+                    ..Horizon::default()
+                },
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert!(
+                c.horizon_terminates() ^ kind.requires_metric_axes(),
+                "{kind:?}: horizon_terminates() XOR requires_metric_axes() must hold",
+            );
+        }
     }
 }

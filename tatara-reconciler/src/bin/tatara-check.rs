@@ -1990,6 +1990,29 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "signals",
         probe: |s| s.signals.sigterm_grace_seconds > 0,
     },
+    // `terminating-horizon` — FIRST occupant on the (parent × derived-
+    // nullary-bool) corner of the workspace-wide fixed-tag algebra.
+    // Every prior arm probes either a slice non-empty, a string non-
+    // empty, a numeric threshold, an always-true default, or a closed-
+    // set slice containment; this arm collapses [`HorizonKind::ALL`]
+    // onto a single boolean via the closed set's own
+    // [`HorizonKind::terminates`] projection reached through the ONE
+    // substrate primitive [`Classification::horizon_terminates`] that
+    // walks `self.horizon.kind.terminates()`. Answers the scheduler-
+    // facing question "will this Process ever reach `Reaped` via
+    // natural termination?" — `true` on the `Bounded` default (and on
+    // any operator-authored `Bounded` horizon), `false` on
+    // `Asymptotic`. Byte-for-byte symmetrical with the ephemeral
+    // surface's `terminating-horizon` arm on
+    // [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::horizon_terminates`]
+    // — both surfaces route through the SAME
+    // [`Classification::horizon_terminates`] primitive after the
+    // ephemeral surface pays ONE resolver hop.
+    FixedTagArm {
+        tag: "terminating-horizon",
+        probe: |s| s.classification.horizon_terminates(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2030,6 +2053,23 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "closed-loop-auth",
         probe: |s| s.postconditions.has_kind(ConditionKind::ClosedLoopAuth),
+    },
+    // `terminating-horizon` — byte-for-byte peer of the point
+    // surface's `terminating-horizon` arm on [`POINT_FIXED_TAG_ARMS`]
+    // via [`Classification::horizon_terminates`] reached through the
+    // ephemeral surface's [`EphemeralSpec::resolved_classification`]
+    // resolver. Answers the same scheduler-facing "does this ephemeral
+    // spec's horizon terminate" question on the ephemeral surface —
+    // `true` on the absent-`:classification` default (routes through
+    // [`Classification::gate_compute`] → [`Horizon::default`] →
+    // [`HorizonKind::default = Bounded`] → `terminates() = true`) and
+    // on any operator-authored `Bounded` horizon, `false` on
+    // `Asymptotic`. The two-surface parity contract holds by
+    // construction: both arms compose the SAME
+    // [`Classification::horizon_terminates`] primitive.
+    FixedTagArm {
+        tag: "terminating-horizon",
+        probe: |s| s.horizon_terminates(),
     },
 ];
 
@@ -10834,6 +10874,7 @@ mod tests {
                 "boundary-post",
                 "compliance",
                 "signals",
+                "terminating-horizon",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -10847,6 +10888,7 @@ mod tests {
                 "postconditions",
                 "preconditions",
                 "closed-loop-auth",
+                "terminating-horizon",
             ],
         );
     }
@@ -15211,6 +15253,281 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ── fixed-tag prefix-collision guard ─────────────────────────────
+    //
+    // Fail-before-pass-after granularity: this invariant was learned
+    // the hard way — an initial attempt to publish `horizon-terminating`
+    // as a fixed tag on both surfaces collided with the existing
+    // `horizon-<kind>` prefix family (the prefix machinery's
+    // `strip_and_classify_prefixed_kind` scans BEFORE the fixed-tag
+    // tail so `horizon-terminating` short-circuited with
+    // `Some(Err(PrefixHint {..}))` and never reached the fixed-tag
+    // arm). The tag was renamed to `terminating-horizon` before ship,
+    // and THIS pin turns the naming convention that avoided the
+    // collision into an enforceable invariant: EVERY tag on either
+    // fixed-tag arms table dispatched through its own surface's
+    // classifier MUST resolve to `Ok(_)`, never `Err(_)` — a fixed
+    // tag reaching an `Err(_)` classification means either the prefix
+    // machinery consumed it (the collision case) or the prefix-table
+    // ordering shifted such that a specific arm's tag now shadows a
+    // prefix family (the ordering case). Both future defects fail
+    // HERE, making a future fixed tag that accidentally starts with a
+    // known prefix family's discriminator string surface at ONE
+    // narrow site rather than through mysterious operator-facing
+    // "unknown suffix" diagnostics on tags the classifier itself
+    // owns.
+
+    /// PREFIX-COLLISION GUARD (point surface) — every literal `tag`
+    /// on [`POINT_FIXED_TAG_ARMS`] classifies through
+    /// [`evaluate_point_require_tag`] as `Ok(_)`, never as `Err(_)`.
+    /// An `Err(_)` result — INCLUDING the specific
+    /// `Err(UnknownRequireTag { hint: Some(TagHint::Prefix(_)) })`
+    /// shape a prefix-collision produces — would mean the fixed-tag
+    /// arm never fired because a prefix family consumed the tag
+    /// first. A future point-surface fixed tag that accidentally
+    /// begins with a known prefix (`intent-…`, `lifetime-…`,
+    /// `sighup-…`, `condition-…`, `horizon-…`, …) fails HERE at
+    /// ONE narrow site before the operator sees mystery "unknown
+    /// suffix" diagnostics on a tag the classifier itself owns.
+    #[test]
+    fn point_fixed_tags_never_collide_with_prefix_families() {
+        // A fixture with the emptiest possible defaults so every
+        // fixed-tag probe answers `Ok(false)` where it can — the
+        // shape of the `Ok(_)` value is not the invariant this pin
+        // owns; the invariant is that EVERY arm resolves through the
+        // fixed-tag tail rather than being shadowed by the prefix
+        // machinery.
+        let spec = ProcessSpec::gate_compute_defaults();
+        for arm in POINT_FIXED_TAG_ARMS {
+            let result = evaluate_point_require_tag(&spec, arm.tag);
+            assert!(
+                result.is_ok(),
+                "point fixed tag {:?} was shadowed by the prefix machinery: got {result:?}",
+                arm.tag,
+            );
+        }
+    }
+
+    /// PREFIX-COLLISION GUARD (ephemeral surface) — byte-for-byte
+    /// peer of the point-surface prefix-collision guard on
+    /// [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    /// [`evaluate_ephemeral_require_tag`]. Locks the same naming-
+    /// convention invariant on the ephemeral surface — a future
+    /// ephemeral-surface fixed tag that accidentally begins with a
+    /// known ephemeral-surface prefix (`condition-…`,
+    /// `teardown-policy-…`, `export-when-…`, `horizon-…`,
+    /// `optimization-direction-…`, `routing-form-…`, …) fails HERE.
+    #[test]
+    fn ephemeral_fixed_tags_never_collide_with_prefix_families() {
+        let spec = ephemeral_fixture();
+        for arm in EPHEMERAL_FIXED_TAG_ARMS {
+            let result = evaluate_ephemeral_require_tag(&spec, arm.tag);
+            assert!(
+                result.is_ok(),
+                "ephemeral fixed tag {:?} was shadowed by the prefix machinery: got {result:?}",
+                arm.tag,
+            );
+        }
+    }
+
+    // ── terminating-horizon fixed tag substrate pins ─────────────────
+    //
+    // Fail-before-pass-after granularity: the `terminating-horizon`
+    // fixed tag did not exist before this commit — the fixed-tag
+    // vocabulary on both surfaces carried only slice-empty,
+    // string-empty, numeric-threshold, always-true, and closed-set-
+    // slice-containment probes. The lift opens the FIRST occupant of
+    // the (parent × derived-nullary-bool) corner of the fixed-tag
+    // algebra on BOTH surfaces via ONE substrate primitive
+    // [`tatara_process::classification::Classification::horizon_terminates`].
+    // Every test below binds through the SAME substrate primitive so
+    // a regression that (a) hard-coded either surface's arm to a
+    // fixed answer, (b) crossed the wires with the antisymmetric
+    // partner [`tatara_process::classification::HorizonKind::requires_metric_axes`],
+    // (c) dropped the ephemeral surface's resolver hop, or (d) drifted
+    // the two-surface parity contract fails HERE at ONE narrow
+    // classifier site per pin before landing at the operator-facing
+    // checks.lisp surface.
+
+    /// POINT SURFACE per-variant pin — for every [`HorizonKind`]
+    /// variant, a [`ProcessSpec`] whose `classification.horizon.kind`
+    /// carries that variant answers the `terminating-horizon` fixed
+    /// tag matching the closed set's own [`HorizonKind::terminates`]
+    /// truth table. Sweep [`HorizonKind::ALL`] so a regression that
+    /// probed a fixed variant, inverted the projection, or crossed
+    /// the wires with [`HorizonKind::requires_metric_axes`] fails
+    /// HERE at the classifier before landing at the operator-facing
+    /// surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_horizon_terminates_projection_per_horizon_kind() {
+        for populated in HorizonKind::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.horizon = Horizon {
+                kind: populated,
+                ..Horizon::default()
+            };
+            assert_eq!(
+                evaluate_point_require_tag(&spec, "terminating-horizon"),
+                Ok(populated.terminates()),
+                "point horizon.kind={populated:?}: terminating-horizon drift from HorizonKind::terminates()",
+            );
+        }
+    }
+
+    /// POINT SURFACE DEFAULT-ARM SHORT-CIRCUIT pin — a Process built
+    /// through [`ProcessSpec::gate_compute_defaults`] (which carries
+    /// `horizon: Horizon::default()` whose `kind` field defaults to
+    /// [`HorizonKind::Bounded`] via `#[default]`) answers `Ok(true)`
+    /// on `terminating-horizon` WITHOUT the operator naming the
+    /// horizon axis. Pins the default-arm short-circuit through TWO
+    /// layers of `Default` at ONE narrow classifier site — a
+    /// regression that promoted [`HorizonKind::Asymptotic`] to
+    /// `#[default]`, or that swapped `Horizon::default`'s stored
+    /// `kind`, or that wired the fixed tag's probe to a fixed
+    /// negative answer, would fail HERE before drifting through
+    /// every unadorned Process's scheduler-facing termination check.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_default_terminating_horizon() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "terminating-horizon"),
+            Ok(true),
+            "default (horizon.kind=Bounded → terminates=true) baseline",
+        );
+    }
+
+    /// EPHEMERAL SURFACE per-variant pin — for every [`HorizonKind`]
+    /// variant, an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries that variant answers the
+    /// `terminating-horizon` fixed tag matching the closed set's own
+    /// [`HorizonKind::terminates`] truth table. Byte-for-byte peer
+    /// of the point-surface per-variant pin above via the SAME
+    /// [`Classification::horizon_terminates`] primitive reached
+    /// through the ephemeral surface's `resolved_classification()`
+    /// resolver.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_horizon_terminates_projection_per_horizon_kind() {
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = Horizon {
+                kind: populated,
+                ..Horizon::default()
+            };
+            let spec = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, "terminating-horizon"),
+                Ok(populated.terminates()),
+                "ephemeral horizon.kind={populated:?}: terminating-horizon drift",
+            );
+        }
+    }
+
+    /// EPHEMERAL SURFACE ABSENT-CLASSIFICATION SHORT-CIRCUIT pin —
+    /// an [`EphemeralSpec`] whose `classification` slot is `None`
+    /// routes through the resolver's substrate default
+    /// [`Classification::gate_compute`] (whose horizon defaults to
+    /// [`HorizonKind::Bounded`] → `terminates() = true`), so the
+    /// `terminating-horizon` fixed tag answers `Ok(true)` WITHOUT
+    /// the operator naming the classification axis on
+    /// `(defephemeral …)`. Pins the default-arm short-circuit
+    /// through THREE layers of `Default` at ONE narrow classifier
+    /// site.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_terminating_horizon(
+    ) {
+        let spec = ephemeral_fixture();
+        assert!(spec.classification.is_none());
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "terminating-horizon"),
+            Ok(true),
+            "absent classification (defaults to gate_compute, horizon.kind=Bounded → terminates=true)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME classification (across
+    /// (`None`, `Some(_)` on every [`HorizonKind::ALL`] variant))
+    /// classifies IDENTICALLY through the point-surface
+    /// `terminating-horizon` fixed tag AND the ephemeral-surface
+    /// `terminating-horizon` fixed tag when the ephemeral spec is
+    /// mechanically lowered to a [`ProcessSpec`] via `From`. Locks
+    /// the two-surface parity contract at the CLASSIFIER boundary
+    /// (in addition to the substrate-level pin on
+    /// [`crate::classification::Classification::horizon_terminates`])
+    /// so a regression on either arm's probe body — the point arm
+    /// dropping the direct `.classification.horizon_terminates()`
+    /// walk, the ephemeral arm dropping the
+    /// `.horizon_terminates()` resolver-hop wrapper — fails HERE
+    /// at the parity boundary before drifting through consumers.
+    #[test]
+    fn evaluate_terminating_horizon_matches_across_surfaces_through_lowered_ephemeral() {
+        // Absent classification: both surfaces resolve through the SAME
+        // substrate default and agree.
+        let eph = ephemeral_fixture();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&eph, "terminating-horizon"),
+            evaluate_point_require_tag(&lowered, "terminating-horizon"),
+            "None-classification parity drift",
+        );
+        // Authored classification: both surfaces read the same authored
+        // horizon.kind and route through the same projection.
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = Horizon {
+                kind: populated,
+                ..Horizon::default()
+            };
+            let eph = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph, "terminating-horizon"),
+                evaluate_point_require_tag(&lowered, "terminating-horizon"),
+                "authored horizon.kind={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// COARSE / FINE COEXISTENCE pin — a Process with
+    /// `classification.horizon.kind = Asymptotic` MUST answer
+    /// `Ok(false)` on the `terminating-horizon` fixed tag AND
+    /// simultaneously satisfy the fine `horizon-Asymptotic` closed-
+    /// set prefix tag (the sixteenth prefix family). Locks the
+    /// semantic split between the coarse nullary boolean and the
+    /// fine variant-equality tag at ONE narrow site — a regression
+    /// that collapsed `terminating-horizon` to always match
+    /// `horizon-Bounded` (or vice versa, silently answering the
+    /// classifier's fine-variant question through the coarse
+    /// derived-boolean predicate) fails HERE.
+    #[test]
+    fn evaluate_point_require_tag_terminating_horizon_and_horizon_asymptotic_coexist() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.classification.horizon = Horizon {
+            kind: HorizonKind::Asymptotic,
+            ..Horizon::default()
+        };
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "terminating-horizon"),
+            Ok(false),
+            "Asymptotic-horizon Process must fail the coarse `terminating-horizon` fixed tag",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "horizon-Asymptotic"),
+            Ok(true),
+            "Asymptotic-horizon Process must satisfy the fine `horizon-Asymptotic` prefix tag",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "horizon-Bounded"),
+            Ok(false),
+            "Asymptotic-horizon Process must fail the mismatched `horizon-Bounded` prefix tag",
+        );
     }
 
     // ── RequireTagDomain trait dispatch pins ─────────────────────────

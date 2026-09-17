@@ -1071,6 +1071,103 @@ impl EphemeralSpec {
         self.resolved_classification().has_output_arity(kind)
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s [`Horizon`] project to `true`
+    /// under [`crate::classification::HorizonKind::terminates`]?
+    /// Byte-for-byte peer of
+    /// [`Classification::horizon_terminates`] wrapped through the
+    /// [`Self::resolved_classification`] resolver so an operator-
+    /// omitted `:classification` slot on `(defephemeral …)` still
+    /// answers via the substrate default. The ONE ephemeral-surface
+    /// substrate primitive that owns the `(&EphemeralSpec) -> bool`
+    /// derived-nullary-boolean walk on the classification-horizon
+    /// axis.
+    ///
+    /// # Two-surface parity — resolver hop + Classification primitive
+    ///
+    /// Peer of [`Self::has_point_type`], [`Self::has_substrate`],
+    /// [`Self::has_calm`], [`Self::has_data_classification`],
+    /// [`Self::has_horizon_kind`],
+    /// [`Self::has_optimization_direction`],
+    /// [`Self::has_input_arity`], and [`Self::has_output_arity`] on
+    /// the (resolver-hop × [`Classification`] presence primitive)
+    /// axis: all nine methods route through the SAME
+    /// [`Self::resolved_classification`] resolver, and each composes
+    /// against ONE [`Classification`] primitive. This method
+    /// distinguishes itself by targeting the [`Classification`]
+    /// primitive [`Classification::horizon_terminates`] which is the
+    /// FIRST derived-nullary-boolean (no closed-set argument)
+    /// primitive on the [`Classification`] surface — every prior
+    /// peer probe on [`Classification`] admits a closed-set `kind`
+    /// argument and answers a variant-equality question, while this
+    /// probe collapses [`HorizonKind::ALL`] onto a single boolean
+    /// via the closed set's own [`HorizonKind::terminates`]
+    /// predicate.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `horizon_terminates()` returns `true` iff
+    /// `self.resolved_classification().horizon_terminates()`. The
+    /// resolver returns the authored [`Classification`] when
+    /// present and the substrate default
+    /// [`Classification::gate_compute`] on absence. Because
+    /// [`Classification::gate_compute`] uses [`Horizon::default`]
+    /// (whose `kind` field defaults to [`HorizonKind::Bounded`] via
+    /// `#[default]`), a bare ephemeral spec with no `:classification`
+    /// slot answers `true` — the default-arm short-circuit
+    /// propagates through THREE layers of `Default`
+    /// ([`Classification::gate_compute`] → [`Horizon::default`] →
+    /// [`HorizonKind::default`]) to this predicate's answer, matching
+    /// the default-arm shortcut every prior defaulted-child probe
+    /// on this surface publishes. A regression that dropped the
+    /// resolver hop, probed [`Classification::has_horizon_kind`]
+    /// directly (dropping the `.terminates()` projection), or
+    /// crossed the wires with the antisymmetric partner
+    /// [`HorizonKind::requires_metric_axes`] fails HERE at ONE
+    /// narrow substrate site before drifting through every
+    /// unadorned ephemeral spec's baseline horizon-terminates
+    /// answer.
+    ///
+    /// # Compounding
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `terminating-horizon` on
+    /// `EPHEMERAL_FIXED_TAG_ARMS` — byte-for-byte peer of the point
+    /// surface's `terminating-horizon` fixed tag on
+    /// `POINT_FIXED_TAG_ARMS` via [`Classification::horizon_terminates`]
+    /// directly. The two-surface parity contract holds by
+    /// construction: both surfaces route through the SAME
+    /// [`Classification::horizon_terminates`] primitive after the
+    /// ephemeral surface pays ONE resolver hop — a future
+    /// [`HorizonKind`] variant or a future normalization at the
+    /// substrate primitive lands at ONE site and both surfaces'
+    /// `terminating-horizon` fixed tags inherit the shift
+    /// mechanically. A future co-tenant peer on this surface (a
+    /// hypothetical `horizon_requires_metric_axes` composing the
+    /// antisymmetric partner [`HorizonKind::requires_metric_axes`]
+    /// through the SAME resolver hop) lands as ONE peer inherent
+    /// method with the same nullary-derived body.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-axis derived-nullary-
+    /// boolean probe body composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::horizon_terminates`]) so every downstream
+    /// (`terminating-horizon` fixed tags on both surfaces in
+    /// tatara-check, future scheduler / termination-shape
+    /// validators, future variant additions on [`HorizonKind`])
+    /// binds through the SAME `horizon_terminates()` shape rather
+    /// than restating either the resolver walk or the closed-set
+    /// projection composition at the callsite. THEORY.md §VI.1 —
+    /// generation over composition; a future [`HorizonKind`]
+    /// variant lands at ONE `ALL` entry + ONE `terminates` arm on
+    /// the closed set and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn horizon_terminates(&self) -> bool {
+        self.resolved_classification().horizon_terminates()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -3042,6 +3139,118 @@ mod tests {
         assert!(gate.has_output_arity(Arity::One));
         assert!(!gate.has_input_arity(Arity::One));
         assert!(!gate.has_output_arity(Arity::Many));
+    }
+
+    // ── EphemeralSpec::horizon_terminates pins ───────────────────────
+    //
+    // Fail-before-pass-after granularity: `horizon_terminates` did not
+    // exist pre-lift on `impl EphemeralSpec` — every consumer walking
+    // the "does this ephemeral spec's horizon terminate?" question
+    // went through `.resolved_classification().horizon.kind.terminates()`
+    // or through the lowered `ProcessSpec`'s
+    // `spec.classification.horizon.kind.terminates()`. Post-lift the
+    // NINTH classification-axis peer on the ephemeral surface routes
+    // through the SAME [`Self::resolved_classification`] resolver +
+    // the sibling substrate primitive
+    // [`crate::classification::Classification::horizon_terminates`],
+    // so the two-surface parity contract holds by construction — a
+    // regression on either side of the resolver fails at these pins
+    // before landing at the operator-facing `terminating-horizon`
+    // fixed tag in `tatara-check`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific [`HorizonKind`] variant
+    /// answers [`Self::horizon_terminates`] matching the closed
+    /// set's own [`HorizonKind::terminates`] truth table. Sweep
+    /// [`HorizonKind::ALL`] so a regression that (a) hard-coded the
+    /// body to a fixed answer, (b) inverted the projection, or (c)
+    /// crossed the wires with the antisymmetric partner
+    /// [`HorizonKind::requires_metric_axes`] fails HERE at the
+    /// substrate primitive before drifting through the
+    /// `terminating-horizon` fixed tag or the peer point surface.
+    #[test]
+    fn horizon_terminates_returns_horizon_kind_projection_per_kind() {
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = crate::classification::Horizon {
+                kind: populated,
+                ..crate::classification::Horizon::default()
+            };
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.horizon_terminates(),
+                populated.terminates(),
+                "authored horizon.kind={populated:?}: horizon_terminates() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which uses
+    /// [`crate::classification::Horizon::default`] whose `kind`
+    /// defaults to [`HorizonKind::Bounded`] via `#[default]`, and
+    /// [`HorizonKind::Bounded::terminates`] projects `true`, so
+    /// [`Self::horizon_terminates`] returns `true`. Pins the default-
+    /// arm short-circuit through THREE layers of `Default`
+    /// ([`Classification::gate_compute`] → [`Horizon::default`] →
+    /// [`HorizonKind::default`]) reaching this derived-nullary
+    /// predicate — a regression that dropped the resolver hop
+    /// (silently answering `false` on an absent classification, as
+    /// if the operator's absence meant "no horizon at all") fails
+    /// HERE at ONE narrow ephemeral-surface site.
+    #[test]
+    fn horizon_terminates_probes_true_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            spec.horizon_terminates(),
+            "absent classification (defaults to gate_compute, horizon.kind=Bounded → terminates=true)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::horizon_terminates`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.horizon_terminates()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`HorizonKind::ALL`] variant) so a future regression on
+    /// either side of the resolver fails HERE at the parity
+    /// boundary. Byte-for-byte peer of the eight sibling two-surface
+    /// parity pins on the SAME `Cow`-resolver carrier — the NINTH
+    /// classification-axis two-surface parity contract on the
+    /// ephemeral surface, and the FIRST via a derived-nullary-
+    /// boolean predicate rather than a variant-equality probe.
+    #[test]
+    fn horizon_terminates_matches_point_peer_through_lowered_classification() {
+        // Absent classification: both surfaces resolve through the SAME
+        // default and agree.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.horizon_terminates(),
+            lowered.classification.horizon_terminates(),
+            "None-classification parity drift",
+        );
+        // Authored classification: both surfaces read the same authored
+        // horizon.kind and route through the same projection.
+        for populated in HorizonKind::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon = crate::classification::Horizon {
+                kind: populated,
+                ..crate::classification::Horizon::default()
+            };
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.horizon_terminates(),
+                lowered.classification.horizon_terminates(),
+                "authored horizon.kind={populated:?}: parity drift",
+            );
+        }
     }
 
     // ── EphemeralSpec::has_routing_form pins ─────────────────────────

@@ -242,11 +242,109 @@ pub trait ComplianceBindingSliceExt {
     /// presence probe every consumer of the `(&[ComplianceBinding],
     /// VerificationPhase) -> bool` shape composes against.
     fn has_verification_phase(&self, kind: VerificationPhase) -> bool;
+
+    /// True iff at least one [`ComplianceBinding`] in this slice would
+    /// gate the given [`ProcessPhase`] transition when it fails — i.e.
+    /// at least one binding's [`VerificationPhase::gates_phase`]
+    /// projection is `Some(phase)`. The single-slice DERIVED-Option-
+    /// typed-projection presence probe every consumer of the
+    /// `(&[ComplianceBinding], ProcessPhase) -> bool` shape composes
+    /// against.
+    ///
+    /// # First slice-parent × derived-Option-typed-projection-child corner
+    ///
+    /// Peer of [`Self::has_verification_phase`] on the SAME slice,
+    /// distinct on the child axis. `has_verification_phase(k)` probes
+    /// the RAW stored [`ComplianceBinding::phase`] scalar; this method
+    /// composes the typed [`VerificationPhase::gates_phase`] projection
+    /// through the same slice walk, so the answer keys off "which
+    /// [`ProcessPhase`] transition would a failing binding block?"
+    /// rather than "which verification-phase checkpoint is authored?".
+    /// The projection is many-to-one (`PlanTime → Execing`,
+    /// `AtBoundary → Attested`, `PostConvergence → None`), so
+    /// `has_verification_gates(ProcessPhase::Attested)` on a slice
+    /// carrying five `AtBoundary` bindings and one `PostConvergence`
+    /// binding answers `true` (the five `AtBoundary` bindings all
+    /// project to `Attested`, the `PostConvergence` projects to
+    /// `None`), and `has_verification_gates(ProcessPhase::Reaped)`
+    /// answers `false` on the same slice (no
+    /// [`VerificationPhase`] variant projects to `Reaped`). Sibling
+    /// derived-Option-child probe of
+    /// [`crate::spec::SignalPolicy::has_sighup_target`] on the
+    /// (required-scalar-parent × derived-Option-child) corner — this
+    /// method opens the (slice-parent × derived-Option-child) corner
+    /// as its natural sibling one composition boundary deeper.
+    ///
+    /// # Semantics — TRANSITION match on the projection image
+    ///
+    /// A binding's `phase.gates_phase()` yields `Some(target)` for
+    /// exactly the [`ProcessPhase`]s the [`VerificationPhase`] closed
+    /// set names as gateable ([`ProcessPhase::Execing`] gated by
+    /// `PlanTime`, [`ProcessPhase::Attested`] gated by `AtBoundary`)
+    /// and `None` for the non-blocking `PostConvergence` audit
+    /// checkpoint. So `has_verification_gates` answers `false` for
+    /// every non-gateable [`ProcessPhase`] regardless of how many
+    /// `PostConvergence` bindings live in the slice — the projection
+    /// short-circuit at the closed-set primitive rides through the
+    /// slice walk without leaking. A regression that (a) probed the
+    /// stored `.phase` field directly (which would answer for the
+    /// wrong closed set), (b) inverted the projection (yielding
+    /// `Some` for `PostConvergence` and `None` elsewhere), or (c)
+    /// crossed the wires with `has_verification_phase` (which returns
+    /// `true` for a `PostConvergence` binding queried at
+    /// `PostConvergence`) fails at THIS probe's substrate site before
+    /// drifting into the require-tag classifier or the future
+    /// reconciler control-plane compliance evaluator.
+    ///
+    /// # Compounding
+    ///
+    /// A future `verification-gates-<phase>` require-tag prefix family
+    /// in `tatara-reconciler::bin::tatara-check` composes this
+    /// primitive with the autoderived [`ProcessPhase`] `FromStr`
+    /// through the `strip_and_classify_prefixed_kind` substrate to
+    /// publish a further closed-set-driven prefix family symmetric
+    /// with `verification-phase-<kind>` — but keyed on the transition
+    /// a failing binding blocks rather than on the checkpoint stored
+    /// in the CRD. The future reconciler control-plane compliance
+    /// evaluator that decides "should the current
+    /// `Running → Attested` transition proceed given the observed
+    /// binding violations?" reaches this ONE substrate site to
+    /// answer the load-bearing "does this spec even care about the
+    /// candidate transition?" gate.
+    ///
+    /// A future [`VerificationPhase`] variant whose `gates_phase` arm
+    /// projects to a fresh [`ProcessPhase`] reaches every downstream
+    /// through the SAME closed-set walk with no per-caller edit — the
+    /// projection changes at ONE arm on
+    /// [`VerificationPhase::gates_phase`] and this probe body
+    /// inherits the shift automatically. Symmetric to the way
+    /// [`Self::has_verification_phase`] absorbs a fresh variant with
+    /// no probe-body edit.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the per-slice `phase.gates_phase()` walk
+    /// lives at ONE substrate site so every downstream (require-tag
+    /// classifier, control-plane compliance evaluator, editor
+    /// completion listing "which transitions would fail if this
+    /// binding's control reported a violation") binds through the
+    /// SAME shape rather than restating the `.iter().any(|b|
+    /// b.phase.gates_phase() == Some(K))` closure body at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`VerificationPhase`] variant lands at ONE `ALL` entry,
+    /// one `as_str` arm, one `gates_phase` arm on the closed set,
+    /// and both slice-level presence probes
+    /// (`has_verification_phase`, `has_verification_gates`) pick it
+    /// up mechanically.
+    fn has_verification_gates(&self, phase: ProcessPhase) -> bool;
 }
 
 impl ComplianceBindingSliceExt for [ComplianceBinding] {
     fn has_verification_phase(&self, kind: VerificationPhase) -> bool {
         self.iter().any(|b| b.phase == kind)
+    }
+
+    fn has_verification_gates(&self, phase: ProcessPhase) -> bool {
+        self.iter().any(|b| b.phase.gates_phase() == Some(phase))
     }
 }
 
@@ -489,5 +587,154 @@ mod tests {
             !slice.has_verification_phase(VerificationPhase::AtBoundary),
             "phase absent from the slice must resolve false: AtBoundary",
         );
+    }
+
+    // ── ComplianceBindingSliceExt::has_verification_gates substrate pins ──
+    //
+    // Fail-before-pass-after granularity: `has_verification_gates` did
+    // not exist before this commit — the `(&[ComplianceBinding],
+    // ProcessPhase) -> bool` derived-Option-child walk shape was not
+    // spelled anywhere in the workspace. The lift opens the FIRST
+    // instance in the (slice-parent × derived-Option-typed-projection-
+    // child) corner of the workspace-wide presence-probe algebra
+    // (parent is the `&[ComplianceBinding]` slice; child is the
+    // `Option<ProcessPhase>` derived from each binding's stored
+    // `VerificationPhase` via `VerificationPhase::gates_phase`).
+    // Direct pattern peer of `SignalPolicy::has_sighup_target` at the
+    // (required-scalar-parent × derived-Option-child) corner — that
+    // corner opens the required-scalar side of the derived-Option-
+    // child slice; this method opens the slice side.
+
+    /// EMPTY-SLICE pin — an empty `&[ComplianceBinding]` returns
+    /// `false` for EVERY [`ProcessPhase`], gateable or not. Sweep
+    /// [`ProcessPhase::ALL`] so a new phase variant added without a
+    /// matching arm in the primitive surfaces at rustc's exhaustiveness
+    /// gate on the ALL literal rather than as a silent false-positive
+    /// at every downstream callsite composing this primitive.
+    #[test]
+    fn compliance_binding_slice_has_verification_gates_returns_false_on_empty_slice_for_every_phase(
+    ) {
+        let empty: &[ComplianceBinding] = &[];
+        for phase in ProcessPhase::ALL {
+            assert!(
+                !empty.has_verification_gates(phase),
+                "empty slice must return false for {phase:?}",
+            );
+        }
+    }
+
+    /// PER-VARIANT DIAGONAL pin — a single-element slice returns `true`
+    /// for EXACTLY the [`ProcessPhase`] the binding's
+    /// [`VerificationPhase::gates_phase`] projection yields (or `false`
+    /// for EVERY phase when the projection is `None`), `false` for
+    /// every other phase. Sweep the [`VerificationPhase::ALL`] ×
+    /// [`ProcessPhase::ALL`] cross so a regression that (a) hard-coded
+    /// the arm to a single kind (silently returning `true` for every
+    /// populated slice regardless of query phase), (b) read the stored
+    /// `.phase` field directly (returning `true` on the WRONG closed
+    /// set), or (c) inverted the `Option<ProcessPhase>` projection
+    /// (yielding `Some` for `PostConvergence` and `None` elsewhere)
+    /// fails HERE at the substrate primitive.
+    #[test]
+    fn compliance_binding_slice_has_verification_gates_projects_through_gates_phase_per_variant() {
+        for stored in VerificationPhase::ALL {
+            let slice = [binding_at(stored)];
+            let expected_gate = stored.gates_phase();
+            for query in ProcessPhase::ALL {
+                let expected = expected_gate == Some(query);
+                assert_eq!(
+                    slice.has_verification_gates(query),
+                    expected,
+                    "stored={stored:?}: query {query:?} drifted from \
+                     gates_phase() projection {expected_gate:?}",
+                );
+            }
+        }
+    }
+
+    /// NON-BLOCKING pin — a slice carrying ONLY `PostConvergence`
+    /// bindings answers `false` for EVERY [`ProcessPhase`], because
+    /// [`VerificationPhase::PostConvergence::gates_phase`] is `None`
+    /// (the continuous-audit checkpoint blocks no transition). Locks
+    /// the projection's `None` short-circuit at the slice walk so a
+    /// regression that (a) leaked a `PostConvergence` binding into
+    /// some arbitrary [`ProcessPhase`] answer, or (b) collapsed
+    /// `Option<ProcessPhase>::None` to a defaulted phase (Pending,
+    /// Reaped) fails HERE.
+    #[test]
+    fn compliance_binding_slice_has_verification_gates_returns_false_on_post_convergence_only_slice(
+    ) {
+        let slice = [
+            binding_at(VerificationPhase::PostConvergence),
+            binding_at(VerificationPhase::PostConvergence),
+        ];
+        for phase in ProcessPhase::ALL {
+            assert!(
+                !slice.has_verification_gates(phase),
+                "PostConvergence-only slice must return false for every phase: \
+                 {phase:?} (gates_phase() = None everywhere)",
+            );
+        }
+    }
+
+    /// MULTI-ENTRY / MANY-TO-ONE pin — a slice with MULTIPLE bindings
+    /// projecting to the SAME [`ProcessPhase`] via
+    /// [`VerificationPhase::gates_phase`] answers `true` for that
+    /// phase, and a slice mixing projected + `None`-projected bindings
+    /// still answers `true` for the projected phase while remaining
+    /// `false` for the non-gateable ones. Locks the `any` semantics on
+    /// the projection: the SLICE walk composes the projection through
+    /// `.iter().any(|b| b.phase.gates_phase() == Some(K))` so a
+    /// regression that (a) short-circuited on the first `None`
+    /// projection (silently answering `false` when the first binding
+    /// is `PostConvergence`), (b) required ALL bindings to project to
+    /// the queried phase (universal instead of existential), or (c)
+    /// dropped past-first entries entirely fails HERE.
+    #[test]
+    fn compliance_binding_slice_has_verification_gates_scans_beyond_the_first_position() {
+        let slice = [
+            binding_at(VerificationPhase::PostConvergence),
+            binding_at(VerificationPhase::AtBoundary),
+            binding_at(VerificationPhase::AtBoundary),
+        ];
+        assert!(
+            slice.has_verification_gates(ProcessPhase::Attested),
+            "AtBoundary binding at non-first position must project through gates_phase",
+        );
+        assert!(
+            !slice.has_verification_gates(ProcessPhase::Execing),
+            "no PlanTime binding in slice — Execing gate must resolve false",
+        );
+        assert!(
+            !slice.has_verification_gates(ProcessPhase::Reaped),
+            "no VerificationPhase variant projects to Reaped — must resolve false",
+        );
+    }
+
+    /// AXIS-SPLIT pin — the two slice-level presence probes
+    /// (`has_verification_phase` on the RAW stored checkpoint,
+    /// `has_verification_gates` on the DERIVED Option-typed transition
+    /// projection) answer independently on the SAME slice. A slice
+    /// carrying one `PostConvergence` binding answers `true` for
+    /// `has_verification_phase(PostConvergence)` (the RAW checkpoint
+    /// is authored) AND `false` for every `has_verification_gates(K)`
+    /// (the projection is `None` so no transition is gated). Locks
+    /// the raw-vs-derived semantic split at the substrate boundary so
+    /// a regression that collapsed one probe onto the other fails
+    /// HERE at ONE narrow site.
+    #[test]
+    fn compliance_binding_slice_verification_phase_and_gates_split_on_post_convergence() {
+        let slice = [binding_at(VerificationPhase::PostConvergence)];
+        assert!(
+            slice.has_verification_phase(VerificationPhase::PostConvergence),
+            "raw checkpoint probe must see the authored PostConvergence binding",
+        );
+        for phase in ProcessPhase::ALL {
+            assert!(
+                !slice.has_verification_gates(phase),
+                "derived gates probe on PostConvergence-only slice must resolve \
+                 false for every phase: {phase:?}",
+            );
+        }
     }
 }

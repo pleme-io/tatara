@@ -1594,6 +1594,22 @@ fn evaluate_point_require_tag(
             .compliance
             .bindings
             .has_verification_phase(k)),
+        // `verification-gates-<phase>` — the derived-Option-typed-
+        // projection peer of `verification-phase-<kind>` on the SAME
+        // `compliance.bindings` slice: answers whether ANY authored
+        // binding would gate the given `ProcessPhase` transition via
+        // `VerificationPhase::gates_phase` (many-to-one; `PlanTime →
+        // Execing`, `AtBoundary → Attested`, `PostConvergence →
+        // None`). FIRST occupant on the (slice-parent × derived-
+        // Option-typed-projection-child) corner of the workspace-wide
+        // require-tag prefix algebra — one composition boundary
+        // deeper than `sighup-target-<phase>`, which owns the
+        // (required-scalar-parent × derived-Option-child) corner on
+        // `SignalPolicy`.
+        ("verification-gates-", ProcessPhase, |k| spec
+            .compliance
+            .bindings
+            .has_verification_gates(k)),
         ("export-when-", ExportTrigger, |k| spec
             .lifetime
             .ephemeral_exports()
@@ -5124,6 +5140,206 @@ mod tests {
             evaluate_point_require_tag(&spec, "verification-phase-PostConvergence"),
             Ok(false),
             "fine `verification-phase-PostConvergence` must be false when no binding gates there",
+        );
+    }
+
+    // ── verification-gates-<phase> prefix family pins ────────────────
+    //
+    // Fail-before-pass-after granularity: the `verification-gates-
+    // <phase>` prefix family did not exist before this commit — the
+    // point-domain require-tag vocabulary discriminated compliance
+    // bindings only by the RAW authored [`VerificationPhase`]
+    // checkpoint (via `verification-phase-<kind>`), never by the
+    // derived-Option-typed [`ProcessPhase`] transition a violated
+    // binding would gate (`PlanTime → Execing`, `AtBoundary →
+    // Attested`, `PostConvergence → None`). The lift routes the
+    // TWENTY-SEVENTH closed-set-driven prefix family in the
+    // point-domain classifier and opens the (slice-parent ×
+    // derived-Option-typed-projection-child) corner of the
+    // workspace-wide require-tag prefix algebra as its FIRST occupant.
+    // Composes through the newly-opened
+    // [`tatara_process::compliance::ComplianceBindingSliceExt::has_verification_gates`]
+    // substrate primitive at the classifier prefix-table row + through
+    // the existing typed [`VerificationPhase::gates_phase`] projection
+    // at the closed-set discriminator boundary. A future
+    // [`VerificationPhase`] variant reaches this classifier through
+    // ONE `ALL` entry + one `as_str` arm + one `gates_phase` arm
+    // alone.
+
+    /// POPULATED-slot DIAGONAL pin — `verification-gates-<phase>`
+    /// dispatches through the autoderived [`ProcessPhase`] `FromStr`
+    /// plus the substrate
+    /// [`tatara_process::compliance::ComplianceBindingSliceExt::has_verification_gates`]
+    /// primitive, returning `true` only when the compliance bindings
+    /// slice carries at least one binding whose
+    /// [`VerificationPhase::gates_phase`] projection matches the
+    /// queried phase. Sweep the [`VerificationPhase::ALL`] ×
+    /// [`ProcessPhase::ALL`] cross so a regression that (a) hard-
+    /// coded the arm to a single kind (silently returning `true` for
+    /// every populated compliance vector regardless of query phase),
+    /// (b) probed the raw stored `.phase` field (which would answer
+    /// for `VerificationPhase`, not `ProcessPhase`), or (c) inverted
+    /// the projection fails HERE at the classifier before landing at
+    /// the operator-facing checks.lisp surface. The `PostConvergence`
+    /// arm's `None` projection is separately pinned by
+    /// [`evaluate_point_require_tag_verification_gates_returns_false_on_post_convergence_only_for_every_phase`].
+    #[test]
+    fn evaluate_point_require_tag_returns_true_iff_verification_gates_projects_to_phase() {
+        for stored in VerificationPhase::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.compliance.bindings.push(binding_at(stored));
+            let expected_gate = stored.gates_phase();
+            for phase in ProcessPhase::ALL {
+                let tag = format!("verification-gates-{}", phase.as_str());
+                let expected = expected_gate == Some(phase);
+                assert_eq!(
+                    evaluate_point_require_tag(&spec, &tag),
+                    Ok(expected),
+                    "compliance stored={stored:?}: tag {tag:?} classification \
+                     drifted from gates_phase() projection {expected_gate:?}",
+                );
+            }
+        }
+    }
+
+    /// POST-CONVERGENCE-ARM PIN — a [`ProcessSpec`] whose compliance
+    /// bindings are ALL `PostConvergence` projects to `None` through
+    /// [`VerificationPhase::gates_phase`], so every
+    /// `verification-gates-<phase>` tag classifies as `Ok(false)` on
+    /// it — even for the [`ProcessPhase`]s the sibling `PlanTime` /
+    /// `AtBoundary` variants gate. Pins the derived-Option-child vs
+    /// stored-scalar semantic split at the classifier boundary so a
+    /// regression that projected `PostConvergence` onto a spurious
+    /// target (Pending / Zombie / Failed) fails HERE.
+    #[test]
+    fn evaluate_point_require_tag_verification_gates_returns_false_on_post_convergence_only_for_every_phase(
+    ) {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.compliance
+            .bindings
+            .push(binding_at(VerificationPhase::PostConvergence));
+        spec.compliance
+            .bindings
+            .push(binding_at(VerificationPhase::PostConvergence));
+        for phase in ProcessPhase::ALL {
+            let tag = format!("verification-gates-{}", phase.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "PostConvergence-only compliance spec must classify {tag:?} as Ok(false)",
+            );
+        }
+    }
+
+    /// EMPTY-slot pin — a default [`ProcessSpec`] (empty
+    /// `compliance.bindings` vector) returns `false` for every
+    /// `verification-gates-<phase>` tag. Sweeps [`ProcessPhase::ALL`]
+    /// so a new phase variant added without a matching arm in the
+    /// projection surfaces at rustc's exhaustiveness gate rather than
+    /// as a silent false-positive on the empty-slot boundary. Distinct
+    /// from `sighup-target-<phase>` (which returns `true` on
+    /// `sighup-target-Reconverging` for the default spec because its
+    /// carrier is scalar-not-Vec); this family reads a Vec so a
+    /// default spec is unambiguously empty across every phase.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_empty_compliance_for_every_verification_gates_phase(
+    ) {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for phase in ProcessPhase::ALL {
+            let tag = format!("verification-gates-{}", phase.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&spec, &tag),
+                Ok(false),
+                "default compliance (empty vector) must return false for {tag:?}",
+            );
+        }
+    }
+
+    /// UNKNOWN-suffix pin — `verification-gates-<garbage>` classifies
+    /// as [`UnknownRequireTag`] via the shared
+    /// `strip_and_classify_prefixed_kind` primitive so the caller's
+    /// operator-facing `unknown :requires tag: <verbatim>` diagnostic
+    /// path fires. A regression that fell through to `Ok(false)`
+    /// would silently reclassify a `verification-gates-attested`
+    /// casing typo (PascalCase-only closed set) as `definition
+    /// missing required`, which reads as "the spec is wrong" rather
+    /// than "your check is wrong". Pin the distinction.
+    #[test]
+    fn evaluate_point_require_tag_returns_unknown_on_unknown_verification_gates_suffix() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        for garbage in [
+            "verification-gates-",
+            "verification-gates-attested",
+            "verification-gates-EXECING",
+            "verification-gates-Suspended",
+            "verification-gates-typo",
+        ] {
+            assert_eq!(
+                evaluate_point_require_tag(&spec, garbage),
+                Err(UnknownRequireTag::default()),
+                "unknown suffix in {garbage:?} must classify as UnknownRequireTag",
+            );
+        }
+    }
+
+    /// AXIS-SPLIT COEXISTENCE pin — a single `AtBoundary` binding
+    /// satisfies BOTH the fine `verification-phase-AtBoundary` (raw
+    /// checkpoint match on the [`VerificationPhase`] closed set) AND
+    /// the fine `verification-gates-Attested` (derived
+    /// [`ProcessPhase`] projection through
+    /// [`VerificationPhase::gates_phase`]). Simultaneously it must
+    /// fail BOTH `verification-phase-PlanTime` (wrong raw checkpoint)
+    /// AND `verification-gates-Execing` (wrong derived transition).
+    /// Locks the raw-vs-derived semantic split at the classifier so a
+    /// regression that collapsed the two families to share a single
+    /// dispatch arm fails HERE at ONE narrow site — same-slice, same
+    /// binding, different closed sets, different question. Also pins
+    /// that the two families do NOT contaminate each other: a variant
+    /// of one closed set is not a variant of the other, so the
+    /// classifier surfaces [`UnknownRequireTag`] on cross-family
+    /// suffix leaks.
+    #[test]
+    fn evaluate_point_require_tag_verification_phase_and_gates_families_are_disjoint() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.compliance
+            .bindings
+            .push(binding_at(VerificationPhase::AtBoundary));
+        // Same binding, both surfaces answer true on the matching kind.
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "verification-phase-AtBoundary"),
+            Ok(true),
+            "raw checkpoint match on the authored VerificationPhase",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "verification-gates-Attested"),
+            Ok(true),
+            "derived ProcessPhase match through gates_phase() projection",
+        );
+        // Same binding, both surfaces answer false on the off-diagonal.
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "verification-phase-PlanTime"),
+            Ok(false),
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "verification-gates-Execing"),
+            Ok(false),
+        );
+        // Cross-family contamination is a diagnostic error, not a
+        // false pass — a variant of one closed set is not a variant
+        // of the other, so the classifier surfaces UnknownRequireTag.
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "verification-phase-Attested"),
+            Err(UnknownRequireTag::default()),
+            "`Attested` is a ProcessPhase, not a VerificationPhase — \
+             the raw-checkpoint family must classify it as Unknown, \
+             not fall through",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "verification-gates-AtBoundary"),
+            Err(UnknownRequireTag::default()),
+            "`AtBoundary` is a VerificationPhase, not a ProcessPhase — \
+             the derived-transition family must classify it as Unknown, \
+             not fall through",
         );
     }
 

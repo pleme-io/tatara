@@ -1608,6 +1608,109 @@ impl Classification {
     pub fn point_is_diffusive(&self) -> bool {
         self.point_type.is_diffusive()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`]'s
+    /// [`ConvergencePointType`] project to `true` under
+    /// [`ConvergencePointType::is_convergent`]? The ONE substrate
+    /// primitive that owns the `(Classification) -> bool` derived-
+    /// nullary-predicate walk shape on the `point_type` slot for the
+    /// N→1 fan-in topology-bucket question.
+    ///
+    /// # Eighth occupant on the (parent × derived-nullary-bool) corner
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`],
+    /// [`Self::data_is_regulated`], [`Self::data_is_restricted`],
+    /// [`Self::point_is_endomorphic`], and [`Self::point_is_diffusive`]
+    /// on the workspace-wide (parent × derived-nullary-bool) corner of
+    /// the closed-set-driven presence-probe algebra — the EIGHTH
+    /// occupant on the corner and the THIRD peer threading the
+    /// classification-`point_type` axis. Direct-scalar peer of
+    /// [`Self::point_is_endomorphic`] / [`Self::point_is_diffusive`]:
+    /// the three share the SAME parent slot (`self.point_type`), the
+    /// SAME closed-set carrier ([`ConvergencePointType`]), and the
+    /// SAME chosen-field baseline discipline
+    /// ([`ConvergencePointType`] has no [`Default`] impl, so the
+    /// derived-nullary answer here does NOT carry a substrate default-
+    /// arm short-circuit through the parent's `#[default]` chain).
+    /// Distinct from the two sibling probes on ONE structural degree
+    /// — the [`Self::gate_compute`] baseline's `point_type: Gate`
+    /// answer projects to `true` HERE (`Gate.is_convergent() = true`),
+    /// mirror-inverted from the two siblings' `false` answers, so
+    /// this is the FIRST direct-scalar corner peer whose parent-
+    /// composed gate-compute baseline projects `true` through a
+    /// chosen-field (rather than defaulted) answer.
+    ///
+    /// # Semantics — derived nullary boolean, closes the three-way carving
+    ///
+    /// `point_is_convergent()` returns `true` iff
+    /// `self.point_type.is_convergent()`. The eight-variant
+    /// [`ConvergencePointType`] closed set publishes the truth table
+    /// (via the (Many, One) arity cell): [`ConvergencePointType::Join`]
+    /// / [`ConvergencePointType::Gate`] /
+    /// [`ConvergencePointType::Select`] / [`ConvergencePointType::Reduce`]
+    /// → `true` (N→1 fan-in); every other variant → `false`
+    /// (endomorphic or diffusive). A [`Classification::gate_compute`]
+    /// baseline answers `true` deliberately (Gate is the canonical
+    /// convergent barrier point of the workspace baseline).
+    ///
+    /// A future ninth [`ConvergencePointType`] variant lands at ONE
+    /// `ALL` entry + ONE `is_convergent` arm on the closed set with
+    /// the probe body untouched — the nullary-predicate shape defers
+    /// every per-variant policy decision to the closed set's own truth
+    /// table ([`ConvergencePointType::is_convergent`]) rather than
+    /// duplicating the discriminator sweep here.
+    ///
+    /// # Compounding — closes the three-way XOR partition on the `point_type` axis
+    ///
+    /// This is the THIRD sibling on the `point_type` axis closing the
+    /// mutex pair [`Self::point_is_endomorphic`] /
+    /// [`Self::point_is_diffusive`] (which sealed
+    /// `point_is_endomorphic ⇒ ¬point_is_diffusive`) into the FULL
+    /// three-way XOR partition contract
+    /// `point_is_endomorphic ⊕ point_is_diffusive ⊕
+    /// point_is_convergent = true` for every
+    /// [`ConvergencePointType`] variant. Sealed on the closed set by
+    /// `convergence_point_type_buckets_cover_every_variant` (which
+    /// pins each variant lands in EXACTLY ONE bucket) and now
+    /// composed through the parent-composed layer as a substrate-wide
+    /// theorem. THREE-way XOR is a stricter contract than the closed-
+    /// set XOR pair `terminates ^ requires_metric_axes` that composes
+    /// through this corner today via the two `horizon_*` peers — this
+    /// axis carries a partition of THREE non-empty buckets rather
+    /// than TWO, so the ternary XOR is the natural generalization
+    /// composed through the corner.
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `convergent-point` on `POINT_FIXED_TAG_ARMS` —
+    /// byte-for-byte peer of the sibling `endomorphic-point` /
+    /// `diffusive-point` fixed tags. The ephemeral surface publishes
+    /// the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::point_is_convergent`], which
+    /// composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`] so
+    /// the two-surface parity contract holds — the operator's
+    /// `:requires (convergent-point)` audit answers the same question
+    /// on both surfaces.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `convergent-point` fixed tag in `tatara-check`, future DAG
+    /// composition / edge-cardinality validators, future variant
+    /// additions on [`ConvergencePointType`]) binds through the SAME
+    /// `point_is_convergent()` shape rather than restating the
+    /// `classification.point_type.is_convergent()` chain at each
+    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// future [`ConvergencePointType`] variant lands at ONE `ALL`
+    /// entry + ONE `is_convergent` arm on the closed set and this
+    /// probe picks it up mechanically.
+    #[must_use]
+    pub fn point_is_convergent(&self) -> bool {
+        self.point_type.is_convergent()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -5988,6 +6091,122 @@ mod tests {
             assert!(
                 !(c.point_is_endomorphic() && c.point_is_diffusive()),
                 "point_type={populated:?}: point_is_endomorphic AND point_is_diffusive both true (mutex violated)",
+            );
+        }
+    }
+
+    // ── Classification::point_is_convergent substrate pins ──────────
+    //
+    // Fail-before-pass-after granularity: [`Classification::point_is_convergent`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the scalar [`ConvergencePointType`]
+    // slot's [`ConvergencePointType::is_convergent`] projection had no
+    // substrate owner. Post-lift the shape lives at ONE substrate
+    // primitive and every downstream (the `convergent-point` fixed
+    // tag in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::point_is_convergent`] peer,
+    // future DAG composition / edge-cardinality validators) composes
+    // against the SAME `point_is_convergent()` shape. EIGHTH occupant
+    // of the (parent × derived-nullary-bool) corner and THIRD
+    // occupant threading the `point_type` axis, closing the axis into
+    // a proven-repeatable three-peer sub-corner. CLOSES the mutex
+    // pair [`Self::point_is_endomorphic`] / [`Self::point_is_diffusive`]
+    // into the FULL three-way XOR partition contract on the axis.
+
+    /// PER-VARIANT pin — for every [`ConvergencePointType`] variant, a
+    /// [`Classification`] whose `point_type` field carries that variant
+    /// returns `point_is_convergent()` matching the closed set's own
+    /// [`ConvergencePointType::is_convergent`] truth table. Sweep
+    /// [`ConvergencePointType::ALL`] so a regression that (a)
+    /// hard-coded the method body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with a sibling closed-set
+    /// projection ([`ConvergencePointType::is_endomorphic`] /
+    /// [`ConvergencePointType::is_diffusive`]) fails HERE at the
+    /// substrate primitive before drifting through the
+    /// `convergent-point` fixed tag or the peer ephemeral surface.
+    #[test]
+    fn classification_point_is_convergent_matches_point_type_projection() {
+        for populated in ConvergencePointType::ALL {
+            let c = Classification {
+                point_type: populated,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            assert_eq!(
+                c.point_is_convergent(),
+                populated.is_convergent(),
+                "point_type={populated:?}: point_is_convergent() drift from ConvergencePointType::is_convergent()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `point_type: ConvergencePointType::Gate` deliberately (NOT via
+    /// `#[default]` — [`ConvergencePointType`] has no `impl Default`),
+    /// and [`ConvergencePointType::Gate::is_convergent`] projects
+    /// `true` (Gate is the canonical N→1 convergent barrier), so
+    /// `point_is_convergent()` returns `true`. Pins the baseline's
+    /// chosen-field answer at ONE narrow site — a regression that
+    /// promoted [`ConvergencePointType::Transform`] to the gate-compute
+    /// baseline (silently retargeting every unadorned Process's
+    /// topology bucket), or that wired [`ConvergencePointType::Gate`]
+    /// to `is_convergent() = false`, would fail HERE before drifting
+    /// through every unadorned Process's DAG-composition answer.
+    /// FIRST direct-scalar corner peer whose parent-composed
+    /// gate-compute baseline projects `true` — mirror-inverted from
+    /// the two sibling `point_is_endomorphic` /
+    /// `point_is_diffusive` baselines which both project `false`.
+    #[test]
+    fn classification_gate_compute_point_is_convergent_is_true() {
+        let c = Classification::gate_compute();
+        assert!(
+            c.point_is_convergent(),
+            "gate_compute (point_type=Gate → is_convergent=true) baseline",
+        );
+    }
+
+    /// THREE-WAY XOR PARTITION pin — for every
+    /// [`ConvergencePointType`] variant, EXACTLY ONE of
+    /// [`Classification::point_is_endomorphic`],
+    /// [`Classification::point_is_diffusive`], and
+    /// [`Classification::point_is_convergent`] returns `true` on a
+    /// [`Classification`] carrying that variant. Closes the mutex pair
+    /// `classification_point_is_endomorphic_and_point_is_diffusive_are_mutex_over_all`
+    /// into the FULL ternary XOR partition contract sealed on the
+    /// closed set by `convergence_point_type_buckets_cover_every_variant`
+    /// AND now composed through the parent-composed layer as a
+    /// substrate-wide theorem. Ternary lift of the closed-set XOR
+    /// pair `terminates ^ requires_metric_axes` that already composes
+    /// through this corner today — where the `horizon` axis carves
+    /// its closed set into TWO non-empty buckets, the `point_type`
+    /// axis carves into THREE non-empty buckets. A regression that
+    /// crossed the wires between any two of the three parent-composed
+    /// probes (one probe silently composing the wrong closed-set arm)
+    /// fails HERE rather than at every downstream consumer that
+    /// trusts the three probes partition the point-type slot into
+    /// disjoint buckets whose union covers every variant.
+    #[test]
+    fn classification_point_type_probes_form_three_way_xor_partition_over_all() {
+        for populated in ConvergencePointType::ALL {
+            let c = Classification {
+                point_type: populated,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: DataClassification::default(),
+            };
+            let buckets = [
+                c.point_is_endomorphic(),
+                c.point_is_diffusive(),
+                c.point_is_convergent(),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "point_type={populated:?}: probes {buckets:?} — exactly one must be true (three-way XOR partition violated)",
             );
         }
     }

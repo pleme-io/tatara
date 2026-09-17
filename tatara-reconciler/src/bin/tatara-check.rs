@@ -2196,6 +2196,43 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "diffusive-point",
         probe: |s| s.classification.point_is_diffusive(),
     },
+    // `convergent-point` — EIGHTH occupant on the (parent × derived-
+    // nullary-bool) corner and THIRD arm threading the classification-
+    // `point_type` axis. Composes the ONE substrate primitive
+    // [`tatara_process::classification::Classification::point_is_convergent`]
+    // that walks `self.point_type.is_convergent()` — the eight-variant
+    // [`ConvergencePointType`] closed set's N→1 fan-in topology-bucket
+    // partition as a fixed-tag audit surface. Answers the DAG-
+    // composition-facing question "is this Process a convergent fan-in
+    // (N→1 shape) on its dataflow graph?" — `true` on `Join | Gate |
+    // Select | Reduce`, `false` on every other variant. Byte-for-byte
+    // symmetrical with the ephemeral surface's `convergent-point` arm
+    // on [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::point_is_convergent`]
+    // — both surfaces route through the SAME
+    // [`Classification::point_is_convergent`] primitive after the
+    // ephemeral surface pays ONE resolver hop. Byte-for-byte
+    // structural peer of the two sibling `endomorphic-point` /
+    // `diffusive-point` arms above: all three walk the SAME direct
+    // scalar closed-set field (`self.point_type`) whose carrier has
+    // NO `impl Default`, so the gate-compute-baseline answer is a
+    // chosen-field answer through the baseline's `point_type: Gate`
+    // field — but this arm's chosen-field answer INVERTS to `true`
+    // (`Gate.is_convergent() = true`), mirror-image of the two
+    // siblings' `false` baselines. THIRD arm CLOSES the mutex pair
+    // `endomorphic-point ⇒ ¬diffusive-point` into the FULL three-way
+    // XOR partition contract sealed at the closed-set primitive by
+    // `convergence_point_type_buckets_cover_every_variant` and at
+    // the parent-composed level by
+    // `classification_point_type_probes_form_three_way_xor_partition_over_all`
+    // — a substrate-wide theorem composed through the fixed-tag
+    // classifier layer as a ternary lift of the closed-set XOR pair
+    // `terminates ^ requires_metric_axes` that already composes
+    // through this corner today via the two `horizon_*` arms.
+    FixedTagArm {
+        tag: "convergent-point",
+        probe: |s| s.classification.point_is_convergent(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2395,6 +2432,35 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "diffusive-point",
         probe: |s| s.point_is_diffusive(),
+    },
+    // `convergent-point` — byte-for-byte peer of the point surface's
+    // `convergent-point` arm on [`POINT_FIXED_TAG_ARMS`] via
+    // [`Classification::point_is_convergent`] reached through the
+    // ephemeral surface's [`EphemeralSpec::resolved_classification`]
+    // resolver. Answers the same DAG-composition-facing question on
+    // the ephemeral surface — `true` on the absent-`:classification`
+    // default (routes through [`Classification::gate_compute`] →
+    // `point_type = Gate` → `is_convergent() = true`) and on any
+    // operator-authored `Join | Gate | Select | Reduce` classification,
+    // `false` on `Transform | Fork | Broadcast | Observe`. The two-
+    // surface parity contract holds by construction: both surfaces
+    // route through the SAME [`Classification::point_is_convergent`]
+    // primitive after the ephemeral surface pays ONE resolver hop.
+    // Byte-for-byte structural peer of the two sibling
+    // `endomorphic-point` / `diffusive-point` arms on this surface:
+    // all three walk the SAME direct scalar closed-set field
+    // (`self.point_type`) whose carrier has NO `impl Default`, so the
+    // absent-`:classification` answer is a chosen-field answer through
+    // [`Classification::gate_compute`]'s deliberate `point_type: Gate`
+    // field — but this arm's chosen-field answer INVERTS to `true`,
+    // mirror-image of the two siblings' `false` baselines. THIRD
+    // ephemeral-surface arm CLOSES the mutex pair into the FULL
+    // three-way XOR partition contract on the ephemeral surface,
+    // guaranteeing every unadorned `(defephemeral …)` audits under a
+    // definite non-empty topology bucket.
+    FixedTagArm {
+        tag: "convergent-point",
+        probe: |s| s.point_is_convergent(),
     },
 ];
 
@@ -11206,6 +11272,7 @@ mod tests {
                 "data-restricted",
                 "endomorphic-point",
                 "diffusive-point",
+                "convergent-point",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -11226,6 +11293,7 @@ mod tests {
                 "data-restricted",
                 "endomorphic-point",
                 "diffusive-point",
+                "convergent-point",
             ],
         );
     }
@@ -16973,6 +17041,227 @@ mod tests {
             assert!(
                 !(endo == Ok(true) && diff == Ok(true)),
                 "ephemeral point_type={populated:?}: endomorphic-point AND diffusive-point both Ok(true) (mutex violated)",
+            );
+        }
+    }
+
+    // ── convergent-point fixed tag substrate pins ────────────────────
+    //
+    // Fail-before-pass-after granularity: the `convergent-point` fixed
+    // tag did not exist before this commit — the (parent × derived-
+    // nullary-bool) corner of the fixed-tag algebra carried seven
+    // peers across FOUR closed-set axes (horizon × 2, calm × 1,
+    // data × 2, point-type × 2). This lift opens the EIGHTH occupant
+    // on the corner (THIRD on the `point_type` axis) via ONE substrate
+    // primitive
+    // [`tatara_process::classification::Classification::point_is_convergent`].
+    // THIRD arm CLOSES the mutex pair
+    // `endomorphic-point ⇒ ¬diffusive-point` into the FULL three-way
+    // XOR partition contract at the classifier layer — a substrate-
+    // wide theorem composed through the fixed-tag surface.
+
+    /// POINT SURFACE per-variant pin — for every
+    /// [`ConvergencePointType`] variant, a [`ProcessSpec`] whose
+    /// `classification.point_type` field carries that variant answers
+    /// the `convergent-point` fixed tag matching the closed set's own
+    /// [`ConvergencePointType::is_convergent`] truth table. Sweep
+    /// [`ConvergencePointType::ALL`] so a regression that probed a
+    /// fixed variant, inverted the projection, or crossed the wires
+    /// with a sibling closed-set projection fails HERE at the
+    /// classifier before landing at the operator-facing surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_point_is_convergent_projection_per_point_kind() {
+        for populated in ConvergencePointType::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.point_type = populated;
+            assert_eq!(
+                evaluate_point_require_tag(&spec, "convergent-point"),
+                Ok(populated.is_convergent()),
+                "point point_type={populated:?}: convergent-point drift from ConvergencePointType::is_convergent()",
+            );
+        }
+    }
+
+    /// POINT SURFACE DEFAULT-ARM CHOSEN-FIELD pin — a Process built
+    /// through [`ProcessSpec::gate_compute_defaults`] (which carries
+    /// `point_type: ConvergencePointType::Gate` deliberately — NOT
+    /// via `#[default]` because [`ConvergencePointType`] has no
+    /// `impl Default`) answers `Ok(true)` on `convergent-point`
+    /// WITHOUT the operator naming the point-type axis (Gate is the
+    /// canonical convergent barrier). Pins the chosen-field baseline
+    /// at ONE narrow classifier site — FIRST fixed-tag arm on the
+    /// `point_type` axis whose gate-compute-defaults baseline projects
+    /// `Ok(true)`, mirror-inverted from the two sibling
+    /// `endomorphic-point` / `diffusive-point` arms which both
+    /// project `Ok(false)`.
+    #[test]
+    fn evaluate_point_require_tag_returns_true_on_default_convergent_point() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "convergent-point"),
+            Ok(true),
+            "default (point_type=Gate → is_convergent=true) baseline",
+        );
+    }
+
+    /// EPHEMERAL SURFACE per-variant pin — for every
+    /// [`ConvergencePointType`] variant, an [`EphemeralSpec`] whose
+    /// authored [`Classification`] carries that variant answers the
+    /// `convergent-point` fixed tag matching the closed set's own
+    /// [`ConvergencePointType::is_convergent`] truth table. Byte-for-
+    /// byte peer of the point-surface per-variant pin above via the
+    /// SAME [`Classification::point_is_convergent`] primitive reached
+    /// through the ephemeral surface's `resolved_classification()`
+    /// resolver.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_point_is_convergent_projection_per_point_kind() {
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let spec = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, "convergent-point"),
+                Ok(populated.is_convergent()),
+                "ephemeral point_type={populated:?}: convergent-point drift",
+            );
+        }
+    }
+
+    /// EPHEMERAL SURFACE ABSENT-CLASSIFICATION CHOSEN-FIELD pin — an
+    /// [`EphemeralSpec`] whose `classification` slot is `None` routes
+    /// through the resolver's substrate default
+    /// [`Classification::gate_compute`] (whose `point_type` is
+    /// deliberately [`ConvergencePointType::Gate`] →
+    /// `is_convergent() = true`), so the `convergent-point` fixed tag
+    /// answers `Ok(true)` WITHOUT the operator naming the
+    /// classification axis on `(defephemeral …)`. Guarantees every
+    /// unadorned `(defephemeral …)` audits under a definite non-empty
+    /// topology bucket — the convergent bucket, mirror-inverted from
+    /// the two sibling ephemeral-surface `endomorphic-point` /
+    /// `diffusive-point` arms which both project `Ok(false)`.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_true_on_absent_classification_for_convergent_point() {
+        let spec = ephemeral_fixture();
+        assert!(spec.classification.is_none());
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "convergent-point"),
+            Ok(true),
+            "absent classification (defaults to gate_compute, point_type=Gate → is_convergent=true)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME classification (across
+    /// (`None`, `Some(_)` on every [`ConvergencePointType::ALL`]
+    /// variant)) classifies IDENTICALLY through the point-surface
+    /// `convergent-point` fixed tag AND the ephemeral-surface
+    /// `convergent-point` fixed tag when the ephemeral spec is
+    /// mechanically lowered to a [`ProcessSpec`] via `From`. Byte-
+    /// for-byte peer of
+    /// `evaluate_diffusive_point_matches_across_surfaces_through_lowered_ephemeral`
+    /// on the SAME closed-set axis (`point_type`) via a sibling
+    /// projection.
+    #[test]
+    fn evaluate_convergent_point_matches_across_surfaces_through_lowered_ephemeral() {
+        // Absent classification.
+        let eph = ephemeral_fixture();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&eph, "convergent-point"),
+            evaluate_point_require_tag(&lowered, "convergent-point"),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let eph = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph, "convergent-point"),
+                evaluate_point_require_tag(&lowered, "convergent-point"),
+                "authored point_type={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// POINT-SURFACE THREE-WAY XOR pin — for every
+    /// [`ConvergencePointType`] variant, EXACTLY ONE of the three
+    /// `endomorphic-point` / `diffusive-point` / `convergent-point`
+    /// fixed tags answers `Ok(true)`. Closes the mutex pair pinned
+    /// by `evaluate_endomorphic_point_and_diffusive_point_are_mutex_over_all_point_variants`
+    /// into the FULL ternary XOR partition contract at the classifier
+    /// layer — the fixed-tag peer of the parent-composed
+    /// `classification_point_type_probes_form_three_way_xor_partition_over_all`
+    /// substrate pin. Any operator-facing
+    /// `:requires (endomorphic-point diffusive-point convergent-point)`
+    /// audit trusts the three tags partition the point-type slot
+    /// into disjoint buckets whose union covers every variant — a
+    /// regression that crossed the wires between two arms fails HERE
+    /// before drifting into that audit.
+    #[test]
+    fn evaluate_point_type_fixed_tags_form_three_way_xor_partition_over_all_point_variants() {
+        for populated in ConvergencePointType::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.point_type = populated;
+            let buckets = [
+                evaluate_point_require_tag(&spec, "endomorphic-point"),
+                evaluate_point_require_tag(&spec, "diffusive-point"),
+                evaluate_point_require_tag(&spec, "convergent-point"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "point point_type={populated:?}: {buckets:?} — exactly one must be Ok(true) (three-way XOR partition violated)",
+            );
+        }
+    }
+
+    /// EPHEMERAL-SURFACE THREE-WAY XOR pin — the resolver-hop peer of
+    /// the point-surface three-way XOR pin above via the ephemeral
+    /// surface's `resolved_classification()` resolver. Sweeps the
+    /// absent-classification case (guaranteed to land in the
+    /// convergent bucket via `Gate.is_convergent() = true`) plus
+    /// every [`ConvergencePointType::ALL`] variant so a regression on
+    /// either arm of the resolver-hop fixed-tag classifier fails
+    /// HERE. Closes the ternary XOR partition contract on the
+    /// ephemeral surface at the classifier layer.
+    #[test]
+    fn evaluate_point_type_fixed_tags_form_three_way_xor_partition_over_all_ephemeral_variants() {
+        // Absent classification.
+        let eph = ephemeral_fixture();
+        let buckets = [
+            evaluate_ephemeral_require_tag(&eph, "endomorphic-point"),
+            evaluate_ephemeral_require_tag(&eph, "diffusive-point"),
+            evaluate_ephemeral_require_tag(&eph, "convergent-point"),
+        ];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: {buckets:?} — exactly one must be Ok(true) (three-way XOR partition violated)",
+        );
+        // Authored classification.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let eph = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let buckets = [
+                evaluate_ephemeral_require_tag(&eph, "endomorphic-point"),
+                evaluate_ephemeral_require_tag(&eph, "diffusive-point"),
+                evaluate_ephemeral_require_tag(&eph, "convergent-point"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "ephemeral point_type={populated:?}: {buckets:?} — exactly one must be Ok(true) (three-way XOR partition violated)",
             );
         }
     }

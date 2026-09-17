@@ -2056,6 +2056,36 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "coordination-required",
         probe: |s| s.classification.calm_requires_coordination(),
     },
+    // `data-regulated` — FOURTH occupant on the (parent × derived-
+    // nullary-bool) corner of the workspace-wide fixed-tag algebra
+    // after the two `horizon.*` and one `coordination-required` arms
+    // opened + populated the corner; FIRST occupant threading the
+    // classification-data axis rather than the horizon or calm axes.
+    // Composes the ONE substrate primitive
+    // [`Classification::data_is_regulated`] that walks
+    // `self.data_classification.is_regulated()` — the six-variant
+    // [`DataClassification`] closed set's regulatory-regime bucket
+    // partition as a fixed-tag audit surface. Answers the compliance-
+    // baseline-facing question "does this Process carry data subject
+    // to external regulatory regime (HIPAA / PCI-DSS / GDPR-style
+    // data-subject controls)?" — `false` on the `Internal` default
+    // (access-controlled but unregulated) and on `Public` /
+    // `Confidential`, `true` on `Pii` / `Phi` / `Pci`. Byte-for-byte
+    // symmetrical with the ephemeral surface's `data-regulated` arm
+    // on [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::data_is_regulated`]
+    // — both surfaces route through the SAME
+    // [`Classification::data_is_regulated`] primitive after the
+    // ephemeral surface pays ONE resolver hop. Structural byte-for-
+    // byte peer of the sibling `coordination-required` arm on the
+    // corner: both walk a DIRECT scalar closed-set field's derived
+    // projection with TWO layers of `Default` short-circuit
+    // (distinct from the two `horizon_*` arms which walk a nested-
+    // struct projection with THREE layers of `Default`).
+    FixedTagArm {
+        tag: "data-regulated",
+        probe: |s| s.classification.data_is_regulated(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2153,6 +2183,29 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "coordination-required",
         probe: |s| s.calm_requires_coordination(),
+    },
+    // `data-regulated` — byte-for-byte peer of the point surface's
+    // `data-regulated` arm on [`POINT_FIXED_TAG_ARMS`] via
+    // [`Classification::data_is_regulated`] reached through the
+    // ephemeral surface's [`EphemeralSpec::resolved_classification`]
+    // resolver. Answers the same compliance-baseline-facing question
+    // on the ephemeral surface — `false` on the absent-`:classification`
+    // default (routes through [`Classification::gate_compute`] →
+    // [`DataClassification::default = Internal`] → `is_regulated() =
+    // false`) and on any operator-authored
+    // `Public | Internal | Confidential` classification, `true` on
+    // `Pii | Phi | Pci`. The two-surface parity contract holds by
+    // construction: both surfaces route through the SAME
+    // [`Classification::data_is_regulated`] primitive after the
+    // ephemeral surface pays ONE resolver hop. Byte-for-byte
+    // structural peer of the sibling `coordination-required` arm on
+    // this surface: both walk a DIRECT scalar closed-set field's
+    // derived projection with TWO layers of `Default` short-circuit
+    // (distinct from the two `horizon_*` arms which walk a nested-
+    // struct projection with THREE layers of `Default`).
+    FixedTagArm {
+        tag: "data-regulated",
+        probe: |s| s.data_is_regulated(),
     },
 ];
 
@@ -10960,6 +11013,7 @@ mod tests {
                 "terminating-horizon",
                 "metric-axes-required",
                 "coordination-required",
+                "data-regulated",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -10976,6 +11030,7 @@ mod tests {
                 "terminating-horizon",
                 "metric-axes-required",
                 "coordination-required",
+                "data-regulated",
             ],
         );
     }
@@ -15986,6 +16041,193 @@ mod tests {
             evaluate_point_require_tag(&spec, "calm-Monotone"),
             Ok(false),
             "NonMonotone-calm Process must fail the mismatched `calm-Monotone` prefix tag",
+        );
+    }
+
+    // ── data-regulated fixed tag substrate pins ──────────────────────
+    //
+    // Fail-before-pass-after granularity: the `data-regulated` fixed
+    // tag did not exist before this commit — the (parent × derived-
+    // nullary-bool) corner of the fixed-tag algebra carried three
+    // peers (`terminating-horizon`, `metric-axes-required`,
+    // `coordination-required`) across two axes. This lift opens the
+    // FOURTH occupant on the corner and the FIRST threading the
+    // classification-data axis via ONE substrate primitive
+    // [`tatara_process::classification::Classification::data_is_regulated`].
+    // Every test below binds through the SAME substrate primitive so
+    // a regression that (a) hard-coded either surface's arm to a
+    // fixed answer, (b) inverted the projection, (c) dropped the
+    // ephemeral surface's resolver hop, or (d) drifted the two-
+    // surface parity contract fails HERE at ONE narrow classifier
+    // site per pin before landing at the operator-facing checks.lisp
+    // surface.
+
+    /// POINT SURFACE per-variant pin — for every
+    /// [`DataClassification`] variant, a [`ProcessSpec`] whose
+    /// `classification.data_classification` field carries that variant
+    /// answers the `data-regulated` fixed tag matching the closed
+    /// set's own [`DataClassification::is_regulated`] truth table.
+    /// Sweep [`DataClassification::ALL`] so a regression that probed
+    /// a fixed variant, inverted the projection, or crossed the wires
+    /// with the sibling [`DataClassification::is_restricted`]
+    /// projection (which disagrees on `Internal | Confidential`)
+    /// fails HERE at the classifier before landing at the operator-
+    /// facing surface.
+    #[test]
+    fn evaluate_point_require_tag_returns_data_is_regulated_projection_per_data_kind() {
+        for populated in DataClassification::ALL {
+            let mut spec = ProcessSpec::gate_compute_defaults();
+            spec.classification.data_classification = populated;
+            assert_eq!(
+                evaluate_point_require_tag(&spec, "data-regulated"),
+                Ok(populated.is_regulated()),
+                "point data_classification={populated:?}: data-regulated drift from DataClassification::is_regulated()",
+            );
+        }
+    }
+
+    /// POINT SURFACE DEFAULT-ARM SHORT-CIRCUIT pin — a Process built
+    /// through [`ProcessSpec::gate_compute_defaults`] (which carries
+    /// `data_classification: DataClassification::default()` =
+    /// `Internal` via `#[default]`) answers `Ok(false)` on
+    /// `data-regulated` WITHOUT the operator naming the data axis.
+    /// Pins the default-arm short-circuit through ONE layer of
+    /// `Default` (`DataClassification`'s) at ONE narrow classifier
+    /// site — a regression that promoted [`DataClassification::Pii`]
+    /// (or any other regulated variant) to `#[default]`, or that
+    /// wired the fixed tag's probe to a fixed positive answer, would
+    /// fail HERE before drifting through every unadorned Process's
+    /// compliance-baseline check.
+    #[test]
+    fn evaluate_point_require_tag_returns_false_on_default_data_regulated() {
+        let spec = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "data-regulated"),
+            Ok(false),
+            "default (data_classification=Internal → is_regulated=false) baseline",
+        );
+    }
+
+    /// EPHEMERAL SURFACE per-variant pin — for every
+    /// [`DataClassification`] variant, an [`EphemeralSpec`] whose
+    /// authored [`Classification`] carries that variant answers the
+    /// `data-regulated` fixed tag matching the closed set's own
+    /// [`DataClassification::is_regulated`] truth table. Byte-for-
+    /// byte peer of the point-surface per-variant pin above via the
+    /// SAME [`Classification::data_is_regulated`] primitive reached
+    /// through the ephemeral surface's `resolved_classification()`
+    /// resolver.
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_data_is_regulated_projection_per_data_kind() {
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let spec = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&spec, "data-regulated"),
+                Ok(populated.is_regulated()),
+                "ephemeral data_classification={populated:?}: data-regulated drift",
+            );
+        }
+    }
+
+    /// EPHEMERAL SURFACE ABSENT-CLASSIFICATION SHORT-CIRCUIT pin —
+    /// an [`EphemeralSpec`] whose `classification` slot is `None`
+    /// routes through the resolver's substrate default
+    /// [`Classification::gate_compute`] (whose data_classification
+    /// defaults to [`DataClassification::Internal`] →
+    /// `is_regulated() = false`), so the `data-regulated` fixed tag
+    /// answers `Ok(false)` WITHOUT the operator naming the
+    /// classification axis on `(defephemeral …)`. Pins the default-
+    /// arm short-circuit through TWO layers of `Default` at ONE
+    /// narrow classifier site — byte-for-byte structural peer of the
+    /// sibling `coordination-required` ephemeral absent-classification
+    /// pin on the classification-data axis, distinct from the two
+    /// `horizon_*` ephemeral absent-classification pins by ONE
+    /// structural degree (those walk THREE layers because horizon
+    /// has a nested-struct wrapper; this walks TWO because
+    /// `data_classification` is a direct scalar).
+    #[test]
+    fn evaluate_ephemeral_require_tag_returns_false_on_absent_classification_for_data_regulated() {
+        let spec = ephemeral_fixture();
+        assert!(spec.classification.is_none());
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&spec, "data-regulated"),
+            Ok(false),
+            "absent classification (defaults to gate_compute, data_classification=Internal → is_regulated=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME classification (across
+    /// (`None`, `Some(_)` on every [`DataClassification::ALL`] variant))
+    /// classifies IDENTICALLY through the point-surface
+    /// `data-regulated` fixed tag AND the ephemeral-surface
+    /// `data-regulated` fixed tag when the ephemeral spec is
+    /// mechanically lowered to a [`ProcessSpec`] via `From`. Byte-
+    /// for-byte peer of
+    /// `evaluate_coordination_required_matches_across_surfaces_through_lowered_ephemeral`
+    /// on the classification-data axis.
+    #[test]
+    fn evaluate_data_regulated_matches_across_surfaces_through_lowered_ephemeral() {
+        // Absent classification.
+        let eph = ephemeral_fixture();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            evaluate_ephemeral_require_tag(&eph, "data-regulated"),
+            evaluate_point_require_tag(&lowered, "data-regulated"),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let eph = EphemeralSpec {
+                classification: Some(classification),
+                ..ephemeral_fixture()
+            };
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph, "data-regulated"),
+                evaluate_point_require_tag(&lowered, "data-regulated"),
+                "authored data_classification={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// COARSE / FINE COEXISTENCE pin — a Process with
+    /// `classification.data_classification = Pii` MUST answer
+    /// `Ok(true)` on the `data-regulated` fixed tag AND
+    /// simultaneously satisfy the fine `data-classification-Pii`
+    /// closed-set prefix tag. Locks the semantic split between the
+    /// coarse nullary boolean and the fine variant-equality tag at
+    /// ONE narrow site — a regression that collapsed `data-regulated`
+    /// to always match `data-classification-Internal` (or vice versa,
+    /// silently answering the classifier's fine-variant question
+    /// through the coarse derived-boolean predicate) fails HERE. Peer
+    /// of
+    /// `evaluate_point_require_tag_coordination_required_and_calm_nonmonotone_coexist`
+    /// on the classification-data axis.
+    #[test]
+    fn evaluate_point_require_tag_data_regulated_and_data_classification_pii_coexist() {
+        let mut spec = ProcessSpec::gate_compute_defaults();
+        spec.classification.data_classification = DataClassification::Pii;
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "data-regulated"),
+            Ok(true),
+            "Pii-data Process must satisfy the coarse `data-regulated` fixed tag",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "data-classification-Pii"),
+            Ok(true),
+            "Pii-data Process must satisfy the fine `data-classification-Pii` prefix tag",
+        );
+        assert_eq!(
+            evaluate_point_require_tag(&spec, "data-classification-Internal"),
+            Ok(false),
+            "Pii-data Process must fail the mismatched `data-classification-Internal` prefix tag",
         );
     }
 

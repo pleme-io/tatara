@@ -1358,6 +1358,100 @@ impl EphemeralSpec {
         self.resolved_classification().calm_requires_coordination()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s [`crate::classification::DataClassification`]
+    /// project to `true` under
+    /// [`crate::classification::DataClassification::is_regulated`]?
+    /// Byte-for-byte peer of
+    /// [`Classification::data_is_regulated`] wrapped through the
+    /// [`Self::resolved_classification`] resolver so an operator-
+    /// omitted `:classification` slot on `(defephemeral …)` still
+    /// answers via the substrate default. The ONE ephemeral-surface
+    /// substrate primitive that owns the `(&EphemeralSpec) -> bool`
+    /// derived-nullary-boolean walk on the regulated-data question
+    /// over the classification-data axis.
+    ///
+    /// # Fourth derived-nullary-boolean peer on the ephemeral surface
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`], and
+    /// [`Self::calm_requires_coordination`] on the ephemeral surface's
+    /// (resolver-hop × derived-nullary-bool) shape — the FIRST peer
+    /// threading the classification-data axis rather than the horizon
+    /// or calm axes. Structural byte-for-byte peer of
+    /// [`Self::calm_requires_coordination`]: both walk a DIRECT scalar
+    /// closed-set field's derived projection on the resolved
+    /// [`Classification`] (`.calm.requires_coordination()` /
+    /// `.data_classification.is_regulated()`) — TWO layers of
+    /// `Default` short-circuit ([`Classification::gate_compute`] →
+    /// the direct scalar child's `#[default]`) — distinct from the
+    /// two `horizon_*` peers which walk a NESTED-STRUCT projection
+    /// (`.horizon.kind`) with THREE layers of `Default`. The resolver-
+    /// hop shape is byte-identical across all four peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `data_is_regulated()` returns `true` iff
+    /// `self.resolved_classification().data_is_regulated()`. The
+    /// resolver returns the authored [`Classification`] when present
+    /// and the substrate default [`Classification::gate_compute`] on
+    /// absence. Because [`Classification::gate_compute`] carries
+    /// [`crate::classification::DataClassification::default = Internal`],
+    /// a bare ephemeral spec with no `:classification` slot answers
+    /// `false` — the default-arm short-circuit propagates through TWO
+    /// layers of `Default` ([`Classification::gate_compute`] →
+    /// [`crate::classification::DataClassification::default`]) to
+    /// this predicate's answer, mirror-image of
+    /// [`Self::calm_requires_coordination`]'s Monotone-default
+    /// short-circuit through the same structural depth. Distinct
+    /// from the two `horizon_*` peers on this surface which short-
+    /// circuit through THREE layers of `Default` because the horizon
+    /// axis has a nested-struct wrapper. A regression that dropped
+    /// the resolver hop, probed [`Classification::has_data_classification`]
+    /// directly (dropping the `.is_regulated()` projection), or
+    /// inverted the projection (silently promoting the Internal
+    /// baseline to "regulated") fails HERE at ONE narrow substrate
+    /// site before drifting through every unadorned ephemeral spec's
+    /// baseline regulatory-regime answer.
+    ///
+    /// # Compounding
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `data-regulated` on `EPHEMERAL_FIXED_TAG_ARMS`
+    /// — byte-for-byte peer of the point surface's `data-regulated`
+    /// fixed tag on `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::data_is_regulated`] directly. The two-
+    /// surface parity contract holds by construction: both surfaces
+    /// route through the SAME
+    /// [`Classification::data_is_regulated`] primitive after the
+    /// ephemeral surface pays ONE resolver hop — a future
+    /// [`crate::classification::DataClassification`] variant or a
+    /// future normalization at the substrate primitive lands at ONE
+    /// site and both surfaces' `data-regulated` fixed tags inherit
+    /// the shift mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-data-axis derived-nullary-
+    /// boolean probe body composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::data_is_regulated`]) so every downstream
+    /// (`data-regulated` fixed tags on both surfaces in tatara-check,
+    /// future compliance-baseline / regulatory-regime validators,
+    /// future variant additions on
+    /// [`crate::classification::DataClassification`]) binds through
+    /// the SAME `data_is_regulated()` shape rather than restating
+    /// either the resolver walk or the closed-set projection
+    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// over composition; a future
+    /// [`crate::classification::DataClassification`] variant lands
+    /// at ONE `ALL` entry + ONE `is_regulated` arm on the closed set
+    /// and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn data_is_regulated(&self) -> bool {
+        self.resolved_classification().data_is_regulated()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -3655,6 +3749,116 @@ mod tests {
                 eph.calm_requires_coordination(),
                 lowered.classification.calm_requires_coordination(),
                 "authored calm={populated:?}: parity drift",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::data_is_regulated pins ────────────────────────
+    //
+    // Fail-before-pass-after granularity: `data_is_regulated` did not
+    // exist pre-lift on `impl EphemeralSpec` — every consumer walking
+    // the "does this ephemeral spec carry regulated data?" question
+    // went through
+    // `.resolved_classification().data_classification.is_regulated()`
+    // or through the lowered `ProcessSpec`'s
+    // `spec.classification.data_classification.is_regulated()`. Post-
+    // lift the FOURTH derived-nullary-boolean peer on the ephemeral
+    // surface (first on the data axis, after two horizon-axis peers
+    // and one calm-axis peer) routes through the SAME
+    // [`Self::resolved_classification`] resolver + the sibling
+    // substrate primitive
+    // [`crate::classification::Classification::data_is_regulated`],
+    // so the two-surface parity contract holds by construction — a
+    // regression on either side of the resolver fails at these pins
+    // before landing at the operator-facing `data-regulated` fixed
+    // tag in `tatara-check`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific [`DataClassification`]
+    /// variant answers [`Self::data_is_regulated`] matching the
+    /// closed set's own [`DataClassification::is_regulated`] truth
+    /// table. Sweep [`DataClassification::ALL`] so a regression that
+    /// (a) hard-coded the body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with a sibling
+    /// classification-axis probe fails HERE at the substrate
+    /// primitive before drifting through the `data-regulated` fixed
+    /// tag or the peer point surface.
+    #[test]
+    fn data_is_regulated_returns_data_classification_projection_per_kind() {
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.data_is_regulated(),
+                populated.is_regulated(),
+                "authored data_classification={populated:?}: data_is_regulated() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries
+    /// [`DataClassification::default = Internal`], and
+    /// [`DataClassification::Internal::is_regulated`] projects
+    /// `false`, so [`Self::data_is_regulated`] returns `false`. Pins
+    /// the default-arm short-circuit through TWO layers of `Default`
+    /// ([`Classification::gate_compute`] →
+    /// [`DataClassification::default`]) reaching this derived-nullary
+    /// predicate — byte-for-byte structural peer of the sibling
+    /// `calm_requires_coordination_probes_false_on_absent_classification`
+    /// on the classification-data axis, distinct from the two
+    /// `horizon_*` absent-classification pins by ONE structural
+    /// degree (those walk THREE layers because horizon has a nested-
+    /// struct wrapper; this walks TWO because `data_classification`
+    /// is a direct scalar). A regression that dropped the resolver
+    /// hop (silently answering `true` on an absent classification,
+    /// as if the operator's absence meant "regulated data") fails
+    /// HERE at ONE narrow ephemeral-surface site.
+    #[test]
+    fn data_is_regulated_probes_false_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            !spec.data_is_regulated(),
+            "absent classification (defaults to gate_compute, data_classification=Internal → is_regulated=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::data_is_regulated`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.data_is_regulated()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`DataClassification::ALL`] variant) so a future regression on
+    /// either side of the resolver fails HERE at the parity boundary.
+    /// Byte-for-byte peer of the sibling
+    /// `calm_requires_coordination_matches_point_peer_through_lowered_classification`
+    /// on the data axis.
+    #[test]
+    fn data_is_regulated_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.data_is_regulated(),
+            lowered.classification.data_is_regulated(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.data_is_regulated(),
+                lowered.classification.data_is_regulated(),
+                "authored data_classification={populated:?}: parity drift",
             );
         }
     }

@@ -1164,6 +1164,119 @@ impl Classification {
     pub fn calm_requires_coordination(&self) -> bool {
         self.calm.requires_coordination()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`] carry a
+    /// [`DataClassification`] whose variant projects to `true` under
+    /// [`DataClassification::is_regulated`]? The ONE substrate primitive
+    /// that owns the `(Classification) -> bool` derived-nullary-
+    /// predicate walk shape on the `data_classification` slot for the
+    /// regulated-data question.
+    ///
+    /// # Fourth occupant on the (parent × derived-nullary-bool) corner
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`], and
+    /// [`Self::calm_requires_coordination`] on the workspace-wide
+    /// (parent × derived-nullary-bool) corner of the closed-set-driven
+    /// presence-probe algebra — the FIRST occupant threading the
+    /// classification-data axis rather than the horizon or calm
+    /// sub-axes. Populates the corner across THREE distinct closed-set
+    /// axes (`HorizonKind`, `CalmClassification`, `DataClassification`)
+    /// rather than two — pinning the corner as a proven-repeatable
+    /// primitive shape across the substrate's three classification-
+    /// axis closed sets that publish a `#[default]` variant, not a
+    /// single-axis or two-axis curiosity. Byte-for-byte structural
+    /// peer of [`Self::calm_requires_coordination`]: both walk a
+    /// DIRECT scalar closed-set field (`self.calm` /
+    /// `self.data_classification`) on the [`Classification`] parent —
+    /// TWO layers of `Default` short-circuit (`Classification::gate_compute`
+    /// → the direct scalar child's `#[default]`) — distinct from the
+    /// two `horizon_*` peers which walk a NESTED-STRUCT projection
+    /// (`self.horizon.kind`) with THREE layers of `Default`
+    /// (`Classification::gate_compute` → `Horizon::default` →
+    /// `HorizonKind::default`). SECOND direct-scalar peer on the
+    /// corner: `calm_requires_coordination` opened the direct-scalar
+    /// variant, this method populates it, pinning "direct-scalar
+    /// derived-nullary-bool" as a proven-repeatable structural
+    /// sub-corner rather than a single-example curiosity.
+    ///
+    /// # Semantics — derived nullary boolean, not variant equality
+    ///
+    /// `data_is_regulated()` returns `true` iff
+    /// `self.data_classification.is_regulated()`. The six-variant
+    /// [`DataClassification`] closed set publishes the truth table:
+    /// [`DataClassification::Public`] / [`DataClassification::Internal`]
+    /// / [`DataClassification::Confidential`] → `false` (not subject
+    /// to external regulatory regime); [`DataClassification::Pii`] /
+    /// [`DataClassification::Phi`] / [`DataClassification::Pci`] →
+    /// `true` (HIPAA / PCI-DSS / GDPR-style data-subject controls
+    /// apply). A [`Classification::gate_compute`] baseline (which
+    /// uses [`DataClassification::default = Internal`] via
+    /// `#[default]`) answers `false` — the substrate's default-arm
+    /// short-circuit propagates through the scalar closed-set field's
+    /// own [`Default`] impl to this predicate's answer, mirror image
+    /// of [`Self::calm_requires_coordination`]'s Monotone-default
+    /// short-circuit through the same structural depth.
+    ///
+    /// The closed-set-internal pin
+    /// `data_classification_regulated_implies_restricted` seals the
+    /// implication `is_regulated() ⇒ is_restricted()` on every
+    /// variant, so a `true` answer here implies the sibling
+    /// (`data_is_restricted`, when it lands) also answers `true`;
+    /// the reverse does not hold (`Internal | Confidential` are
+    /// restricted but not regulated).
+    ///
+    /// A future seventh [`DataClassification`] variant (a hypothetical
+    /// `TradeSecret` bucket for competitive-sensitive data, or an
+    /// `Anonymized` bucket for pseudonymized-PII whose regulatory
+    /// posture differs from raw PII) reaches this probe through ONE
+    /// `is_regulated` arm on the closed set with the probe body
+    /// untouched — the nullary-predicate shape defers every per-
+    /// variant policy decision to the closed set's own truth table
+    /// ([`DataClassification::is_regulated`]) rather than duplicating
+    /// the discriminator sweep here.
+    ///
+    /// # Compounding
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `data-regulated` on `POINT_FIXED_TAG_ARMS` —
+    /// byte-for-byte peer of the sibling `terminating-horizon`,
+    /// `metric-axes-required`, and `coordination-required` fixed tags
+    /// on the (parent × derived-nullary-bool) corner. The ephemeral
+    /// surface publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::data_is_regulated`], which
+    /// composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (data-regulated)` audit answers the same question
+    /// on both surfaces.
+    ///
+    /// Future compliance-baseline auto-selectors dispatching on the
+    /// `(is_regulated, is_restricted)` two-axis projection
+    /// (documented on [`DataClassification::is_regulated`] itself)
+    /// read THIS predicate rather than re-deriving from the variant
+    /// name at each callsite — the classification-data-axis lattice-
+    /// typed image of the regulated-data question lives at ONE
+    /// substrate site and every compliance-mode chooser downstream
+    /// binds through the SAME `data_is_regulated()` shape.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `data-regulated` fixed tag in `tatara-check`, future
+    /// compliance-baseline / regulatory-regime validators, future
+    /// variant additions on [`DataClassification`]) binds through
+    /// the SAME `data_is_regulated()` shape rather than restating the
+    /// `classification.data_classification.is_regulated()` chain at
+    /// each callsite. THEORY.md §VI.1 — generation over composition;
+    /// a future [`DataClassification`] variant lands at ONE `ALL`
+    /// entry + ONE `is_regulated` arm on the closed set and this
+    /// probe picks it up mechanically.
+    #[must_use]
+    pub fn data_is_regulated(&self) -> bool {
+        self.data_classification.is_regulated()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -5146,6 +5259,90 @@ mod tests {
         assert!(
             !c.calm_requires_coordination(),
             "gate_compute (calm=Monotone → requires_coordination=false) baseline",
+        );
+    }
+
+    // ── Classification::data_is_regulated substrate pins ─────────────
+    //
+    // Fail-before-pass-after granularity: [`Classification::data_is_regulated`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the scalar [`DataClassification`]
+    // slot's [`DataClassification::is_regulated`] projection had no
+    // substrate owner. Post-lift the shape lives at ONE substrate
+    // primitive and every downstream (the `data-regulated` fixed tag
+    // in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::data_is_regulated`] peer,
+    // future compliance-baseline / regulatory-regime validators)
+    // composes against the SAME `data_is_regulated()` shape rather
+    // than restating the
+    // `classification.data_classification.is_regulated()` chain at
+    // its own callsite. FOURTH occupant of the (parent × derived-
+    // nullary-bool) corner across THREE closed-set axes
+    // (`HorizonKind`, `CalmClassification`, `DataClassification`),
+    // pinning the corner as a proven-repeatable primitive shape
+    // across the substrate's three defaulted-child classification-
+    // axis closed sets rather than a two-axis curiosity. SECOND
+    // direct-scalar peer on the corner after
+    // [`Self::calm_requires_coordination`] opened the direct-scalar
+    // sub-corner variant.
+
+    /// PER-VARIANT pin — for every [`DataClassification`] variant, a
+    /// [`Classification`] whose `data_classification` field carries
+    /// that variant returns `data_is_regulated()` matching the closed
+    /// set's own [`DataClassification::is_regulated`] truth table.
+    /// Sweep [`DataClassification::ALL`] so a regression that (a)
+    /// hard-coded the method body to a fixed answer (silently
+    /// stamping every Process as regulated, silently forcing
+    /// compliance-baseline overlays that only apply to PII/PHI/PCI
+    /// onto every unadorned Process), (b) inverted the projection
+    /// (silently downgrading regulated Pii/Phi/Pci to unregulated),
+    /// or (c) crossed the wires with the sibling
+    /// [`DataClassification::is_restricted`] projection (which
+    /// disagrees on the two `Internal | Confidential` variants) fails
+    /// HERE at the substrate primitive before drifting through the
+    /// `data-regulated` fixed tag or the peer ephemeral surface.
+    #[test]
+    fn classification_data_is_regulated_matches_data_classification_projection() {
+        for populated in DataClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: populated,
+            };
+            assert_eq!(
+                c.data_is_regulated(),
+                populated.is_regulated(),
+                "data_classification={populated:?}: data_is_regulated() drift from DataClassification::is_regulated()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `data_classification: DataClassification::default()` which
+    /// defaults to [`DataClassification::Internal`] via `#[default]`,
+    /// and [`DataClassification::Internal::is_regulated`] projects
+    /// `false`, so `data_is_regulated()` returns `false`. Pins the
+    /// default-arm short-circuit through ONE layer of `Default`
+    /// (`DataClassification`'s) at ONE narrow site — a regression
+    /// that promoted [`DataClassification::Pii`] (or any other
+    /// regulated variant) to `#[default]`, or that wired
+    /// [`DataClassification::Internal`] to `is_regulated() = true`,
+    /// would fail HERE before drifting through every unadorned
+    /// Process's compliance-baseline answer. Byte-for-byte
+    /// structural peer of the sibling
+    /// `classification_gate_compute_calm_requires_coordination_is_false`
+    /// on the classification-data axis — same ONE-layer-of-Default
+    /// short-circuit shape distinct from the two horizon-axis
+    /// baselines which walk TWO layers of `Default`.
+    #[test]
+    fn classification_gate_compute_data_is_regulated_is_false() {
+        let c = Classification::gate_compute();
+        assert!(
+            !c.data_is_regulated(),
+            "gate_compute (data_classification=Internal → is_regulated=false) baseline",
         );
     }
 }

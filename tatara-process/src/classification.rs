@@ -1277,6 +1277,128 @@ impl Classification {
     pub fn data_is_regulated(&self) -> bool {
         self.data_classification.is_regulated()
     }
+
+    /// Derived-boolean predicate — does this [`Classification`] carry a
+    /// [`DataClassification`] whose variant projects to `true` under
+    /// [`DataClassification::is_restricted`]? The ONE substrate primitive
+    /// that owns the `(Classification) -> bool` derived-nullary-
+    /// predicate walk shape on the `data_classification` slot for the
+    /// restricted-data question.
+    ///
+    /// # Fifth occupant on the (parent × derived-nullary-bool) corner
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], and
+    /// [`Self::data_is_regulated`] on the workspace-wide (parent ×
+    /// derived-nullary-bool) corner of the closed-set-driven presence-
+    /// probe algebra — the SECOND peer threading the classification-
+    /// data axis after [`Self::data_is_regulated`] opened it, pinning
+    /// the classification-data axis as a proven-repeatable structural
+    /// sub-corner across TWO sibling closed-set projections
+    /// (`DataClassification::is_regulated` / `is_restricted`) rather
+    /// than a single-projection curiosity. Byte-for-byte structural
+    /// peer of [`Self::data_is_regulated`]: both walk the SAME
+    /// direct scalar closed-set field (`self.data_classification`) on
+    /// the [`Classification`] parent through TWO layers of `Default`
+    /// short-circuit (`Classification::gate_compute` →
+    /// [`DataClassification::default = Internal`]) — distinct from the
+    /// two `horizon_*` peers by ONE structural degree (they walk a
+    /// NESTED-STRUCT projection with THREE layers of `Default`). THIRD
+    /// direct-scalar peer on the corner after
+    /// [`Self::calm_requires_coordination`] opened +
+    /// [`Self::data_is_regulated`] populated the sub-corner: seals
+    /// "direct-scalar derived-nullary-bool" as the substrate's third
+    /// occupant on the sub-corner and the FIRST corner peer whose
+    /// gate-compute baseline projects to `true` rather than `false`,
+    /// mirror-image of the `Bounded`-default `terminating-horizon`
+    /// baseline on the horizon-axis nested sub-corner.
+    ///
+    /// # Semantics — derived nullary boolean, not variant equality
+    ///
+    /// `data_is_restricted()` returns `true` iff
+    /// `self.data_classification.is_restricted()`. The six-variant
+    /// [`DataClassification`] closed set publishes the truth table:
+    /// [`DataClassification::Public`] → `false` (freely distributable);
+    /// [`DataClassification::Internal`] / [`DataClassification::Confidential`]
+    /// / [`DataClassification::Pii`] / [`DataClassification::Phi`] /
+    /// [`DataClassification::Pci`] → `true` (access controls beyond
+    /// freely-distributable apply). A [`Classification::gate_compute`]
+    /// baseline (which uses [`DataClassification::default = Internal`]
+    /// via `#[default]`) answers `true` — the substrate's default-arm
+    /// short-circuit propagates through the scalar closed-set field's
+    /// own [`Default`] impl to this predicate's answer, distinct from
+    /// [`Self::data_is_regulated`]'s `false` baseline (which projects
+    /// the SAME `Internal` default through the antisymmetric arm of
+    /// the closed set's predicate pair). This baseline-flip is the
+    /// FIRST direct-scalar corner peer where the gate-compute baseline
+    /// answers `true`, not `false`.
+    ///
+    /// The closed-set-internal pin
+    /// `data_classification_regulated_implies_restricted` seals the
+    /// implication `is_regulated() ⇒ is_restricted()` on every
+    /// variant, so `data_is_regulated()` returning `true` implies THIS
+    /// predicate also returns `true`; the reverse does not hold
+    /// (`Internal | Confidential` are restricted but not regulated).
+    /// This is the FIRST substrate-primitive pair on the (parent ×
+    /// derived-nullary-bool) corner whose two predicates carry a non-
+    /// trivial closed-set-internal implication relationship — a
+    /// future compliance-baseline auto-selector can rely on
+    /// `data_is_regulated() ⇒ data_is_restricted()` by construction
+    /// rather than restating the implication at every callsite.
+    ///
+    /// A future seventh [`DataClassification`] variant (a hypothetical
+    /// `TradeSecret` bucket for competitive-sensitive data, or an
+    /// `Anonymized` bucket for pseudonymized-PII whose access posture
+    /// differs from raw PII) reaches this probe through ONE
+    /// `is_restricted` arm on the closed set with the probe body
+    /// untouched — the nullary-predicate shape defers every per-
+    /// variant policy decision to the closed set's own truth table
+    /// ([`DataClassification::is_restricted`]) rather than duplicating
+    /// the discriminator sweep here.
+    ///
+    /// # Compounding
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `data-restricted` on `POINT_FIXED_TAG_ARMS` —
+    /// byte-for-byte peer of the sibling `terminating-horizon`,
+    /// `metric-axes-required`, `coordination-required`, and
+    /// `data-regulated` fixed tags on the (parent × derived-nullary-
+    /// bool) corner. The ephemeral surface publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::data_is_restricted`], which
+    /// composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (data-restricted)` audit answers the same question
+    /// on both surfaces.
+    ///
+    /// Future compliance-baseline auto-selectors dispatching on the
+    /// `(is_regulated, is_restricted)` two-axis projection
+    /// (documented on [`DataClassification::is_regulated`] itself)
+    /// read THIS predicate rather than re-deriving from the variant
+    /// name at each callsite — the classification-data-axis lattice-
+    /// typed image of the restricted-data question lives at ONE
+    /// substrate site and every compliance-mode chooser downstream
+    /// binds through the SAME `data_is_restricted()` shape.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `data-restricted` fixed tag in `tatara-check`, future
+    /// compliance-baseline / access-control-mandatory validators,
+    /// future variant additions on [`DataClassification`]) binds
+    /// through the SAME `data_is_restricted()` shape rather than
+    /// restating the
+    /// `classification.data_classification.is_restricted()` chain at
+    /// each callsite. THEORY.md §VI.1 — generation over composition;
+    /// a future [`DataClassification`] variant lands at ONE `ALL`
+    /// entry + ONE `is_restricted` arm on the closed set and this
+    /// probe picks it up mechanically.
+    #[must_use]
+    pub fn data_is_restricted(&self) -> bool {
+        self.data_classification.is_restricted()
+    }
 }
 
 /// Structural type — how data flows through the point.
@@ -5344,5 +5466,123 @@ mod tests {
             !c.data_is_regulated(),
             "gate_compute (data_classification=Internal → is_regulated=false) baseline",
         );
+    }
+
+    // ── Classification::data_is_restricted substrate pins ────────────
+    //
+    // Fail-before-pass-after granularity: [`Classification::data_is_restricted`]
+    // did not exist before this commit — the `(Classification) -> bool`
+    // derived-nullary-boolean walk over the scalar [`DataClassification`]
+    // slot's [`DataClassification::is_restricted`] projection had no
+    // substrate owner. Post-lift the shape lives at ONE substrate
+    // primitive and every downstream (the `data-restricted` fixed tag
+    // in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::data_is_restricted`] peer,
+    // future compliance-baseline / access-control-mandatory validators)
+    // composes against the SAME `data_is_restricted()` shape rather
+    // than restating the
+    // `classification.data_classification.is_restricted()` chain at
+    // its own callsite. FIFTH occupant of the (parent × derived-
+    // nullary-bool) corner across THREE closed-set axes and the SECOND
+    // occupant on the classification-data axis, pinning the axis as
+    // a proven-repeatable structural sub-corner across TWO sibling
+    // closed-set projections (`is_regulated` / `is_restricted`).
+    // THIRD direct-scalar peer on the corner and the FIRST corner peer
+    // whose gate-compute baseline projects to `true` rather than
+    // `false` (mirror-image of the `Bounded`-default
+    // `horizon_terminates` baseline on the nested-struct sub-corner).
+
+    /// PER-VARIANT pin — for every [`DataClassification`] variant, a
+    /// [`Classification`] whose `data_classification` field carries
+    /// that variant returns `data_is_restricted()` matching the closed
+    /// set's own [`DataClassification::is_restricted`] truth table.
+    /// Sweep [`DataClassification::ALL`] so a regression that (a)
+    /// hard-coded the method body to a fixed answer, (b) inverted the
+    /// projection (silently promoting `Public` to restricted), or
+    /// (c) crossed the wires with the sibling
+    /// [`DataClassification::is_regulated`] projection (which
+    /// disagrees on the two `Internal | Confidential` variants) fails
+    /// HERE at the substrate primitive before drifting through the
+    /// `data-restricted` fixed tag or the peer ephemeral surface.
+    #[test]
+    fn classification_data_is_restricted_matches_data_classification_projection() {
+        for populated in DataClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: populated,
+            };
+            assert_eq!(
+                c.data_is_restricted(),
+                populated.is_restricted(),
+                "data_classification={populated:?}: data_is_restricted() drift from DataClassification::is_restricted()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `data_classification: DataClassification::default()` which
+    /// defaults to [`DataClassification::Internal`] via `#[default]`,
+    /// and [`DataClassification::Internal::is_restricted`] projects
+    /// `true`, so `data_is_restricted()` returns `true`. Pins the
+    /// default-arm short-circuit through ONE layer of `Default` at
+    /// ONE narrow site — a regression that promoted
+    /// [`DataClassification::Public`] to `#[default]`, or that wired
+    /// [`DataClassification::Internal`] to `is_restricted() = false`,
+    /// would fail HERE before drifting through every unadorned
+    /// Process's access-control-mandatory answer. FIRST direct-scalar
+    /// corner peer whose gate-compute baseline projects to `true`
+    /// (`data_is_regulated` / `calm_requires_coordination` both
+    /// project `false` on the same defaulted parent), mirror-image of
+    /// the nested-struct sub-corner where
+    /// `classification_gate_compute_horizon_terminates_is_true`
+    /// pins the `Bounded`-default `true` baseline.
+    #[test]
+    fn classification_gate_compute_data_is_restricted_is_true() {
+        let c = Classification::gate_compute();
+        assert!(
+            c.data_is_restricted(),
+            "gate_compute (data_classification=Internal → is_restricted=true) baseline",
+        );
+    }
+
+    /// COMPOSED IMPLICATION pin — the substrate-primitive-level
+    /// counterpart of
+    /// `data_classification_regulated_implies_restricted` at the
+    /// [`Classification`] parent site: for every
+    /// [`DataClassification`] variant, a [`Classification`] carrying
+    /// that variant answers `data_is_regulated() ⇒
+    /// data_is_restricted()` — regulated data is by construction
+    /// restricted at the parent-composed derived-nullary-boolean
+    /// projection, not just at the closed-set primitives. Pins the
+    /// implication contract at the SAME substrate site that composes
+    /// each side of the pair, so a regression that (a) reversed the
+    /// [`Classification::data_is_regulated`] arm, (b) reversed the
+    /// [`Classification::data_is_restricted`] arm, or (c) crossed
+    /// their wires while the closed-set primitives stayed intact
+    /// fails HERE. FIRST corner-peer pair on the workspace-wide
+    /// (parent × derived-nullary-bool) corner whose two projections
+    /// carry a non-trivial closed-set-internal implication
+    /// relationship — a future compliance-baseline auto-selector
+    /// binds through the parent-composed contract rather than
+    /// restating the closed-set-primitive contract at the callsite.
+    #[test]
+    fn classification_data_is_regulated_implies_data_is_restricted_over_all() {
+        for populated in DataClassification::ALL {
+            let c = Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Horizon::default(),
+                calm: CalmClassification::default(),
+                data_classification: populated,
+            };
+            assert!(
+                !c.data_is_regulated() || c.data_is_restricted(),
+                "data_classification={populated:?}: data_is_regulated ⇒ data_is_restricted violated",
+            );
+        }
     }
 }

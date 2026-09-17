@@ -1452,6 +1452,109 @@ impl EphemeralSpec {
         self.resolved_classification().data_is_regulated()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's
+    /// resolved [`Classification`]'s [`crate::classification::DataClassification`]
+    /// project to `true` under
+    /// [`crate::classification::DataClassification::is_restricted`]?
+    /// Byte-for-byte peer of
+    /// [`Classification::data_is_restricted`] wrapped through the
+    /// [`Self::resolved_classification`] resolver so an operator-
+    /// omitted `:classification` slot on `(defephemeral …)` still
+    /// answers via the substrate default. The ONE ephemeral-surface
+    /// substrate primitive that owns the `(&EphemeralSpec) -> bool`
+    /// derived-nullary-boolean walk on the restricted-data question
+    /// over the classification-data axis.
+    ///
+    /// # Fifth derived-nullary-boolean peer on the ephemeral surface
+    ///
+    /// Peer of [`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], and
+    /// [`Self::data_is_regulated`] on the ephemeral surface's
+    /// (resolver-hop × derived-nullary-bool) shape — the SECOND peer
+    /// threading the classification-data axis after
+    /// [`Self::data_is_regulated`] opened it, pinning the data axis
+    /// as a proven-repeatable structural sub-corner across TWO sibling
+    /// closed-set projections (`is_regulated` / `is_restricted`).
+    /// Structural byte-for-byte peer of
+    /// [`Self::data_is_regulated`]: both walk the SAME DIRECT scalar
+    /// closed-set field's derived projection on the resolved
+    /// [`Classification`] (`.data_classification.is_regulated()` /
+    /// `.is_restricted()`) — TWO layers of `Default` short-circuit
+    /// ([`Classification::gate_compute`] → [`crate::classification::DataClassification::default = Internal`])
+    /// — distinct from the two `horizon_*` peers which walk a NESTED-
+    /// STRUCT projection (`.horizon.kind`) with THREE layers of
+    /// `Default`. The resolver-hop shape is byte-identical across all
+    /// five peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `data_is_restricted()` returns `true` iff
+    /// `self.resolved_classification().data_is_restricted()`. The
+    /// resolver returns the authored [`Classification`] when present
+    /// and the substrate default [`Classification::gate_compute`] on
+    /// absence. Because [`Classification::gate_compute`] carries
+    /// [`crate::classification::DataClassification::default = Internal`],
+    /// a bare ephemeral spec with no `:classification` slot answers
+    /// `true` — the default-arm short-circuit propagates through TWO
+    /// layers of `Default` ([`Classification::gate_compute`] →
+    /// [`crate::classification::DataClassification::default`]) to
+    /// this predicate's answer. FIRST direct-scalar ephemeral-surface
+    /// peer whose absent-classification default answers `true`, not
+    /// `false` (`data_is_regulated` and `calm_requires_coordination`
+    /// both project `false` on the same absent classification),
+    /// mirror-image of [`Self::horizon_terminates`]'s `Bounded`-default
+    /// `true` baseline on the nested-struct sub-corner. A regression
+    /// that dropped the resolver hop, probed
+    /// [`Classification::has_data_classification`] directly (dropping
+    /// the `.is_restricted()` projection), or inverted the projection
+    /// (silently demoting the Internal baseline to "unrestricted")
+    /// fails HERE at ONE narrow substrate site before drifting
+    /// through every unadorned ephemeral spec's baseline access-
+    /// control-mandatory answer.
+    ///
+    /// # Compounding
+    ///
+    /// The ephemeral require-tag classifier composes this primitive
+    /// as a fixed tag `data-restricted` on `EPHEMERAL_FIXED_TAG_ARMS`
+    /// — byte-for-byte peer of the point surface's `data-restricted`
+    /// fixed tag on `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::data_is_restricted`] directly. The two-
+    /// surface parity contract holds by construction: both surfaces
+    /// route through the SAME
+    /// [`Classification::data_is_restricted`] primitive after the
+    /// ephemeral surface pays ONE resolver hop — a future
+    /// [`crate::classification::DataClassification`] variant or a
+    /// future normalization at the substrate primitive lands at ONE
+    /// site and both surfaces' `data-restricted` fixed tags inherit
+    /// the shift mechanically. The closed-set-internal implication
+    /// `is_regulated() ⇒ is_restricted()` composes through the
+    /// resolver hop to
+    /// `data_is_regulated() ⇒ data_is_restricted()` at this surface
+    /// too.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-data-axis derived-nullary-
+    /// boolean probe body composes ONE resolver primitive
+    /// ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::data_is_restricted`]) so every downstream
+    /// (`data-restricted` fixed tags on both surfaces in tatara-check,
+    /// future compliance-baseline / access-control-mandatory
+    /// validators, future variant additions on
+    /// [`crate::classification::DataClassification`]) binds through
+    /// the SAME `data_is_restricted()` shape rather than restating
+    /// either the resolver walk or the closed-set projection
+    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// over composition; a future
+    /// [`crate::classification::DataClassification`] variant lands
+    /// at ONE `ALL` entry + ONE `is_restricted` arm on the closed set
+    /// and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn data_is_restricted(&self) -> bool {
+        self.resolved_classification().data_is_restricted()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -3859,6 +3962,159 @@ mod tests {
                 eph.data_is_regulated(),
                 lowered.classification.data_is_regulated(),
                 "authored data_classification={populated:?}: parity drift",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::data_is_restricted pins ───────────────────────
+    //
+    // Fail-before-pass-after granularity: `data_is_restricted` did not
+    // exist pre-lift on `impl EphemeralSpec` — every consumer walking
+    // the "does this ephemeral spec require access controls?" question
+    // went through
+    // `.resolved_classification().data_classification.is_restricted()`
+    // or through the lowered `ProcessSpec`'s
+    // `spec.classification.data_classification.is_restricted()`. Post-
+    // lift the FIFTH derived-nullary-boolean peer on the ephemeral
+    // surface (second on the data axis, after
+    // [`Self::data_is_regulated`] opened the axis) routes through the
+    // SAME [`Self::resolved_classification`] resolver + the sibling
+    // substrate primitive
+    // [`crate::classification::Classification::data_is_restricted`],
+    // so the two-surface parity contract holds by construction — a
+    // regression on either side of the resolver fails at these pins
+    // before landing at the operator-facing `data-restricted` fixed
+    // tag in `tatara-check`. FIRST direct-scalar ephemeral-surface
+    // peer whose absent-classification baseline projects to `true`
+    // rather than `false`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries a specific [`DataClassification`]
+    /// variant answers [`Self::data_is_restricted`] matching the
+    /// closed set's own [`DataClassification::is_restricted`] truth
+    /// table. Sweep [`DataClassification::ALL`] so a regression that
+    /// (a) hard-coded the body to a fixed answer, (b) inverted the
+    /// projection, or (c) crossed the wires with the sibling
+    /// [`DataClassification::is_regulated`] projection fails HERE at
+    /// the substrate primitive before drifting through the
+    /// `data-restricted` fixed tag or the peer point surface.
+    #[test]
+    fn data_is_restricted_returns_data_classification_projection_per_kind() {
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.data_is_restricted(),
+                populated.is_restricted(),
+                "authored data_classification={populated:?}: data_is_restricted() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries
+    /// [`DataClassification::default = Internal`], and
+    /// [`DataClassification::Internal::is_restricted`] projects
+    /// `true`, so [`Self::data_is_restricted`] returns `true`. Pins
+    /// the default-arm short-circuit through TWO layers of `Default`
+    /// ([`Classification::gate_compute`] →
+    /// [`DataClassification::default`]) reaching this derived-nullary
+    /// predicate. FIRST direct-scalar ephemeral-surface peer whose
+    /// absent-classification baseline answers `true`, not `false`
+    /// (the four earlier direct-scalar peers on this surface —
+    /// `data_is_regulated`, `calm_requires_coordination`, plus the
+    /// nested-struct `horizon_requires_metric_axes` — all project
+    /// `false` on the same absent classification, and only the
+    /// sibling nested-struct `horizon_terminates` projects `true`).
+    /// A regression that dropped the resolver hop (silently answering
+    /// `false` on an absent classification, as if the operator's
+    /// absence meant "freely distributable"), or that inverted the
+    /// projection while the closed-set primitive stayed intact,
+    /// fails HERE at ONE narrow ephemeral-surface site.
+    #[test]
+    fn data_is_restricted_probes_true_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            spec.data_is_restricted(),
+            "absent classification (defaults to gate_compute, data_classification=Internal → is_restricted=true)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::data_is_restricted`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.data_is_restricted()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`DataClassification::ALL`] variant) so a future regression on
+    /// either side of the resolver fails HERE at the parity boundary.
+    /// Byte-for-byte peer of the sibling
+    /// `data_is_regulated_matches_point_peer_through_lowered_classification`
+    /// on the same classification-data axis, published a second time
+    /// through the antisymmetric closed-set projection.
+    #[test]
+    fn data_is_restricted_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.data_is_restricted(),
+            lowered.classification.data_is_restricted(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.data_is_restricted(),
+                lowered.classification.data_is_restricted(),
+                "authored data_classification={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// COMPOSED IMPLICATION pin — the ephemeral-surface counterpart of
+    /// the closed-set-internal
+    /// `data_classification_regulated_implies_restricted` and its
+    /// parent-composed peer
+    /// `classification_data_is_regulated_implies_data_is_restricted_over_all`:
+    /// for every ([`EphemeralSpec`] with authored classification
+    /// carrying every [`DataClassification`] variant, plus the
+    /// absent-classification case), the resolver-hop probe pair
+    /// satisfies `data_is_regulated() ⇒ data_is_restricted()`. Pins
+    /// the implication contract at the ephemeral-surface site so a
+    /// regression that (a) inverted the ephemeral
+    /// [`Self::data_is_regulated`] resolver hop, (b) inverted the
+    /// ephemeral [`Self::data_is_restricted`] resolver hop, or (c)
+    /// crossed their wires while the underlying substrate primitives
+    /// stayed intact fails HERE. FIRST ephemeral-surface corner-peer
+    /// pair whose two projections carry a non-trivial closed-set-
+    /// internal implication relationship.
+    #[test]
+    fn ephemeral_data_is_regulated_implies_data_is_restricted_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        assert!(
+            !eph.data_is_regulated() || eph.data_is_restricted(),
+            "None-classification: data_is_regulated ⇒ data_is_restricted violated",
+        );
+        // Authored classification.
+        for populated in DataClassification::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.data_classification = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            assert!(
+                !eph.data_is_regulated() || eph.data_is_restricted(),
+                "authored data_classification={populated:?}: data_is_regulated ⇒ data_is_restricted violated",
             );
         }
     }

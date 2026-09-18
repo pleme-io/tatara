@@ -13873,12 +13873,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_true_iff_point_type_matches_authored_classification_per_kind(
     ) {
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             for query in ConvergencePointType::ALL {
                 let tag = format!("point-type-{}", query.as_str());
                 let expected = query == populated;
@@ -14000,12 +13995,7 @@ mod tests {
         // rides across the `From<EphemeralSpec>` lowering byte-for-
         // byte, so both surfaces classify identically on every variant.
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let point: ProcessSpec = eph.clone().into();
             for query in ConvergencePointType::ALL {
                 let tag = format!("point-type-{}", query.as_str());
@@ -14057,12 +14047,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_true_iff_substrate_matches_authored_classification_per_kind(
     ) {
         for populated in SubstrateType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.substrate = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             for query in SubstrateType::ALL {
                 let tag = format!("substrate-{}", query.as_str());
                 let expected = query == populated;
@@ -14186,12 +14171,7 @@ mod tests {
         // rides across the `From<EphemeralSpec>` lowering byte-for-
         // byte, so both surfaces classify identically on every variant.
         for populated in SubstrateType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.substrate = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let point: ProcessSpec = eph.clone().into();
             for query in SubstrateType::ALL {
                 let tag = format!("substrate-{}", query.as_str());
@@ -14250,12 +14230,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_true_iff_calm_matches_authored_classification_per_kind(
     ) {
         for populated in CalmClassification::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.calm = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             for query in CalmClassification::ALL {
                 let tag = format!("calm-{}", query.as_str());
                 let expected = query == populated;
@@ -14384,12 +14359,7 @@ mod tests {
         // rides across the `From<EphemeralSpec>` lowering byte-for-
         // byte, so both surfaces classify identically on every variant.
         for populated in CalmClassification::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.calm = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let point: ProcessSpec = eph.clone().into();
             for query in CalmClassification::ALL {
                 let tag = format!("calm-{}", query.as_str());
@@ -14447,12 +14417,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_true_iff_data_classification_matches_authored_classification_per_kind(
     ) {
         for populated in DataClassification::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.data_classification = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             for query in DataClassification::ALL {
                 let tag = format!("data-classification-{}", query.as_str());
                 let expected = query == populated;
@@ -14585,12 +14550,7 @@ mod tests {
         // rides across the `From<EphemeralSpec>` lowering byte-for-
         // byte, so both surfaces classify identically on every variant.
         for populated in DataClassification::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.data_classification = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let point: ProcessSpec = eph.clone().into();
             for query in DataClassification::ALL {
                 let tag = format!("data-classification-{}", query.as_str());
@@ -14649,11 +14609,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_true_iff_horizon_kind_matches_authored_classification_per_kind(
     ) {
         for populated in HorizonKind::ALL {
-            let classification = Classification::gate_compute_with_axis(populated);
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             for query in HorizonKind::ALL {
                 let tag = format!("horizon-{}", query.as_str());
                 let expected = query == populated;
@@ -14787,11 +14743,7 @@ mod tests {
         // rides across the `From<EphemeralSpec>` lowering byte-for-
         // byte, so both surfaces classify identically on every variant.
         for populated in HorizonKind::ALL {
-            let classification = Classification::gate_compute_with_axis(populated);
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let point: ProcessSpec = eph.clone().into();
             for query in HorizonKind::ALL {
                 let tag = format!("horizon-{}", query.as_str());
@@ -14863,11 +14815,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_true_iff_optimization_direction_matches_authored_classification_per_kind(
     ) {
         for populated in OptimizationDirection::ALL {
-            let classification = Classification::gate_compute_with_axis(populated);
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             for query in OptimizationDirection::ALL {
                 let tag = format!("optimization-direction-{}", query.as_str());
                 let expected = query == populated;
@@ -15025,11 +14973,7 @@ mod tests {
         // Authored classification with `direction: Some(_)` — both
         // surfaces read the same authored value verbatim.
         for populated in OptimizationDirection::ALL {
-            let classification = Classification::gate_compute_with_axis(populated);
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let point: ProcessSpec = eph.clone().into();
             for query in OptimizationDirection::ALL {
                 let tag = format!("optimization-direction-{}", query.as_str());
@@ -15098,12 +15042,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_true_iff_input_arity_matches_authored_classification_per_kind(
     ) {
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             let projected = populated.input_arity();
             for query in Arity::ALL {
                 let tag = format!("input-arity-{}", query.as_str());
@@ -15246,12 +15185,7 @@ mod tests {
         // Authored classification: both surfaces read the same authored
         // point_type and route through the same projection.
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let point: ProcessSpec = eph.clone().into();
             for query in Arity::ALL {
                 let tag = format!("input-arity-{}", query.as_str());
@@ -15319,12 +15253,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_true_iff_output_arity_matches_authored_classification_per_kind(
     ) {
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             let projected = populated.output_arity();
             for query in Arity::ALL {
                 let tag = format!("output-arity-{}", query.as_str());
@@ -15460,12 +15389,7 @@ mod tests {
             );
         }
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let point: ProcessSpec = eph.clone().into();
             for query in Arity::ALL {
                 let tag = format!("output-arity-{}", query.as_str());
@@ -15505,12 +15429,7 @@ mod tests {
     /// ephemeral-surface site.
     #[test]
     fn evaluate_ephemeral_require_tag_output_arity_and_input_arity_pin_dag_composition_pair() {
-        let mut classification = Classification::gate_compute();
-        classification.point_type = ConvergencePointType::Fork;
-        let fork = EphemeralSpec {
-            classification: Some(classification),
-            ..ephemeral_fixture()
-        };
+        let fork = ephemeral_fixture().with_classification_axis(ConvergencePointType::Fork);
         assert_eq!(
             evaluate_ephemeral_require_tag(&fork, "input-arity-One"),
             Ok(true),
@@ -15532,12 +15451,8 @@ mod tests {
             "Fork diffusive cell: output-arity-One must be false",
         );
 
-        let mut classification = Classification::gate_compute();
-        classification.point_type = ConvergencePointType::Transform;
-        let transform = EphemeralSpec {
-            classification: Some(classification),
-            ..ephemeral_fixture()
-        };
+        let transform =
+            ephemeral_fixture().with_classification_axis(ConvergencePointType::Transform);
         assert_eq!(
             evaluate_ephemeral_require_tag(&transform, "input-arity-One"),
             Ok(true),
@@ -16146,11 +16061,7 @@ mod tests {
     #[test]
     fn evaluate_ephemeral_require_tag_returns_horizon_terminates_projection_per_horizon_kind() {
         for populated in HorizonKind::ALL {
-            let classification = Classification::gate_compute_with_axis(populated);
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, "terminating-horizon"),
                 Ok(populated.terminates()),
@@ -16209,11 +16120,7 @@ mod tests {
         // Authored classification: both surfaces read the same authored
         // horizon.kind and route through the same projection.
         for populated in HorizonKind::ALL {
-            let classification = Classification::gate_compute_with_axis(populated);
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let lowered: ProcessSpec = eph.clone().into();
             assert_eq!(
                 evaluate_ephemeral_require_tag(&eph, "terminating-horizon"),
@@ -16327,11 +16234,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_horizon_requires_metric_axes_projection_per_horizon_kind(
     ) {
         for populated in HorizonKind::ALL {
-            let classification = Classification::gate_compute_with_axis(populated);
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, "metric-axes-required"),
                 Ok(populated.requires_metric_axes()),
@@ -16381,11 +16284,7 @@ mod tests {
         );
         // Authored classification.
         for populated in HorizonKind::ALL {
-            let classification = Classification::gate_compute_with_axis(populated);
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let lowered: ProcessSpec = eph.clone().into();
             assert_eq!(
                 evaluate_ephemeral_require_tag(&eph, "metric-axes-required"),
@@ -16780,6 +16679,150 @@ mod tests {
         }
     }
 
+    // ── (ephemeral-authored-classification × classifier-surface) landmark ─
+    //
+    // Fail-before-pass-after granularity: this run swept the THIRTY-SIX
+    // remaining `EphemeralSpec { classification: Some(<hand>), ..
+    // ephemeral_fixture() }` populated-classification fixtures at the
+    // `evaluate_ephemeral_require_tag_*` classifier-facing tests onto ONE
+    // substrate primitive
+    // [`tatara_process::ephemeral::EphemeralSpec::with_classification_axis`]
+    // — the peer of [`ProcessSpec::gate_compute_with_axis`] on the
+    // ephemeral sugar surface. Prior commit `8bad69b` lifted the
+    // (spec × axis-slice) composer on the point-surface carrier and
+    // explicitly named the ephemeral surface's per-axis-loop fixtures as
+    // the next mechanical sweep target. This landmark extends the parity
+    // guarantee ONE hop past the ephemeral composer through the
+    // classifier body — a regression that (a) failed to wrap the
+    // composed [`Classification`] in `Some(_)` on the `None`-arm fill-
+    // through, (b) stomped a sibling axis slot on any
+    // [`ClassificationAxis`] impl through the ephemeral surface, or (c)
+    // drifted a non-classification slot on `EphemeralSpec` away from
+    // its pre-call value would fail HERE at ONE landmark site before
+    // drifting through the thirty-six swept sites downstream.
+
+    /// (ephemeral-authored-classification × classifier-surface) parity
+    /// landmark — the post-sweep shape
+    /// `ephemeral_fixture().with_classification_axis(populated)`
+    /// classifies IDENTICALLY to the pre-sweep hand-authored
+    /// `EphemeralSpec { classification: Some({ let mut c =
+    /// Classification::gate_compute(); c.<axis> = populated; c }),
+    /// ..ephemeral_fixture() }` shape at every direct-scalar closed-set
+    /// axis (`ConvergencePointType`, `SubstrateType`,
+    /// `CalmClassification`, `DataClassification`) AND the two
+    /// horizon-nested peers (`HorizonKind`, `OptimizationDirection`)
+    /// through `evaluate_ephemeral_require_tag`. Sweep every variant on
+    /// every axis so a regression that dropped the `Some(_)` wrap on
+    /// the `None`-arm fill, drifted the trait-dispatch axis, or
+    /// reintroduced a direct-`classification.<axis> = value;` shape that
+    /// bypassed [`ClassificationAxis::overlay`] surfaces HERE at ONE
+    /// landmark site rather than at the thirty-six swept ephemeral-
+    /// facing sites downstream.
+    #[test]
+    fn ephemeral_authored_classification_sweep_matches_pre_sweep_shape_at_classifier_surface() {
+        // Direct-scalar closed-set axes.
+        for populated in ConvergencePointType::ALL {
+            let mut hand_classification = Classification::gate_compute();
+            hand_classification.point_type = populated;
+            let hand = EphemeralSpec {
+                classification: Some(hand_classification),
+                ..ephemeral_fixture()
+            };
+            let composed = ephemeral_fixture().with_classification_axis(populated);
+            for query in ConvergencePointType::ALL {
+                let tag = format!("point-type-{}", query.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&hand, &tag),
+                    evaluate_ephemeral_require_tag(&composed, &tag),
+                    "point_type={populated:?}: tag {tag:?} classifier drift",
+                );
+            }
+        }
+        for populated in SubstrateType::ALL {
+            let mut hand_classification = Classification::gate_compute();
+            hand_classification.substrate = populated;
+            let hand = EphemeralSpec {
+                classification: Some(hand_classification),
+                ..ephemeral_fixture()
+            };
+            let composed = ephemeral_fixture().with_classification_axis(populated);
+            for query in SubstrateType::ALL {
+                let tag = format!("substrate-{}", query.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&hand, &tag),
+                    evaluate_ephemeral_require_tag(&composed, &tag),
+                    "substrate={populated:?}: tag {tag:?} classifier drift",
+                );
+            }
+        }
+        for populated in CalmClassification::ALL {
+            let mut hand_classification = Classification::gate_compute();
+            hand_classification.calm = populated;
+            let hand = EphemeralSpec {
+                classification: Some(hand_classification),
+                ..ephemeral_fixture()
+            };
+            let composed = ephemeral_fixture().with_classification_axis(populated);
+            for query in CalmClassification::ALL {
+                let tag = format!("calm-{}", query.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&hand, &tag),
+                    evaluate_ephemeral_require_tag(&composed, &tag),
+                    "calm={populated:?}: tag {tag:?} classifier drift",
+                );
+            }
+        }
+        for populated in DataClassification::ALL {
+            let mut hand_classification = Classification::gate_compute();
+            hand_classification.data_classification = populated;
+            let hand = EphemeralSpec {
+                classification: Some(hand_classification),
+                ..ephemeral_fixture()
+            };
+            let composed = ephemeral_fixture().with_classification_axis(populated);
+            for query in DataClassification::ALL {
+                let tag = format!("data-classification-{}", query.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&hand, &tag),
+                    evaluate_ephemeral_require_tag(&composed, &tag),
+                    "data_classification={populated:?}: tag {tag:?} classifier drift",
+                );
+            }
+        }
+        // Horizon-nested closed-set axes (the newer
+        // `gate_compute_with_axis(populated)` pre-sweep shape).
+        for populated in HorizonKind::ALL {
+            let hand = EphemeralSpec {
+                classification: Some(Classification::gate_compute_with_axis(populated)),
+                ..ephemeral_fixture()
+            };
+            let composed = ephemeral_fixture().with_classification_axis(populated);
+            for query in HorizonKind::ALL {
+                let tag = format!("horizon-{}", query.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&hand, &tag),
+                    evaluate_ephemeral_require_tag(&composed, &tag),
+                    "horizon.kind={populated:?}: tag {tag:?} classifier drift",
+                );
+            }
+        }
+        for populated in OptimizationDirection::ALL {
+            let hand = EphemeralSpec {
+                classification: Some(Classification::gate_compute_with_axis(populated)),
+                ..ephemeral_fixture()
+            };
+            let composed = ephemeral_fixture().with_classification_axis(populated);
+            for query in OptimizationDirection::ALL {
+                let tag = format!("optimization-direction-{}", query.as_str());
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&hand, &tag),
+                    evaluate_ephemeral_require_tag(&composed, &tag),
+                    "horizon.direction=Some({populated:?}): tag {tag:?} classifier drift",
+                );
+            }
+        }
+    }
+
     // ── coordination-required fixed tag substrate pins ───────────────
     //
     // Fail-before-pass-after granularity: the `coordination-required`
@@ -16853,12 +16896,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_calm_requires_coordination_projection_per_calm_kind()
     {
         for populated in CalmClassification::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.calm = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, "coordination-required"),
                 Ok(populated.requires_coordination()),
@@ -16914,12 +16952,7 @@ mod tests {
         );
         // Authored classification.
         for populated in CalmClassification::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.calm = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let lowered: ProcessSpec = eph.clone().into();
             assert_eq!(
                 evaluate_ephemeral_require_tag(&eph, "coordination-required"),
@@ -17037,12 +17070,7 @@ mod tests {
     #[test]
     fn evaluate_ephemeral_require_tag_returns_data_is_regulated_projection_per_data_kind() {
         for populated in DataClassification::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.data_classification = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, "data-regulated"),
                 Ok(populated.is_regulated()),
@@ -17099,12 +17127,7 @@ mod tests {
         );
         // Authored classification.
         for populated in DataClassification::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.data_classification = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let lowered: ProcessSpec = eph.clone().into();
             assert_eq!(
                 evaluate_ephemeral_require_tag(&eph, "data-regulated"),
@@ -17230,12 +17253,7 @@ mod tests {
     #[test]
     fn evaluate_ephemeral_require_tag_returns_data_is_restricted_projection_per_data_kind() {
         for populated in DataClassification::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.data_classification = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, "data-restricted"),
                 Ok(populated.is_restricted()),
@@ -17293,12 +17311,7 @@ mod tests {
         );
         // Authored classification.
         for populated in DataClassification::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.data_classification = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let lowered: ProcessSpec = eph.clone().into();
             assert_eq!(
                 evaluate_ephemeral_require_tag(&eph, "data-restricted"),
@@ -17419,12 +17432,7 @@ mod tests {
     #[test]
     fn evaluate_ephemeral_require_tag_returns_point_is_endomorphic_projection_per_point_kind() {
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, "endomorphic-point"),
                 Ok(populated.is_endomorphic()),
@@ -17483,12 +17491,7 @@ mod tests {
         );
         // Authored classification.
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let lowered: ProcessSpec = eph.clone().into();
             assert_eq!(
                 evaluate_ephemeral_require_tag(&eph, "endomorphic-point"),
@@ -17566,12 +17569,7 @@ mod tests {
     #[test]
     fn evaluate_ephemeral_require_tag_returns_point_is_diffusive_projection_per_point_kind() {
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, "diffusive-point"),
                 Ok(populated.is_diffusive()),
@@ -17621,12 +17619,7 @@ mod tests {
         );
         // Authored classification.
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let lowered: ProcessSpec = eph.clone().into();
             assert_eq!(
                 evaluate_ephemeral_require_tag(&eph, "diffusive-point"),
@@ -17679,12 +17672,7 @@ mod tests {
         );
         // Authored classification.
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let endo = evaluate_ephemeral_require_tag(&eph, "endomorphic-point");
             let diff = evaluate_ephemeral_require_tag(&eph, "diffusive-point");
             assert!(
@@ -17764,12 +17752,7 @@ mod tests {
     #[test]
     fn evaluate_ephemeral_require_tag_returns_point_is_convergent_projection_per_point_kind() {
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let spec = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let spec = ephemeral_fixture().with_classification_axis(populated);
             assert_eq!(
                 evaluate_ephemeral_require_tag(&spec, "convergent-point"),
                 Ok(populated.is_convergent()),
@@ -17823,12 +17806,7 @@ mod tests {
         );
         // Authored classification.
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let lowered: ProcessSpec = eph.clone().into();
             assert_eq!(
                 evaluate_ephemeral_require_tag(&eph, "convergent-point"),
@@ -17894,12 +17872,7 @@ mod tests {
         );
         // Authored classification.
         for populated in ConvergencePointType::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.point_type = populated;
-            let eph = EphemeralSpec {
-                classification: Some(classification),
-                ..ephemeral_fixture()
-            };
+            let eph = ephemeral_fixture().with_classification_axis(populated);
             let buckets = [
                 evaluate_ephemeral_require_tag(&eph, "endomorphic-point"),
                 evaluate_ephemeral_require_tag(&eph, "diffusive-point"),

@@ -36,8 +36,8 @@ use tatara_lisp::DeriveTataraDomain;
 
 use crate::boundary::{Boundary, Condition, ConditionKind, ConditionSliceExt};
 use crate::classification::{
-    Arity, CalmClassification, Classification, ConvergencePointType, DataClassification,
-    HorizonKind, OptimizationDirection, SubstrateType,
+    Arity, CalmClassification, Classification, ClassificationAxis, ConvergencePointType,
+    DataClassification, HorizonKind, OptimizationDirection, SubstrateType,
 };
 use crate::crd::ProcessSpec;
 use crate::export::{ExportSpec, ExportSpecSliceExt};
@@ -416,6 +416,109 @@ impl EphemeralSpec {
             Some(c) => Cow::Borrowed(c),
             None => Cow::Owned(default_ephemeral_class()),
         }
+    }
+
+    /// Overlay a single [`ClassificationAxis`] variant onto this
+    /// ephemeral spec's authored [`Self::classification`] slot, filling
+    /// `None` through [`Classification::gate_compute`] before the
+    /// overlay so the resulting slot carries `Some(_)` regardless of
+    /// the pre-call state. Fluent chaining primitive: the peer of
+    /// [`ProcessSpec::gate_compute_with_axis`] (fresh-spec × axis
+    /// overlay) and [`Classification::with_axis`] (arbitrary-base ×
+    /// axis overlay) on the ephemeral sugar surface.
+    ///
+    /// # Substrate ergonomics
+    ///
+    /// Pre-lift the four-line shape `let mut classification =
+    /// Classification::gate_compute(); classification.<axis> =
+    /// populated; let spec = EphemeralSpec { classification:
+    /// Some(classification), ..ephemeral_fixture() };` (and its newer
+    /// three-line peer `let classification =
+    /// Classification::gate_compute_with_axis(populated); let spec =
+    /// EphemeralSpec { classification: Some(classification),
+    /// ..ephemeral_fixture() };`) recurred at THIRTY-SIX hand-authored
+    /// callsites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger
+    /// inside `tatara-reconciler::bin::tatara-check`'s
+    /// `evaluate_ephemeral_require_tag_*` classifier-facing test
+    /// module. Post-lift each callsite reads
+    /// `let spec = ephemeral_fixture().with_classification_axis(populated);`
+    /// — one line, one immutable binding, and every per-axis loop
+    /// dispatches its per-iteration axis mutation through the SAME
+    /// [`ClassificationAxis::overlay`] trait rather than by directly
+    /// poking a `classification.<axis>` field or restating the
+    /// `Some(_)` wrap.
+    ///
+    /// # Fluent chaining semantics
+    ///
+    /// * `EphemeralSpec { classification: None, .. }
+    ///   .with_classification_axis(axis)` produces
+    ///   `EphemeralSpec { classification:
+    ///   Some(Classification::gate_compute_with_axis(axis)), .. }` —
+    ///   the `None`-arm short-circuit fills through
+    ///   [`Classification::gate_compute`] identically to the sibling
+    ///   [`Self::resolved_classification`] resolver on the read side.
+    /// * `EphemeralSpec { classification: Some(prior), .. }
+    ///   .with_classification_axis(axis)` produces
+    ///   `EphemeralSpec { classification: Some(prior.with_axis(axis)),
+    ///   .. }` — the axis overlay composes onto the existing carrier
+    ///   via [`ClassificationAxis::overlay`], preserving every other
+    ///   axis slot on `prior`. Chained calls
+    ///   `.with_classification_axis(a).with_classification_axis(b)`
+    ///   compose arbitrary N-axis conjunctions on the ephemeral
+    ///   sugar surface with the same order-independence guarantee
+    ///   [`Classification::with_axis`] carries on distinct-slot axes.
+    ///
+    /// # Sibling to [`ProcessSpec::gate_compute_with_axis`]
+    ///
+    /// Same (spec-carrier × axis) shape, one refinement lower on
+    /// the composition-depth axis: `ProcessSpec::gate_compute_with_axis`
+    /// owns the (fresh-`gate_compute_defaults`-spec × axis-overlay)
+    /// construction on the point-surface carrier;
+    /// [`Self::with_classification_axis`] owns the
+    /// (arbitrary-`EphemeralSpec` × axis-overlay-onto-authored-classification)
+    /// construction on the ephemeral sugar-surface carrier. Both
+    /// primitives compose through the SAME
+    /// [`ClassificationAxis::overlay`] trait so a regression on any
+    /// axis's overlay surfaces at both composer owners' pin sets
+    /// simultaneously.
+    ///
+    /// # Compounding
+    ///
+    /// A future SIXTH classification axis lands as ONE peer
+    /// `impl ClassificationAxis` — every ephemeral-surface fixture
+    /// that binds through this primitive picks up the sixth axis
+    /// mechanically without a `classification.<new-axis> = value;`
+    /// restatement per site. A future audit dispatcher walking the
+    /// (ephemeral-surface × axis-loop) shape (per-axis matrix
+    /// generator, closed-set-sweep sagas, per-axis-XOR-partition-
+    /// witness synthesis on the ephemeral side) binds through the
+    /// SAME composer regardless of which axis it targets. Directly
+    /// benefits the P1 caixa-tatara renderer target
+    /// (`(defaplicacao …)` → `Process` mechanical lowering test
+    /// fixtures that construct authored classifications through the
+    /// ephemeral sugar surface) and future ephemeral-surface XOR-
+    /// partition landmark tests peer to the point-surface pins in
+    /// `tatara-check.rs`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the [`ClassificationAxis::overlay`] trait
+    /// owns the axis-dispatch proof at ONE site and this primitive
+    /// extends the ONE-site guarantee to the (ephemeral-spec ×
+    /// authored-classification × axis-overlay) construction shape.
+    /// THEORY.md §VI.1 — generation over composition; the 3-to-4-line
+    /// hand-authored classification-then-wrap shape recurred at ≥ 36
+    /// hand-authored callsites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold and is lifted onto ONE substrate owner
+    /// here.
+    #[must_use]
+    pub fn with_classification_axis<A: ClassificationAxis>(mut self, axis: A) -> Self {
+        let mut c = self
+            .classification
+            .take()
+            .unwrap_or_else(Classification::gate_compute);
+        axis.overlay(&mut c);
+        self.classification = Some(c);
+        self
     }
 
     /// True iff the resolved [`Classification`] carries the given
@@ -2585,6 +2688,307 @@ mod tests {
             assert_eq!(
                 via_composer, via_hand_authored,
                 "OptimizationDirection::{direction:?}: composer vs pre-sweep hand-authored struct-literal drift",
+            );
+        }
+    }
+
+    /// Primitive-owner pin — `EphemeralSpec::with_classification_axis`
+    /// on a `classification: None` carrier produces an ephemeral spec
+    /// whose `classification` slot is
+    /// `Some(Classification::gate_compute_with_axis(axis))` byte-for-
+    /// byte on every axis-variant, and preserves every non-
+    /// classification slot at its pre-call value. A regression that
+    /// (a) failed to wrap the composed [`Classification`] in `Some(_)`
+    /// on the `None`-arm, (b) mutated a sibling slot on `EphemeralSpec`
+    /// through the axis overlay, or (c) picked a different `None`-arm
+    /// fill-through than the sibling
+    /// [`Self::resolved_classification`] resolver would fail HERE.
+    #[test]
+    fn with_classification_axis_on_none_arm_fills_through_gate_compute() {
+        fn baseline() -> EphemeralSpec {
+            EphemeralSpec {
+                aplicacao: demo_overlay(),
+                ttl: "2h".into(),
+                teardown: TeardownPolicy::OnAttested,
+                max_concurrent: 3,
+                postconditions: vec![],
+                preconditions: vec![],
+                verify_timeout: Some("30m".into()),
+                classification: None,
+                parent: Some("seph.1".into()),
+                exports: vec![],
+                routing: None,
+            }
+        }
+        // Direct-scalar axes: composer output matches
+        // `Classification::gate_compute_with_axis(axis)` byte-for-byte,
+        // wrapped in `Some(_)`.
+        for kind in ConvergencePointType::ALL {
+            let via_composer = baseline().with_classification_axis(kind);
+            assert_eq!(
+                via_composer.classification,
+                Some(Classification::gate_compute_with_axis(kind)),
+                "ConvergencePointType::{kind:?}: composer vs gate_compute_with_axis Some(_) drift on None-arm",
+            );
+        }
+        for kind in SubstrateType::ALL {
+            let via_composer = baseline().with_classification_axis(kind);
+            assert_eq!(
+                via_composer.classification,
+                Some(Classification::gate_compute_with_axis(kind)),
+                "SubstrateType::{kind:?}: composer vs gate_compute_with_axis Some(_) drift on None-arm",
+            );
+        }
+        for kind in CalmClassification::ALL {
+            let via_composer = baseline().with_classification_axis(kind);
+            assert_eq!(
+                via_composer.classification,
+                Some(Classification::gate_compute_with_axis(kind)),
+                "CalmClassification::{kind:?}: composer vs gate_compute_with_axis Some(_) drift on None-arm",
+            );
+        }
+        for kind in DataClassification::ALL {
+            let via_composer = baseline().with_classification_axis(kind);
+            assert_eq!(
+                via_composer.classification,
+                Some(Classification::gate_compute_with_axis(kind)),
+                "DataClassification::{kind:?}: composer vs gate_compute_with_axis Some(_) drift on None-arm",
+            );
+        }
+        // Horizon-nested axes: same shape through the trait's
+        // sub-slot overlay.
+        for kind in HorizonKind::ALL {
+            let via_composer = baseline().with_classification_axis(kind);
+            assert_eq!(
+                via_composer.classification,
+                Some(Classification::gate_compute_with_axis(kind)),
+                "HorizonKind::{kind:?}: composer vs gate_compute_with_axis Some(_) drift on None-arm",
+            );
+        }
+        for direction in OptimizationDirection::ALL {
+            let via_composer = baseline().with_classification_axis(direction);
+            assert_eq!(
+                via_composer.classification,
+                Some(Classification::gate_compute_with_axis(direction)),
+                "OptimizationDirection::{direction:?}: composer vs gate_compute_with_axis Some(_) drift on None-arm",
+            );
+        }
+        // Non-classification slots: every one preserved byte-for-byte
+        // across the overlay on every axis. Compare through JSON
+        // round-trip since `AplicacaoIntent` / `ExportSpec` /
+        // `RoutingSpec` do not carry `PartialEq`.
+        for kind in ConvergencePointType::ALL {
+            let via_composer = baseline().with_classification_axis(kind);
+            let baseline_ref = baseline();
+            assert_eq!(
+                serde_json::to_string(&via_composer.aplicacao).unwrap(),
+                serde_json::to_string(&baseline_ref.aplicacao).unwrap(),
+                "aplicacao slot drifted under axis overlay for kind={kind:?}",
+            );
+            assert_eq!(via_composer.ttl, baseline_ref.ttl);
+            assert_eq!(via_composer.teardown, baseline_ref.teardown);
+            assert_eq!(via_composer.max_concurrent, baseline_ref.max_concurrent);
+            assert_eq!(
+                via_composer.postconditions.len(),
+                baseline_ref.postconditions.len()
+            );
+            assert_eq!(
+                via_composer.preconditions.len(),
+                baseline_ref.preconditions.len()
+            );
+            assert_eq!(via_composer.verify_timeout, baseline_ref.verify_timeout);
+            assert_eq!(via_composer.parent, baseline_ref.parent);
+            assert_eq!(via_composer.exports.len(), baseline_ref.exports.len());
+            assert!(via_composer.routing.is_none());
+        }
+    }
+
+    /// Primitive-owner pin —
+    /// `EphemeralSpec::with_classification_axis` on a
+    /// `classification: Some(prior)` carrier composes the axis
+    /// overlay onto `prior` via [`ClassificationAxis::overlay`],
+    /// preserving every OTHER axis slot on `prior`. Distinct from the
+    /// `None`-arm pin above: the `Some(prior)` arm does NOT reset
+    /// through [`Classification::gate_compute`], and consecutive
+    /// `.with_classification_axis(...)` calls compose arbitrary
+    /// N-axis conjunctions on the ephemeral surface with the same
+    /// order-independence guarantee [`Classification::with_axis`]
+    /// carries on distinct-slot axes.
+    #[test]
+    fn with_classification_axis_on_some_arm_chains_onto_prior() {
+        fn baseline() -> EphemeralSpec {
+            EphemeralSpec {
+                aplicacao: demo_overlay(),
+                ttl: "1h".into(),
+                teardown: TeardownPolicy::Always,
+                max_concurrent: 0,
+                postconditions: vec![],
+                preconditions: vec![],
+                verify_timeout: None,
+                classification: None,
+                parent: None,
+                exports: vec![],
+                routing: None,
+            }
+        }
+        // Prior authored point_type = Fork; overlay substrate = Storage
+        // preserves the Fork point_type on the composed classification.
+        let seeded = baseline().with_classification_axis(ConvergencePointType::Fork);
+        let composed = seeded.with_classification_axis(SubstrateType::Storage);
+        let classification = composed
+            .classification
+            .as_ref()
+            .expect("with_classification_axis populates Some(_)");
+        assert_eq!(classification.point_type, ConvergencePointType::Fork);
+        assert_eq!(classification.substrate, SubstrateType::Storage);
+        // Order independence on distinct-slot axes: swapping the axis
+        // chain reads the SAME final classification.
+        let forward = baseline()
+            .with_classification_axis(ConvergencePointType::Fork)
+            .with_classification_axis(SubstrateType::Storage)
+            .with_classification_axis(CalmClassification::NonMonotone)
+            .with_classification_axis(DataClassification::Pii)
+            .classification
+            .unwrap();
+        let reverse = baseline()
+            .with_classification_axis(DataClassification::Pii)
+            .with_classification_axis(CalmClassification::NonMonotone)
+            .with_classification_axis(SubstrateType::Storage)
+            .with_classification_axis(ConvergencePointType::Fork)
+            .classification
+            .unwrap();
+        assert_eq!(
+            forward, reverse,
+            "with_classification_axis chain must be order-independent on distinct-slot axes",
+        );
+        // Nested horizon-sub-slot overlays compose onto the same
+        // carrier without stomping each other: the (kind, direction)
+        // pair rides both chains.
+        let paired = baseline()
+            .with_classification_axis(HorizonKind::Asymptotic)
+            .with_classification_axis(OptimizationDirection::Maximize)
+            .classification
+            .unwrap();
+        assert_eq!(paired.horizon.kind, HorizonKind::Asymptotic);
+        assert_eq!(
+            paired.horizon.direction,
+            Some(OptimizationDirection::Maximize)
+        );
+    }
+
+    /// Primitive-owner pin —
+    /// `EphemeralSpec::with_classification_axis` composes byte-for-
+    /// byte with the pre-sweep hand-authored two-shape callsite
+    /// pattern that recurred at ~36 sites in
+    /// `tatara-reconciler::bin::tatara-check`: either
+    /// `let mut c = Classification::gate_compute(); c.<axis> =
+    /// populated; EphemeralSpec { classification: Some(c), ..
+    /// baseline }`, or the newer `let c =
+    /// Classification::gate_compute_with_axis(populated); EphemeralSpec
+    /// { classification: Some(c), ..baseline }`. Both restated
+    /// pre-sweep shapes classify identically to
+    /// `baseline.with_classification_axis(populated)` on every
+    /// [`ClassificationAxis`] impl. A regression that drifted the
+    /// composer body away from the pre-sweep shape (a stray reset of a
+    /// non-classification slot, a stomping of a nested horizon sub-
+    /// slot on the direct-scalar axes) fails HERE at ONE landmark site
+    /// before drifting through the ~36 swept callsites in tatara-
+    /// check.rs.
+    #[test]
+    fn with_classification_axis_matches_pre_sweep_hand_authored_shape() {
+        fn baseline() -> EphemeralSpec {
+            EphemeralSpec {
+                aplicacao: demo_overlay(),
+                ttl: "1h".into(),
+                teardown: TeardownPolicy::Always,
+                max_concurrent: 0,
+                postconditions: vec![],
+                preconditions: vec![],
+                verify_timeout: None,
+                classification: None,
+                parent: None,
+                exports: vec![],
+                routing: None,
+            }
+        }
+        // Direct-scalar axes: `<eph>.with_classification_axis(kind)`
+        // matches the pre-sweep two-shape callsite pattern on every
+        // ConvergencePointType variant.
+        for kind in ConvergencePointType::ALL {
+            let via_composer = baseline().with_classification_axis(kind);
+            let mut hand_classification = Classification::gate_compute();
+            hand_classification.point_type = kind;
+            let via_hand = EphemeralSpec {
+                classification: Some(hand_classification),
+                ..baseline()
+            };
+            assert_eq!(
+                via_composer.classification, via_hand.classification,
+                "ConvergencePointType::{kind:?}: composer vs pre-sweep hand-authored classification drift",
+            );
+        }
+        for kind in SubstrateType::ALL {
+            let via_composer = baseline().with_classification_axis(kind);
+            let mut hand_classification = Classification::gate_compute();
+            hand_classification.substrate = kind;
+            let via_hand = EphemeralSpec {
+                classification: Some(hand_classification),
+                ..baseline()
+            };
+            assert_eq!(
+                via_composer.classification, via_hand.classification,
+                "SubstrateType::{kind:?}: composer vs pre-sweep hand-authored classification drift",
+            );
+        }
+        for kind in CalmClassification::ALL {
+            let via_composer = baseline().with_classification_axis(kind);
+            let mut hand_classification = Classification::gate_compute();
+            hand_classification.calm = kind;
+            let via_hand = EphemeralSpec {
+                classification: Some(hand_classification),
+                ..baseline()
+            };
+            assert_eq!(
+                via_composer.classification, via_hand.classification,
+                "CalmClassification::{kind:?}: composer vs pre-sweep hand-authored classification drift",
+            );
+        }
+        for kind in DataClassification::ALL {
+            let via_composer = baseline().with_classification_axis(kind);
+            let mut hand_classification = Classification::gate_compute();
+            hand_classification.data_classification = kind;
+            let via_hand = EphemeralSpec {
+                classification: Some(hand_classification),
+                ..baseline()
+            };
+            assert_eq!(
+                via_composer.classification, via_hand.classification,
+                "DataClassification::{kind:?}: composer vs pre-sweep hand-authored classification drift",
+            );
+        }
+        // Horizon-nested axes: composer matches the newer
+        // `gate_compute_with_axis` shape used on the horizon-nested
+        // sweep sites in tatara-check.rs.
+        for kind in HorizonKind::ALL {
+            let via_composer = baseline().with_classification_axis(kind);
+            let via_hand = EphemeralSpec {
+                classification: Some(Classification::gate_compute_with_axis(kind)),
+                ..baseline()
+            };
+            assert_eq!(
+                via_composer.classification, via_hand.classification,
+                "HorizonKind::{kind:?}: composer vs pre-sweep gate_compute_with_axis Some(_) drift",
+            );
+        }
+        for direction in OptimizationDirection::ALL {
+            let via_composer = baseline().with_classification_axis(direction);
+            let via_hand = EphemeralSpec {
+                classification: Some(Classification::gate_compute_with_axis(direction)),
+                ..baseline()
+            };
+            assert_eq!(
+                via_composer.classification, via_hand.classification,
+                "OptimizationDirection::{direction:?}: composer vs pre-sweep gate_compute_with_axis Some(_) drift",
             );
         }
     }

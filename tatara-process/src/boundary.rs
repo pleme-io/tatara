@@ -481,6 +481,116 @@ impl Boundary {
     pub fn count_postcondition_kind(&self, kind: ConditionKind) -> usize {
         self.postconditions.count_kind(kind)
     }
+
+    /// The set of [`ConditionKind`] variants that appear at least once in
+    /// `preconditions ∪ postconditions`, projected in
+    /// [`ConditionKind::ALL`] order — the closed-set-inversion refinement
+    /// on the presence-probe algebra (distinct axis from the four point-
+    /// probe refinements: bool via [`Self::has_condition_kind`],
+    /// `Option<&Condition>` via [`Self::find_condition_kind`],
+    /// `impl Iterator<Item = &Condition>` via [`Self::iter_condition_kind`],
+    /// `usize` via [`Self::count_condition_kind`]).
+    ///
+    /// # Composed body
+    ///
+    /// `ConditionKind::ALL.into_iter().filter(|k|
+    /// self.has_condition_kind(*k)).collect()` — a thin projection over
+    /// the closed set composed against the two-slice union primitive
+    /// [`Self::has_condition_kind`]. Equivalent to the set-union of
+    /// [`Self::distinct_precondition_kinds`] and
+    /// [`Self::distinct_postcondition_kinds`] projected in canonical
+    /// [`ConditionKind::ALL`] order (the union composition law pinned by
+    /// the substrate testkit macro [`crate::assert_surface_union_composition_laws`]).
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::distinct_condition_kinds`]
+    ///
+    /// Same signature `(&Self) -> Vec<ConditionKind>`, same closed-set-
+    /// inversion body, on the sugar-surface type whose pre/post condition
+    /// vectors live directly on the struct. Both methods compose against
+    /// the SAME slice-level substrate primitive
+    /// [`ConditionSliceExt::distinct_kinds`] via the two-slice union
+    /// composed through [`Self::has_condition_kind`] — a regression at
+    /// the per-slice walk fails at that primitive's tests rather than as
+    /// silent drift at either struct-level union caller.
+    ///
+    /// # Sibling to the four point-probe refinements
+    ///
+    /// FIFTH refinement on the boundary-surface presence-probe algebra,
+    /// distinct in axis from the other four: `has_condition_kind` /
+    /// `find_condition_kind` / `iter_condition_kind` /
+    /// `count_condition_kind` fix a [`ConditionKind`] and vary the return
+    /// type; this refinement INVERTS the axis by fixing the boundary and
+    /// varying over [`ConditionKind::ALL`]. The composition law
+    /// `distinct_condition_kinds().contains(&k) == has_condition_kind(k)`
+    /// for every `k ∈ ConditionKind::ALL` binds the closed-set-inversion
+    /// probe to the point probe at the (precondition, postcondition,
+    /// condition-union) triad.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that enforces "every process boundary
+    /// carries at least ONE distinct kind" (a warning surfaced when
+    /// `spec.boundary.distinct_condition_kinds().is_empty()`) reaches
+    /// this ONE method rather than paying for the eight-way sweep with
+    /// `has_condition_kind` at every callsite. A future require-tag
+    /// classifier that surfaces the distinct-set cardinality as a scalar
+    /// (a hypothetical `condition-kinds-distinct-<n>` prefix family, an
+    /// audit dump reporting "boundary carries N distinct kinds") reaches
+    /// this ONE method through `.distinct_condition_kinds().len()`
+    /// rather than restating the closed-set-inverted filter idiom at
+    /// every callsite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the closed-set-inversion aggregate is a typed projection
+    /// of [`Self::has_condition_kind`] over [`ConditionKind::ALL`], and
+    /// every downstream aggregate consumer binds through the SAME shape).
+    /// THEORY.md §VI.1 (generation over composition — a new
+    /// [`ConditionKind`] variant added to `ALL` reaches this method
+    /// mechanically through the closed-set walk).
+    #[must_use]
+    pub fn distinct_condition_kinds(&self) -> Vec<ConditionKind> {
+        ConditionKind::ALL
+            .into_iter()
+            .filter(|k| self.has_condition_kind(*k))
+            .collect()
+    }
+
+    /// The set of [`ConditionKind`] variants appearing at least once in
+    /// [`Self::preconditions`], projected in [`ConditionKind::ALL`]
+    /// order — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) distinct-set triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::distinct_kinds`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::distinct_postcondition_kinds`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive and their canonical set-union
+    /// (projected in [`ConditionKind::ALL`] order) is
+    /// [`Self::distinct_condition_kinds`].
+    #[must_use]
+    pub fn distinct_precondition_kinds(&self) -> Vec<ConditionKind> {
+        self.preconditions.distinct_kinds()
+    }
+
+    /// The set of [`ConditionKind`] variants appearing at least once in
+    /// [`Self::postconditions`], projected in [`ConditionKind::ALL`]
+    /// order — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) distinct-set triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::distinct_kinds`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::distinct_precondition_kinds`]. See that method
+    /// for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via [`crate::ephemeral::EphemeralSpec::distinct_postcondition_kinds`].
+    #[must_use]
+    pub fn distinct_postcondition_kinds(&self) -> Vec<ConditionKind> {
+        self.postconditions.distinct_kinds()
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -677,6 +787,94 @@ pub trait ConditionSliceExt {
     fn count_kind(&self, kind: ConditionKind) -> usize {
         self.iter_kind(kind).count()
     }
+
+    /// The set of [`ConditionKind`] variants that appear at least once in
+    /// this slice, projected in [`ConditionKind::ALL`] order — the
+    /// closed-set-inversion refinement on the slice-level presence-probe
+    /// axis. Default body: `ConditionKind::ALL.into_iter().filter(|k|
+    /// self.has_kind(*k)).collect()` — a thin projection over the closed
+    /// set that composes against [`Self::has_kind`] per variant.
+    ///
+    /// # Sibling to [`Self::has_kind`] / [`Self::find_kind`] / [`Self::iter_kind`] / [`Self::count_kind`]
+    ///
+    /// FIFTH refinement on the presence-probe algebra, distinct in axis
+    /// from the other four: `has_kind` / `find_kind` / `iter_kind` /
+    /// `count_kind` fix a [`ConditionKind`] and vary the return type
+    /// (bool / `Option<&Condition>` / `impl Iterator<Item = &Condition>` /
+    /// `usize`); this refinement INVERTS the axis by fixing the slice and
+    /// varying over [`ConditionKind::ALL`], returning the SET of present
+    /// kinds. The composition law
+    /// `distinct_kinds().contains(&k) == has_kind(k)` for every
+    /// `k ∈ ConditionKind::ALL` binds the closed-set-inversion probe to
+    /// the point probe at the trait's default body.
+    ///
+    /// # Semantics — canonical subsequence of [`ConditionKind::ALL`]
+    ///
+    /// Returns a `Vec<ConditionKind>` whose elements appear in
+    /// [`ConditionKind::ALL`] order with no duplicates. A slice that
+    /// carries the same [`ConditionKind`] at multiple positions
+    /// contributes ONE entry to the returned set (the closed-set
+    /// projection collapses multiplicity — a caller that needs the
+    /// per-kind cardinality reaches for [`Self::count_kind`]). An
+    /// empty slice, or a slice with no matching kind under any
+    /// [`ConditionKind::ALL`] variant, returns an empty vec.
+    ///
+    /// # Why closed-set-inversion is a distinct axis
+    ///
+    /// The other four refinements answer "for THIS kind, how does the
+    /// slice populate the probe's return type?"; this refinement
+    /// answers "for THIS slice, which kinds appear at least once?".
+    /// A consumer that needs to enumerate every present kind for an
+    /// audit dump (`"boundary carries [PromQL, ClosedLoopAuth]"`), a
+    /// coherence check that verifies "every process's boundary carries
+    /// at least ONE of {`JobAttested`, `ClosedLoopAuth`}", or a
+    /// require-tag family that surfaces the distinct-set as a whole
+    /// (`condition-kinds-distinct-count`) reaches this refinement
+    /// rather than paying for a per-kind sweep with `has_kind` at the
+    /// callsite. The point probe stays composable one axis over
+    /// (`slice.has_kind(k)` for a fixed `k`); the aggregate refinement
+    /// lives at the same trait, one axis away.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that enforces "every boundary carries
+    /// at least ONE distinct kind" (a warning surfaced when
+    /// `boundary.distinct_condition_kinds().is_empty()`) reaches this
+    /// ONE primitive rather than paying for the eight-way
+    /// `for k in ConditionKind::ALL { if boundary.has_condition_kind(k)
+    /// { return true; } }` sweep at every callsite. A future require-
+    /// tag classifier arm that publishes the distinct-set cardinality
+    /// as a scalar (a hypothetical `condition-kinds-distinct-<n>`
+    /// prefix family, an audit dump reporting "boundary carries N
+    /// distinct kinds") reaches this ONE primitive through
+    /// `boundary.distinct_condition_kinds().len()` rather than
+    /// restating the closed-set-inverted `.iter().filter(...).count()`
+    /// idiom at every callsite. The presence-probe axis now carries
+    /// FIVE refinements at ONE typed algebra surface — the four point-
+    /// probes fixing a kind AND the ONE closed-set-inversion probe
+    /// fixing a slice — every downstream consumer picks the one that
+    /// answers its question and the others stay compositionally
+    /// derived from the single-source-of-truth widened primitive.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The closed-set-inversion projection lives at ONE substrate
+    ///   site as a typed projection of [`Self::has_kind`] over the
+    ///   closed set [`ConditionKind::ALL`]. Every downstream aggregate
+    ///   consumer binds through the SAME shape rather than restating
+    ///   the ALL-filter closure body.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically (the closed-set walk picks up the new
+    ///   entry) and every downstream consumer sees the wider set
+    ///   without further per-caller edit.
+    fn distinct_kinds(&self) -> Vec<ConditionKind> {
+        ConditionKind::ALL
+            .into_iter()
+            .filter(|k| self.has_kind(*k))
+            .collect()
+    }
 }
 
 /// Iterator yielded by [`ConditionSliceExt::iter_kind`] — the widened
@@ -817,6 +1015,7 @@ pub fn assert_slice_refinement_composition_laws<S>(slice: &S)
 where
     S: ConditionSliceExt + ?Sized,
 {
+    let distinct = slice.distinct_kinds();
     for kind in ConditionKind::ALL {
         let find_result = slice.find_kind(kind);
         let has_result = slice.has_kind(kind);
@@ -847,7 +1046,29 @@ where
             count_result > 0,
             "has_kind({kind:?}) drifted from (count_kind({kind:?}) > 0)",
         );
+        // distinct ↔ has (per-kind membership on the closed-set-inversion axis)
+        assert_eq!(
+            distinct.contains(&kind),
+            has_result,
+            "distinct_kinds().contains({kind:?}) drifted from has_kind({kind:?})",
+        );
     }
+
+    // distinct ↔ ALL-filter (canonical subsequence — closed-set-inversion
+    // walks ConditionKind::ALL in order, filters by has_kind, dedups by
+    // construction). A regression that (a) returned duplicates (a naive
+    // `.iter().map(|c| c.kind).collect()` override that skipped dedup),
+    // (b) drifted the walk order from ConditionKind::ALL to slice-encounter
+    // order, or (c) returned a superset containing absent kinds surfaces
+    // HERE at the substrate boundary.
+    let canonical: Vec<ConditionKind> = ConditionKind::ALL
+        .into_iter()
+        .filter(|k| slice.has_kind(*k))
+        .collect();
+    assert_eq!(
+        distinct, canonical,
+        "distinct_kinds() must yield ConditionKind::ALL-ordered subsequence of kinds where has_kind is true (no duplicates, canonical order)",
+    );
 }
 
 /// Substrate testkit macro — pins the FOUR union composition laws that
@@ -978,6 +1199,13 @@ where
 macro_rules! assert_surface_union_composition_laws {
     ($surface:expr) => {{
         let __surface = &$surface;
+        // Hoist distinct_* out of the per-kind loop — closed-set-inversion
+        // refinements return the WHOLE distinct-set per call, so a single
+        // computation per surface backs the per-kind membership arm inside
+        // the loop AND the canonical-order equality after it.
+        let __distinct_pre_kinds = __surface.distinct_precondition_kinds();
+        let __distinct_post_kinds = __surface.distinct_postcondition_kinds();
+        let __distinct_union_kinds = __surface.distinct_condition_kinds();
         for __kind in $crate::boundary::ConditionKind::ALL {
             // has: union == pre || post (bool OR)
             let __has_via_arms =
@@ -1023,7 +1251,36 @@ macro_rules! assert_surface_union_composition_laws {
                 "surface union count arm drifted from SUM of half-slice arms for {:?}",
                 __kind,
             );
+            // distinct: union.contains(k) == pre.contains(k) || post.contains(k)
+            // (set-union membership per kind on the closed-set-inversion axis)
+            ::core::assert_eq!(
+                __distinct_union_kinds.contains(&__kind),
+                __distinct_pre_kinds.contains(&__kind)
+                    || __distinct_post_kinds.contains(&__kind),
+                "surface distinct union arm drifted from OR-membership of half-slice distinct arms for {:?}",
+                __kind,
+            );
         }
+        // distinct: union == canonical(pre ∪ post) — closed-set-inversion
+        // set-union projected in ConditionKind::ALL order. A regression that
+        // (a) reversed the walk order (post-then-pre), (b) preserved
+        // slice-encounter order rather than ConditionKind::ALL order, or
+        // (c) narrowed the union to an intersection surfaces HERE at the
+        // substrate boundary (the per-kind membership arm above catches
+        // membership drift; this arm catches ordering + dedup drift the
+        // membership arm cannot detect on its own).
+        let __expected_distinct_union: ::std::vec::Vec<_> =
+            $crate::boundary::ConditionKind::ALL
+                .into_iter()
+                .filter(|__k| {
+                    __distinct_pre_kinds.contains(__k)
+                        || __distinct_post_kinds.contains(__k)
+                })
+                .collect();
+        ::core::assert_eq!(
+            __distinct_union_kinds, __expected_distinct_union,
+            "surface distinct union arm drifted from canonical ConditionKind::ALL-ordered set-union of half-slice distinct arms",
+        );
     }};
 }
 
@@ -2644,6 +2901,183 @@ mod tests {
                          pre={pre_kind:?} post={post_kind:?} query={query:?}",
                     );
                 }
+            }
+        }
+    }
+
+    // ── ConditionSliceExt::distinct_kinds — closed-set-inversion axis ──
+    //
+    // The fifth refinement on the slice-level presence-probe algebra
+    // inverts the axis: the four point-probe refinements (has, find,
+    // iter, count) fix a [`ConditionKind`] and vary the return type;
+    // `distinct_kinds` fixes the slice and varies over
+    // [`ConditionKind::ALL`], returning the SET of present kinds
+    // projected in [`ConditionKind::ALL`] order with no duplicates.
+    // The composition-law arms in `assert_slice_refinement_composition_laws`
+    // pin the fifth refinement against `has_kind` per variant AND
+    // against the canonical ALL-order equality; the four dedicated
+    // behavior tests below pin the returned VALUE per authored
+    // arrangement (empty, single-element populated, dual-populated,
+    // duplicate-populated).
+
+    /// EMPTY-SLICE pin — an empty slice returns an empty `Vec` on
+    /// `distinct_kinds`, distinct from every populated arrangement.
+    /// Locks the zero-element identity so a regression that (a)
+    /// returned `ConditionKind::ALL.to_vec()` (the wrong direction of
+    /// the closed-set walk), (b) returned a placeholder `[ProcessPhase]`
+    /// vec (a copy-paste of the first-variant default in a `impl
+    /// Default` for a hypothetical `KindSet` wrapper) surfaces HERE.
+    #[test]
+    fn condition_slice_distinct_kinds_returns_empty_vec_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        assert_eq!(
+            empty.distinct_kinds(),
+            Vec::<ConditionKind>::new(),
+            "empty slice must return empty distinct-kinds vec",
+        );
+    }
+
+    /// PER-VARIANT pin — a slice with EXACTLY ONE `Condition` carrying
+    /// the addressed kind returns `[kind]` — a single-element vec
+    /// containing exactly that kind. Sweep `ConditionKind::ALL` so a
+    /// new variant added without a matching arm in the closed-set walk
+    /// surfaces at rustc's exhaustiveness gate on the ALL literal
+    /// (arity forced by `[Self; 8]`) rather than as a silent false-
+    /// negative at every downstream `distinct_condition_kinds`
+    /// callsite. Locks the closed-set-inversion probe body against a
+    /// regression that (a) always returned `[ProcessPhase]` regardless
+    /// of the actual kind, (b) collapsed `distinct_kinds` to
+    /// `iter_kind(<first ALL variant>).map(|c| c.kind).collect()`
+    /// (silently filtering to only ProcessPhase matches).
+    #[test]
+    fn condition_slice_distinct_kinds_returns_single_element_vec_per_variant() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            assert_eq!(
+                slice.distinct_kinds(),
+                vec![populated],
+                "single-populated slice must return exactly [{populated:?}] on distinct_kinds",
+            );
+        }
+    }
+
+    /// DEDUP pin — a slice with the SAME kind at multiple positions
+    /// (three interleaved with distinct kinds) returns a distinct-set
+    /// containing that kind exactly ONCE. The closed-set-inversion
+    /// projection collapses multiplicity — a caller that needs the
+    /// per-kind cardinality reaches for `count_kind`; this refinement
+    /// returns the PRESENCE set. A regression that (a) omitted the
+    /// dedup and returned `[ClosedLoopAuth, PromQL, ClosedLoopAuth,
+    /// PromQL, ClosedLoopAuth]` (byte-identical to
+    /// `slice.iter().map(|c| c.kind).collect()` — the wrong closed-
+    /// set walk direction), (b) counted every duplicate as a distinct
+    /// entry via a `.collect::<HashSet<_>>()` without canonicalizing
+    /// order surfaces HERE.
+    #[test]
+    fn condition_slice_distinct_kinds_deduplicates_and_yields_canonical_all_order() {
+        let interleaved = [
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "first" }),
+            },
+            Condition {
+                kind: ConditionKind::PromQL,
+                params: json!({ "query": "up" }),
+            },
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "second" }),
+            },
+            Condition {
+                kind: ConditionKind::PromQL,
+                params: json!({ "query": "healthy" }),
+            },
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "third" }),
+            },
+        ];
+        // Canonical ConditionKind::ALL order: PromQL is at position 3,
+        // ClosedLoopAuth at position 7 in the ALL array. So PromQL comes
+        // FIRST in the distinct-set even though ClosedLoopAuth appears
+        // FIRST in the slice — the closed-set-inversion walk is
+        // ordered by ConditionKind::ALL, not by slice-encounter order.
+        assert_eq!(
+            interleaved.distinct_kinds(),
+            vec![ConditionKind::PromQL, ConditionKind::ClosedLoopAuth],
+            "interleaved-duplicate slice must dedup AND order by ConditionKind::ALL, not by slice-encounter order",
+        );
+    }
+
+    /// FULL-COVERAGE pin — a slice that carries every [`ConditionKind`]
+    /// variant returns `ConditionKind::ALL.to_vec()` on `distinct_kinds`.
+    /// The closed-set-inversion probe covers the full closed set at ONE
+    /// call site — a regression that missed one variant in the walk
+    /// (skipping the FIRST or LAST `ALL` entry via a `[1..]` or
+    /// `[..ALL.len() - 1]` slice bug in the closed-set walk) surfaces
+    /// HERE.
+    #[test]
+    fn condition_slice_distinct_kinds_covers_full_closed_set_on_saturated_slice() {
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert_eq!(
+            saturated.as_slice().distinct_kinds(),
+            ConditionKind::ALL.to_vec(),
+            "slice containing every ConditionKind must return ConditionKind::ALL as its distinct-set",
+        );
+    }
+
+    // ── Boundary distinct-set triad — substrate-delegation pins ────────
+    //
+    // The (precondition, postcondition, condition-union) distinct-set
+    // triad on [`Boundary`] delegates to the slice-level substrate
+    // primitive [`ConditionSliceExt::distinct_kinds`] on each half-slice
+    // and composes the union via [`Self::has_condition_kind`] over
+    // [`ConditionKind::ALL`]. The dedicated tests below pin each arm's
+    // delegation shape; the substrate testkit macro
+    // `assert_surface_union_composition_laws` (extended in this commit
+    // with the closed-set-inversion arm) pins the union composition law
+    // against the two half-slice arms in canonical ALL-order.
+
+    /// SUBSTRATE-DELEGATION pin (Boundary distinct-set triad) — the
+    /// three `distinct_*_kinds` methods on [`Boundary`] delegate to the
+    /// slice-level substrate primitive over the two `Vec<Condition>`
+    /// slots (precondition + postcondition) and compose the union via
+    /// `ConditionKind::ALL.filter(|k| has_condition_kind(*k))`. Sweep
+    /// `ConditionKind::ALL × ConditionKind::ALL` so a regression that
+    /// (a) inlined a divergent closed-set walk at either half-slice
+    /// arm, (b) reversed the union walk order, or (c) narrowed the
+    /// union to an intersection surfaces HERE.
+    #[test]
+    fn distinct_condition_kinds_triad_delegates_to_slice_distinct_kinds() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                assert_eq!(
+                    b.distinct_precondition_kinds(),
+                    b.preconditions.distinct_kinds(),
+                    "Boundary::distinct_precondition_kinds must delegate verbatim to \
+                     preconditions.distinct_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.distinct_postcondition_kinds(),
+                    b.postconditions.distinct_kinds(),
+                    "Boundary::distinct_postcondition_kinds must delegate verbatim to \
+                     postconditions.distinct_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let expected_union: Vec<_> = ConditionKind::ALL
+                    .into_iter()
+                    .filter(|k| pre_kind == *k || post_kind == *k)
+                    .collect();
+                assert_eq!(
+                    b.distinct_condition_kinds(),
+                    expected_union,
+                    "Boundary::distinct_condition_kinds must equal ConditionKind::ALL-ordered \
+                     set-union of the two half-slice distinct-sets for pre={pre_kind:?} post={post_kind:?}",
+                );
             }
         }
     }

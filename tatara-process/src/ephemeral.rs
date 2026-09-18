@@ -541,6 +541,104 @@ impl EphemeralSpec {
         self.postconditions.count_kind(kind)
     }
 
+    /// The set of [`ConditionKind`] variants appearing at least once in
+    /// `preconditions ∪ postconditions`, projected in
+    /// [`ConditionKind::ALL`] order — the peer of
+    /// [`crate::boundary::Boundary::distinct_condition_kinds`] on the
+    /// [`EphemeralSpec`] sugar surface.
+    ///
+    /// # Semantics — byte-identical to [`crate::boundary::Boundary::distinct_condition_kinds`]
+    ///
+    /// Composed as `ConditionKind::ALL.into_iter().filter(|k|
+    /// self.has_condition_kind(*k)).collect()` — the ONE closed-set-
+    /// inversion arm on the presence-probe algebra (distinct in axis
+    /// from the four point-probe arms `has_condition_kind` /
+    /// `find_condition_kind` / `iter_condition_kind` /
+    /// `count_condition_kind` which fix a [`ConditionKind`] and vary
+    /// the return type). Equivalent to the set-union of
+    /// [`Self::distinct_precondition_kinds`] and
+    /// [`Self::distinct_postcondition_kinds`] projected in canonical
+    /// [`ConditionKind::ALL`] order.
+    ///
+    /// # Peer on the point surface — [`crate::boundary::Boundary::distinct_condition_kinds`]
+    ///
+    /// Same signature `(&Self) -> Vec<ConditionKind>`, same closed-set-
+    /// inversion body, on the point-domain [`crate::boundary::Boundary`]
+    /// nested-slot carrier. Both methods compose against the SAME
+    /// slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::distinct_kinds`] via the
+    /// two-slice union composed through [`Self::has_condition_kind`] —
+    /// a regression at the per-slice walk fails at that primitive's
+    /// tests rather than as silent drift at either struct-level union
+    /// caller.
+    ///
+    /// # Sibling to the four point-probe refinements
+    ///
+    /// FIFTH refinement on the ephemeral-surface presence-probe algebra,
+    /// distinct in axis from the other four. The composition law
+    /// `distinct_condition_kinds().contains(&k) == has_condition_kind(k)`
+    /// for every `k ∈ ConditionKind::ALL` binds the closed-set-inversion
+    /// probe to the point probe at the (precondition, postcondition,
+    /// condition-union) triad. The two-surface parity contract now
+    /// covers FIVE refinements (bool / `&Condition` / `impl Iterator` /
+    /// `usize` / `Vec<ConditionKind>` closed-set-inversion) on the
+    /// condition axis, byte-for-byte peer of the point-domain triad on
+    /// [`crate::boundary::Boundary`].
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the closed-set-inversion aggregate composes the SAME
+    /// slice-level substrate primitive on both this ephemeral surface
+    /// and the point-domain [`crate::boundary::Boundary`] surface).
+    /// THEORY.md §VI.1 (generation over composition — a future
+    /// [`ConditionKind`] variant added to `ALL` reaches both surfaces'
+    /// distinct-set triads mechanically through the SAME closed-set
+    /// walk).
+    #[must_use]
+    pub fn distinct_condition_kinds(&self) -> Vec<ConditionKind> {
+        ConditionKind::ALL
+            .into_iter()
+            .filter(|k| self.has_condition_kind(*k))
+            .collect()
+    }
+
+    /// The set of [`ConditionKind`] variants appearing at least once in
+    /// [`Self::preconditions`], projected in [`ConditionKind::ALL`]
+    /// order — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) distinct-set triad on
+    /// [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::distinct_kinds`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`crate::boundary::Boundary::distinct_precondition_kinds`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice closed-set walk fails at that primitive's tests
+    /// rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn distinct_precondition_kinds(&self) -> Vec<ConditionKind> {
+        self.preconditions.distinct_kinds()
+    }
+
+    /// The set of [`ConditionKind`] variants appearing at least once in
+    /// [`Self::postconditions`], projected in [`ConditionKind::ALL`]
+    /// order — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) distinct-set triad on
+    /// [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::distinct_kinds`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`crate::boundary::Boundary::distinct_postcondition_kinds`]
+    /// on the point-domain surface. See
+    /// [`Self::distinct_precondition_kinds`] for the full rationale —
+    /// the two methods share ONE lift motivation, ONE fail-before-
+    /// pass-after composition-law pin, and ONE two-surface parity
+    /// contract with the point-domain
+    /// [`crate::boundary::Boundary`] distinct-set peer methods.
+    #[must_use]
+    pub fn distinct_postcondition_kinds(&self) -> Vec<ConditionKind> {
+        self.postconditions.distinct_kinds()
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -4985,6 +5083,64 @@ mod tests {
                          pre={pre_kind:?} post={post_kind:?} query={query:?}",
                     );
                 }
+            }
+        }
+    }
+
+    // ── EphemeralSpec distinct-set triad — substrate-delegation pin ──
+    //
+    // The (precondition, postcondition, condition-union) distinct-set
+    // triad on [`EphemeralSpec`] delegates to the slice-level substrate
+    // primitive [`crate::boundary::ConditionSliceExt::distinct_kinds`]
+    // on each half-slice and composes the union via
+    // [`Self::has_condition_kind`] over [`ConditionKind::ALL`] — byte-
+    // for-byte peer of the point-surface distinct-set triad on
+    // [`crate::boundary::Boundary`]. The two-surface parity contract
+    // now covers FIVE refinements on the condition axis: the four
+    // point-probe refinements (has / find / iter / count) AND the ONE
+    // closed-set-inversion refinement (distinct-set) on both surfaces.
+
+    /// SUBSTRATE-DELEGATION pin (ephemeral surface, distinct-set triad)
+    /// — the three `distinct_*_kinds` methods on [`EphemeralSpec`]
+    /// delegate to the slice-level substrate primitive over the two
+    /// `Vec<Condition>` slots and compose the union via
+    /// `ConditionKind::ALL.filter(|k| has_condition_kind(*k))`. Byte-
+    /// for-byte peer of the point-surface pin
+    /// `distinct_condition_kinds_triad_delegates_to_slice_distinct_kinds`
+    /// on [`crate::boundary::Boundary`] — the two-surface parity
+    /// contract binds every downstream distinct-set consumer on either
+    /// surface to the SAME closed-set-inversion primitive through ONE
+    /// substrate rather than through per-surface re-authored sweeps.
+    #[test]
+    fn ephemeral_distinct_condition_kinds_triad_delegates_to_slice_distinct_kinds() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+
+                assert_eq!(
+                    spec.distinct_precondition_kinds(),
+                    spec.preconditions.distinct_kinds(),
+                    "EphemeralSpec::distinct_precondition_kinds must delegate verbatim to \
+                     preconditions.distinct_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.distinct_postcondition_kinds(),
+                    spec.postconditions.distinct_kinds(),
+                    "EphemeralSpec::distinct_postcondition_kinds must delegate verbatim to \
+                     postconditions.distinct_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let expected_union: Vec<_> = ConditionKind::ALL
+                    .into_iter()
+                    .filter(|k| pre_kind == *k || post_kind == *k)
+                    .collect();
+                assert_eq!(
+                    spec.distinct_condition_kinds(),
+                    expected_union,
+                    "EphemeralSpec::distinct_condition_kinds must equal ConditionKind::ALL-ordered \
+                     set-union of the two half-slice distinct-sets for pre={pre_kind:?} post={post_kind:?}",
+                );
             }
         }
     }

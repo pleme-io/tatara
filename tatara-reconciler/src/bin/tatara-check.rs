@@ -2614,6 +2614,87 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "multi-input-arity",
         probe: |s| s.classification.input_arity_is_many(),
     },
+    // `single-output-arity` — EIGHTEENTH occupant on the (parent ×
+    // derived-nullary-bool) corner of the workspace-wide fixed-tag
+    // algebra after the seventeen prior arms; FIRST occupant threading
+    // the classification-`point_type`-derived OUTPUT-arity axis —
+    // opens the EIGHTH classification axis into the fixed-tag algebra
+    // after the seven axes (horizon, calm, data, point-type, substrate,
+    // optimization-direction, input-arity) already opened + closed at
+    // the corner. Composes the ONE substrate primitive
+    // [`tatara_process::classification::Classification::output_arity_is_one`]
+    // that walks `self.point_type.output_arity().is_one()` — the
+    // DAG-composition output-cardinality projection reached through
+    // [`tatara_process::classification::ConvergencePointType::output_arity`]
+    // as a fixed-tag audit surface. Answers the DAG-composition-facing
+    // question "does this Process emit a SINGLE downstream edge
+    // (endomorphic Transform | Observe topologies, or fan-in
+    // sinks Join | Gate | Select | Reduce)?" — `true` on the
+    // [`Classification::gate_compute`] baseline (`point_type = Gate` →
+    // `output_arity = One`) and on the `Transform | Join | Gate |
+    // Select | Reduce | Observe` single-output variants, `false` on
+    // the `Fork | Broadcast` fan-out variants. Distinct from the
+    // sibling `single-input-arity` arm on this table which walks the
+    // SAME `self.point_type` slot through the INPUT-arity projection —
+    // this arm's projection carves the closed set into the OUTPUT-
+    // cardinality bucket rather than the input-cardinality one. A
+    // future antisymmetric peer `multi-output-arity` closes the binary
+    // XOR partition on this axis — mirror of the input-arity axis
+    // (`single-input-arity ⊕ multi-input-arity`), the calm-axis
+    // (`monotone-calm ⊕ coordination-required`), the data-axis
+    // (`public-data ⊕ data-restricted`), and the optimization-
+    // direction-axis (`prefers-lower-direction ⊕
+    // prefers-higher-direction`) closures. Byte-for-byte symmetrical
+    // with the ephemeral surface's `single-output-arity` arm on
+    // [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::output_arity_is_one`]
+    // — both surfaces route through the SAME
+    // [`Classification::output_arity_is_one`] primitive after the
+    // ephemeral surface pays ONE resolver hop.
+    FixedTagArm {
+        tag: "single-output-arity",
+        probe: |s| s.classification.output_arity_is_one(),
+    },
+    // `multi-output-arity` — NINETEENTH occupant on the (parent ×
+    // derived-nullary-bool) corner of the workspace-wide fixed-tag
+    // algebra; SECOND occupant threading the classification-
+    // `point_type`-derived OUTPUT-arity axis — CLOSES the EIGHTH
+    // classification axis into a binary XOR partition on the point-
+    // surface fixed-tag corner after the horizon, calm, data, point-
+    // type, substrate, optimization-direction, and input-arity axes'
+    // closures. Composes the ONE substrate primitive
+    // [`tatara_process::classification::Classification::output_arity_is_many`]
+    // that walks `self.point_type.output_arity().is_many()` — the
+    // DAG-composition output-cardinality projection reached through
+    // [`tatara_process::classification::ConvergencePointType::output_arity`]
+    // as a fixed-tag audit surface. Answers the DAG-composition-facing
+    // question "does this Process fan out into MULTIPLE downstream
+    // edges (Fork | Broadcast fan-out topologies)?" — `false` on the
+    // [`Classification::gate_compute`] baseline (`point_type = Gate` →
+    // `output_arity = One`) and on the `Transform | Join | Gate |
+    // Select | Reduce | Observe` single-output variants, `true` on
+    // the `Fork | Broadcast` fan-out variants. Antisymmetric peer of
+    // the sibling `single-output-arity` arm on this table — the
+    // operator's `:requires (single-output-arity)` audit is the exact
+    // complement of `:requires (multi-output-arity)` per the closed-
+    // set XOR pin composed through the parent-composed layer by
+    // `classification_output_arity_probes_form_binary_xor_partition_over_all`.
+    // Byte-for-byte symmetrical with the ephemeral surface's
+    // `multi-output-arity` arm on [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::output_arity_is_many`]
+    // — both surfaces route through the SAME
+    // [`Classification::output_arity_is_many`] primitive after the
+    // ephemeral surface pays ONE resolver hop. With this arm the
+    // output-arity axis is the FIFTH binary-XOR-partition closure
+    // landmark on this corner (after calm, data, optimization-
+    // direction, input-arity) that structurally twins the ternary
+    // partitions already sealed on the sibling `point_type` and
+    // `substrate` axes — completes the DAG-composition arity PAIR
+    // (input × output) on the fixed-tag corner.
+    FixedTagArm {
+        tag: "multi-output-arity",
+        probe: |s| s.classification.output_arity_is_many(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -3084,6 +3165,65 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "multi-input-arity",
         probe: |s| s.input_arity_is_many(),
+    },
+    // `single-output-arity` — byte-for-byte peer of the point surface's
+    // `single-output-arity` arm on [`POINT_FIXED_TAG_ARMS`] via
+    // [`tatara_process::classification::Classification::output_arity_is_one`]
+    // reached through the resolver hop
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    // FIRST output-arity-axis occupant on the ephemeral surface's
+    // fixed-tag corner — opens the EIGHTH classification axis on the
+    // ephemeral fixed-tag algebra after horizon, calm, data, point,
+    // substrate, optimization-direction, and input-arity. Route:
+    // `spec.output_arity_is_one()` →
+    // `resolved_classification().output_arity_is_one()` →
+    // `classification.point_type.output_arity().is_one()`.
+    // Guarantees the absent-classification case lands on `true`
+    // (the authored slot's `None` short-circuits through
+    // `default_ephemeral_class → gate_compute → point_type: Gate →
+    // output_arity = One → is_one = true`), so every unadorned
+    // `(defephemeral …)` audits FOR the single-output framing by
+    // default (safe under the substrate arity convention: the Gate
+    // baseline treats fan-in-with-one-output as the default
+    // downstream-cardinality topology).
+    FixedTagArm {
+        tag: "single-output-arity",
+        probe: |s| s.output_arity_is_one(),
+    },
+    // `multi-output-arity` — byte-for-byte peer of the point
+    // surface's `multi-output-arity` arm on
+    // [`POINT_FIXED_TAG_ARMS`] via
+    // [`tatara_process::classification::Classification::output_arity_is_many`]
+    // reached through the resolver hop
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    // SECOND output-arity-axis occupant on the ephemeral surface's
+    // fixed-tag corner — CLOSES the EIGHTH classification axis into
+    // a binary XOR partition on the ephemeral fixed-tag algebra
+    // after horizon, calm, data, point, substrate, optimization-
+    // direction, and input-arity. Route: `spec.output_arity_is_many()`
+    // → `resolved_classification().output_arity_is_many()` →
+    // `classification.point_type.output_arity().is_many()`.
+    // Guarantees the absent-classification case lands on `false`
+    // (the authored slot's `None` short-circuits through
+    // `default_ephemeral_class → gate_compute → point_type: Gate →
+    // output_arity = One → is_many = false`), so every unadorned
+    // `(defephemeral …)` audits AGAINST the multi-output framing by
+    // default (safe under the substrate arity convention: the Gate
+    // baseline treats fan-in-with-one-output as the default
+    // downstream-cardinality topology). The resolver-hop XOR
+    // closure holds by construction: on the ephemeral surface too,
+    // `single-output-arity ⊕ multi-output-arity` at every reachable
+    // classification because both arms compose the SAME point-surface
+    // primitive pair after one resolver hop, and that pair is XOR-
+    // closed on the parent-composed layer by
+    // `classification_output_arity_probes_form_binary_xor_partition_over_all`
+    // and on the ephemeral surface by
+    // `ephemeral_output_arity_probes_form_binary_xor_partition_over_all`.
+    // Completes the DAG-composition arity PAIR (input × output) on
+    // the ephemeral fixed-tag corner.
+    FixedTagArm {
+        tag: "multi-output-arity",
+        probe: |s| s.output_arity_is_many(),
     },
 ];
 
@@ -11887,6 +12027,8 @@ mod tests {
                 "prefers-higher-direction",
                 "single-input-arity",
                 "multi-input-arity",
+                "single-output-arity",
+                "multi-output-arity",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -11917,6 +12059,8 @@ mod tests {
                 "prefers-higher-direction",
                 "single-input-arity",
                 "multi-input-arity",
+                "single-output-arity",
+                "multi-output-arity",
             ],
         );
     }
@@ -18237,6 +18381,85 @@ mod tests {
             let buckets = [
                 evaluate_ephemeral_require_tag(&eph, "single-input-arity"),
                 evaluate_ephemeral_require_tag(&eph, "multi-input-arity"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "ephemeral point_type={populated:?}: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+            );
+        }
+    }
+
+    /// POINT-SURFACE BINARY XOR pin (output-arity) — for every
+    /// [`ConvergencePointType`] variant, EXACTLY ONE of the two
+    /// `single-output-arity` / `multi-output-arity` fixed tags answers
+    /// `Ok(true)`. SECOND binary-XOR partition closure at the fixed-tag
+    /// classifier layer (after `input-arity`) — imports the closed-set
+    /// XOR closure sealed on the parent-composed layer by
+    /// `classification_output_arity_probes_form_binary_xor_partition_over_all`
+    /// onto the classifier layer so any operator-facing
+    /// `:requires (single-output-arity multi-output-arity)` audit trusts
+    /// the two tags partition the output-arity axis into disjoint
+    /// buckets whose union covers every point-type variant — a
+    /// regression that hard-coded either arm to a fixed answer or
+    /// crossed the wires between the two probes fails HERE before
+    /// drifting into that audit. Twin of the sibling
+    /// `evaluate_input_arity_fixed_tags_form_binary_xor_partition_over_all_point_variants`
+    /// on the input-arity axis via the SAME
+    /// `ProcessSpec::gate_compute_with_axis` sweep composer;
+    /// together they seal the DAG-composition arity PAIR (input ×
+    /// output) at the classifier layer.
+    #[test]
+    fn evaluate_output_arity_fixed_tags_form_binary_xor_partition_over_all_point_variants() {
+        for populated in ConvergencePointType::ALL {
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
+            let buckets = [
+                evaluate_point_require_tag(&spec, "single-output-arity"),
+                evaluate_point_require_tag(&spec, "multi-output-arity"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "point point_type={populated:?}: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+            );
+        }
+    }
+
+    /// EPHEMERAL-SURFACE BINARY XOR pin (output-arity) — resolver-hop
+    /// peer of the point-surface pin above via the ephemeral surface's
+    /// `resolved_classification()` resolver. Sweeps the absent-
+    /// classification case (guaranteed to land in the single-output
+    /// bucket via `Gate.output_arity() = One`) plus every
+    /// [`ConvergencePointType::ALL`] variant so a regression on
+    /// either arm of the resolver-hop fixed-tag classifier fails
+    /// HERE. Closes the binary XOR partition contract on the
+    /// ephemeral surface at the classifier layer — twin of the
+    /// sibling
+    /// `evaluate_input_arity_fixed_tags_form_binary_xor_partition_over_all_ephemeral_variants`
+    /// on the input-arity axis via the SAME
+    /// `ephemeral_fixture().with_classification_axis(...)` sweep
+    /// composer.
+    #[test]
+    fn evaluate_output_arity_fixed_tags_form_binary_xor_partition_over_all_ephemeral_variants() {
+        // Absent classification — resolves through
+        // `default_ephemeral_class → gate_compute → point_type: Gate
+        // → output_arity: One`, landing in the single-output bucket.
+        let eph = ephemeral_fixture();
+        let buckets = [
+            evaluate_ephemeral_require_tag(&eph, "single-output-arity"),
+            evaluate_ephemeral_require_tag(&eph, "multi-output-arity"),
+        ];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+        );
+        // Authored classification.
+        for populated in ConvergencePointType::ALL {
+            let eph = ephemeral_fixture().with_classification_axis(populated);
+            let buckets = [
+                evaluate_ephemeral_require_tag(&eph, "single-output-arity"),
+                evaluate_ephemeral_require_tag(&eph, "multi-output-arity"),
             ];
             let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
             assert_eq!(

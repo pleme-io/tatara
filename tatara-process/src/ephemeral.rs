@@ -3589,7 +3589,7 @@ pub fn compile_ephemeral_source(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::boundary::ConditionKind;
+    use crate::boundary::{assert_slice_refinement_composition_laws, ConditionKind};
     use crate::classification::{
         Arity, CalmClassification, ConvergencePointType, DataClassification, Horizon, HorizonKind,
         OptimizationDirection, SubstrateType,
@@ -4986,6 +4986,63 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    // ── assert_slice_refinement_composition_laws — mirror invocations ──
+    //
+    // The substrate testkit primitive
+    // [`crate::boundary::assert_slice_refinement_composition_laws`]
+    // pins the FOUR composition laws that bind the
+    // [`crate::boundary::ConditionSliceExt`] refinement algebra
+    // (find ↔ iter, count ↔ iter, has ↔ find, has ↔ count) at ONE
+    // call site per authored arrangement, sweeping
+    // [`ConditionKind::ALL`]. The two ephemeral-surface tests below
+    // dispatch the primitive against the two `Vec<Condition>` slots
+    // ([`EphemeralSpec::preconditions`] +
+    // [`EphemeralSpec::postconditions`]) authored through the
+    // ephemeral-surface test-fixture — byte-for-byte peer of the
+    // point-surface `slice_refinement_composition_laws_hold_across_authored_arrangements`
+    // + `slice_refinement_composition_laws_hold_on_interleaved_duplicates`
+    // pins on the [`crate::boundary::Boundary`] surface. Two-surface
+    // parity contract: the substrate primitive holds on every slice
+    // reachable through either the point-surface `.preconditions` /
+    // `.postconditions` fields OR the ephemeral-surface's
+    // eponymous field pair.
+
+    /// SUBSTRATE PANEL pin (ephemeral surface) — the substrate
+    /// primitive [`assert_slice_refinement_composition_laws`] holds
+    /// on both [`EphemeralSpec::preconditions`] and
+    /// [`EphemeralSpec::postconditions`] slices for every populated-
+    /// pair authored through the ephemeral-surface test-fixture.
+    /// Byte-for-byte peer of
+    /// `slice_refinement_composition_laws_hold_across_authored_arrangements`
+    /// on the point surface.
+    #[test]
+    fn ephemeral_slice_refinement_composition_laws_hold_across_authored_arrangements() {
+        let empty = empty_ephemeral();
+        assert_slice_refinement_composition_laws(empty.preconditions.as_slice());
+        assert_slice_refinement_composition_laws(empty.postconditions.as_slice());
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+                assert_slice_refinement_composition_laws(spec.preconditions.as_slice());
+                assert_slice_refinement_composition_laws(spec.postconditions.as_slice());
+            }
+        }
+
+        for populated in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            spec.preconditions.push(cond(populated));
+            spec.preconditions.push(cond(populated));
+            spec.preconditions.push(cond(populated));
+            spec.postconditions.push(cond(populated));
+            spec.postconditions.push(cond(populated));
+            assert_slice_refinement_composition_laws(spec.preconditions.as_slice());
+            assert_slice_refinement_composition_laws(spec.postconditions.as_slice());
         }
     }
 

@@ -723,6 +723,133 @@ impl ConditionSliceExt for [Condition] {
     }
 }
 
+/// Generic slice-level substrate testkit — pins the FOUR composition
+/// laws that bind the [`ConditionSliceExt`] refinement algebra
+/// (`iter_kind` → `find_kind` → `has_kind` → `count_kind`) at ONE
+/// call site per authored arrangement, sweeping [`ConditionKind::ALL`].
+///
+/// The [`ConditionSliceExt`] trait publishes four refinements on the
+/// slice-level presence-probe axis:
+///
+/// | refinement | return type | default body                        |
+/// |------------|-------------|-------------------------------------|
+/// | `iter_kind`| [`KindMatches`]      | (widened primitive, required)      |
+/// | `find_kind`| `Option<&Condition>` | `self.iter_kind(k).next()`         |
+/// | `has_kind` | `bool`               | `self.find_kind(k).is_some()`      |
+/// | `count_kind`| `usize`             | `self.iter_kind(k).count()`        |
+///
+/// The three coarser refinements are typed projections of the widened
+/// primitive by construction. The composition laws that bind them
+/// (and therefore surface any implementor that overrode a default
+/// with a divergent walk shape — a stored-length cache that drifted,
+/// a `.rev().find(...)` returning trailing-first, a `.step_by(2)`
+/// artifact from a copy-paste of `iter_kind`) sweep at ONE typed
+/// substrate site through this primitive:
+///
+/// 1. **`find ↔ iter`**: `find_kind(k) == iter_kind(k).next()` — the
+///    first-match probe equals the widened stream's first yield.
+/// 2. **`count ↔ iter`**: `count_kind(k) == iter_kind(k).count()` —
+///    the cardinality probe equals the widened stream's yield count.
+/// 3. **`has ↔ find`**: `has_kind(k) == find_kind(k).is_some()` —
+///    the presence bit equals the first-match probe's `is_some()`.
+/// 4. **`has ↔ count`**: `has_kind(k) == (count_kind(k) > 0)` — the
+///    presence bit equals the cardinality's positivity test (the
+///    dual composition path from `has` back to the widened primitive
+///    that doesn't go through `find`).
+///
+/// Pre-lift each composition law lived at its own hand-authored
+/// nested-`for` loop test in [`tatara_process::boundary`] tests
+/// (`condition_slice_find_kind_equals_iter_kind_next`,
+/// `condition_slice_count_kind_equals_iter_kind_count`,
+/// `condition_slice_has_kind_equals_find_kind_is_some`,
+/// `condition_slice_has_and_find_equal_count_greater_than_zero`) —
+/// four sibling test bodies whose only per-law knobs were the
+/// projection functions being bridged. Post-lift each authored
+/// arrangement (empty, single-element, dual-populated, duplicate-
+/// populated) pins ALL FOUR laws through ONE
+/// `assert_slice_refinement_composition_laws(slice)` call whose body
+/// is the substrate primitive's own sweep.
+///
+/// The primitive binds `<S: ConditionSliceExt + ?Sized>` so both a
+/// bare `&[Condition]` and any future implementor of the trait
+/// (a wrapper type with additional invariants, an alternative slice
+/// projection over a builder's staging Vec) picks up the four-law
+/// composition contract through ONE call site. `?Sized` lets the
+/// caller pass `slice.as_slice()` or `&owned[..]` without an
+/// intermediate reference dance.
+///
+/// # Compounding
+///
+/// A FIFTH refinement added to [`ConditionSliceExt`] (a hypothetical
+/// `nth_kind(k, n) -> Option<&Condition>` for indexed match access,
+/// a `distinct_kinds()` aggregate that returns which kinds appear at
+/// least once, a `has_kind_matching(pred)` closure-based predicate
+/// probe) lands its composition-law pins as ONE new arm inside this
+/// primitive's sweep body. Every downstream test that already reaches
+/// this primitive picks up the fifth-refinement pin mechanically —
+/// no per-arrangement author-time enumeration of the new law across
+/// the four sibling composition-law sites, no re-authored `for kind
+/// in ConditionKind::ALL { … }` sweep at every consumer.
+///
+/// Symmetrical shape to
+/// [`crate::tagged_union::assert_find_agrees_with_has`] on the
+/// tagged-union parent axis: both project a widened-refinement /
+/// coarser-refinement composition law contract onto ONE typed
+/// substrate call site, both bind `<T: /* refinement carrier */>`
+/// generically, both sweep the addressed closed set
+/// ([`ConditionKind::ALL`] here, `<T::Kind as ClosedSet>::ALL`
+/// there). The two primitives close the "refinement axis composes"
+/// invariant at two adjacent typescape sites — one per closed-set-
+/// addressed slice-level refinement, one per closed-set-addressed
+/// tagged-union parent-level refinement.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// proofs. The four coarser refinements are typed projections of the
+/// widened primitive, and this substrate primitive turns each
+/// projection's composition law from doc-prose into a first-class
+/// typed theorem provable generically over any
+/// `S: ConditionSliceExt + ?Sized`. THEORY.md §VI.1 — generation over
+/// composition; a new [`ConditionKind`] variant added to `ALL` reaches
+/// every downstream composition-law consumer through the SAME
+/// closed-set sweep with no per-caller edit.
+#[track_caller]
+pub fn assert_slice_refinement_composition_laws<S>(slice: &S)
+where
+    S: ConditionSliceExt + ?Sized,
+{
+    for kind in ConditionKind::ALL {
+        let find_result = slice.find_kind(kind);
+        let has_result = slice.has_kind(kind);
+        let count_result = slice.count_kind(kind);
+        let iter_next_kind = slice.iter_kind(kind).next().map(|c| c.kind);
+        let iter_count = slice.iter_kind(kind).count();
+
+        // find ↔ iter
+        assert_eq!(
+            find_result.map(|c| c.kind),
+            iter_next_kind,
+            "find_kind({kind:?}) drifted from iter_kind({kind:?}).next()",
+        );
+        // count ↔ iter
+        assert_eq!(
+            count_result, iter_count,
+            "count_kind({kind:?}) drifted from iter_kind({kind:?}).count()",
+        );
+        // has ↔ find
+        assert_eq!(
+            has_result,
+            find_result.is_some(),
+            "has_kind({kind:?}) drifted from find_kind({kind:?}).is_some()",
+        );
+        // has ↔ count
+        assert_eq!(
+            has_result,
+            count_result > 0,
+            "has_kind({kind:?}) drifted from (count_kind({kind:?}) > 0)",
+        );
+    }
+}
+
 /// A single boundary predicate.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -2342,5 +2469,103 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ── assert_slice_refinement_composition_laws — substrate testkit ──
+    //
+    // The substrate testkit primitive
+    // [`assert_slice_refinement_composition_laws`] pins the FOUR
+    // composition laws that bind the [`ConditionSliceExt`] refinement
+    // algebra (find ↔ iter, count ↔ iter, has ↔ find, has ↔ count) at
+    // ONE call site per authored arrangement, sweeping
+    // [`ConditionKind::ALL`]. The four hand-authored slice-level
+    // composition-law tests above
+    // (`condition_slice_find_kind_equals_iter_kind_next`,
+    // `condition_slice_count_kind_equals_iter_kind_count`,
+    // `condition_slice_has_kind_equals_find_kind_is_some`,
+    // `condition_slice_has_and_find_equal_count_greater_than_zero`)
+    // stay as first-class per-law drift-arm pins; this substrate
+    // testkit is the compound-lift primitive that binds all four
+    // laws through ONE typed sweep so a future FIFTH refinement's
+    // composition law picks up its pin as ONE new arm inside the
+    // primitive's body rather than as ONE new sibling test at every
+    // downstream author-time enumeration.
+
+    /// SUBSTRATE PANEL pin — the substrate testkit primitive
+    /// [`assert_slice_refinement_composition_laws`] passes on the
+    /// FOUR canonical authored arrangements the trait's downstream
+    /// consumers reach for: the empty slice (every refinement returns
+    /// its zero-element identity), a single-element populated slice
+    /// (every refinement returns the addressed match's projection),
+    /// a dual-populated slice with distinct kinds (every refinement
+    /// probes the kind field per element), and a duplicate-populated
+    /// slice with the same kind at multiple positions (the widened
+    /// primitive `iter_kind` yields every match; `find_kind` collapses
+    /// to the first; `count_kind` returns the exact cardinality;
+    /// `has_kind` returns true). Sweeping the four arrangements at
+    /// ONE call site pins that every composition law holds regardless
+    /// of the widened primitive's yield structure.
+    #[test]
+    fn slice_refinement_composition_laws_hold_across_authored_arrangements() {
+        let empty: &[Condition] = &[];
+        assert_slice_refinement_composition_laws(empty);
+
+        for populated in ConditionKind::ALL {
+            let single = [condition_with(populated)];
+            assert_slice_refinement_composition_laws(single.as_slice());
+        }
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let dual = [condition_with(pre_kind), condition_with(post_kind)];
+                assert_slice_refinement_composition_laws(dual.as_slice());
+            }
+        }
+
+        for populated in ConditionKind::ALL {
+            let duplicates = [
+                condition_with(populated),
+                condition_with(populated),
+                condition_with(populated),
+            ];
+            assert_slice_refinement_composition_laws(duplicates.as_slice());
+        }
+    }
+
+    /// SUBSTRATE PANEL pin (params-distinguishable duplicates) — the
+    /// substrate primitive holds on a slice that carries duplicate
+    /// kinds interleaved with a distinct kind, byte-for-byte peer of
+    /// the standalone `condition_slice_iter_kind_yields_every_match_in_slice_order_on_duplicates`
+    /// / `condition_slice_count_kind_counts_every_match_on_duplicates`
+    /// arrangement. Confirms the four composition laws hold when
+    /// the widened primitive's yield stream is genuinely multi-element
+    /// AND the addressed kind is interleaved with a non-matching kind
+    /// (the union structural case that the diagonal-and-corners sweep
+    /// above doesn't reach).
+    #[test]
+    fn slice_refinement_composition_laws_hold_on_interleaved_duplicates() {
+        let interleaved = [
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "first" }),
+            },
+            Condition {
+                kind: ConditionKind::PromQL,
+                params: json!({ "query": "up" }),
+            },
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "second" }),
+            },
+            Condition {
+                kind: ConditionKind::PromQL,
+                params: json!({ "query": "healthy" }),
+            },
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "third" }),
+            },
+        ];
+        assert_slice_refinement_composition_laws(interleaved.as_slice());
     }
 }

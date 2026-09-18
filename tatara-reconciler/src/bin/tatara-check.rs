@@ -7849,8 +7849,8 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_substrate_coexists_with_point_type() {
         let mut spec = ProcessSpec::gate_compute_defaults();
-        spec.classification.point_type = ConvergencePointType::Fork;
-        spec.classification.substrate = SubstrateType::Storage;
+        spec.classification = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage);
         assert_eq!(
             evaluate_point_require_tag(&spec, "point-type-Fork"),
             Ok(true),
@@ -8057,9 +8057,9 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_calm_coexists_with_prior_classification_axes() {
         let mut spec = ProcessSpec::gate_compute_defaults();
-        spec.classification.point_type = ConvergencePointType::Fork;
-        spec.classification.substrate = SubstrateType::Storage;
-        spec.classification.calm = CalmClassification::NonMonotone;
+        spec.classification = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage)
+            .with_axis(CalmClassification::NonMonotone);
         assert_eq!(
             evaluate_point_require_tag(&spec, "point-type-Fork"),
             Ok(true),
@@ -8284,10 +8284,10 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_data_classification_coexists_with_prior_classification_axes() {
         let mut spec = ProcessSpec::gate_compute_defaults();
-        spec.classification.point_type = ConvergencePointType::Fork;
-        spec.classification.substrate = SubstrateType::Storage;
-        spec.classification.calm = CalmClassification::NonMonotone;
-        spec.classification.data_classification = DataClassification::Pii;
+        spec.classification = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage)
+            .with_axis(CalmClassification::NonMonotone)
+            .with_axis(DataClassification::Pii);
         assert_eq!(
             evaluate_point_require_tag(&spec, "point-type-Fork"),
             Ok(true),
@@ -16557,6 +16557,127 @@ mod tests {
                 evaluate_ephemeral_require_tag(&eph_composed, &tag),
                 "ephemeral classifier drift on OptimizationDirection::{direction:?}",
             );
+        }
+    }
+
+    // ── (direct-scalar-axis-conjunction × classifier-surface) landmark ─
+    //
+    // Fail-before-pass-after granularity: this run swept the THREE
+    // remaining direct-scalar multi-axis-conjunction restatements at
+    // `evaluate_point_require_tag_substrate_coexists_with_point_type`
+    // (2-axis), `…_calm_coexists_with_prior_classification_axes`
+    // (3-axis), and `…_data_classification_coexists_with_prior_classification_axes`
+    // (4-axis) onto ONE substrate primitive
+    // [`tatara_process::classification::Classification::gate_compute_with_axis`]
+    // + [`tatara_process::classification::Classification::with_axis`]
+    // chain — the SAME composer the 5-axis + 6-axis peers at
+    // `…_horizon_kind_coexists_with_prior_classification_axes` +
+    // `…_optimization_direction_coexists_with_prior_classification_axes`
+    // already bind through. Prior commit `2161cba` lifted `with_axis`
+    // and closed the classification.rs multi-axis-conjunction sweep on
+    // its home file; `6fc16e9` closed the horizon-nested-slot sweep at
+    // this file's classifier-facing tests. This landmark extends the
+    // parity guarantee ONE hop past the composer for the four direct-
+    // scalar axes (`point_type`, `substrate`, `calm`, `data_classification`)
+    // — a regression that (a) changed `ClassificationAxis for
+    // ConvergencePointType` / `SubstrateType` / `CalmClassification` /
+    // `DataClassification` to stomp a sibling slot, (b) reordered any
+    // impl to a nested-struct assignment instead of a direct-scalar
+    // assignment, or (c) reintroduced a per-N-arity composer path
+    // (`gate_compute_with_axes2`, `gate_compute_with_axes3`, …) would
+    // fail HERE at ONE landmark site before drifting through the three
+    // swept sites that already bind through the chain.
+
+    /// (direct-scalar-axis-conjunction × classifier-surface) parity
+    /// landmark — the post-sweep shape
+    /// `Classification::gate_compute_with_axis(a).with_axis(b).with_axis(c).with_axis(d)`
+    /// classifies IDENTICALLY to the pre-sweep hand-authored direct-
+    /// scalar assignment shape (`spec.classification.point_type = a;
+    /// spec.classification.substrate = b; spec.classification.calm = c;
+    /// spec.classification.data_classification = d;`) at every prefix
+    /// arity (n=2, n=3, n=4) through `evaluate_point_require_tag`. A
+    /// regression that dropped an axis on the composer chain, stomped
+    /// a sibling slot on any [`ClassificationAxis`] impl, or drifted
+    /// the direct-scalar assignment semantics on either arm surfaces
+    /// HERE at ONE landmark site rather than at the three swept
+    /// classifier-facing sites downstream.
+    #[test]
+    fn direct_scalar_axis_conjunction_sweep_matches_pre_sweep_shape_at_classifier_surface() {
+        // n=2 (point_type + substrate).
+        let mut hand2 = Classification::gate_compute();
+        hand2.point_type = ConvergencePointType::Fork;
+        hand2.substrate = SubstrateType::Storage;
+        let composed2 = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage);
+        assert_eq!(
+            hand2, composed2,
+            "n=2 (point_type+substrate) byte-parity drift",
+        );
+
+        // n=3 (…+calm).
+        let mut hand3 = hand2.clone();
+        hand3.calm = CalmClassification::NonMonotone;
+        let composed3 = composed2.clone().with_axis(CalmClassification::NonMonotone);
+        assert_eq!(
+            hand3, composed3,
+            "n=3 (point_type+substrate+calm) byte-parity drift",
+        );
+
+        // n=4 (…+data_classification).
+        let mut hand4 = hand3.clone();
+        hand4.data_classification = DataClassification::Pii;
+        let composed4 = composed3.clone().with_axis(DataClassification::Pii);
+        assert_eq!(
+            hand4, composed4,
+            "n=4 (point_type+substrate+calm+data_classification) byte-parity drift",
+        );
+
+        // Classifier-surface parity: for each (hand, composed) pair, every
+        // in-scope fine + off-diagonal tag classifies identically at both
+        // shapes through `evaluate_point_require_tag`.
+        let pairs = [
+            (
+                hand2,
+                composed2,
+                &["point-type-Fork", "substrate-Storage"][..],
+            ),
+            (
+                hand3,
+                composed3,
+                &[
+                    "point-type-Fork",
+                    "substrate-Storage",
+                    "calm-NonMonotone",
+                    "calm-Monotone",
+                ][..],
+            ),
+            (
+                hand4,
+                composed4,
+                &[
+                    "point-type-Fork",
+                    "substrate-Storage",
+                    "calm-NonMonotone",
+                    "data-classification-Pii",
+                    "point-type-Gate",
+                    "substrate-Compute",
+                    "data-classification-Internal",
+                ][..],
+            ),
+        ];
+        for (n, (hand, composed, tags)) in pairs.iter().enumerate() {
+            let mut hand_spec = ProcessSpec::gate_compute_defaults();
+            hand_spec.classification = hand.clone();
+            let mut composed_spec = ProcessSpec::gate_compute_defaults();
+            composed_spec.classification = composed.clone();
+            for tag in *tags {
+                assert_eq!(
+                    evaluate_point_require_tag(&hand_spec, tag),
+                    evaluate_point_require_tag(&composed_spec, tag),
+                    "n={} classifier drift on tag {tag:?}",
+                    n + 2,
+                );
+            }
         }
     }
 

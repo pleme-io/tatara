@@ -2491,6 +2491,43 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "prefers-lower-direction",
         probe: |s| s.classification.direction_prefers_lower(),
     },
+    // `prefers-higher-direction` — FIFTEENTH occupant on the (parent ×
+    // derived-nullary-bool) corner of the workspace-wide fixed-tag
+    // algebra after the fourteen prior arms opened + populated the
+    // corner; SECOND occupant threading the classification-
+    // `horizon.direction` axis — CLOSES the SIXTH classification axis
+    // into a binary XOR partition on the fixed-tag corner after the
+    // horizon, calm, data, point, and substrate axes' closures.
+    // Composes the ONE substrate primitive
+    // [`tatara_process::classification::Classification::direction_prefers_higher`]
+    // that walks `self.horizon.direction.unwrap_or_default().prefers_higher()`
+    // — the higher-is-better optimization-polarity image (throughput /
+    // coverage / revenue — increasing values improve) as a fixed-tag
+    // audit surface. Answers the rate-window-evaluator-facing question
+    // "does this Process's asymptotic-health polarity treat increasing
+    // rate as improvement?" — `false` on the `Minimize` default AND on
+    // `Some(Minimize)`, `true` on `Some(Maximize)`. Antisymmetric peer
+    // of the sibling `prefers-lower-direction` arm on this table —
+    // the operator's `:requires (prefers-lower-direction)` audit is
+    // the exact complement of `:requires (prefers-higher-direction)`
+    // per the closed-set XOR pin
+    // `optimization_direction_prefers_lower_xor_prefers_higher`
+    // composed through the parent-composed layer by
+    // `classification_direction_probes_form_binary_xor_partition_over_all`.
+    // Byte-for-byte symmetrical with the ephemeral surface's
+    // `prefers-higher-direction` arm on [`EPHEMERAL_FIXED_TAG_ARMS`]
+    // via
+    // [`tatara_process::ephemeral::EphemeralSpec::direction_prefers_higher`]
+    // — both surfaces route through the SAME
+    // [`Classification::direction_prefers_higher`] primitive after the
+    // ephemeral surface pays ONE resolver hop. With this arm ALL SIX
+    // classification axes (horizon, calm, data, point, substrate,
+    // optimization-direction) now have their partitions closed at the
+    // point-surface fixed-tag corner.
+    FixedTagArm {
+        tag: "prefers-higher-direction",
+        probe: |s| s.classification.direction_prefers_higher(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2877,6 +2914,34 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "prefers-lower-direction",
         probe: |s| s.direction_prefers_lower(),
+    },
+    // `prefers-higher-direction` — byte-for-byte peer of the point
+    // surface's `prefers-higher-direction` arm on
+    // [`POINT_FIXED_TAG_ARMS`] via
+    // [`tatara_process::classification::Classification::direction_prefers_higher`]
+    // reached through the resolver hop
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    // SECOND optimization-direction-axis occupant on the ephemeral
+    // surface's fixed-tag corner — CLOSES the SIXTH classification
+    // axis into a binary XOR partition on the ephemeral fixed-tag
+    // algebra after horizon, calm, data, point, and substrate.
+    // Route: `spec.direction_prefers_higher()` →
+    // `resolved_classification().direction_prefers_higher()` →
+    // `classification.horizon.direction.unwrap_or_default().prefers_higher()`.
+    // Guarantees the absent-classification case lands on `false` (the
+    // authored slot's `None` short-circuits through
+    // `default_ephemeral_class → gate_compute → Horizon::default →
+    // direction: None → OptimizationDirection::default = Minimize →
+    // prefers_higher = false`), so every unadorned `(defephemeral …)`
+    // audits AGAINST the higher-is-better polarity by default (safe
+    // under the substrate polarity convention: an operator must
+    // deliberately opt into Maximize polarity). With this arm ALL SIX
+    // classification axes (horizon, calm, data, point, substrate,
+    // optimization-direction) now have their partitions closed at
+    // the ephemeral-surface fixed-tag corner.
+    FixedTagArm {
+        tag: "prefers-higher-direction",
+        probe: |s| s.direction_prefers_higher(),
     },
 ];
 
@@ -11677,6 +11742,7 @@ mod tests {
                 "monotone-calm",
                 "public-data",
                 "prefers-lower-direction",
+                "prefers-higher-direction",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -11704,6 +11770,7 @@ mod tests {
                 "monotone-calm",
                 "public-data",
                 "prefers-lower-direction",
+                "prefers-higher-direction",
             ],
         );
     }

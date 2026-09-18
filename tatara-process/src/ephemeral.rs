@@ -2486,6 +2486,108 @@ impl EphemeralSpec {
         self.resolved_classification().direction_prefers_lower()
     }
 
+    /// POSITIVE-FRAMING PEER of [`Self::direction_prefers_lower`] —
+    /// does this ephemeral spec's resolved [`Classification`]'s
+    /// [`crate::classification::Horizon::direction`] slot (defaulted
+    /// through [`crate::classification::OptimizationDirection::default =
+    /// Minimize`] on absence) project to `true` under
+    /// [`crate::classification::OptimizationDirection::prefers_higher`]?
+    /// Byte-for-byte peer of
+    /// [`crate::classification::Classification::direction_prefers_higher`]
+    /// wrapped through the [`Self::resolved_classification`] resolver
+    /// so an operator-omitted `:classification` slot on
+    /// `(defephemeral …)` still answers via the substrate default. The
+    /// ONE ephemeral-surface substrate primitive that owns the
+    /// `(&EphemeralSpec) -> bool` derived-nullary-boolean walk on the
+    /// higher-is-better optimization-polarity question.
+    ///
+    /// # Fifteenth derived-nullary-boolean peer on the ephemeral surface — CLOSES the optimization-direction axis
+    ///
+    /// Peer of the fourteen prior nullary-boolean substrate primitives
+    /// on [`EphemeralSpec`] ([`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], [`Self::data_is_regulated`],
+    /// [`Self::data_is_restricted`], [`Self::point_is_endomorphic`],
+    /// [`Self::point_is_diffusive`], [`Self::point_is_convergent`],
+    /// [`Self::substrate_is_resource`], [`Self::substrate_is_policy`],
+    /// [`Self::substrate_is_telemetry`], [`Self::calm_is_monotone`],
+    /// [`Self::data_is_public`], [`Self::direction_prefers_lower`]) on
+    /// the ephemeral surface's (resolver-hop × derived-nullary-bool)
+    /// shape — the FIFTEENTH peer overall and the SECOND peer
+    /// threading the classification-`horizon.direction` axis on this
+    /// surface. CLOSES the SIXTH classification axis into a binary XOR
+    /// partition on the ephemeral surface after the horizon, calm,
+    /// data, point, and substrate axes — completing the axis-coverage
+    /// milestone on this surface: ALL SIX classification axes now
+    /// have their partitions closed at the ephemeral-surface derived-
+    /// nullary corner. The resolver-hop shape is byte-identical across
+    /// all fifteen peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `direction_prefers_higher()` returns `true` iff
+    /// `self.resolved_classification().direction_prefers_higher()`.
+    /// The resolver returns the authored [`Classification`] when
+    /// present and the substrate default
+    /// [`Classification::gate_compute`] on absence. Because
+    /// [`Classification::gate_compute`] carries `horizon:
+    /// Horizon::default()` whose `direction` field is `None`, and
+    /// [`crate::classification::OptimizationDirection::default =
+    /// Minimize`] projects `prefers_higher = false`, a bare ephemeral
+    /// spec with no `:classification` slot answers `false` — every
+    /// unadorned `(defephemeral …)` reads as lower-is-better under the
+    /// substrate polarity default (safe under the asymptotic-health
+    /// rate-window evaluator's convention: an operator must
+    /// deliberately opt into Maximize polarity rather than the
+    /// substrate silently flipping every unadorned Process onto the
+    /// higher-is-better path). A regression that dropped the resolver
+    /// hop, probed the wrong closed-set arm, or inverted the
+    /// projection fails HERE at ONE narrow substrate site before
+    /// drifting through every unadorned ephemeral spec's rate-window
+    /// evaluator polarity.
+    ///
+    /// # Compounding — CLOSES the optimization-direction axis on the ephemeral surface
+    ///
+    /// The ephemeral require-tag classifier composes this primitive as
+    /// a fixed tag `prefers-higher-direction` on
+    /// `EPHEMERAL_FIXED_TAG_ARMS` — byte-for-byte peer of the point
+    /// surface's `prefers-higher-direction` fixed tag on
+    /// `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::direction_prefers_higher`] directly. The
+    /// two-surface parity contract holds by construction: both
+    /// surfaces route through the SAME
+    /// [`Classification::direction_prefers_higher`] primitive after
+    /// the ephemeral surface pays ONE resolver hop. SECOND
+    /// optimization-direction-axis peer CLOSES the axis into the FULL
+    /// binary XOR partition contract on this surface — the resolver-
+    /// hop peer of the parent-composed
+    /// `classification_direction_probes_form_binary_xor_partition_over_all`,
+    /// mirror of the calm-axis (`monotone-calm ⊕ coordination-required`)
+    /// and data-axis (`public-data ⊕ data-restricted`) closures on
+    /// this surface.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-`horizon.direction`-axis
+    /// derived-nullary-boolean probe body composes ONE resolver
+    /// primitive ([`Self::resolved_classification`]) with ONE
+    /// [`Classification`] primitive
+    /// ([`Classification::direction_prefers_higher`]) so every
+    /// downstream (the `prefers-higher-direction` fixed tags on both
+    /// surfaces in tatara-check, future asymptotic-health rate-window
+    /// / regression-detector evaluators, future variant additions on
+    /// [`crate::classification::OptimizationDirection`]) binds through
+    /// the SAME `direction_prefers_higher()` shape rather than
+    /// restating either the resolver walk or the closed-set projection
+    /// composition at the callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future
+    /// [`crate::classification::OptimizationDirection`] variant lands
+    /// at ONE `ALL` entry + ONE `prefers_higher` arm on the closed set
+    /// and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn direction_prefers_higher(&self) -> bool {
+        self.resolved_classification().direction_prefers_higher()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -6711,6 +6813,180 @@ mod tests {
                 eph.direction_prefers_lower(),
                 lowered.classification.direction_prefers_lower(),
                 "authored horizon.direction={populated:?}: parity drift",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::direction_prefers_higher pins ────────────────
+    //
+    // Fail-before-pass-after granularity: `direction_prefers_higher`
+    // did not exist pre-lift on `impl EphemeralSpec` — the positive
+    // higher-is-better framing peer of
+    // [`Self::direction_prefers_lower`] had no ephemeral-surface
+    // substrate owner. Post-lift the FIFTEENTH derived-nullary-boolean
+    // peer on the ephemeral surface (SECOND on the optimization-
+    // direction axis, CLOSING the SIXTH classification axis into a
+    // binary XOR partition on this surface) routes through the SAME
+    // [`Self::resolved_classification`] resolver + the sibling
+    // substrate primitive
+    // [`crate::classification::Classification::direction_prefers_higher`],
+    // so the two-surface parity contract holds by construction, AND
+    // the two-way lower/higher split on this surface CLOSES the
+    // optimization-direction axis into the FULL binary XOR partition
+    // contract via
+    // `ephemeral_direction_probes_form_binary_xor_partition_over_all`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries `Some(variant)` on `horizon.direction`
+    /// answers [`Self::direction_prefers_higher`] matching the closed
+    /// set's own
+    /// [`crate::classification::OptimizationDirection::prefers_higher`]
+    /// truth table. Sweep
+    /// [`crate::classification::OptimizationDirection::ALL`] so a
+    /// regression that (a) hard-coded the body to a fixed answer,
+    /// (b) inverted the projection, (c) dropped the `.unwrap_or_default()`
+    /// hop, or (d) crossed the wires with a sibling classification-
+    /// axis probe fails HERE at the substrate primitive before
+    /// drifting through the `prefers-higher-direction` fixed tag or
+    /// the peer point surface.
+    #[test]
+    fn direction_prefers_higher_returns_direction_projection_per_kind() {
+        for populated in OptimizationDirection::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon.direction = Some(populated);
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.direction_prefers_higher(),
+                populated.prefers_higher(),
+                "authored horizon.direction={populated:?}: direction_prefers_higher() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries
+    /// `horizon: Horizon::default()` whose `direction` field is `None`,
+    /// so `unwrap_or_default()` defaults to
+    /// [`crate::classification::OptimizationDirection::Minimize`] via
+    /// `#[default]`, and `Minimize.prefers_higher()` projects `false`,
+    /// so [`Self::direction_prefers_higher`] returns `false`. Pins
+    /// the resolver's default-arm short-circuit through THREE layers
+    /// of `Default` ([`Classification::gate_compute`] →
+    /// [`crate::classification::Horizon::default`] with `direction:
+    /// None` → [`crate::classification::OptimizationDirection::default =
+    /// Minimize`]) reaching this derived-nullary predicate. Guarantees
+    /// every unadorned `(defephemeral …)` reads UNDER the lower-is-
+    /// better polarity default (safe under the asymptotic-health
+    /// rate-window evaluator convention: an operator must
+    /// deliberately opt into Maximize polarity). Mirror-inverted from
+    /// the sibling `direction_prefers_lower_probes_true_on_absent_classification`
+    /// baseline on the same resolver walk.
+    #[test]
+    fn direction_prefers_higher_probes_false_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            !spec.direction_prefers_higher(),
+            "absent classification (defaults to gate_compute, horizon.direction=None → unwrap_or_default=Minimize → prefers_higher=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::direction_prefers_higher`] AND
+    /// through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.direction_prefers_higher()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`crate::classification::OptimizationDirection::ALL`] variant)
+    /// so a future regression on either side of the resolver fails
+    /// HERE at the parity boundary. Byte-for-byte peer of
+    /// `direction_prefers_lower_matches_point_peer_through_lowered_classification`
+    /// on the antisymmetric closed-set arm via the same resolver-hop
+    /// shape.
+    #[test]
+    fn direction_prefers_higher_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.direction_prefers_higher(),
+            lowered.classification.direction_prefers_higher(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in OptimizationDirection::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon.direction = Some(populated);
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.direction_prefers_higher(),
+                lowered.classification.direction_prefers_higher(),
+                "authored horizon.direction={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// BINARY XOR PARTITION pin — for the absent-classification
+    /// baseline AND every
+    /// [`crate::classification::OptimizationDirection::ALL`] variant,
+    /// EXACTLY ONE of [`Self::direction_prefers_lower`] and
+    /// [`Self::direction_prefers_higher`] returns `true`. CLOSES the
+    /// optimization-direction axis into the FULL binary XOR partition
+    /// contract on the ephemeral surface — the resolver-hop peer of
+    /// the parent-composed
+    /// `classification_direction_probes_form_binary_xor_partition_over_all`
+    /// test. Binary counterpart of the ternary XOR partitions sealed
+    /// on the sibling `point_type` and `substrate` axes by
+    /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`
+    /// and
+    /// `ephemeral_substrate_probes_form_three_way_xor_partition_over_all`,
+    /// structural twin of the calm/data binary partitions
+    /// `ephemeral_calm_probes_form_binary_xor_partition_over_all` and
+    /// `ephemeral_data_probes_form_binary_xor_partition_over_all`.
+    /// This pin is the SIXTH (and final) classification axis to reach
+    /// the closed XOR partition landmark on the ephemeral resolver-
+    /// hop surface — ALL SIX classification axes (horizon, calm,
+    /// data, point, substrate, optimization-direction) now have
+    /// their partitions closed on the ephemeral surface at this
+    /// corner. Guarantees the absent-classification case lands in
+    /// the definite lower-is-better bucket (`gate_compute` →
+    /// Horizon::default → direction: None →
+    /// OptimizationDirection::default = Minimize → prefers_lower =
+    /// true, prefers_higher = false), so every unadorned
+    /// `(defephemeral …)` audits under a definite non-empty polarity
+    /// bucket.
+    #[test]
+    fn ephemeral_direction_probes_form_binary_xor_partition_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let buckets = [
+            eph.direction_prefers_lower(),
+            eph.direction_prefers_higher(),
+        ];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
+        );
+        // Authored classification.
+        for populated in OptimizationDirection::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.horizon.direction = Some(populated);
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let buckets = [
+                eph.direction_prefers_lower(),
+                eph.direction_prefers_higher(),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "authored horizon.direction={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
             );
         }
     }

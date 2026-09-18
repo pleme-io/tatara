@@ -2375,6 +2375,130 @@ impl Classification {
         self.horizon.direction.unwrap_or_default().prefers_lower()
     }
 
+    /// POSITIVE-FRAMING PEER of [`Self::direction_prefers_lower`] —
+    /// does this [`Classification`]'s [`Horizon::direction`] slot
+    /// (defaulted through [`OptimizationDirection::default = Minimize`]
+    /// on absence) project to `true` under
+    /// [`OptimizationDirection::prefers_higher`]? The ONE substrate
+    /// primitive that owns the `(Classification) -> bool` derived-
+    /// nullary-predicate walk on the `horizon.direction` slot for the
+    /// higher-is-better optimization-polarity question.
+    ///
+    /// # Fifteenth occupant on the (parent × derived-nullary-bool) corner — CLOSES the optimization-direction axis
+    ///
+    /// Peer of the fourteen prior nullary-bool substrate primitives on
+    /// [`Classification`] ([`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], [`Self::data_is_regulated`],
+    /// [`Self::data_is_restricted`], [`Self::point_is_endomorphic`],
+    /// [`Self::point_is_diffusive`], [`Self::point_is_convergent`],
+    /// [`Self::substrate_is_resource`], [`Self::substrate_is_policy`],
+    /// [`Self::substrate_is_telemetry`], [`Self::calm_is_monotone`],
+    /// [`Self::data_is_public`], [`Self::direction_prefers_lower`]) on
+    /// the workspace-wide (parent × derived-nullary-bool) corner of
+    /// the closed-set-driven presence-probe algebra. FIFTEENTH
+    /// occupant on the corner and SECOND peer threading the
+    /// classification-`horizon.direction` axis — CLOSES the axis into
+    /// the FULL binary XOR partition contract `direction_prefers_lower
+    /// ⊕ direction_prefers_higher` sealed on the closed set by
+    /// `optimization_direction_prefers_lower_xor_prefers_higher` and
+    /// composed through the parent-composed layer by
+    /// `classification_direction_probes_form_binary_xor_partition_over_all`.
+    /// ALL SIX classification axes (horizon, calm, data, point,
+    /// substrate, optimization-direction) now have their partitions
+    /// closed at the corner — the fixed-tag algebra reaches full
+    /// axis-coverage on the classification lattice.
+    ///
+    /// Direct byte-for-byte structural peer of
+    /// [`Self::direction_prefers_lower`]: both walk the SAME
+    /// [`Horizon::direction`] slot through TWO layers of `Default`
+    /// (`Horizon::default` → `direction: None`; then
+    /// [`OptimizationDirection::default = Minimize`]) to reach the
+    /// closed-set-level projection. The [`Classification::gate_compute`]
+    /// baseline's default-arm answer projects `false` HERE (Minimize
+    /// default → `prefers_higher() = false`), mirror-inverted from
+    /// [`Self::direction_prefers_lower`]'s Minimize-default `true` on
+    /// the SAME defaulted `horizon.direction` slot — the antisymmetric
+    /// twin on the substrate polarity default.
+    ///
+    /// # Semantics — derived nullary boolean over the closed-set plane
+    ///
+    /// `direction_prefers_higher()` returns `true` iff
+    /// `self.horizon.direction.unwrap_or_default().prefers_higher()`.
+    /// The two-variant [`OptimizationDirection`] closed set publishes
+    /// the truth table: [`OptimizationDirection::Minimize`] → `false`
+    /// (cost / latency / error rate — decreasing values improve);
+    /// [`OptimizationDirection::Maximize`] → `true` (throughput /
+    /// coverage / revenue — increasing values improve). A
+    /// [`Classification::gate_compute`] baseline (which carries
+    /// `horizon: Horizon::default()` whose `direction` field is `None`)
+    /// answers `false` because [`OptimizationDirection::default =
+    /// Minimize`] projects `prefers_higher = false`, so every
+    /// unadorned Process reads under the lower-is-better polarity —
+    /// matching the substrate polarity default (safe under the
+    /// asymptotic-health rate-window evaluator's convention: an
+    /// operator must deliberately opt into Maximize polarity rather
+    /// than the substrate silently flipping every unadorned Process
+    /// onto the higher-is-better path).
+    ///
+    /// A future third [`OptimizationDirection`] variant (a hypothetical
+    /// `Stabilize` sentinel for "drive toward a target value", which
+    /// neither minimization nor maximization names) reaches this probe
+    /// through ONE `prefers_higher` arm on the closed set with the
+    /// probe body untouched — the nullary-predicate shape defers every
+    /// per-variant policy decision to the closed set's own truth table
+    /// ([`OptimizationDirection::prefers_higher`]) rather than
+    /// duplicating the discriminator sweep here. The XOR pin on the
+    /// closed set forces such a variant to answer `false` on BOTH
+    /// `prefers_lower` AND `prefers_higher` unless a deliberate
+    /// extension carves the closed set into a ternary partition.
+    ///
+    /// # Compounding — CLOSES the optimization-direction axis into a binary XOR partition
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `prefers-higher-direction` on `POINT_FIXED_TAG_ARMS`
+    /// — byte-for-byte structural peer of the sibling
+    /// `prefers-lower-direction` fixed tag (the antisymmetric partner
+    /// on the same axis) and of every other `(parent × derived-
+    /// nullary-bool)` corner arm. The ephemeral surface publishes the
+    /// same tag via
+    /// [`crate::ephemeral::EphemeralSpec::direction_prefers_higher`],
+    /// which composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`] so
+    /// the two-surface parity contract holds — the operator's
+    /// `:requires (prefers-higher-direction)` audit answers the same
+    /// question on both surfaces. SECOND optimization-direction-axis
+    /// peer CLOSES the binary XOR partition contract
+    /// `direction_prefers_lower ⊕ direction_prefers_higher` sealed on
+    /// the closed set by
+    /// `optimization_direction_prefers_lower_xor_prefers_higher`
+    /// through the parent-composed layer as a substrate-wide theorem
+    /// — mirror of the calm-axis (`monotone-calm ⊕ coordination-required`)
+    /// and data-axis (`public-data ⊕ data-restricted`) closures
+    /// already landed on the corner, and the SIXTH (and final)
+    /// classification axis to reach the closed XOR partition landmark
+    /// at this corner.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the
+    /// `prefers-higher-direction` fixed tag in `tatara-check`, future
+    /// asymptotic-health rate-window / regression-detector evaluators
+    /// keying on the positive higher-is-better polarity framing,
+    /// future variant additions on [`OptimizationDirection`]) binds
+    /// through the SAME `direction_prefers_higher()` shape rather
+    /// than restating either `!self.direction_prefers_lower()` or
+    /// `self.horizon.direction.unwrap_or_default().prefers_higher()`
+    /// at the callsite. THEORY.md §VI.1 — generation over composition;
+    /// a future [`OptimizationDirection`] variant lands at ONE `ALL`
+    /// entry + ONE `prefers_higher` arm on the closed set and this
+    /// probe picks it up mechanically.
+    #[must_use]
+    pub fn direction_prefers_higher(&self) -> bool {
+        self.horizon.direction.unwrap_or_default().prefers_higher()
+    }
+
     /// Compose the workspace-baseline [`Self::gate_compute`] with a
     /// single-axis mutation — return `Self::gate_compute()` with the
     /// axis slot carrying `axis`'s classification-axis type overwritten
@@ -3353,6 +3477,44 @@ impl OptimizationDirection {
         match self {
             Self::Minimize => true,
             Self::Maximize => false,
+        }
+    }
+
+    /// POSITIVE-FRAMING PEER of [`Self::prefers_lower`] — does this
+    /// direction prefer numerically higher values? Closed-set match
+    /// (not `matches!`) so a future variant triggers the compiler's
+    /// exhaustiveness check at this site rather than silently
+    /// defaulting to `false` (which would mis-bucket a `Stabilize`-
+    /// style variant onto the minimization path). The boolean
+    /// partition is the antisymmetric image of [`Self::prefers_lower`]:
+    /// `Minimize ⇒ false`, `Maximize ⇒ true`. Exactly one of
+    /// `(prefers_lower, prefers_higher)` is true per variant on the
+    /// current two-variant closed set — pinned by
+    /// `optimization_direction_prefers_lower_xor_prefers_higher` —
+    /// exactly the binary XOR partition already sealed on the sibling
+    /// calm axis by `calm_classification_monotone_xor_requires_coordination`
+    /// and on the sibling data axis by `data_classification_public_xor_restricted`.
+    /// Structural mirror of [`CalmClassification::is_monotone`] as the
+    /// positive-framing peer that any future dispatch on the higher-
+    /// is-better polarity (throughput / coverage / revenue rate-window
+    /// evaluator, breathe-band regression detector's positive sign)
+    /// reads once rather than re-deriving from either the variant name
+    /// or the `!prefers_lower()` inversion at each callsite.
+    ///
+    /// A future third variant (a hypothetical `Stabilize` sentinel for
+    /// "drive toward a target value", which neither minimization nor
+    /// maximization names) MUST answer `false` here — matching the
+    /// antisymmetric complement on [`Self::prefers_lower`] so the
+    /// binary XOR partition either extends into a ternary partition
+    /// deliberately (adding a third derived-nullary predicate on the
+    /// closed set) OR the author flips one of the existing predicates
+    /// to reclaim the XOR. The exhaustiveness check plus the XOR pin
+    /// force the decision at the closed set rather than silently
+    /// bucketing the new variant onto an existing polarity.
+    pub const fn prefers_higher(self) -> bool {
+        match self {
+            Self::Minimize => false,
+            Self::Maximize => true,
         }
     }
 
@@ -5293,6 +5455,55 @@ mod tests {
     fn optimization_direction_prefers_lower_truth_table() {
         assert!(OptimizationDirection::Minimize.prefers_lower());
         assert!(!OptimizationDirection::Maximize.prefers_lower());
+    }
+
+    /// POSITIVE-FRAMING TRUTH-TABLE CONTRACT: `prefers_higher`
+    /// implements the antisymmetric partner of `prefers_lower` —
+    /// `Minimize ⇒ false` and `Maximize ⇒ true`. Pinning this table
+    /// at one site means any future consumer asking the positive
+    /// higher-is-better framing ("does this direction reward
+    /// throughput / coverage / revenue rate?") reads the same
+    /// projection every asymptotic-health probe writes. Mirrors
+    /// [`CalmClassification::is_monotone`]'s positive-framing shape
+    /// on the sibling binary closed set.
+    #[test]
+    fn optimization_direction_prefers_higher_truth_table() {
+        assert!(!OptimizationDirection::Minimize.prefers_higher());
+        assert!(OptimizationDirection::Maximize.prefers_higher());
+    }
+
+    /// XOR PARTITION CONTRACT: for every [`OptimizationDirection`]
+    /// variant, EXACTLY ONE of `prefers_lower` / `prefers_higher` is
+    /// true — the two predicates carve the closed set into
+    /// COMPLEMENTARY buckets (lower-is-better ↔ higher-is-better),
+    /// the exact binary partition already sealed on the sibling
+    /// [`CalmClassification`] axis by
+    /// `calm_classification_monotone_xor_requires_coordination` and
+    /// on the sibling [`DataClassification`] axis (through the
+    /// projection layer) by `data_classification_public_xor_restricted`,
+    /// now lifted to the two-variant optimization-direction axis. A
+    /// future variant that returned `true` for both (lower AND higher —
+    /// a category error) or `false` for both (an inert direction with
+    /// no polarity — nothing to dispatch on: a hypothetical `Stabilize`
+    /// sentinel MUST answer `false` on BOTH here, forcing the author
+    /// to add a third derived-nullary predicate on the closed set
+    /// deliberately rather than silently bucketing it onto an existing
+    /// polarity) would fail here, forcing the author to extend either
+    /// the predicates or the [`OptimizationDirection`] enum deliberately.
+    /// Structural twin of `calm_classification_monotone_xor_requires_coordination`
+    /// and `data_classification_public_xor_restricted` on the sibling
+    /// calm + data axes — all three binary XOR partitions publish
+    /// their two derived-nullary-bool projections as complementary
+    /// XOR pairs at ONE site each so the axis carves into disjoint
+    /// buckets by construction.
+    #[test]
+    fn optimization_direction_prefers_lower_xor_prefers_higher() {
+        for d in OptimizationDirection::ALL {
+            assert!(
+                d.prefers_lower() ^ d.prefers_higher(),
+                "{d:?}: prefers_lower() XOR prefers_higher() must hold",
+            );
+        }
     }
 
     /// COVERAGE CONTRACT: every variant lands in exactly one of two
@@ -8065,5 +8276,152 @@ mod tests {
             c.direction_prefers_lower(),
             "gate_compute (horizon.direction=None → unwrap_or_default=Minimize → prefers_lower=true) baseline",
         );
+    }
+
+    // ── Classification::direction_prefers_higher substrate pins ─────
+    //
+    // Fail-before-pass-after granularity:
+    // [`Classification::direction_prefers_higher`] did not exist before
+    // this commit — the positive higher-is-better framing peer of
+    // [`Classification::direction_prefers_lower`] had no substrate
+    // owner. Post-lift the shape lives at ONE substrate primitive and
+    // every downstream (the `prefers-higher-direction` fixed tag in
+    // `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::direction_prefers_higher`]
+    // peer, future asymptotic-health rate-window / regression-detector
+    // evaluators keying on the higher-is-better polarity) composes
+    // against the SAME `direction_prefers_higher()` shape rather than
+    // restating either `!self.direction_prefers_lower()` or the
+    // `self.horizon.direction.unwrap_or_default().prefers_higher()`
+    // chain at its own callsite. FIFTEENTH occupant of the (parent ×
+    // derived-nullary-bool) corner and SECOND occupant threading the
+    // classification-`horizon.direction` axis — CLOSES the axis on the
+    // corner into the FULL binary XOR partition contract
+    // `direction_prefers_lower ⊕ direction_prefers_higher` sealed on
+    // the closed set by
+    // `optimization_direction_prefers_lower_xor_prefers_higher` and
+    // composed through the parent-composed layer by
+    // `classification_direction_probes_form_binary_xor_partition_over_all`.
+    // ALL SIX classification axes (horizon, calm, data, point,
+    // substrate, optimization-direction) now have their partitions
+    // closed at the corner.
+
+    /// PER-VARIANT pin — for every [`OptimizationDirection`] variant, a
+    /// [`Classification`] whose `horizon.direction` slot carries
+    /// `Some(variant)` returns `direction_prefers_higher()` matching
+    /// the closed set's own [`OptimizationDirection::prefers_higher`]
+    /// truth table. Sweep [`OptimizationDirection::ALL`] so a
+    /// regression that (a) hard-coded the method body to a fixed
+    /// answer (silently returning `false` regardless of the stored
+    /// variant, silently keeping every Process on the lower-is-better
+    /// path and inverting every rate-window evaluator that expected
+    /// Maximize polarity), (b) inverted the projection (silently
+    /// promoting `Minimize` to "prefers higher"), (c) dropped the
+    /// `.unwrap_or_default()` hop (defaulting a `None` slot to a
+    /// fixed `true` rather than the closed-set-level
+    /// `Minimize.prefers_higher() = false`), or (d) crossed the wires
+    /// with a sibling classification-axis probe fails HERE at the
+    /// substrate primitive before drifting through the
+    /// `prefers-higher-direction` fixed tag or the peer ephemeral
+    /// surface.
+    #[test]
+    fn classification_direction_prefers_higher_matches_optimization_direction_projection() {
+        for populated in OptimizationDirection::ALL {
+            let c = Classification::gate_compute_with_axis(populated);
+            assert_eq!(
+                c.direction_prefers_higher(),
+                populated.prefers_higher(),
+                "horizon.direction={populated:?}: direction_prefers_higher() drift from OptimizationDirection::prefers_higher()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `horizon: Horizon::default()` whose `direction` field is `None`,
+    /// so `self.horizon.direction.unwrap_or_default()` defaults to
+    /// [`OptimizationDirection::Minimize`] via `#[default]`, and
+    /// [`OptimizationDirection::Minimize::prefers_higher`] projects
+    /// `false`, so `direction_prefers_higher()` returns `false`. Pins
+    /// the default-arm short-circuit through TWO layers of `Default`
+    /// ([`Horizon::default`] → `direction: None`; then
+    /// [`OptimizationDirection::default = Minimize`]) at ONE narrow
+    /// site — a regression that promoted [`OptimizationDirection::Maximize`]
+    /// to `#[default]` (silently flipping every unadorned Process's
+    /// rate-window evaluator polarity onto the higher-is-better path),
+    /// that wired `Minimize` to `prefers_higher() = true`, or that
+    /// dropped the `.unwrap_or_default()` hop (silently defaulting
+    /// `None` to `true` rather than the closed-set-level `Minimize`
+    /// baseline) would fail HERE before drifting through every
+    /// unadorned Process's optimization-polarity answer. Mirror-
+    /// inverted from the sibling
+    /// `classification_gate_compute_direction_prefers_lower_is_true`
+    /// baseline (both walk the SAME defaulted `horizon.direction`
+    /// slot, so `prefers_lower = true` ⇒ `prefers_higher = false` on
+    /// the closed set's disjoint XOR partition).
+    #[test]
+    fn classification_gate_compute_direction_prefers_higher_is_false() {
+        let c = Classification::gate_compute();
+        assert!(
+            !c.direction_prefers_higher(),
+            "gate_compute (horizon.direction=None → unwrap_or_default=Minimize → prefers_higher=false) baseline",
+        );
+    }
+
+    /// MUTEX pin — [`Classification::direction_prefers_lower`] AND
+    /// [`Classification::direction_prefers_higher`] are NEVER
+    /// simultaneously true for ANY [`OptimizationDirection`] variant,
+    /// since the closed set's own `prefers_lower` / `prefers_higher`
+    /// pair carves it into disjoint buckets sealed by
+    /// `optimization_direction_prefers_lower_xor_prefers_higher`.
+    /// Substrate-composed antisymmetric MUTEX pin against the
+    /// positive higher-is-better framing peer at the parent-composed
+    /// layer.
+    #[test]
+    fn classification_direction_prefers_lower_and_prefers_higher_are_mutex_over_all() {
+        for populated in OptimizationDirection::ALL {
+            let c = Classification::gate_compute_with_axis(populated);
+            assert!(
+                !(c.direction_prefers_lower() && c.direction_prefers_higher()),
+                "horizon.direction={populated:?}: direction_prefers_lower AND direction_prefers_higher both true (mutex violated)",
+            );
+        }
+    }
+
+    /// BINARY XOR PARTITION pin — for every [`OptimizationDirection`]
+    /// variant, EXACTLY ONE of [`Classification::direction_prefers_lower`]
+    /// and [`Classification::direction_prefers_higher`] returns `true`
+    /// on a [`Classification`] carrying that variant on its
+    /// `horizon.direction` slot. CLOSES the optimization-direction
+    /// axis into the FULL binary XOR partition contract sealed on the
+    /// closed set by
+    /// `optimization_direction_prefers_lower_xor_prefers_higher` and
+    /// composed through the parent-composed layer as a substrate-wide
+    /// theorem — the SIXTH (and final) classification axis to reach
+    /// the parent-composed binary XOR partition landmark at this
+    /// corner. Structural twin of the calm-axis binary XOR partition
+    /// `classification_calm_probes_form_binary_xor_partition_over_all`
+    /// and the data-axis binary XOR partition
+    /// `classification_data_probes_form_binary_xor_partition_over_all`
+    /// on the sibling calm + data axes — all three binary XOR
+    /// partitions publish their two derived-nullary-bool projections
+    /// as complementary XOR pairs at ONE site each so the axis carves
+    /// into disjoint buckets by construction. A regression that
+    /// crossed the wires between the two parent-composed probes (one
+    /// probe silently composing the wrong closed-set arm) fails HERE
+    /// rather than at every downstream consumer that trusts the two
+    /// probes partition the direction slot into disjoint buckets
+    /// whose union covers every variant.
+    #[test]
+    fn classification_direction_probes_form_binary_xor_partition_over_all() {
+        for populated in OptimizationDirection::ALL {
+            let c = Classification::gate_compute_with_axis(populated);
+            let buckets = [c.direction_prefers_lower(), c.direction_prefers_higher()];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "horizon.direction={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
+            );
+        }
     }
 }

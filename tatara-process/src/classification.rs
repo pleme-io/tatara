@@ -2499,6 +2499,166 @@ impl Classification {
         self.horizon.direction.unwrap_or_default().prefers_higher()
     }
 
+    /// Derived-boolean predicate — does this [`Classification`]'s
+    /// `point_type` slot project to `Arity::One` under
+    /// [`ConvergencePointType::input_arity`]? The ONE substrate
+    /// primitive that owns the `(Classification) -> bool` derived-
+    /// nullary-predicate walk on the DAG-composition input-arity
+    /// projection.
+    ///
+    /// # First derived-nullary-bool corner occupant on the input-arity axis
+    ///
+    /// Peer of the fifteen prior nullary-bool substrate primitives on
+    /// [`Classification`] ([`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], [`Self::data_is_regulated`],
+    /// [`Self::data_is_restricted`], [`Self::point_is_endomorphic`],
+    /// [`Self::point_is_diffusive`], [`Self::point_is_convergent`],
+    /// [`Self::substrate_is_resource`], [`Self::substrate_is_policy`],
+    /// [`Self::substrate_is_telemetry`], [`Self::calm_is_monotone`],
+    /// [`Self::data_is_public`], [`Self::direction_prefers_lower`],
+    /// [`Self::direction_prefers_higher`]) on the workspace-wide
+    /// (parent × derived-nullary-bool) corner of the closed-set-driven
+    /// presence-probe algebra. SIXTEENTH occupant on the corner and
+    /// FIRST occupant threading the classification-`point_type`-
+    /// derived input-arity axis — opens the SEVENTH classification
+    /// axis into the fixed-tag algebra after the six axes (horizon,
+    /// calm, data, point-type, substrate, optimization-direction)
+    /// already closed at the corner. The input-arity axis is a
+    /// derived typed projection through
+    /// [`ConvergencePointType::input_arity`] rather than a stored
+    /// classification slot — so this predicate composes an extra
+    /// closed-set-level projection hop compared to the sibling
+    /// `point_is_*` triple that walks the raw `point_type` slot.
+    ///
+    /// # Semantics — derived nullary boolean over the input-arity projection
+    ///
+    /// `input_arity_is_one()` returns `true` iff
+    /// `self.point_type.input_arity().is_one()`. The eight-variant
+    /// [`ConvergencePointType`] closed set publishes the truth table
+    /// through [`ConvergencePointType::input_arity`]: `Transform |
+    /// Fork | Broadcast | Observe → One → true`; `Join | Gate |
+    /// Select | Reduce → Many → false`. A
+    /// [`Classification::gate_compute`] baseline (which carries
+    /// `point_type: Gate`) answers `false` — `Gate.input_arity() =
+    /// Many`, so the multi-input bucket carves the workspace-wide
+    /// baseline into the multi-input cell.
+    ///
+    /// A future [`ConvergencePointType`] variant (a hypothetical
+    /// `Demux` for `One → Many` or `Mux` for `Many → One`) reaches
+    /// this probe through ONE `input_arity` arm on
+    /// [`ConvergencePointType`] with the probe body untouched — the
+    /// many-to-one projection means the bucket membership shift lands
+    /// exactly at [`ConvergencePointType::input_arity`], not at every
+    /// consumer that previously restated the bucket in code.
+    ///
+    /// # Compounding — opens the input-arity axis at the parent-composed corner
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `single-input-arity` on `POINT_FIXED_TAG_ARMS`
+    /// — byte-for-byte structural peer of every other `(parent ×
+    /// derived-nullary-bool)` corner arm. The antisymmetric partner
+    /// [`Self::input_arity_is_many`] closes the input-arity axis into
+    /// the FULL binary XOR partition contract sealed on the closed
+    /// set by `arity_is_one_xor_is_many_over_all` — mirror of the
+    /// binary XOR closures on the calm axis (`monotone-calm ⊕
+    /// coordination-required`), the data axis (`public-data ⊕
+    /// data-restricted`), and the optimization-direction axis
+    /// (`prefers-lower-direction ⊕ prefers-higher-direction`). A
+    /// future ephemeral-surface peer
+    /// (`EphemeralSpec::input_arity_is_one`) will compose THIS method
+    /// through [`crate::ephemeral::EphemeralSpec::resolved_classification`]
+    /// so the two-surface parity contract holds — the operator's
+    /// `:requires (single-input-arity)` audit answers the same
+    /// question on both surfaces.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the future
+    /// `single-input-arity` fixed tag in `tatara-check`, DAG
+    /// composition validators keying on the single-input framing,
+    /// future variant additions on [`ConvergencePointType`]) binds
+    /// through the SAME `input_arity_is_one()` shape rather than
+    /// restating the two-hop `self.point_type.input_arity().is_one()`
+    /// chain at each callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future [`ConvergencePointType`] variant lands
+    /// at ONE `ALL` entry + ONE `input_arity` arm on the closed set
+    /// and this probe picks it up mechanically.
+    #[must_use]
+    pub fn input_arity_is_one(&self) -> bool {
+        self.point_type.input_arity().is_one()
+    }
+
+    /// ANTISYMMETRIC PEER of [`Self::input_arity_is_one`] — does
+    /// this [`Classification`]'s `point_type` slot project to
+    /// `Arity::Many` under [`ConvergencePointType::input_arity`]?
+    /// The ONE substrate primitive that owns the `(Classification) ->
+    /// bool` derived-nullary-predicate walk on the multi-input side
+    /// of the DAG-composition input-arity projection.
+    ///
+    /// # Seventeenth corner occupant — CLOSES the input-arity axis into a binary XOR partition
+    ///
+    /// SEVENTEENTH occupant on the (parent × derived-nullary-bool)
+    /// corner of the workspace-wide closed-set-driven presence-probe
+    /// algebra and SECOND peer threading the classification-
+    /// `point_type`-derived input-arity axis — CLOSES the SEVENTH
+    /// classification axis into the FULL binary XOR partition
+    /// contract `input_arity_is_one ⊕ input_arity_is_many` sealed on
+    /// the closed set by `arity_is_one_xor_is_many_over_all` and
+    /// composed through the parent-composed layer by
+    /// `classification_input_arity_probes_form_binary_xor_partition_over_all`.
+    /// Structural mirror of the calm-axis binary XOR partition
+    /// (`monotone-calm ⊕ coordination-required`), the data-axis
+    /// binary XOR partition (`public-data ⊕ data-restricted`), and
+    /// the optimization-direction-axis binary XOR partition
+    /// (`prefers-lower-direction ⊕ prefers-higher-direction`) — the
+    /// FOURTH parent-composed binary XOR partition on the corner.
+    ///
+    /// # Semantics — derived nullary boolean over the multi-input projection
+    ///
+    /// `input_arity_is_many()` returns `true` iff
+    /// `self.point_type.input_arity().is_many()`. The eight-variant
+    /// [`ConvergencePointType`] closed set publishes the truth table
+    /// through [`ConvergencePointType::input_arity`]: `Transform |
+    /// Fork | Broadcast | Observe → One → false`; `Join | Gate |
+    /// Select | Reduce → Many → true`. A
+    /// [`Classification::gate_compute`] baseline (which carries
+    /// `point_type: Gate`) answers `true` — `Gate.input_arity() =
+    /// Many`, so the multi-input bucket carves the workspace-wide
+    /// baseline. Direct antisymmetric mirror of
+    /// [`Self::input_arity_is_one`] on the SAME projection through
+    /// the SAME closed set.
+    ///
+    /// # Compounding — CLOSES the input-arity axis into a binary XOR partition
+    ///
+    /// The point-domain require-tag surface will compose this
+    /// primitive as a fixed tag `multi-input-arity` on
+    /// `POINT_FIXED_TAG_ARMS` — antisymmetric peer of the sibling
+    /// `single-input-arity` fixed tag. Together with the sibling
+    /// [`Self::input_arity_is_one`] the two predicates seal the
+    /// input-arity axis into a binary XOR partition on the parent-
+    /// composed layer as a substrate-wide theorem, closing the
+    /// axis at the SEVENTH-classification-axis landmark.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body
+    /// lives at ONE substrate site so every downstream (the future
+    /// `multi-input-arity` fixed tag, DAG composition validators
+    /// keying on multi-input fan-in semantics, future variant
+    /// additions on [`ConvergencePointType`]) binds through the SAME
+    /// `input_arity_is_many()` shape rather than restating either
+    /// `!self.input_arity_is_one()` or
+    /// `self.point_type.input_arity().is_many()` at each callsite.
+    /// THEORY.md §VI.1 — generation over composition; a future
+    /// [`ConvergencePointType`] variant lands at ONE `ALL` entry +
+    /// ONE `input_arity` arm on the closed set and this probe picks
+    /// it up mechanically.
+    #[must_use]
+    pub fn input_arity_is_many(&self) -> bool {
+        self.point_type.input_arity().is_many()
+    }
+
     /// Compose the workspace-baseline [`Self::gate_compute`] with a
     /// single-axis mutation — return `Self::gate_compute()` with the
     /// axis slot carrying `axis`'s classification-axis type overwritten
@@ -2989,6 +3149,46 @@ impl Arity {
         match self {
             Self::One => true,
             Self::Many => false,
+        }
+    }
+
+    /// POSITIVE-FRAMING PEER of [`Self::is_one`] — is this the
+    /// multi-edge cardinality? Closed-set match (not `matches!`) so a
+    /// future variant triggers the compiler's exhaustiveness check at
+    /// this site rather than silently defaulting to `false` (which
+    /// would mis-bucket a `Zero`-style sink variant onto the multi-
+    /// edge path). The boolean partition is the antisymmetric image
+    /// of [`Self::is_one`]: `One ⇒ false`, `Many ⇒ true`. Exactly
+    /// one of `(is_one, is_many)` is true per variant on the current
+    /// two-variant closed set — pinned by
+    /// `arity_is_one_xor_is_many_over_all` — exactly the binary XOR
+    /// partition already sealed on the sibling optimization-direction
+    /// axis by `optimization_direction_prefers_lower_xor_prefers_higher`,
+    /// on the calm axis by
+    /// `calm_classification_monotone_xor_requires_coordination`, and
+    /// on the data axis by
+    /// `data_classification_public_xor_restricted`. Structural mirror
+    /// of [`OptimizationDirection::prefers_higher`] as the positive-
+    /// framing peer that any future dispatch on the multi-edge
+    /// cardinality (DAG fan-out validators, edge-cardinality checks:
+    /// "every diffusive topology point emits fan-out") reads once
+    /// rather than re-deriving from the variant name or the
+    /// `!is_one()` inversion at each callsite.
+    ///
+    /// A future third variant (a hypothetical `Zero` sentinel for
+    /// pure sinks with no edge, which neither single nor multi
+    /// cardinality names) MUST answer `false` here — matching the
+    /// antisymmetric complement on [`Self::is_one`] so the binary
+    /// XOR partition either extends into a ternary partition
+    /// deliberately (adding a third derived-nullary predicate on the
+    /// closed set) OR the author flips one of the existing predicates
+    /// to reclaim the XOR. The exhaustiveness check plus the XOR pin
+    /// force the decision at the closed set rather than silently
+    /// bucketing the new variant onto an existing cardinality.
+    pub const fn is_many(self) -> bool {
+        match self {
+            Self::One => false,
+            Self::Many => true,
         }
     }
 }
@@ -4999,6 +5199,70 @@ mod tests {
     fn arity_is_one_predicate_truth_table() {
         assert!(Arity::One.is_one());
         assert!(!Arity::Many.is_one());
+    }
+
+    /// PREDICATE CONTRACT: `is_many` is true exactly for `Arity::Many`
+    /// — the antisymmetric image of `is_one` on the current two-
+    /// variant closed set. Pins the codomain here means a future
+    /// `Arity::Zero` (or any other) variant must declare its own
+    /// `is_many` arm deliberately rather than silently defaulting
+    /// through a non-closed-set match.
+    #[test]
+    fn arity_is_many_predicate_truth_table() {
+        assert!(!Arity::One.is_many());
+        assert!(Arity::Many.is_many());
+    }
+
+    /// BINARY XOR PARTITION pin — for every [`Arity`] variant, EXACTLY
+    /// ONE of `is_one` / `is_many` holds. Structural twin of the
+    /// optimization-direction axis
+    /// (`optimization_direction_prefers_lower_xor_prefers_higher`),
+    /// the calm axis
+    /// (`calm_classification_monotone_xor_requires_coordination`), and
+    /// the data axis (`data_classification_public_xor_restricted`) —
+    /// all four binary XOR partitions publish their two derived-
+    /// nullary-bool projections as complementary XOR pairs at ONE
+    /// site each so the closed set carves into disjoint buckets by
+    /// construction. A future variant that returned `true` for both
+    /// (single AND multi — a category error) or `false` for both (an
+    /// inert cardinality with no edge count: a hypothetical `Zero`
+    /// sink sentinel MUST answer `false` on BOTH here, forcing the
+    /// author to add a third derived-nullary predicate on the closed
+    /// set deliberately rather than silently bucketing it onto an
+    /// existing cardinality) would fail here, forcing the author to
+    /// extend either the predicates or the [`Arity`] enum
+    /// deliberately.
+    #[test]
+    fn arity_is_one_xor_is_many_over_all() {
+        for a in Arity::ALL {
+            assert!(
+                a.is_one() ^ a.is_many(),
+                "{a:?}: is_one() XOR is_many() must hold",
+            );
+        }
+    }
+
+    /// COVERAGE CONTRACT: every [`Arity`] variant lands in exactly one
+    /// of two cardinality buckets — single (`One`) or multi (`Many`).
+    /// Pins the two buckets at their declared cardinalities (1, 1 —
+    /// sum to `ALL.len()`) so a future variant lands somewhere
+    /// deliberately. Structural mirror of
+    /// `optimization_direction_buckets_cover_every_variant` on the
+    /// sibling optimization-direction axis.
+    #[test]
+    fn arity_buckets_cover_every_variant() {
+        let mut single = 0u32;
+        let mut multi = 0u32;
+        for a in Arity::ALL {
+            if a.is_one() {
+                single += 1;
+            } else {
+                multi += 1;
+            }
+        }
+        assert_eq!(single, 1, "single-edge bucket: One");
+        assert_eq!(multi, 1, "multi-edge bucket: Many");
+        assert_eq!(single + multi, Arity::ALL.len() as u32);
     }
 
     // ── closed-set algebra contracts for SubstrateType
@@ -8421,6 +8685,171 @@ mod tests {
             assert_eq!(
                 hits, 1,
                 "horizon.direction={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
+            );
+        }
+    }
+
+    // ── Classification::input_arity_is_one / input_arity_is_many
+    //    substrate pins ─────────────────────────────────────────────────
+    //
+    // Fail-before-pass-after granularity:
+    // [`Classification::input_arity_is_one`] and
+    // [`Classification::input_arity_is_many`] did not exist before this
+    // commit — the input-arity axis, previously reachable only through
+    // the parameterized [`Classification::has_input_arity`] probe, had
+    // no derived-nullary-bool corner occupant. Post-lift the two
+    // shapes live at ONE substrate primitive each and every future
+    // downstream (the `single-input-arity` / `multi-input-arity` fixed
+    // tags in `tatara-check`, DAG composition validators, an ephemeral
+    // surface peer through [`crate::ephemeral::EphemeralSpec::resolved_classification`])
+    // composes against the SAME shape rather than restating either
+    // `self.point_type.input_arity().is_one()` or
+    // `self.has_input_arity(Arity::One)` at its own callsite.
+    // SIXTEENTH + SEVENTEENTH occupants of the (parent × derived-
+    // nullary-bool) corner and FIRST + SECOND occupants threading the
+    // classification-`point_type`-derived input-arity axis — CLOSE the
+    // SEVENTH classification axis into the FULL binary XOR partition
+    // contract `input_arity_is_one ⊕ input_arity_is_many` sealed on
+    // the closed set by `arity_is_one_xor_is_many_over_all` and
+    // composed through the parent-composed layer by
+    // `classification_input_arity_probes_form_binary_xor_partition_over_all`.
+
+    /// PER-VARIANT pin — for every [`ConvergencePointType`] variant, a
+    /// [`Classification`] whose `point_type` slot carries that variant
+    /// returns `input_arity_is_one()` matching the closed set's own
+    /// [`ConvergencePointType::input_arity`] projection composed with
+    /// [`Arity::is_one`]. Sweep [`ConvergencePointType::ALL`] so a
+    /// regression that (a) hard-coded the method body to a fixed
+    /// answer, (b) inverted the projection (silently promoting the
+    /// multi-input variants to "single-input"), (c) crossed the wires
+    /// with [`ConvergencePointType::output_arity`] (which disagrees
+    /// on the four `Fork | Broadcast | Join | Gate | Select | Reduce`
+    /// arms), or (d) dropped the `.is_one()` hop (silently returning
+    /// the raw [`Arity`] variant discriminant) fails HERE before
+    /// drifting through every future downstream that trusts the
+    /// derived-nullary shape.
+    #[test]
+    fn classification_input_arity_is_one_matches_input_arity_projection() {
+        for kind in ConvergencePointType::ALL {
+            let mut c = Classification::gate_compute();
+            c.point_type = kind;
+            assert_eq!(
+                c.input_arity_is_one(),
+                kind.input_arity().is_one(),
+                "point_type={kind:?}: input_arity_is_one() drift from ConvergencePointType::input_arity().is_one()",
+            );
+        }
+    }
+
+    /// PER-VARIANT pin — antisymmetric peer of the sibling
+    /// `classification_input_arity_is_one_matches_input_arity_projection`.
+    /// For every [`ConvergencePointType`] variant, a
+    /// [`Classification`] whose `point_type` slot carries that variant
+    /// returns `input_arity_is_many()` matching
+    /// [`ConvergencePointType::input_arity`] composed with
+    /// [`Arity::is_many`]. Regressions matching the sibling
+    /// per-variant pin's shape fail HERE for the multi-input side of
+    /// the axis.
+    #[test]
+    fn classification_input_arity_is_many_matches_input_arity_projection() {
+        for kind in ConvergencePointType::ALL {
+            let mut c = Classification::gate_compute();
+            c.point_type = kind;
+            assert_eq!(
+                c.input_arity_is_many(),
+                kind.input_arity().is_many(),
+                "point_type={kind:?}: input_arity_is_many() drift from ConvergencePointType::input_arity().is_many()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] carries `point_type: Gate`;
+    /// [`ConvergencePointType::Gate::input_arity`] projects to
+    /// [`Arity::Many`], so `input_arity_is_one()` returns `false` on
+    /// the baseline. Pins the closed-set-driven default arm at ONE
+    /// narrow site — a regression that promoted a different
+    /// [`ConvergencePointType`] variant to the workspace-wide
+    /// baseline, that flipped `Gate.input_arity()` from `Many` to
+    /// `One`, or that inverted the `is_one()` projection would fail
+    /// HERE before drifting through every unadorned Process's
+    /// input-arity answer.
+    #[test]
+    fn classification_gate_compute_input_arity_is_one_is_false() {
+        let c = Classification::gate_compute();
+        assert!(
+            !c.input_arity_is_one(),
+            "gate_compute (point_type=Gate → input_arity=Many → is_one=false) baseline",
+        );
+    }
+
+    /// GATE-COMPUTE BASELINE — the antisymmetric mirror of the
+    /// sibling `_input_arity_is_one_is_false` pin: `Gate.input_arity()
+    /// = Many`, so `input_arity_is_many()` returns `true` on the
+    /// baseline. Together with the sibling pin the two seal the
+    /// input-arity slot's default-arm answer on the workspace-wide
+    /// baseline as a binary XOR partition — a regression breaking
+    /// either bucket's default-arm answer fails HERE.
+    #[test]
+    fn classification_gate_compute_input_arity_is_many_is_true() {
+        let c = Classification::gate_compute();
+        assert!(
+            c.input_arity_is_many(),
+            "gate_compute (point_type=Gate → input_arity=Many → is_many=true) baseline",
+        );
+    }
+
+    /// SUBSTRATE-COMPOSED MUTEX pin — for every
+    /// [`ConvergencePointType`] variant, both predicates are NEVER
+    /// simultaneously `true` on a [`Classification`] carrying that
+    /// variant on its `point_type` slot. A regression that broke the
+    /// disjointness (either predicate silently answering `true` for
+    /// both single AND multi input variants) fails HERE.
+    #[test]
+    fn classification_input_arity_is_one_and_is_many_are_mutex_over_all() {
+        for kind in ConvergencePointType::ALL {
+            let mut c = Classification::gate_compute();
+            c.point_type = kind;
+            assert!(
+                !(c.input_arity_is_one() && c.input_arity_is_many()),
+                "point_type={kind:?}: input_arity_is_one AND input_arity_is_many both true (mutex violated)",
+            );
+        }
+    }
+
+    /// BINARY XOR PARTITION pin — for every [`ConvergencePointType`]
+    /// variant, EXACTLY ONE of [`Classification::input_arity_is_one`]
+    /// and [`Classification::input_arity_is_many`] returns `true` on
+    /// a [`Classification`] carrying that variant on its `point_type`
+    /// slot. CLOSES the input-arity axis (the SEVENTH classification
+    /// axis) into the FULL binary XOR partition contract sealed on
+    /// the closed set by `arity_is_one_xor_is_many_over_all` and
+    /// composed through the parent-composed layer as a substrate-wide
+    /// theorem. Structural twin of the calm-axis binary XOR partition
+    /// (`classification_calm_probes_form_binary_xor_partition_over_all`),
+    /// the data-axis binary XOR partition
+    /// (`classification_data_probes_form_binary_xor_partition_over_all`),
+    /// and the optimization-direction-axis binary XOR partition
+    /// (`classification_direction_probes_form_binary_xor_partition_over_all`)
+    /// on the sibling axes — all four binary XOR partitions publish
+    /// their two derived-nullary-bool projections as complementary
+    /// XOR pairs at ONE site each so the axis carves into disjoint
+    /// buckets by construction. A regression that crossed the wires
+    /// between the two parent-composed probes (one probe silently
+    /// composing the wrong closed-set arm) fails HERE rather than at
+    /// every future downstream consumer that trusts the two probes
+    /// partition the input-arity projection into disjoint buckets
+    /// whose union covers every [`ConvergencePointType`] variant.
+    #[test]
+    fn classification_input_arity_probes_form_binary_xor_partition_over_all() {
+        for kind in ConvergencePointType::ALL {
+            let mut c = Classification::gate_compute();
+            c.point_type = kind;
+            let buckets = [c.input_arity_is_one(), c.input_arity_is_many()];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "point_type={kind:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
             );
         }
     }

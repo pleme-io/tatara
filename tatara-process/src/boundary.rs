@@ -182,6 +182,108 @@ impl Boundary {
     pub fn has_postcondition_kind(&self, kind: ConditionKind) -> bool {
         self.postconditions.has_kind(kind)
     }
+
+    /// Returns the first [`Condition`] in
+    /// `preconditions ∪ postconditions` carrying the given
+    /// [`ConditionKind`], searching preconditions first — the
+    /// widened peer of [`Self::has_condition_kind`] one refinement
+    /// higher on the presence-probe algebra.
+    ///
+    /// # Sibling to [`Self::has_condition_kind`]
+    ///
+    /// Same axis, one refinement wider: `has_condition_kind` collapses
+    /// the return to a `bool` (`find_condition_kind(k).is_some()`);
+    /// this method returns the matching `&Condition` so consumers can
+    /// read [`Condition::params`] (the `probeImage`, the `expression`,
+    /// the `flakeRef`) at the presence probe's own callsite without
+    /// re-walking the two condition vectors. Pinned by the composition
+    /// law `has_condition_kind(K) == find_condition_kind(K).is_some()`
+    /// at [`Boundary`]'s substrate-delegation test.
+    ///
+    /// # Semantics — precondition takes precedence
+    ///
+    /// Walks [`Self::preconditions`] first, then [`Self::postconditions`]:
+    /// a kind authored on BOTH sides returns the precondition-side
+    /// [`Condition`]. Callers that need the postcondition-side match
+    /// specifically reach for [`Self::find_postcondition_kind`]; callers
+    /// that need every match across both sides walk the two vectors
+    /// directly. Composition law: `find_condition_kind(K) ==
+    /// find_precondition_kind(K).or_else(|| find_postcondition_kind(K))`,
+    /// pinned as a first-class typed invariant.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::find_condition_kind`]
+    ///
+    /// Same signature `(ConditionKind) -> Option<&Condition>`, same
+    /// precondition-first body, on the sugar-surface type whose
+    /// pre/post condition vectors live directly on the struct. Both
+    /// methods compose against the SAME slice-level substrate primitive
+    /// [`ConditionSliceExt::find_kind`] — a regression at the per-slice
+    /// walk fails at that primitive's tests rather than as silent drift
+    /// at either struct-level widened caller.
+    ///
+    /// # Compounding
+    ///
+    /// A future diagnostic consumer (an operator-facing "condition
+    /// {kind} matched on {side} with params.{key}={value}" message
+    /// emitted by the require-tag classifier, a coherence check that
+    /// verifies "every `ClosedLoopAuth` postcondition carries a
+    /// non-empty `probeImage`" by inspecting the returned
+    /// `&Condition.params`, an editor completion listing which
+    /// params-keys appear on the present kind) reaches for the
+    /// matching [`Condition`] through this ONE method rather than
+    /// re-walking the two vectors with `iter().find(...)` at the
+    /// callsite. The presence-probe axis now carries both refinements
+    /// (bool via `has_condition_kind`, `&Condition` via
+    /// `find_condition_kind`) at ONE typed algebra surface per struct.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the widened return lives at ONE substrate
+    /// site so every downstream diagnostic consumer + coherence check
+    /// binds through the SAME shape rather than restating the
+    /// `.iter().find(|c| c.kind == K)` closure body).
+    #[must_use]
+    pub fn find_condition_kind(&self, kind: ConditionKind) -> Option<&Condition> {
+        self.find_precondition_kind(kind)
+            .or_else(|| self.find_postcondition_kind(kind))
+    }
+
+    /// Returns the first [`Condition`] in [`Self::preconditions`]
+    /// carrying the given [`ConditionKind`], or `None` — the
+    /// precondition-side arm of the (precondition, postcondition,
+    /// condition-union) widened triad on [`Boundary`]. Thin typed
+    /// delegate to [`ConditionSliceExt::find_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::find_postcondition_kind`] on the (precondition,
+    /// postcondition) partition of the boundary's two condition-vector
+    /// slots; both peers compose against the SAME slice-level substrate
+    /// primitive and their `or_else` composition is
+    /// [`Self::find_condition_kind`]. Byte-identical semantics to
+    /// [`Self::has_precondition_kind`] with a widened `Option<&Condition>`
+    /// return rather than a `bool`.
+    #[must_use]
+    pub fn find_precondition_kind(&self, kind: ConditionKind) -> Option<&Condition> {
+        self.preconditions.find_kind(kind)
+    }
+
+    /// Returns the first [`Condition`] in [`Self::postconditions`]
+    /// carrying the given [`ConditionKind`], or `None` — the
+    /// postcondition-side arm of the (precondition, postcondition,
+    /// condition-union) widened triad on [`Boundary`]. Thin typed
+    /// delegate to [`ConditionSliceExt::find_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::find_precondition_kind`] on the (precondition,
+    /// postcondition) partition of the boundary's two condition-vector
+    /// slots. See [`Self::find_precondition_kind`] for the full
+    /// rationale — the two methods share ONE lift motivation, ONE
+    /// fail-before-pass-after composition-law pin, and ONE two-surface
+    /// parity contract with the ephemeral sugar type via
+    /// [`crate::ephemeral::EphemeralSpec::find_postcondition_kind`].
+    #[must_use]
+    pub fn find_postcondition_kind(&self, kind: ConditionKind) -> Option<&Condition> {
+        self.postconditions.find_kind(kind)
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -229,12 +331,13 @@ impl Boundary {
 ///
 /// # Compounding
 ///
-/// A future extension of the probe algebra to a
-/// `has_kind_matching(|&Condition| -> bool)` predicate variant (e.g.
-/// "does any `ClosedLoopAuth` postcondition have a non-empty
-/// `probeImage`?") lands as ONE new default method on this trait —
-/// the closed-set discriminator case above becomes `has_kind(k) ==
-/// self.has_kind_matching(|c| c.kind == k)` by construction, so a
+/// [`Self::find_kind`] is the widened primitive returning
+/// `Option<&Condition>` that both `has_kind` (`self.find_kind(k).
+/// is_some()`, the default body) and future diagnostic consumers
+/// compose against. A `has_kind_matching(|&Condition| -> bool)`
+/// predicate extension similarly lands as ONE new default method on
+/// this trait — the closed-set discriminator case becomes `has_kind(k)
+/// == self.has_kind_matching(|c| c.kind == k)` by construction, so a
 /// regression that drifted one from the other becomes structurally
 /// impossible past the trait boundary.
 ///
@@ -247,17 +350,49 @@ impl Boundary {
 /// primitive through `slice.has_kind(k)` with no per-caller
 /// restatement of the `.iter().any(|c| c.kind == K)` closure body.
 pub trait ConditionSliceExt {
+    /// Returns the first [`Condition`] in this slice that carries the
+    /// given [`ConditionKind`], or `None` if none matches — the ONE
+    /// widened primitive that both [`Self::has_kind`] (via the default
+    /// `find_kind(k).is_some()` body) and future diagnostic consumers
+    /// (an operator-facing "found on {pre|post}conditions with
+    /// param.probeImage=X" message, a coherence check that verifies
+    /// "every `ClosedLoopAuth` postcondition carries a non-empty
+    /// `probeImage`", an editor completion that lists params-keys per
+    /// present kind) compose against.
+    ///
+    /// # Sibling to [`Self::has_kind`]
+    ///
+    /// One refinement wider: `has_kind` collapses the return to a
+    /// `bool`; `find_kind` returns the matching `&Condition` so callers
+    /// can read [`Condition::params`] without re-walking the slice. The
+    /// default body of `has_kind` is `self.find_kind(kind).is_some()`
+    /// — the two methods share ONE walk semantics by construction, so
+    /// a regression that drifted the presence probe from the widened
+    /// probe becomes structurally impossible past the trait boundary.
+    ///
+    /// # Semantics
+    ///
+    /// Returns `Some(c)` for the FIRST `c` in this slice with `c.kind
+    /// == kind` — a slice that carries multiple matches returns the
+    /// earliest by position. Returns `None` iff no element matches.
+    /// Byte-for-byte equivalent to `self.iter().find(|c| c.kind ==
+    /// kind)`.
+    fn find_kind(&self, kind: ConditionKind) -> Option<&Condition>;
+
     /// True iff at least one [`Condition`] in this slice carries the
-    /// given [`ConditionKind`]. The single-slice presence probe both
+    /// given [`ConditionKind`]. Default body: `self.find_kind(kind).
+    /// is_some()`. The single-slice presence probe both
     /// [`Boundary::has_condition_kind`] (twice, in a union) and the
     /// ephemeral `closed-loop-auth` require-tag arm (once, on
     /// postconditions only) compose against.
-    fn has_kind(&self, kind: ConditionKind) -> bool;
+    fn has_kind(&self, kind: ConditionKind) -> bool {
+        self.find_kind(kind).is_some()
+    }
 }
 
 impl ConditionSliceExt for [Condition] {
-    fn has_kind(&self, kind: ConditionKind) -> bool {
-        self.iter().any(|c| c.kind == kind)
+    fn find_kind(&self, kind: ConditionKind) -> Option<&Condition> {
+        self.iter().find(|c| c.kind == kind)
     }
 }
 
@@ -1114,6 +1249,248 @@ mod tests {
                     "postcondition arm must delegate to postconditions.has_kind: \
                      populated={populated:?} query={query:?}",
                 );
+            }
+        }
+    }
+
+    // ── ConditionSliceExt::find_kind substrate pins + widened triad ──
+    //
+    // Fail-before-pass-after granularity: `ConditionSliceExt::find_kind`
+    // + its three struct-level peers (`Boundary::find_(pre|post)?
+    // condition_kind`) did not exist before this commit — the existing
+    // `has_*_kind` triad collapses the return to `bool`, losing the
+    // matching `&Condition` a future diagnostic consumer (an operator-
+    // facing "found on {pre|post}conditions at param.probeImage=X"
+    // message, a coherence check verifying "every ClosedLoopAuth
+    // postcondition carries a non-empty probeImage", an editor
+    // completion listing params-keys per present kind) needs. The lift
+    // widens the primitive to `Option<&Condition>` and re-anchors
+    // `has_kind` as a default composed from it, so the two refinements
+    // share ONE walk semantics by construction.
+
+    /// EMPTY-SLICE pin — an empty `&[Condition]` returns `None` from
+    /// `find_kind` for EVERY [`ConditionKind`]. Sweep
+    /// `ConditionKind::ALL` so a new variant added without a matching
+    /// arm in the primitive surfaces at rustc's exhaustiveness gate on
+    /// the ALL literal (arity forced by `[Self; 8]`) rather than as a
+    /// silent false-`Some` at every downstream widened callsite.
+    #[test]
+    fn condition_slice_find_kind_returns_none_on_empty_slice_for_every_kind() {
+        let empty: &[Condition] = &[];
+        for kind in ConditionKind::ALL {
+            assert!(
+                empty.find_kind(kind).is_none(),
+                "empty slice must return None for {kind:?}",
+            );
+        }
+    }
+
+    /// PER-VARIANT pin — a single-element slice returns `Some` with
+    /// the matching kind for exactly the kind it carries, `None` for
+    /// every other variant. Sweep the ALL × ALL cross so a regression
+    /// that (a) hard-coded the arm to a single kind (silently returning
+    /// `Some` for every populated slice regardless of query kind), or
+    /// (b) matched on [`Condition::params`] instead of [`Condition::kind`]
+    /// fails HERE at the substrate primitive.
+    #[test]
+    fn condition_slice_find_kind_reads_kind_field_per_variant() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            for query in ConditionKind::ALL {
+                let hit = slice.find_kind(query);
+                if query == populated {
+                    assert_eq!(
+                        hit.map(|c| c.kind),
+                        Some(populated),
+                        "populated={populated:?}: query {query:?} must return Some",
+                    );
+                } else {
+                    assert!(
+                        hit.is_none(),
+                        "populated={populated:?}: query {query:?} must return None",
+                    );
+                }
+            }
+        }
+    }
+
+    /// FIRST-MATCH pin — a slice with the same kind at MULTIPLE
+    /// positions returns the earliest by position. Locks the `.iter().
+    /// find(...)` semantics so a regression that collapsed to a
+    /// `.last()` walk (returning the trailing match) or a `.rev().
+    /// find(...)` walk (returning the last-inserted match) surfaces
+    /// HERE, since diagnostic consumers reading `find_kind(K).unwrap().
+    /// params` expect the FIRST occurrence's params-payload not the
+    /// last.
+    #[test]
+    fn condition_slice_find_kind_returns_first_position_on_duplicate_kinds() {
+        // Two ClosedLoopAuth entries with distinct params — a first-
+        // match walk resolves to the leading entry's params-payload.
+        let first = Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "probeImage": "first" }),
+        };
+        let second = Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "probeImage": "second" }),
+        };
+        let slice = [first, second];
+        let hit = slice
+            .find_kind(ConditionKind::ClosedLoopAuth)
+            .expect("populated slice must resolve Some on the matching kind");
+        assert_eq!(
+            hit.params
+                .get("probeImage")
+                .and_then(serde_json::Value::as_str),
+            Some("first"),
+            "find_kind must return the FIRST position's Condition on duplicate kinds",
+        );
+    }
+
+    /// SLICE-LEVEL DELEGATION pin (has ↔ find) — [`ConditionSliceExt::has_kind`]
+    /// equals `find_kind(k).is_some()` at EVERY (populated arrangement,
+    /// query) pair on `ConditionKind::ALL`. Turns the trait doc's
+    /// "compounding" note ("the closed-set discriminator case becomes
+    /// `has_kind(k) == self.find_kind(k).is_some()` by construction")
+    /// into a first-class typed test invariant: a future consumer
+    /// that overrode the default `has_kind` body with a divergent walk
+    /// shape (a `.iter().any(...)` that missed a variant, a `.count() >
+    /// 0` predicate on a filtered clone) surfaces HERE at the substrate
+    /// boundary rather than as silent skew between the two refinements
+    /// downstream consumers reach through.
+    #[test]
+    fn condition_slice_has_kind_equals_find_kind_is_some() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let slice = [condition_with(pre_kind), condition_with(post_kind)];
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        slice.has_kind(query),
+                        slice.find_kind(query).is_some(),
+                        "slice-level has/find refinement bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (find-triad) — the three widened
+    /// `find_*_kind` methods on [`Boundary`] delegate verbatim to
+    /// [`ConditionSliceExt::find_kind`] on the underlying
+    /// [`Vec<Condition>`] slices, no inline reimplementation. The
+    /// `find_condition_kind` union walks preconditions first then
+    /// postconditions via `Option::or_else`. Sweep
+    /// `ConditionKind::ALL × ConditionKind::ALL × ConditionKind::ALL`
+    /// so a regression that (a) inlined a divergent walk at either
+    /// half-slice arm, (b) reversed the union walk order (postcondition
+    /// first), or (c) collapsed `or_else` to `and_then` (silently
+    /// narrowing the union to an intersection) surfaces HERE at the
+    /// substrate boundary rather than as silent skew between the
+    /// struct-level widened arms and the slice-level primitive.
+    #[test]
+    fn find_condition_kind_triad_delegates_to_slice_find_kind() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+                for query in ConditionKind::ALL {
+                    let via_pre = b.preconditions.find_kind(query);
+                    let via_post = b.postconditions.find_kind(query);
+                    assert_eq!(
+                        b.find_precondition_kind(query).map(|c| c.kind),
+                        via_pre.map(|c| c.kind),
+                        "precondition find arm must delegate to preconditions.find_kind: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.find_postcondition_kind(query).map(|c| c.kind),
+                        via_post.map(|c| c.kind),
+                        "postcondition find arm must delegate to postconditions.find_kind: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    let expected_union = via_pre.or(via_post).map(|c| c.kind);
+                    assert_eq!(
+                        b.find_condition_kind(query).map(|c| c.kind),
+                        expected_union,
+                        "union find arm must equal precondition.or_else(postcondition): \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// PRECONDITION-PRECEDENCE pin — a kind authored on BOTH sides
+    /// returns the precondition-side [`Condition`] from
+    /// `find_condition_kind`. Uses two params-distinguishable
+    /// [`Condition`]s so a regression that reversed the walk order
+    /// (postcondition first) surfaces at the returned params payload
+    /// rather than silently at the presence bit (which is `true` on
+    /// both walk orders).
+    #[test]
+    fn find_condition_kind_returns_precondition_side_on_dual_populated() {
+        let mut b = Boundary::default();
+        b.preconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "side": "pre" }),
+        });
+        b.postconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "side": "post" }),
+        });
+        let hit = b
+            .find_condition_kind(ConditionKind::ClosedLoopAuth)
+            .expect("dual-populated boundary must resolve Some");
+        assert_eq!(
+            hit.params.get("side").and_then(serde_json::Value::as_str),
+            Some("pre"),
+            "find_condition_kind must walk preconditions first: dual-populated kind \
+             returned postcondition-side Condition rather than precondition-side",
+        );
+    }
+
+    /// STRUCT-LEVEL DELEGATION pin (has ↔ find) — the three
+    /// [`Boundary`] `has_*_kind` arms equal their widened peers'
+    /// `.is_some()` projection at EVERY (pre-populated, post-populated,
+    /// query) triple on `ConditionKind::ALL`. The three widened
+    /// `find_*_kind` arms are the load-bearing primitives; the three
+    /// `has_*_kind` arms are their bool projections. Byte-for-byte
+    /// re-anchors the composition-law pin
+    /// `boundary_has_condition_kind_composes_precondition_and_postcondition_arms`
+    /// through the widened axis so a future consumer that reads
+    /// `has_condition_kind` as sugar for `find_condition_kind(k).
+    /// is_some()` (rather than as `has_precondition_kind ||
+    /// has_postcondition_kind`) stays typed against the SAME truth
+    /// table.
+    #[test]
+    fn boundary_has_triad_equals_find_triad_is_some_projection() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        b.has_precondition_kind(query),
+                        b.find_precondition_kind(query).is_some(),
+                        "precondition has/find bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.has_postcondition_kind(query),
+                        b.find_postcondition_kind(query).is_some(),
+                        "postcondition has/find bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.has_condition_kind(query),
+                        b.find_condition_kind(query).is_some(),
+                        "union has/find bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
             }
         }
     }

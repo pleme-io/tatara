@@ -448,6 +448,99 @@ impl EphemeralSpec {
         self.postconditions.iter_kind(kind)
     }
 
+    /// Number of [`Condition`]s in `preconditions ∪ postconditions`
+    /// carrying the given [`ConditionKind`] — the peer of
+    /// [`crate::boundary::Boundary::count_condition_kind`] on the
+    /// [`EphemeralSpec`] sugar surface.
+    ///
+    /// # Semantics — byte-identical to [`Boundary::count_condition_kind`]
+    ///
+    /// Composed as
+    /// `count_precondition_kind(k) + count_postcondition_kind(k)` —
+    /// the SUM-composed arm on the presence-probe algebra (distinct
+    /// from `has_condition_kind`'s `||`, `find_condition_kind`'s
+    /// `or_else`, and `iter_condition_kind`'s `Chain`). Composition
+    /// law `count_condition_kind(K) == iter_condition_kind(K).count()`
+    /// pinned as a first-class typed invariant. Both halves compose
+    /// through the SAME slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::count_kind`] that
+    /// [`Boundary::count_condition_kind`] sums — so a regression at
+    /// the per-slice count fails at that primitive's tests rather
+    /// than as silent drift at either struct-level widened caller.
+    ///
+    /// # Sibling to [`Self::iter_condition_kind`]
+    ///
+    /// Same axis, one refinement lower on the cardinality projection:
+    /// `iter_condition_kind` yields the whole match stream; this
+    /// method collapses that stream to its cardinality. Byte-for-byte
+    /// peer of the point-domain count triad on [`Boundary`], so the
+    /// two-surface parity contract now covers four refinements (bool
+    /// via has, `&Condition` via find, `impl Iterator<Item =
+    /// &Condition>` via iter, `usize` via count) on the condition
+    /// axis.
+    ///
+    /// # Compounding
+    ///
+    /// A future ephemeral-surface coherence check that enforces
+    /// "each [`ConditionKind`] appears at most once across
+    /// preconditions ∪ postconditions" reads
+    /// `spec.count_condition_kind(k) <= 1` at ONE call site. A future
+    /// ephemeral require-tag classifier arm that surfaces multiplicity
+    /// to the operator (a hypothetical `condition-count-<kind>` prefix
+    /// family that publishes the raw cardinality on the ephemeral
+    /// surface, an operator-facing "3 ClosedLoopAuth postconditions
+    /// matched" message) reaches this ONE method rather than restating
+    /// the `.iter_condition_kind(k).count()` chain body at the
+    /// callsite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the scalar cardinality body composes the
+    /// SAME slice-level substrate primitive on both this ephemeral
+    /// surface and the point-domain [`Boundary`] surface). THEORY.md
+    /// §VI.1 (generation over composition — a future
+    /// [`ConditionKind`] variant added to `ALL` reaches both surfaces'
+    /// count triads mechanically through the SAME closed-set walk).
+    #[must_use]
+    pub fn count_condition_kind(&self, kind: ConditionKind) -> usize {
+        self.count_precondition_kind(kind) + self.count_postcondition_kind(kind)
+    }
+
+    /// Number of [`Condition`]s in [`Self::preconditions`] carrying
+    /// the given [`ConditionKind`] — the precondition-side arm of the
+    /// (precondition, postcondition, condition-union) count triad on
+    /// [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::count_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`crate::boundary::Boundary::count_precondition_kind`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice count fails at that primitive's tests rather than as
+    /// silent drift at either struct-level count arm.
+    #[must_use]
+    pub fn count_precondition_kind(&self, kind: ConditionKind) -> usize {
+        self.preconditions.count_kind(kind)
+    }
+
+    /// Number of [`Condition`]s in [`Self::postconditions`] carrying
+    /// the given [`ConditionKind`] — the postcondition-side arm of
+    /// the (precondition, postcondition, condition-union) count triad
+    /// on [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::count_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`crate::boundary::Boundary::count_postcondition_kind`]
+    /// on the point-domain surface. See
+    /// [`Self::count_precondition_kind`] for the full rationale — the
+    /// two methods share ONE lift motivation, ONE fail-before-
+    /// pass-after composition-law pin, and ONE two-surface parity
+    /// contract with the point-domain [`crate::boundary::Boundary`]
+    /// count peer methods.
+    #[must_use]
+    pub fn count_postcondition_kind(&self, kind: ConditionKind) -> usize {
+        self.postconditions.count_kind(kind)
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -4770,6 +4863,125 @@ mod tests {
                         spec.find_condition_kind(query).map(|c| c.kind),
                         spec.iter_condition_kind(query).next().map(|c| c.kind),
                         "ephemeral union find/iter bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    // ── EphemeralSpec count triad — scalar cardinality peers ─────────
+    //
+    // Byte-for-byte peers of the point-domain `Boundary`
+    // `count_(pre|post|)condition_kind` triad, tested at the ephemeral
+    // sugar surface. Same SUM composition on the union arm, same
+    // slice-level substrate delegation, same composition-law bridge
+    // against the widened iter refinement.
+
+    /// EMPTY-SPEC pin (count-triad) — a default [`EphemeralSpec`]
+    /// counts `0` from every arm of the count triad for EVERY
+    /// [`ConditionKind`].
+    #[test]
+    fn ephemeral_count_condition_kind_triad_returns_zero_on_empty_spec() {
+        let spec = empty_ephemeral();
+        for kind in ConditionKind::ALL {
+            assert_eq!(
+                spec.count_precondition_kind(kind),
+                0,
+                "empty ephemeral must count 0 on precondition arm for {kind:?}",
+            );
+            assert_eq!(
+                spec.count_postcondition_kind(kind),
+                0,
+                "empty ephemeral must count 0 on postcondition arm for {kind:?}",
+            );
+            assert_eq!(
+                spec.count_condition_kind(kind),
+                0,
+                "empty ephemeral must count 0 on union arm for {kind:?}",
+            );
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (ephemeral count-triad) — the three
+    /// widened `count_*_kind` methods on [`EphemeralSpec`] delegate
+    /// verbatim to [`crate::boundary::ConditionSliceExt::count_kind`]
+    /// on the underlying [`Vec<Condition>`] slices. The
+    /// `count_condition_kind` union SUMS preconditions and
+    /// postconditions. Byte-for-byte peer of the point-domain
+    /// `boundary_count_condition_kind_triad_delegates_and_sums_slice_count_kind`
+    /// pin; a regression that (a) subtracted rather than summed, (b)
+    /// collapsed the sum to [`std::cmp::max`], or (c) inlined a
+    /// divergent count at either half-slice arm on the ephemeral
+    /// surface only (breaking two-surface parity with [`Boundary`])
+    /// surfaces HERE.
+    #[test]
+    fn ephemeral_count_condition_kind_triad_delegates_and_sums_slice_count_kind() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+                for query in ConditionKind::ALL {
+                    let via_pre = spec.preconditions.count_kind(query);
+                    let via_post = spec.postconditions.count_kind(query);
+                    assert_eq!(
+                        spec.count_precondition_kind(query),
+                        via_pre,
+                        "ephemeral precondition count arm must delegate: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.count_postcondition_kind(query),
+                        via_post,
+                        "ephemeral postcondition count arm must delegate: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.count_condition_kind(query),
+                        via_pre + via_post,
+                        "ephemeral union count arm must SUM pre + post: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// STRUCT-LEVEL DELEGATION pin (count ↔ iter on EphemeralSpec) —
+    /// the three [`EphemeralSpec`] `count_*_kind` arms equal their
+    /// widened peers' `.count()` projection at EVERY (pre-populated
+    /// twice, post-populated, query) triple. Byte-for-byte peer of
+    /// the point-domain
+    /// `boundary_count_triad_equals_iter_triad_count_projection`
+    /// pin. Uses two-preconditions authoring so the union arm's SUM
+    /// composition witnesses a nontrivial cardinality (rather than
+    /// coinciding with the presence bit).
+    #[test]
+    fn ephemeral_count_triad_equals_iter_triad_count_projection() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        spec.count_precondition_kind(query),
+                        spec.iter_precondition_kind(query).count(),
+                        "ephemeral precondition count/iter bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.count_postcondition_kind(query),
+                        spec.iter_postcondition_kind(query).count(),
+                        "ephemeral postcondition count/iter bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.count_condition_kind(query),
+                        spec.iter_condition_kind(query).count(),
+                        "ephemeral union count/iter bridge drifted: \
                          pre={pre_kind:?} post={post_kind:?} query={query:?}",
                     );
                 }

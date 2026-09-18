@@ -389,6 +389,98 @@ impl Boundary {
     pub fn iter_postcondition_kind(&self, kind: ConditionKind) -> KindMatches<'_> {
         self.postconditions.iter_kind(kind)
     }
+
+    /// Number of [`Condition`]s in `preconditions ∪ postconditions`
+    /// carrying the given [`ConditionKind`] — the scalar cardinality
+    /// arm of the (precondition, postcondition, condition-union)
+    /// count triad on [`Boundary`]. Composed as
+    /// `count_precondition_kind(k) + count_postcondition_kind(k)` —
+    /// the ONE SUM-composed arm on the presence-probe algebra
+    /// (distinct from `has_condition_kind`'s `||` union,
+    /// `find_condition_kind`'s `or_else` first-match, and
+    /// `iter_condition_kind`'s `Chain` stream).
+    ///
+    /// # Sibling to [`Self::iter_condition_kind`]
+    ///
+    /// Same axis, one refinement lower on the cardinality projection:
+    /// `iter_condition_kind` yields the whole match stream across both
+    /// sides; this method collapses that stream to its cardinality
+    /// without materializing any intermediate [`Vec`]. Composition law
+    /// `count_condition_kind(K) == iter_condition_kind(K).count()`
+    /// pinned as a first-class typed invariant at the substrate-
+    /// delegation test.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::count_condition_kind`]
+    ///
+    /// Same signature `(ConditionKind) -> usize`, same SUM body, on
+    /// the sugar-surface type whose pre/post condition vectors live
+    /// directly on the struct. Both methods compose against the SAME
+    /// slice-level substrate primitive [`ConditionSliceExt::count_kind`]
+    /// — a regression at the per-slice count fails at that primitive's
+    /// tests rather than as silent drift at either struct-level union
+    /// caller.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that enforces "each [`ConditionKind`]
+    /// appears at most once across preconditions ∪ postconditions"
+    /// reads `boundary.count_condition_kind(k) <= 1` at ONE call site.
+    /// A future require-tag classifier arm that surfaces multiplicity
+    /// to the operator (a hypothetical `condition-count-<kind>` prefix
+    /// family, an audit dump reporting "N ClosedLoopAuth conditions
+    /// matched") reaches this ONE method rather than restating the
+    /// `.iter_condition_kind(k).count()` chain body at the callsite.
+    /// The presence-probe axis on [`Boundary`] now carries FOUR
+    /// refinements (bool via `has_condition_kind`, `Option<&Condition>`
+    /// via `find_condition_kind`, `impl Iterator<Item = &Condition>`
+    /// via `iter_condition_kind`, `usize` via `count_condition_kind`)
+    /// at ONE typed algebra surface per struct, byte-for-byte peer of
+    /// the same tetrad on [`crate::ephemeral::EphemeralSpec`].
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the scalar cardinality lives at ONE
+    /// substrate site so every downstream diagnostic + coherence
+    /// consumer binds through the SAME shape rather than restating
+    /// the two-half sum body).
+    #[must_use]
+    pub fn count_condition_kind(&self, kind: ConditionKind) -> usize {
+        self.count_precondition_kind(kind) + self.count_postcondition_kind(kind)
+    }
+
+    /// Number of [`Condition`]s in [`Self::preconditions`] carrying
+    /// the given [`ConditionKind`] — the precondition-side arm of the
+    /// (precondition, postcondition, condition-union) count triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::count_kind`] over [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::count_postcondition_kind`] on the (precondition,
+    /// postcondition) partition of the boundary's two condition-vector
+    /// slots; both peers compose against the SAME slice-level substrate
+    /// primitive and their `+` composition is
+    /// [`Self::count_condition_kind`]. Byte-identical semantics to
+    /// [`Self::iter_precondition_kind`] with the scalar `usize`
+    /// cardinality projection rather than the widened stream.
+    #[must_use]
+    pub fn count_precondition_kind(&self, kind: ConditionKind) -> usize {
+        self.preconditions.count_kind(kind)
+    }
+
+    /// Number of [`Condition`]s in [`Self::postconditions`] carrying
+    /// the given [`ConditionKind`] — the postcondition-side arm of
+    /// the (precondition, postcondition, condition-union) count triad
+    /// on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::count_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::count_precondition_kind`]. See that method for
+    /// the full rationale — the two methods share ONE lift motivation,
+    /// ONE fail-before-pass-after composition-law pin, and ONE
+    /// two-surface parity contract with the ephemeral sugar type via
+    /// [`crate::ephemeral::EphemeralSpec::count_postcondition_kind`].
+    #[must_use]
+    pub fn count_postcondition_kind(&self, kind: ConditionKind) -> usize {
+        self.postconditions.count_kind(kind)
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -536,6 +628,54 @@ pub trait ConditionSliceExt {
     /// postconditions only) compose against.
     fn has_kind(&self, kind: ConditionKind) -> bool {
         self.find_kind(kind).is_some()
+    }
+
+    /// Number of [`Condition`]s in this slice carrying the given
+    /// [`ConditionKind`] — the scalar cardinality refinement on the
+    /// slice-level presence-probe axis. Default body:
+    /// `self.iter_kind(kind).count()` — a thin projection of the
+    /// widened primitive [`Self::iter_kind`] onto its cardinality.
+    ///
+    /// # Sibling to [`Self::iter_kind`] / [`Self::find_kind`] / [`Self::has_kind`]
+    ///
+    /// Fourth refinement on the presence-probe algebra: `iter_kind`
+    /// yields the whole match stream, `find_kind` collapses it to the
+    /// first match, `has_kind` collapses that to a `bool`, and
+    /// `count_kind` collapses the stream to its cardinality without
+    /// materializing any intermediate [`Vec`] or `Option`. The
+    /// composition laws
+    /// `count_kind(k) == iter_kind(k).count()`,
+    /// `has_kind(k) == (count_kind(k) > 0)`, and
+    /// `find_kind(k).is_some() == (count_kind(k) > 0)`
+    /// share ONE walk semantics by construction; a regression that
+    /// drifted the cardinality probe from the widened stream becomes
+    /// structurally impossible past the trait boundary.
+    ///
+    /// # Semantics
+    ///
+    /// Returns `self.iter().filter(|c| c.kind == kind).count()` — a
+    /// slice that carries multiple matches returns that count, an
+    /// empty slice or a slice with no matching kind returns `0`.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that verifies "each [`ConditionKind`]
+    /// appears at most once per side" now reads
+    /// `slice.count_kind(k) <= 1` at ONE call site rather than
+    /// restating either `slice.iter_kind(k).nth(1).is_none()` or the
+    /// `iter_kind(k).count() <= 1` idiom. A future require-tag
+    /// classifier arm that surfaces multiplicity to the operator
+    /// (a hypothetical `condition-count-<kind>` prefix family that
+    /// publishes the raw cardinality, an audit dump reporting "3
+    /// PromQL preconditions matched") reaches this ONE primitive
+    /// through `slice.count_kind(k)` rather than restating the
+    /// `.iter_kind(k).count()` chain body at the callsite. The
+    /// presence-probe axis now carries FOUR refinements at ONE typed
+    /// algebra surface — every downstream consumer picks the coarsest
+    /// one that answers its question and the coarser ones stay
+    /// compositionally derived from [`Self::iter_kind`].
+    fn count_kind(&self, kind: ConditionKind) -> usize {
+        self.iter_kind(kind).count()
     }
 }
 
@@ -1959,5 +2099,248 @@ mod tests {
             "iter_condition_kind must yield every precondition-side match before any \
              postcondition-side match (chain order pinned by two-surface parity contract)",
         );
+    }
+
+    // ----- count_kind — scalar cardinality refinement --------------------
+    //
+    // The `count_kind` fourth refinement collapses the widened
+    // `iter_kind` stream to its cardinality without materializing an
+    // intermediate `Vec` or `Option`. Distinct composition law from the
+    // three prior refinements: `count_condition_kind` SUMS pre + post
+    // (rather than OR-ing them via `has`, or_else-ing them via `find`,
+    // or Chain-ing them via `iter`). The tests below pin (a) the default
+    // trait body against the primitive `iter_kind(k).count()`, (b) the
+    // slice-level composition laws `has_kind(k) == (count_kind(k) > 0)`
+    // and `find_kind(k).is_some() == (count_kind(k) > 0)`, (c) the
+    // struct-level SUM composition on both `Boundary` half-slice arms,
+    // and (d) the two-surface parity contract with
+    // `EphemeralSpec::count_(pre|post|)condition_kind` (in ephemeral.rs).
+
+    /// EMPTY-SLICE pin (count) — an empty `&[Condition]` returns `0`
+    /// from `count_kind` for EVERY [`ConditionKind`]. Sweep
+    /// `ConditionKind::ALL` so a new variant added without a matching
+    /// arm surfaces at rustc's exhaustiveness gate on the ALL literal
+    /// rather than as silent phantom-cardinality at every downstream
+    /// count callsite.
+    #[test]
+    fn condition_slice_count_kind_returns_zero_on_empty_slice_for_every_kind() {
+        let empty: &[Condition] = &[];
+        for kind in ConditionKind::ALL {
+            assert_eq!(
+                empty.count_kind(kind),
+                0,
+                "empty slice must count 0 for {kind:?}",
+            );
+        }
+    }
+
+    /// PER-VARIANT pin (count) — a single-element slice returns `1`
+    /// on the matching kind and `0` on every other kind. Sweep ALL ×
+    /// ALL so a regression that (a) hard-coded the filter predicate
+    /// to a single kind (silently counting every populated slice
+    /// regardless of query), or (b) matched on [`Condition::params`]
+    /// instead of [`Condition::kind`] fails HERE at the substrate
+    /// primitive.
+    #[test]
+    fn condition_slice_count_kind_reads_kind_field_per_variant() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            for query in ConditionKind::ALL {
+                let expected = if query == populated { 1 } else { 0 };
+                assert_eq!(
+                    slice.count_kind(query),
+                    expected,
+                    "populated={populated:?} query={query:?} \
+                     must count {expected}",
+                );
+            }
+        }
+    }
+
+    /// DUPLICATES pin (count) — a slice with the same kind at
+    /// MULTIPLE positions returns the exact match count (not `1`, not
+    /// a de-duplicated `1`). A regression that (a) short-circuited on
+    /// the first match (an `.iter().find(...)` yielding `0`/`1` sugar
+    /// on the count arm), or (b) de-duplicated by kind (an erroneous
+    /// `HashSet::insert`-gated walk that swallowed repeats) surfaces
+    /// HERE at the cardinality boundary rather than silently at a
+    /// downstream count-based coherence check.
+    #[test]
+    fn condition_slice_count_kind_counts_every_match_on_duplicates() {
+        let slice = [
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "first" }),
+            },
+            Condition {
+                kind: ConditionKind::PromQL,
+                params: json!({ "query": "up" }),
+            },
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "second" }),
+            },
+        ];
+        assert_eq!(slice.count_kind(ConditionKind::ClosedLoopAuth), 2);
+        assert_eq!(slice.count_kind(ConditionKind::PromQL), 1);
+        for kind in ConditionKind::ALL {
+            if matches!(kind, ConditionKind::ClosedLoopAuth | ConditionKind::PromQL) {
+                continue;
+            }
+            assert_eq!(
+                slice.count_kind(kind),
+                0,
+                "non-populated kind {kind:?} must count 0",
+            );
+        }
+    }
+
+    /// SLICE-LEVEL DELEGATION pin (count ↔ iter) — the trait's
+    /// default `count_kind` body equals `iter_kind(k).count()` at
+    /// EVERY (populated arrangement, query) pair on
+    /// `ConditionKind::ALL`. Turns the trait doc's composition-law
+    /// note (`count_kind(k) == iter_kind(k).count()` by construction)
+    /// into a first-class typed invariant: a future implementor that
+    /// overrode the default `count_kind` body with a divergent walk
+    /// shape (a stored-length cache that drifted, a `.step_by(2)`
+    /// artefact from a copy-paste of `iter_kind`) surfaces HERE.
+    #[test]
+    fn condition_slice_count_kind_equals_iter_kind_count() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let slice = [condition_with(pre_kind), condition_with(post_kind)];
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        slice.count_kind(query),
+                        slice.iter_kind(query).count(),
+                        "count/iter bridge drifted: pre={pre_kind:?} \
+                         post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// SLICE-LEVEL DELEGATION pin (count ↔ has ↔ find) — the two
+    /// composition laws
+    /// `has_kind(k) == (count_kind(k) > 0)` and
+    /// `find_kind(k).is_some() == (count_kind(k) > 0)`
+    /// hold at every (populated, populated, query) triple on
+    /// `ConditionKind::ALL`. Sweeps both refinement bridges at ONE
+    /// site so a regression at the count primitive that drifted from
+    /// the presence bit or the first-match probe surfaces HERE.
+    #[test]
+    fn condition_slice_has_and_find_equal_count_greater_than_zero() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let slice = [condition_with(pre_kind), condition_with(post_kind)];
+                for query in ConditionKind::ALL {
+                    let count = slice.count_kind(query);
+                    assert_eq!(
+                        slice.has_kind(query),
+                        count > 0,
+                        "has/count bridge drifted: pre={pre_kind:?} \
+                         post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        slice.find_kind(query).is_some(),
+                        count > 0,
+                        "find/count bridge drifted: pre={pre_kind:?} \
+                         post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary count-triad) — the three
+    /// widened `count_*_kind` methods on [`Boundary`] delegate
+    /// verbatim to [`ConditionSliceExt::count_kind`] on the
+    /// underlying [`Vec<Condition>`] slices. The
+    /// `count_condition_kind` union SUMS preconditions and
+    /// postconditions (distinct from the `iter_condition_kind`
+    /// [`Chain`](std::iter::Chain), `find_condition_kind`
+    /// [`Option::or_else`], and `has_condition_kind` `||`
+    /// compositions on the same axis). Sweep `ConditionKind::ALL ×
+    /// ConditionKind::ALL × ConditionKind::ALL` so a regression that
+    /// (a) inlined a divergent count at either half-slice arm, (b)
+    /// subtracted rather than summed, or (c) collapsed the sum to
+    /// [`std::cmp::max`] (silently narrowing the union to a max-per-
+    /// side probe) surfaces HERE at the substrate boundary.
+    #[test]
+    fn boundary_count_condition_kind_triad_delegates_and_sums_slice_count_kind() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+                for query in ConditionKind::ALL {
+                    let via_pre = b.preconditions.count_kind(query);
+                    let via_post = b.postconditions.count_kind(query);
+                    assert_eq!(
+                        b.count_precondition_kind(query),
+                        via_pre,
+                        "boundary precondition count arm must delegate: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.count_postcondition_kind(query),
+                        via_post,
+                        "boundary postcondition count arm must delegate: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.count_condition_kind(query),
+                        via_pre + via_post,
+                        "boundary union count arm must SUM pre + post: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// STRUCT-LEVEL DELEGATION pin (count ↔ iter on Boundary) — the
+    /// three [`Boundary`] `count_*_kind` arms equal their widened
+    /// peers' `.count()` projection at EVERY (pre-populated, post-
+    /// populated, query) triple on `ConditionKind::ALL`. Re-anchors
+    /// the composition-law pin
+    /// `count_condition_kind == iter_condition_kind.count()` through
+    /// the cardinality axis on the parent surface — a future consumer
+    /// that reads `count_condition_kind(k)` as sugar for
+    /// `iter_condition_kind(k).count()` stays typed against the SAME
+    /// truth table on both the slice-level and struct-level layers.
+    /// Also pins the sum-composition round-trip through the widened
+    /// stream: the union arm's SUM equals the chained stream's count.
+    #[test]
+    fn boundary_count_triad_equals_iter_triad_count_projection() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        b.count_precondition_kind(query),
+                        b.iter_precondition_kind(query).count(),
+                        "precondition count/iter bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.count_postcondition_kind(query),
+                        b.iter_postcondition_kind(query).count(),
+                        "postcondition count/iter bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.count_condition_kind(query),
+                        b.iter_condition_kind(query).count(),
+                        "union count/iter bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
     }
 }

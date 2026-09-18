@@ -850,6 +850,183 @@ where
     }
 }
 
+/// Substrate testkit macro — pins the FOUR union composition laws that
+/// bind the (precondition, postcondition, union) refinement triads on
+/// any authored surface exposing the 12-method (has / find / iter /
+/// count) × (pre / post / union) `_kind` matrix. Sweeps
+/// [`ConditionKind::ALL`] at ONE call site per authored arrangement.
+///
+/// # The four surface-level union composition laws
+///
+/// Where the slice-level substrate primitive
+/// [`assert_slice_refinement_composition_laws`] pins the algebra that
+/// binds the four refinements *on a single slice* (`iter_kind` →
+/// `find_kind` → `has_kind` → `count_kind`), this macro pins the peer
+/// algebra one struct-layer up: each refinement's union arm on a
+/// two-slice surface (a [`Boundary`] with `preconditions` +
+/// `postconditions`, an [`crate::ephemeral::EphemeralSpec`] with the
+/// same eponymous field pair) composes from its two half-slice arms
+/// through a specific monoid operator baked into the refinement's return
+/// type:
+///
+/// | refinement | half-slice arms                             | union composition                     |
+/// |------------|---------------------------------------------|---------------------------------------|
+/// | `has_*_kind`   | `has_precondition_kind`, `has_postcondition_kind`     | `pre \|\| post` (bool OR)             |
+/// | `find_*_kind`  | `find_precondition_kind`, `find_postcondition_kind`   | `pre.or(post)` (first-Some)           |
+/// | `iter_*_kind`  | `iter_precondition_kind`, `iter_postcondition_kind`   | `pre.chain(post)` (stream concat)     |
+/// | `count_*_kind` | `count_precondition_kind`, `count_postcondition_kind` | `pre + post` (cardinality SUM)        |
+///
+/// # Why lift
+///
+/// Pre-lift each surface-level union composition law lived at its own
+/// hand-authored nested-`for` loop test on each of the two surfaces —
+/// EIGHT sibling test bodies (`boundary_has_condition_kind_composes_precondition_and_postcondition_arms`,
+/// `find_condition_kind_triad_delegates_to_slice_find_kind`,
+/// `iter_condition_kind_triad_delegates_to_slice_iter_kind`,
+/// `boundary_count_condition_kind_triad_delegates_and_sums_slice_count_kind`
+/// on the [`Boundary`] surface, byte-for-byte peers on the
+/// [`crate::ephemeral::EphemeralSpec`] surface) whose only per-law knobs
+/// were the projection functions being bridged and the composition
+/// operator (`\|\|` / `Option::or` / `Iterator::chain` / `+`) applied
+/// on top. Post-lift each authored `(preconditions, postconditions)`
+/// arrangement pins ALL FOUR union composition laws through ONE
+/// `assert_surface_union_composition_laws!(surface)` call whose body
+/// is the substrate primitive's own sweep, no per-surface author-time
+/// enumeration.
+///
+/// # Why a macro rather than a `pub fn`
+///
+/// [`Boundary`] and [`crate::ephemeral::EphemeralSpec`] expose the
+/// twelve methods as *inherent* methods with matching signatures. A
+/// generic `pub fn assert_surface_union_composition_laws<B: T>(&B)`
+/// would need a trait `T` publishing those same twelve methods, and
+/// implementing that trait on either surface would collide with the
+/// eponymous inherent methods at method resolution — the trait
+/// impl would either duplicate the inherent-method bodies verbatim
+/// (defeating the lift) or require renaming the trait methods with a
+/// `_ext` suffix (introducing a parallel API surface). A macro
+/// duck-types at expansion time and hits the inherent methods
+/// directly, so both surfaces stay bound through the SAME
+/// `_kind`-suffixed method names their non-generic callers already
+/// reach for, and the pattern generalizes to any future surface that
+/// grows the same twelve-method matrix (an `AplicacaoBoundary` typed
+/// wrapper, a `PoolBoundary` gate-carrier at
+/// [`crate::pool`], the boundary slot on a
+/// hypothetical `AttestationBoundary` receipt-envelope surface) with
+/// ONE macro invocation per authored arrangement rather than a per-
+/// surface re-authored sweep over the four laws.
+///
+/// # Compounding
+///
+/// A FIFTH union refinement added to the (has, find, iter, count)
+/// tetrad (a hypothetical `first_params_of_kind(k) -> Option<&Value>`
+/// projection combining `find_condition_kind(k).map(|c| &c.params)` at
+/// real reconciler callsites, a `distinct_kinds() -> impl Iterator<Item
+/// = ConditionKind>` aggregate returning which kinds appear at least
+/// once on either side, a `has_kind_matching(pred)` closure-based
+/// predicate probe) lands its composition-law pin as ONE new arm
+/// inside this macro's body. Every downstream test that already reaches
+/// this macro picks up the fifth-refinement pin mechanically — no per-
+/// arrangement author-time enumeration of the new law across the four
+/// sibling composition-law sites on each of the two surfaces, no
+/// re-authored `for kind in ConditionKind::ALL { … }` sweep at every
+/// consumer.
+///
+/// Symmetrical shape to [`assert_slice_refinement_composition_laws`]
+/// one layer below: both project a widened-refinement / coarser-
+/// refinement composition law contract onto ONE typed substrate call
+/// site, both sweep the addressed closed set [`ConditionKind::ALL`],
+/// both surface any implementor that overrode the union arm with a
+/// divergent composition operator (an `&&` inlined where `\|\|` is
+/// required, a `pre - post` inlined where `pre + post` is required,
+/// a `zip` inlined where `chain` is required, a `and_then` inlined
+/// where `or_else` is required) as a first-class typed test failure
+/// rather than as silent operator-facing drift at the
+/// `condition-<kind>` / `precondition-<kind>` / `postcondition-<kind>`
+/// require-tag classifier surfaces downstream.
+///
+/// # Theory grounding
+///
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. Each
+///   union arm is a typed projection of its two half-slice peers via
+///   a specific monoid operator, and this substrate macro turns each
+///   projection's composition law from doc-prose into a first-class
+///   typed theorem provable against any surface exposing the twelve
+///   `_kind`-suffixed inherent methods.
+/// - THEORY.md §VI.1 — generation over composition. A new
+///   [`ConditionKind`] variant added to `ALL` reaches every downstream
+///   union-composition-law consumer through the SAME closed-set sweep
+///   with no per-caller edit; a new surface (a typed wrapper carrying
+///   the same twelve methods) picks up all four union composition-law
+///   pins through ONE macro invocation per authored arrangement.
+///
+/// # Usage
+///
+/// ```ignore
+/// // Point surface.
+/// let mut b = Boundary::default();
+/// b.preconditions.push(condition_with(ConditionKind::PromQL));
+/// b.postconditions.push(condition_with(ConditionKind::ClosedLoopAuth));
+/// assert_surface_union_composition_laws!(b);
+///
+/// // Ephemeral surface (peer, same primitive).
+/// let mut spec = empty_ephemeral();
+/// spec.postconditions.push(cond(ConditionKind::JobAttested));
+/// assert_surface_union_composition_laws!(spec);
+/// ```
+#[macro_export]
+macro_rules! assert_surface_union_composition_laws {
+    ($surface:expr) => {{
+        let __surface = &$surface;
+        for __kind in $crate::boundary::ConditionKind::ALL {
+            // has: union == pre || post (bool OR)
+            let __has_via_arms =
+                __surface.has_precondition_kind(__kind) || __surface.has_postcondition_kind(__kind);
+            ::core::assert_eq!(
+                __surface.has_condition_kind(__kind),
+                __has_via_arms,
+                "surface union has arm drifted from OR of half-slice arms for {:?}",
+                __kind,
+            );
+            // find: union == pre.or(post) (first-Some, kind projection)
+            let __find_via_arms = __surface
+                .find_precondition_kind(__kind)
+                .or(__surface.find_postcondition_kind(__kind))
+                .map(|c| c.kind);
+            ::core::assert_eq!(
+                __surface.find_condition_kind(__kind).map(|c| c.kind),
+                __find_via_arms,
+                "surface union find arm drifted from precondition.or(postcondition) for {:?}",
+                __kind,
+            );
+            // iter: union == chain(pre, post) (stream concat, kind projection)
+            let __iter_via_arms: ::std::vec::Vec<_> = __surface
+                .iter_precondition_kind(__kind)
+                .chain(__surface.iter_postcondition_kind(__kind))
+                .map(|c| c.kind)
+                .collect();
+            let __iter_via_union: ::std::vec::Vec<_> = __surface
+                .iter_condition_kind(__kind)
+                .map(|c| c.kind)
+                .collect();
+            ::core::assert_eq!(
+                __iter_via_union,
+                __iter_via_arms,
+                "surface union iter arm drifted from chain(pre, post) for {:?}",
+                __kind,
+            );
+            // count: union == pre + post (cardinality SUM)
+            ::core::assert_eq!(
+                __surface.count_condition_kind(__kind),
+                __surface.count_precondition_kind(__kind)
+                    + __surface.count_postcondition_kind(__kind),
+                "surface union count arm drifted from SUM of half-slice arms for {:?}",
+                __kind,
+            );
+        }
+    }};
+}
+
 /// A single boundary predicate.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -2567,5 +2744,107 @@ mod tests {
             },
         ];
         assert_slice_refinement_composition_laws(interleaved.as_slice());
+    }
+
+    // ── assert_surface_union_composition_laws — substrate testkit ────
+    //
+    // The substrate testkit macro
+    // [`crate::assert_surface_union_composition_laws`] pins the FOUR
+    // union composition laws (has: OR, find: or_else, iter: chain,
+    // count: SUM) that bind the (pre, post, union) refinement triads
+    // on the [`Boundary`] surface at ONE call site per authored
+    // arrangement, sweeping [`ConditionKind::ALL`]. The four hand-
+    // authored point-surface composition-law tests above
+    // (`boundary_has_condition_kind_composes_precondition_and_postcondition_arms`,
+    // `find_condition_kind_triad_delegates_to_slice_find_kind`,
+    // `iter_condition_kind_triad_delegates_to_slice_iter_kind`,
+    // `boundary_count_condition_kind_triad_delegates_and_sums_slice_count_kind`)
+    // stay as first-class per-law drift-arm pins; this substrate
+    // testkit macro is the compound-lift primitive that binds all
+    // four union composition laws through ONE typed sweep so a
+    // future FIFTH union refinement picks up its composition-law
+    // pin as ONE new arm inside the macro body rather than as ONE
+    // new sibling test at every downstream author-time
+    // enumeration on each of the two surfaces.
+
+    /// SUBSTRATE PANEL pin — the substrate testkit macro
+    /// [`crate::assert_surface_union_composition_laws`] passes on
+    /// [`Boundary`] for the four canonical authored arrangements the
+    /// surface's downstream consumers reach for: the empty boundary
+    /// (every union arm returns its zero-element identity), a
+    /// precondition-only populated boundary (every union arm equals
+    /// its precondition arm, postcondition arm is empty), a
+    /// postcondition-only populated boundary (mirror), and a dual-
+    /// populated boundary sweeping `ALL × ALL` (both half-slice arms
+    /// contribute; the union monoid operator applies). Sweeping the
+    /// four arrangements at ONE call site pins every union
+    /// composition law holds regardless of the arrangement's per-
+    /// half fill pattern.
+    #[test]
+    fn boundary_surface_union_composition_laws_hold_across_authored_arrangements() {
+        let empty = Boundary::default();
+        crate::assert_surface_union_composition_laws!(empty);
+
+        for populated in ConditionKind::ALL {
+            let mut pre_only = Boundary::default();
+            pre_only.preconditions.push(condition_with(populated));
+            crate::assert_surface_union_composition_laws!(pre_only);
+
+            let mut post_only = Boundary::default();
+            post_only.postconditions.push(condition_with(populated));
+            crate::assert_surface_union_composition_laws!(post_only);
+        }
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut dual = Boundary::default();
+                dual.preconditions.push(condition_with(pre_kind));
+                dual.postconditions.push(condition_with(post_kind));
+                crate::assert_surface_union_composition_laws!(dual);
+            }
+        }
+    }
+
+    /// SUBSTRATE PANEL pin (params-distinguishable duplicates) — the
+    /// substrate macro holds on a [`Boundary`] whose two half-slices
+    /// each carry duplicates of the same kind at multiple positions,
+    /// interleaved with a distinct kind. The scenario reaches every
+    /// union arm at its non-degenerate composition: `has` still
+    /// resolves `true` on both halves (OR is not the discriminating
+    /// bit), `find` yields the FIRST-precondition-side match
+    /// (`or_else` walk order), `iter` yields every match with the
+    /// full pre-then-post chain order (five total matches across the
+    /// two halves), `count` returns the SUM (five). A regression that
+    /// (a) collapsed `find`'s `or_else` to `and_then` (silently
+    /// narrowing to intersection), (b) collapsed `iter`'s `chain` to
+    /// `zip` (silently truncating to `min(pre, post)`), or (c)
+    /// collapsed `count`'s SUM to `max` (silently narrowing the
+    /// cardinality) surfaces HERE — the four laws are pinned
+    /// simultaneously and any single-arm regression fails one of
+    /// the four asserts.
+    #[test]
+    fn boundary_surface_union_composition_laws_hold_on_interleaved_duplicates() {
+        let mut b = Boundary::default();
+        b.preconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "side": "pre-1" }),
+        });
+        b.preconditions.push(Condition {
+            kind: ConditionKind::PromQL,
+            params: json!({ "query": "up" }),
+        });
+        b.preconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "side": "pre-2" }),
+        });
+        b.postconditions.push(Condition {
+            kind: ConditionKind::PromQL,
+            params: json!({ "query": "healthy" }),
+        });
+        b.postconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "side": "post-1" }),
+        });
+        crate::assert_surface_union_composition_laws!(b);
     }
 }

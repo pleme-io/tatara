@@ -5046,6 +5046,97 @@ mod tests {
         }
     }
 
+    // ── assert_surface_union_composition_laws — ephemeral surface ────
+    //
+    // The substrate testkit macro
+    // [`crate::assert_surface_union_composition_laws`] pins the FOUR
+    // union composition laws (has: OR, find: or_else, iter: chain,
+    // count: SUM) that bind the (pre, post, union) refinement triads
+    // on the [`EphemeralSpec`] sugar-surface at ONE call site per
+    // authored arrangement, sweeping [`ConditionKind::ALL`]. Byte-for-
+    // byte peer of the point-surface
+    // `boundary_surface_union_composition_laws_hold_across_authored_arrangements`
+    // / `boundary_surface_union_composition_laws_hold_on_interleaved_duplicates`
+    // pins on the [`crate::boundary::Boundary`] surface — the two-
+    // surface parity contract binds every downstream `condition-<K>`
+    // / `precondition-<K>` / `postcondition-<K>` require-tag classifier
+    // on either surface to the SAME four union-composition operators
+    // through ONE substrate primitive rather than through per-surface
+    // author-time re-authored sweeps.
+
+    /// SUBSTRATE PANEL pin (ephemeral surface) — the substrate macro
+    /// [`crate::assert_surface_union_composition_laws`] passes on
+    /// [`EphemeralSpec`] for the four canonical authored arrangements
+    /// (empty spec, precondition-only populated, postcondition-only
+    /// populated, dual-populated sweep over `ALL × ALL`). Byte-for-byte
+    /// peer of the point-surface
+    /// `boundary_surface_union_composition_laws_hold_across_authored_arrangements`
+    /// pin — the two-surface parity contract binds every union
+    /// composition law on both surfaces to the SAME substrate
+    /// primitive.
+    #[test]
+    fn ephemeral_surface_union_composition_laws_hold_across_authored_arrangements() {
+        let empty = empty_ephemeral();
+        crate::assert_surface_union_composition_laws!(empty);
+
+        for populated in ConditionKind::ALL {
+            let mut pre_only = empty_ephemeral();
+            pre_only.preconditions.push(cond(populated));
+            crate::assert_surface_union_composition_laws!(pre_only);
+
+            let mut post_only = empty_ephemeral();
+            post_only.postconditions.push(cond(populated));
+            crate::assert_surface_union_composition_laws!(post_only);
+        }
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut dual = empty_ephemeral();
+                dual.preconditions.push(cond(pre_kind));
+                dual.postconditions.push(cond(post_kind));
+                crate::assert_surface_union_composition_laws!(dual);
+            }
+        }
+    }
+
+    /// SUBSTRATE PANEL pin (ephemeral surface, params-distinguishable
+    /// duplicates) — the substrate macro holds on an [`EphemeralSpec`]
+    /// whose two half-slices each carry duplicates of the same kind at
+    /// multiple positions interleaved with a distinct kind. Byte-for-
+    /// byte peer of the point-surface
+    /// `boundary_surface_union_composition_laws_hold_on_interleaved_duplicates`
+    /// pin — the non-degenerate composition of every union arm on the
+    /// sugar-surface binds against the SAME four monoid operators as
+    /// the point-surface peer. A regression on the ephemeral surface
+    /// only that (a) collapsed `find`'s `or_else` to `and_then`, (b)
+    /// collapsed `iter`'s `chain` to `zip`, or (c) collapsed `count`'s
+    /// SUM to `max` surfaces HERE, breaking two-surface parity.
+    #[test]
+    fn ephemeral_surface_union_composition_laws_hold_on_interleaved_duplicates() {
+        let mut spec = empty_ephemeral();
+        spec.preconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: serde_json::json!({ "side": "pre-1" }),
+        });
+        spec.preconditions.push(Condition {
+            kind: ConditionKind::PromQL,
+            params: serde_json::json!({ "query": "up" }),
+        });
+        spec.preconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: serde_json::json!({ "side": "pre-2" }),
+        });
+        spec.postconditions.push(Condition {
+            kind: ConditionKind::PromQL,
+            params: serde_json::json!({ "query": "healthy" }),
+        });
+        spec.postconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: serde_json::json!({ "side": "post-1" }),
+        });
+        crate::assert_surface_union_composition_laws!(spec);
+    }
+
     #[test]
     fn from_impl_clears_other_intent_variants() {
         // Even if someone constructs an EphemeralSpec by hand and the

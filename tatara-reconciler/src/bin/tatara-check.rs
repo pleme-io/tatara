@@ -18469,6 +18469,239 @@ mod tests {
         }
     }
 
+    /// POINT-SURFACE BINARY XOR pin (calm) — for every
+    /// [`CalmClassification`] variant, EXACTLY ONE of the two
+    /// `monotone-calm` / `coordination-required` fixed tags answers
+    /// `Ok(true)`. THIRD binary-XOR partition closure at the fixed-tag
+    /// classifier layer (after `input-arity` + `output-arity`) —
+    /// IMPORTS the closed-set XOR closure sealed on the parent-composed
+    /// layer by `classification_calm_probes_form_binary_xor_partition_over_all`
+    /// onto the classifier layer so any operator-facing
+    /// `:requires (monotone-calm coordination-required)` audit trusts
+    /// the two tags partition the calm axis into disjoint buckets
+    /// whose union covers every calm variant — a regression that hard-
+    /// coded either arm to a fixed answer or crossed the wires between
+    /// the two probes fails HERE before drifting into that audit. Twin
+    /// of the sibling
+    /// `evaluate_input_arity_fixed_tags_form_binary_xor_partition_over_all_point_variants`
+    /// and
+    /// `evaluate_output_arity_fixed_tags_form_binary_xor_partition_over_all_point_variants`
+    /// via the SAME `ProcessSpec::gate_compute_with_axis` sweep composer,
+    /// re-parametrized on the calm axis via
+    /// `impl ClassificationAxis for CalmClassification`.
+    #[test]
+    fn evaluate_calm_fixed_tags_form_binary_xor_partition_over_all_point_variants() {
+        for populated in CalmClassification::ALL {
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
+            let buckets = [
+                evaluate_point_require_tag(&spec, "monotone-calm"),
+                evaluate_point_require_tag(&spec, "coordination-required"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "point calm={populated:?}: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+            );
+        }
+    }
+
+    /// EPHEMERAL-SURFACE BINARY XOR pin (calm) — resolver-hop peer of
+    /// the point-surface pin above via the ephemeral surface's
+    /// `resolved_classification()` resolver. Sweeps the absent-
+    /// classification case (guaranteed to land in the monotone bucket
+    /// via `CalmClassification::default = Monotone`) plus every
+    /// [`CalmClassification::ALL`] variant so a regression on either
+    /// arm of the resolver-hop fixed-tag classifier fails HERE. Twin
+    /// of the sibling
+    /// `evaluate_input_arity_fixed_tags_form_binary_xor_partition_over_all_ephemeral_variants`
+    /// and
+    /// `evaluate_output_arity_fixed_tags_form_binary_xor_partition_over_all_ephemeral_variants`
+    /// via the SAME `ephemeral_fixture().with_classification_axis(...)`
+    /// sweep composer, re-parametrized on the calm axis via
+    /// `impl ClassificationAxis for CalmClassification`.
+    #[test]
+    fn evaluate_calm_fixed_tags_form_binary_xor_partition_over_all_ephemeral_variants() {
+        // Absent classification — resolves through
+        // `default_ephemeral_class → gate_compute → calm: Monotone`,
+        // landing in the monotone bucket.
+        let eph = ephemeral_fixture();
+        let buckets = [
+            evaluate_ephemeral_require_tag(&eph, "monotone-calm"),
+            evaluate_ephemeral_require_tag(&eph, "coordination-required"),
+        ];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+        );
+        // Authored classification.
+        for populated in CalmClassification::ALL {
+            let eph = ephemeral_fixture().with_classification_axis(populated);
+            let buckets = [
+                evaluate_ephemeral_require_tag(&eph, "monotone-calm"),
+                evaluate_ephemeral_require_tag(&eph, "coordination-required"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "ephemeral calm={populated:?}: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+            );
+        }
+    }
+
+    /// POINT-SURFACE BINARY XOR pin (data) — for every
+    /// [`DataClassification`] variant, EXACTLY ONE of the two
+    /// `public-data` / `data-restricted` fixed tags answers `Ok(true)`.
+    /// FOURTH binary-XOR partition closure at the fixed-tag classifier
+    /// layer (after `input-arity` + `output-arity` + `calm`) — IMPORTS
+    /// the closed-set XOR closure sealed on the parent-composed layer
+    /// by `classification_data_probes_form_binary_xor_partition_over_all`
+    /// onto the classifier layer so any operator-facing
+    /// `:requires (public-data data-restricted)` audit trusts the two
+    /// tags partition the data axis into disjoint buckets whose union
+    /// covers every [`DataClassification`] variant (Public, Internal,
+    /// Confidential, Pii, Phi, Pci) — a regression that hard-coded
+    /// either arm to a fixed answer or crossed the wires between the
+    /// two probes fails HERE. Twin of the sibling calm-axis pin above
+    /// via the SAME `ProcessSpec::gate_compute_with_axis` sweep composer,
+    /// re-parametrized on the data axis via
+    /// `impl ClassificationAxis for DataClassification`.
+    #[test]
+    fn evaluate_data_fixed_tags_form_binary_xor_partition_over_all_point_variants() {
+        for populated in DataClassification::ALL {
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
+            let buckets = [
+                evaluate_point_require_tag(&spec, "public-data"),
+                evaluate_point_require_tag(&spec, "data-restricted"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "point data={populated:?}: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+            );
+        }
+    }
+
+    /// EPHEMERAL-SURFACE BINARY XOR pin (data) — resolver-hop peer of
+    /// the point-surface pin above via the ephemeral surface's
+    /// `resolved_classification()` resolver. Sweeps the absent-
+    /// classification case (guaranteed to land in the restricted
+    /// bucket via `DataClassification::default = Internal`, which
+    /// projects as restricted, not public) plus every
+    /// [`DataClassification::ALL`] variant so a regression on either
+    /// arm of the resolver-hop fixed-tag classifier fails HERE. Twin
+    /// of the sibling calm-axis ephemeral pin above via the SAME
+    /// `ephemeral_fixture().with_classification_axis(...)` sweep
+    /// composer, re-parametrized on the data axis via
+    /// `impl ClassificationAxis for DataClassification`.
+    #[test]
+    fn evaluate_data_fixed_tags_form_binary_xor_partition_over_all_ephemeral_variants() {
+        // Absent classification — resolves through
+        // `default_ephemeral_class → gate_compute → data_classification:
+        // Internal`, landing in the data-restricted bucket.
+        let eph = ephemeral_fixture();
+        let buckets = [
+            evaluate_ephemeral_require_tag(&eph, "public-data"),
+            evaluate_ephemeral_require_tag(&eph, "data-restricted"),
+        ];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+        );
+        // Authored classification.
+        for populated in DataClassification::ALL {
+            let eph = ephemeral_fixture().with_classification_axis(populated);
+            let buckets = [
+                evaluate_ephemeral_require_tag(&eph, "public-data"),
+                evaluate_ephemeral_require_tag(&eph, "data-restricted"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "ephemeral data={populated:?}: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+            );
+        }
+    }
+
+    /// POINT-SURFACE BINARY XOR pin (optimization-direction) — for every
+    /// [`OptimizationDirection`] variant, EXACTLY ONE of the two
+    /// `prefers-lower-direction` / `prefers-higher-direction` fixed tags
+    /// answers `Ok(true)`. FIFTH binary-XOR partition closure at the
+    /// fixed-tag classifier layer (after `input-arity` + `output-arity`
+    /// + `calm` + `data`) — IMPORTS the closed-set XOR closure sealed
+    /// on the parent-composed layer by
+    /// `classification_direction_probes_form_binary_xor_partition_over_all`
+    /// onto the classifier layer so any operator-facing
+    /// `:requires (prefers-lower-direction prefers-higher-direction)`
+    /// audit trusts the two tags partition the direction axis into
+    /// disjoint buckets whose union covers every
+    /// [`OptimizationDirection`] variant — a regression that hard-
+    /// coded either arm to a fixed answer or crossed the wires between
+    /// the two probes fails HERE. Twin of the sibling data-axis pin
+    /// above via the SAME `ProcessSpec::gate_compute_with_axis` sweep
+    /// composer, re-parametrized on the direction axis via
+    /// `impl ClassificationAxis for OptimizationDirection`.
+    #[test]
+    fn evaluate_direction_fixed_tags_form_binary_xor_partition_over_all_point_variants() {
+        for populated in OptimizationDirection::ALL {
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
+            let buckets = [
+                evaluate_point_require_tag(&spec, "prefers-lower-direction"),
+                evaluate_point_require_tag(&spec, "prefers-higher-direction"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "point direction={populated:?}: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+            );
+        }
+    }
+
+    /// EPHEMERAL-SURFACE BINARY XOR pin (optimization-direction) —
+    /// resolver-hop peer of the point-surface pin above via the
+    /// ephemeral surface's `resolved_classification()` resolver.
+    /// Sweeps the absent-classification case (guaranteed to land in
+    /// the prefers-lower bucket via `Horizon::default → direction:
+    /// None`, which `unwrap_or_default()` resolves to
+    /// `OptimizationDirection::default = Minimize`) plus every
+    /// [`OptimizationDirection::ALL`] variant so a regression on
+    /// either arm of the resolver-hop fixed-tag classifier fails
+    /// HERE. Twin of the sibling data-axis ephemeral pin above via
+    /// the SAME `ephemeral_fixture().with_classification_axis(...)`
+    /// sweep composer, re-parametrized on the direction axis via
+    /// `impl ClassificationAxis for OptimizationDirection`.
+    #[test]
+    fn evaluate_direction_fixed_tags_form_binary_xor_partition_over_all_ephemeral_variants() {
+        // Absent classification — resolves through
+        // `default_ephemeral_class → gate_compute → horizon.direction:
+        // None → unwrap_or_default() = Minimize`, landing in the
+        // prefers-lower bucket.
+        let eph = ephemeral_fixture();
+        let buckets = [
+            evaluate_ephemeral_require_tag(&eph, "prefers-lower-direction"),
+            evaluate_ephemeral_require_tag(&eph, "prefers-higher-direction"),
+        ];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+        );
+        // Authored classification.
+        for populated in OptimizationDirection::ALL {
+            let eph = ephemeral_fixture().with_classification_axis(populated);
+            let buckets = [
+                evaluate_ephemeral_require_tag(&eph, "prefers-lower-direction"),
+                evaluate_ephemeral_require_tag(&eph, "prefers-higher-direction"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "ephemeral direction={populated:?}: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+            );
+        }
+    }
+
     // ── RequireTagDomain trait dispatch pins ─────────────────────────
     //
     // Fail-before-pass-after granularity: the `RequireTagDomain` trait,

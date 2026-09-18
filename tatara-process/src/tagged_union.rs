@@ -280,6 +280,28 @@ macro_rules! declare_tagged_union_impls {
             pub fn has(&self, kind: $kind) -> bool {
                 <Self as $crate::tagged_union::TaggedUnion>::has(self, kind)
             }
+
+            /// Widened peer of [`Self::has`] — returns the borrowed
+            /// variant view addressed by `kind`, or `None` when the
+            /// matching slot is empty.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::find`], whose
+            /// default body is `kind.select(self)`. Every
+            /// closed-set-driven `kind.select(&parent)` callsite that
+            /// pre-lift required `use VariantSelector` at the caller
+            /// now reads `parent.find(kind)` through the inherent
+            /// surface, byte-for-byte symmetrical with
+            /// `parent.has(kind)`. The composition law
+            /// `parent.has(kind) == parent.find(kind).is_some()` is
+            /// pinned as a first-class typed invariant by the trait's
+            /// own `has` default body
+            /// (`self.find(kind).is_some()`), swept substrate-wide by
+            /// [`crate::tagged_union::assert_find_agrees_with_has`].
+            pub fn find(&self, kind: $kind) -> ::std::option::Option<$variant<'_>> {
+                <Self as $crate::tagged_union::TaggedUnion>::find(self, kind)
+            }
         }
 
         impl $crate::tagged_union::VariantSelector<$parent> for $kind {
@@ -591,17 +613,66 @@ pub trait TaggedUnion: Sized {
         )
     }
 
+    /// Widened peer of [`Self::has`] — projects a `&'a Self` borrow
+    /// into the optional borrowed-variant view addressed by `kind`,
+    /// or `None` when the matching slot on `Self` is empty.
+    ///
+    /// One-liner that delegates to [`VariantSelector::select`] on the
+    /// closed-set discriminator; the substrate primitive both
+    /// [`Self::has`] (via the default `self.find(kind).is_some()`
+    /// body) and future diagnostic consumers (an operator-facing
+    /// require-tag classifier that reads the populated slot's inner
+    /// payload for a `param.key=value` message, a coherence check
+    /// that projects the borrowed variant into its
+    /// [`VariantKind::variant_kind`] Kind for round-trip validation
+    /// without going through the resolver's Empty/Ambiguous carriers)
+    /// compose against.
+    ///
+    /// # Sibling to [`Self::has`]
+    ///
+    /// One refinement wider: `has` collapses the return to a `bool`;
+    /// `find` returns the matching borrowed [`VariantSelector::Variant`]
+    /// so callers can read the populated slot's inner spec without
+    /// re-projecting through `kind.select(self)` at the callsite (and
+    /// without pulling `use VariantSelector` into scope). The default
+    /// body of `has` is `self.find(kind).is_some()` — the two methods
+    /// share ONE walk semantics by construction, so a regression that
+    /// drifted the presence probe from the widened probe becomes
+    /// structurally impossible past the trait boundary.
+    ///
+    /// # Peer to [`crate::boundary::ConditionSliceExt::find_kind`]
+    ///
+    /// Same shape, same axis, second instance in the workspace-wide
+    /// `(K) -> Option<&V>` widened presence-probe algebra:
+    /// [`ConditionSliceExt::find_kind`] returns `Option<&Condition>`
+    /// on the slice-level ONE-shape probe; `find` here returns
+    /// `Option<Variant<'_>>` on the tagged-union parent-level
+    /// N-slot probe. Both refine their `has_kind` / `has` bool peer
+    /// through the same `find(...).is_some()` composition law.
+    ///
+    /// # Semantics
+    ///
+    /// Returns `Some(v)` where `v` is the borrowed-view projection of
+    /// the populated slot addressed by `kind`, or `None` iff that
+    /// slot is `None`. Byte-for-byte equivalent to
+    /// `kind.select(self)`; existing `k.select(&parent)` callsites
+    /// route through this inherent surface after the macro-emitted
+    /// forwarder lands.
+    fn find(&self, kind: Self::Kind) -> Option<<Self::Kind as VariantSelector<Self>>::Variant<'_>> {
+        kind.select(self)
+    }
+
     /// Presence probe — does this tagged union carry a populated
     /// slot addressed by the given closed-set discriminator?
     ///
-    /// One-liner that composes [`VariantSelector::select`]'s optional
-    /// borrow with `.is_some()` — the presence half of the resolve
-    /// contract, without allocating an [`Self::Error`] carrier when the
-    /// caller only needs the yes/no answer. Substrate primitive for
-    /// closed-set-driven dispatch tables (e.g. tatara-check's
-    /// `intent-<kind>` requires-tag sweep) where a hand-authored
-    /// per-slot `spec.<field>.is_some()` chain otherwise drifts from
-    /// the [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL)
+    /// Default body: `self.find(kind).is_some()`. The presence half
+    /// of the resolve contract, without allocating an [`Self::Error`]
+    /// carrier when the caller only needs the yes/no answer.
+    /// Substrate primitive for closed-set-driven dispatch tables
+    /// (e.g. tatara-check's `intent-<kind>` requires-tag sweep) where
+    /// a hand-authored per-slot `spec.<field>.is_some()` chain
+    /// otherwise drifts from the
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL)
     /// enumeration as new variants land.
     ///
     /// Every one of the four production `.variant()` sites on
@@ -611,7 +682,7 @@ pub trait TaggedUnion: Sized {
     /// callsites without `use TaggedUnion`. Adding a fifth sibling
     /// picks up the presence probe with zero re-authored body.
     fn has(&self, kind: Self::Kind) -> bool {
-        kind.select(self).is_some()
+        self.find(kind).is_some()
     }
 }
 
@@ -694,6 +765,95 @@ where
                 expected,
                 "VariantSelector::select drift — populated={populated:?} probed={probed:?} expected={expected}",
             );
+        }
+    }
+}
+
+/// Generic widened-probe testkit — pins that [`TaggedUnion::find`]
+/// agrees with [`TaggedUnion::has`] AND with
+/// [`VariantSelector::select`] across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) entry, and
+/// that the returned borrowed view round-trips through
+/// [`VariantKind::variant_kind`] back to the addressing Kind on the
+/// populated diagonal.
+///
+/// Substrate primitive for the widened half of the presence-probe
+/// contract — dispatch tables that key off `intent-<kind>` /
+/// `channel-<kind>` / `source-<kind>` require-tags gain a `.find(k)`
+/// call whose return type carries the borrowed variant payload for
+/// diagnostic composition (an operator-facing "channel-<kind>
+/// matched with e.channel.<field>.<key>=<value>" message, a
+/// coherence check that projects the borrowed variant into its
+/// Kind for round-trip validation), and the pin here surfaces a
+/// `find` override that would drift from the composition law
+/// `has(k) == find(k).is_some()` at ONE call site rather than at
+/// every downstream dispatcher.
+///
+/// The three sub-assertions swept per (populated, probed) pair:
+///
+/// 1. `parent.find(probed).is_some() == parent.has(probed)` — the
+///    composition law binding [`TaggedUnion::has`] to
+///    [`TaggedUnion::find`] via `find(k).is_some()`.
+/// 2. `parent.find(probed).is_some() == probed.select(&parent).is_some()`
+///    — the widened primitive delegates to
+///    [`VariantSelector::select`] on the Kind, so a regression that
+///    inlined a divergent walk body at the trait's `find` default
+///    fails here rather than as silent drift at every downstream
+///    diagnostic consumer.
+/// 3. On the populated diagonal (`probed == populated`), the
+///    returned borrowed view satisfies
+///    `find(k).unwrap().variant_kind() == k` — the round-trip
+///    contract that closes `find` (forward-widened) against
+///    [`VariantKind::variant_kind`] (reverse projection).
+///
+/// A fifth sibling tagged-union parent picks up the widened-probe
+/// check through ONE `assert_find_agrees_with_has::<X, _>(single_slot)`
+/// invocation — no re-authored `for k in K::ALL { … }` sweep at the
+/// test site.
+#[track_caller]
+pub fn assert_find_agrees_with_has<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        for probed in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let expected = probed == populated;
+            let via_has = parent.has(probed);
+            let via_find = parent.find(probed).is_some();
+            let via_select = probed.select(&parent).is_some();
+            assert_eq!(
+                via_find, via_has,
+                "TaggedUnion::find drifted from has — populated={populated:?} probed={probed:?}",
+            );
+            assert_eq!(
+                via_find, via_select,
+                "TaggedUnion::find drifted from VariantSelector::select — populated={populated:?} probed={probed:?}",
+            );
+            assert_eq!(
+                via_find, expected,
+                "TaggedUnion::find truth-table drift — populated={populated:?} probed={probed:?} expected={expected}",
+            );
+            if expected {
+                let variant = parent.find(probed).unwrap_or_else(|| {
+                    panic!("TaggedUnion::find must return Some for populated slot {probed:?}",)
+                });
+                assert_eq!(
+                    <<T::Kind as VariantSelector<T>>::Variant<'_> as VariantKind<T::Kind>>::variant_kind(
+                        &variant,
+                    ),
+                    probed,
+                    "find→variant_kind round-trip failed for {probed:?}",
+                );
+            }
         }
     }
 }
@@ -1308,6 +1468,7 @@ where
     assert_variant_round_trip::<T, _>(&single_slot);
     assert_two_slots_ambiguous::<T, _>(two_slot);
     assert_has_matches_select::<T, _>(&single_slot);
+    assert_find_agrees_with_has::<T, _>(&single_slot);
     assert_single_slot_key_matches_label::<T, _>(single_slot);
 }
 
@@ -2790,6 +2951,83 @@ mod tests {
         assert!(p.has(MacroLocalKind::Bar));
     }
 
+    /// The macro-emitted inherent `.find()` forwarder dispatches
+    /// through the trait default body — every populated slot resolves
+    /// to `Some(matching-borrow)`, empty slots to `None`, and the
+    /// composition law `parent.has(k) == parent.find(k).is_some()`
+    /// holds at every arm of the four-outcome truth table. Additional
+    /// pointer-identity pin: the borrowed reference returned by
+    /// `p.find(k)` on a populated slot IS the same reference that
+    /// `<Kind>::select(k, &p)` returns — a regression that inlines a
+    /// divergent projection body at the macro's emitted forwarder
+    /// (rather than reaching the trait's `<Self as
+    /// TaggedUnion>::find(self, kind)` one-line delegation) is caught
+    /// here.
+    #[test]
+    fn macro_emitted_inherent_find_dispatches_the_presence_probe_diagonal() {
+        // Foo populated → find(Foo) borrows the inner ref, find(Bar)
+        // is None, and `has` agrees with `find(...).is_some()` on
+        // both arms.
+        let p = MacroLocalParent {
+            foo: Some(77),
+            bar: None,
+        };
+        match p.find(MacroLocalKind::Foo) {
+            Some(MacroLocalVariant::Foo(v)) => {
+                assert_eq!(*v, 77, "find must borrow the populated inner");
+                assert_eq!(
+                    p.has(MacroLocalKind::Foo),
+                    true,
+                    "composition law: has must agree with find(...).is_some() on populated slot",
+                );
+                // Pointer-identity check: `find` delegates to
+                // `kind.select(self)` byte-identically. The returned
+                // borrow IS the borrow `select` returns.
+                let via_select = MacroLocalKind::Foo.select(&p).unwrap();
+                match via_select {
+                    MacroLocalVariant::Foo(w) => assert!(
+                        std::ptr::eq(v, w),
+                        "macro-emitted find must return the SAME borrow as VariantSelector::select",
+                    ),
+                    MacroLocalVariant::Bar(_) => {
+                        panic!(
+                            "VariantSelector::select disagreed with find on the populated Foo slot"
+                        )
+                    }
+                }
+            }
+            other => panic!("expected Foo populated, got {other:?}"),
+        }
+        assert!(p.find(MacroLocalKind::Bar).is_none());
+        assert_eq!(
+            p.has(MacroLocalKind::Bar),
+            false,
+            "composition law: has must agree with find(...).is_some() on empty slot",
+        );
+
+        // All none — find returns None for every kind; has agrees.
+        let p = MacroLocalParent::default();
+        for kind in MacroLocalKind::ALL {
+            assert!(p.find(kind).is_none());
+            assert_eq!(
+                p.has(kind),
+                false,
+                "composition law on empty parent: has must equal find(...).is_some()",
+            );
+        }
+
+        // Two populated — find(k) is Some for BOTH populated slots
+        // (the widened primitive is a per-slot projection, not the
+        // parent-wide resolver — Ambiguous is a resolve outcome, not
+        // a find outcome).
+        let p = MacroLocalParent {
+            foo: Some(1),
+            bar: Some(2),
+        };
+        assert!(p.find(MacroLocalKind::Foo).is_some());
+        assert!(p.find(MacroLocalKind::Bar).is_some());
+    }
+
     /// The macro-emitted `VariantSelector` impl's `select` body
     /// delegates to the Kind's inherent `<Kind>::select(self, parent)`
     /// — pin the delegation via `std::ptr::eq` on the returned
@@ -2905,6 +3143,157 @@ mod tests {
             LocalParent::default()
         }
         assert_variant_round_trip::<LocalParent, _>(empty_factory);
+    }
+
+    // -------------------------------------------------------------------
+    // `TaggedUnion::find` — the widened peer of `TaggedUnion::has` on the
+    // presence-probe algebra. Pin every arm of the four-outcome truth
+    // table (empty parent → None, populated-diagonal → Some(matching
+    // borrow), populated-off-diagonal → None, two-populated → Some for
+    // BOTH populated slots) directly on the sibling-shaped local scaffold
+    // AND on the macro-emitted inherent surface. A regression on the
+    // default body's `kind.select(self)` delegation (or on the emitted
+    // inherent forwarder's `<Self as TaggedUnion>::find(self, kind)`
+    // one-line body) fails here before it reaches any of the four
+    // production sites.
+    // -------------------------------------------------------------------
+
+    /// EMPTY-PARENT pin — a default [`LocalParent`] returns `None` at
+    /// `find` for EVERY [`LocalKind`], sweeping `ClosedSet::ALL` so a
+    /// new variant added without a matching arm in the primitive
+    /// surfaces at rustc's exhaustiveness gate on the ALL literal
+    /// rather than as a silent false-positive at every downstream
+    /// consumer composing this primitive.
+    #[test]
+    fn tagged_union_default_find_returns_none_on_empty_parent_for_every_kind() {
+        let empty = LocalParent::default();
+        for kind in <LocalKind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            assert!(
+                <LocalParent as TaggedUnion>::find(&empty, kind).is_none(),
+                "empty parent must return None at find for {kind:?}",
+            );
+        }
+    }
+
+    /// DELEGATION pin — every populated position across
+    /// [`LocalKind::ALL`] returns `Some(matching-borrow)` at `find`,
+    /// AND the returned borrowed view carries the SAME reference as
+    /// `probed.select(&parent).unwrap()` (byte-identical delegation:
+    /// `find` IS `kind.select(self)`, not a re-projection).
+    /// Composition-law pin: `has(k) == find(k).is_some()` on both
+    /// diagonal (populated slot AND matching Kind → true) and
+    /// off-diagonal (populated slot BUT other Kind → false).
+    #[test]
+    fn tagged_union_default_find_delegates_to_select_across_every_kind() {
+        for populated in <LocalKind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let parent = match populated {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(101),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(202),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(303),
+                    ..Default::default()
+                },
+            };
+            for probed in <LocalKind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+            {
+                let via_find = <LocalParent as TaggedUnion>::find(&parent, probed);
+                let via_select = probed.select(&parent);
+                assert_eq!(
+                    via_find.is_some(),
+                    via_select.is_some(),
+                    "find drifted from select — populated={populated:?} probed={probed:?}",
+                );
+                assert_eq!(
+                    parent.has(probed),
+                    via_find.is_some(),
+                    "has drifted from find(k).is_some() — populated={populated:?} probed={probed:?}",
+                );
+                if let Some(v) = via_find {
+                    assert_eq!(
+                        <LocalVariant<'_> as VariantKind<LocalKind>>::variant_kind(&v),
+                        probed,
+                        "find→variant_kind round-trip failed — populated={populated:?} probed={probed:?}",
+                    );
+                    // Populated iff probed == populated (single-slot
+                    // parent) — off-diagonal arms return None above
+                    // and never reach this Some-branch.
+                    assert_eq!(
+                        probed, populated,
+                        "off-diagonal probe should have returned None at find",
+                    );
+                }
+            }
+        }
+    }
+
+    /// TWO-POPULATED pin — a parent with two populated slots returns
+    /// `Some(matching-borrow)` at `find` for BOTH populated Kinds
+    /// (unlike `variant()` which resolves to `Ambiguous`), and `None`
+    /// for the empty third Kind. Locks the presence-probe axis of the
+    /// widened primitive against a regression that inlined the
+    /// resolver's short-circuit body into `find` (silently narrowing
+    /// two populated to Ambiguous instead of a per-slot borrow).
+    #[test]
+    fn tagged_union_default_find_projects_per_slot_on_multi_populated_parent() {
+        let parent = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: None,
+        };
+        assert!(
+            <LocalParent as TaggedUnion>::find(&parent, LocalKind::Alpha).is_some(),
+            "find must project Alpha slot in a two-populated parent",
+        );
+        assert!(
+            <LocalParent as TaggedUnion>::find(&parent, LocalKind::Beta).is_some(),
+            "find must project Beta slot in a two-populated parent",
+        );
+        assert!(
+            <LocalParent as TaggedUnion>::find(&parent, LocalKind::Gamma).is_none(),
+            "find must return None for the empty Gamma slot",
+        );
+    }
+
+    /// `assert_find_agrees_with_has` testkit accepts the coherent
+    /// local scaffold — sweeping every `(populated, probed)` pair
+    /// through the three sub-assertions (find↔has, find↔select,
+    /// diagonal round-trip). A regression on any of the three
+    /// composition laws fails at the substrate primitive's
+    /// `#[track_caller]` boundary here rather than at four per-parent
+    /// production sites downstream.
+    #[test]
+    fn assert_find_agrees_with_has_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_find_agrees_with_has::<LocalParent, _>(make_local);
     }
 
     // -------------------------------------------------------------------

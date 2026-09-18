@@ -2528,6 +2528,50 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "prefers-higher-direction",
         probe: |s| s.classification.direction_prefers_higher(),
     },
+    // `single-input-arity` — SIXTEENTH occupant on the (parent ×
+    // derived-nullary-bool) corner of the workspace-wide fixed-tag
+    // algebra after the fifteen prior arms opened + populated the
+    // corner; FIRST occupant threading the classification-
+    // `point_type`-derived input-arity axis — opens the SEVENTH
+    // classification axis into the fixed-tag algebra after the six
+    // axes (horizon, calm, data, point-type, substrate,
+    // optimization-direction) already opened + closed at the corner.
+    // Composes the ONE substrate primitive
+    // [`tatara_process::classification::Classification::input_arity_is_one`]
+    // that walks `self.point_type.input_arity().is_one()` — the
+    // DAG-composition input-cardinality projection reached through
+    // [`tatara_process::classification::ConvergencePointType::input_arity`]
+    // as a fixed-tag audit surface. Answers the DAG-composition-
+    // facing question "does this Process take a SINGLE upstream edge
+    // (endomorphic Transform | Observe topologies, or fan-out
+    // sources Fork | Broadcast)?" — `false` on the
+    // [`Classification::gate_compute`] baseline (`point_type = Gate`
+    // → `input_arity = Many`) and on the `Join | Gate | Select |
+    // Reduce` multi-input variants, `true` on `Transform | Fork |
+    // Broadcast | Observe`. Distinct from the sibling `point_is_*`
+    // triple (`endomorphic-point` / `diffusive-point` /
+    // `convergent-point`) which walks the SAME `self.point_type`
+    // slot through DIFFERENT typed projections
+    // ([`ConvergencePointType::is_endomorphic`] / `is_diffusive` /
+    // `is_convergent`) — this arm's projection carves the closed
+    // set into the input-cardinality bucket rather than the
+    // (input, output) topology bucket. A future antisymmetric peer
+    // `multi-input-arity` closes the binary XOR partition on this
+    // axis — mirror of the calm-axis (`monotone-calm ⊕
+    // coordination-required`), data-axis (`public-data ⊕
+    // data-restricted`), and optimization-direction-axis
+    // (`prefers-lower-direction ⊕ prefers-higher-direction`)
+    // closures. Byte-for-byte symmetrical with the ephemeral
+    // surface's `single-input-arity` arm on
+    // [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::input_arity_is_one`]
+    // — both surfaces route through the SAME
+    // [`Classification::input_arity_is_one`] primitive after the
+    // ephemeral surface pays ONE resolver hop.
+    FixedTagArm {
+        tag: "single-input-arity",
+        probe: |s| s.classification.input_arity_is_one(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2942,6 +2986,30 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "prefers-higher-direction",
         probe: |s| s.direction_prefers_higher(),
+    },
+    // `single-input-arity` — byte-for-byte peer of the point
+    // surface's `single-input-arity` arm on
+    // [`POINT_FIXED_TAG_ARMS`] via
+    // [`tatara_process::classification::Classification::input_arity_is_one`]
+    // reached through the resolver hop
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    // FIRST input-arity-axis occupant on the ephemeral surface's
+    // fixed-tag corner — opens the SEVENTH classification axis into
+    // the ephemeral fixed-tag algebra after horizon, calm, data,
+    // point, substrate, and optimization-direction. Route:
+    // `spec.input_arity_is_one()` →
+    // `resolved_classification().input_arity_is_one()` →
+    // `classification.point_type.input_arity().is_one()`.
+    // Guarantees the absent-classification case lands on `false`
+    // (the authored slot's `None` short-circuits through
+    // `default_ephemeral_class → gate_compute → point_type: Gate →
+    // input_arity = Many → is_one = false`), so every unadorned
+    // `(defephemeral …)` audits AGAINST the single-input framing by
+    // default (safe under the substrate arity convention: the
+    // Gate baseline treats fan-in as the multi-input topology).
+    FixedTagArm {
+        tag: "single-input-arity",
+        probe: |s| s.input_arity_is_one(),
     },
 ];
 
@@ -11743,6 +11811,7 @@ mod tests {
                 "public-data",
                 "prefers-lower-direction",
                 "prefers-higher-direction",
+                "single-input-arity",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -11771,6 +11840,7 @@ mod tests {
                 "public-data",
                 "prefers-lower-direction",
                 "prefers-higher-direction",
+                "single-input-arity",
             ],
         );
     }

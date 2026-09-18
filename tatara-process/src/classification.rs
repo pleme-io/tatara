@@ -2273,6 +2273,108 @@ impl Classification {
         self.data_classification.is_public()
     }
 
+    /// Derived-boolean predicate — does this [`Classification`]'s
+    /// [`Horizon::direction`] slot (defaulted through
+    /// [`OptimizationDirection::default = Minimize`] on absence) project
+    /// to `true` under [`OptimizationDirection::prefers_lower`]? The ONE
+    /// substrate primitive that owns the `(Classification) -> bool`
+    /// derived-nullary-predicate walk on the `horizon.direction` slot
+    /// for the lower-is-better optimization-polarity question.
+    ///
+    /// # Fourteenth occupant on the (parent × derived-nullary-bool) corner — first via the optimization-direction axis
+    ///
+    /// Peer of the thirteen prior nullary-bool substrate primitives on
+    /// [`Classification`] ([`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], [`Self::data_is_regulated`],
+    /// [`Self::data_is_restricted`], [`Self::point_is_endomorphic`],
+    /// [`Self::point_is_diffusive`], [`Self::point_is_convergent`],
+    /// [`Self::substrate_is_resource`], [`Self::substrate_is_policy`],
+    /// [`Self::substrate_is_telemetry`], [`Self::calm_is_monotone`],
+    /// [`Self::data_is_public`]) on the workspace-wide (parent ×
+    /// derived-nullary-bool) corner of the closed-set-driven presence-
+    /// probe algebra. FIRST occupant threading the classification-
+    /// `horizon.direction` axis — opens the SIXTH classification axis
+    /// into the fixed-tag algebra after the horizon, calm, data, point,
+    /// and substrate axes; distinct from every prior corner peer on ONE
+    /// structural degree: the source carrier is `Option<OptimizationDirection>`
+    /// nested inside the [`Horizon`] struct rather than a direct scalar
+    /// or a nested direct-scalar. Byte-for-byte peer of the sibling
+    /// [`Self::has_optimization_direction`] on the Option-carrier hop
+    /// (both unwrap the [`Horizon::direction`] slot through
+    /// [`Option::unwrap_or_default`] against the closed-set-level
+    /// [`OptimizationDirection::default = Minimize`]); this method is
+    /// the derived-nullary-bool projection over the same defaulted
+    /// scalar, mirroring the (has-variant, is-projection) pair on the
+    /// sibling `point_type` axis.
+    ///
+    /// # Semantics — derived nullary boolean, defaulted through Option
+    ///
+    /// `direction_prefers_lower()` returns `true` iff
+    /// `self.horizon.direction.unwrap_or_default().prefers_lower()`. The
+    /// two-variant [`OptimizationDirection`] closed set publishes the
+    /// truth table: [`OptimizationDirection::Minimize`] → `true` (cost /
+    /// latency / error rate — lower is better);
+    /// [`OptimizationDirection::Maximize`] → `false` (throughput /
+    /// coverage / revenue — higher is better). A
+    /// [`Classification::gate_compute`] baseline (which carries
+    /// `horizon: Horizon::default()` whose `direction` field is `None`)
+    /// answers `true` deliberately — an unadorned Process's polarity
+    /// reads as lower-is-better, matching the substrate
+    /// [`OptimizationDirection::default = Minimize`] chosen precisely so
+    /// an under-specified `Asymptotic` horizon can't silently flip the
+    /// rate-window evaluator's polarity onto the Maximize path (a
+    /// future `Maximize`-default-via-rename would silently invert every
+    /// existing alert that treats decreasing rate as healthy).
+    ///
+    /// A future third [`OptimizationDirection`] variant (a hypothetical
+    /// `Stabilize` sentinel for "drive toward a target value", which
+    /// neither minimization nor maximization names) reaches this probe
+    /// through ONE `prefers_lower` arm on the closed set with the probe
+    /// body untouched — the nullary-predicate shape defers every
+    /// per-variant policy decision to the closed set's own truth table
+    /// ([`OptimizationDirection::prefers_lower`]) rather than
+    /// duplicating the discriminator sweep here.
+    ///
+    /// # Compounding — opens the optimization-direction axis on the corner
+    ///
+    /// The point-domain require-tag surface in
+    /// `tatara-reconciler::bin::tatara-check` composes this primitive
+    /// as a fixed tag `prefers-lower-direction` on `POINT_FIXED_TAG_ARMS`
+    /// — the SIXTH classification axis to reach the fixed-tag corner.
+    /// The ephemeral surface publishes the same tag via
+    /// [`crate::ephemeral::EphemeralSpec::direction_prefers_lower`],
+    /// which composes THIS method through
+    /// [`crate::ephemeral::EphemeralSpec::resolved_classification`] so
+    /// the two-surface parity contract holds — the operator's
+    /// `:requires (prefers-lower-direction)` audit answers the same
+    /// question on both surfaces. A future antisymmetric peer
+    /// (`direction_prefers_higher` reading
+    /// `!self.horizon.direction.unwrap_or_default().prefers_lower()`,
+    /// or a projection through a peer `OptimizationDirection::prefers_higher`
+    /// closed-set arm) closes the binary XOR partition on this axis —
+    /// mirror of the calm-axis (`monotone-calm ⊕ coordination-required`)
+    /// and data-axis (`public-data ⊕ data-restricted`) closures — as
+    /// the SECOND occupant on the axis.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the derived-nullary-bool predicate body lives
+    /// at ONE substrate site so every downstream (the
+    /// `prefers-lower-direction` fixed tag in `tatara-check`, future
+    /// asymptotic-health rate-window / regression-detector evaluators
+    /// keying on the optimization-polarity, future variant additions on
+    /// [`OptimizationDirection`]) binds through the SAME
+    /// `direction_prefers_lower()` shape rather than restating the
+    /// `classification.horizon.direction.unwrap_or_default().prefers_lower()`
+    /// chain at each callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future [`OptimizationDirection`] variant lands at
+    /// ONE `ALL` entry + ONE `prefers_lower` arm on the closed set and
+    /// this probe picks it up mechanically.
+    #[must_use]
+    pub fn direction_prefers_lower(&self) -> bool {
+        self.horizon.direction.unwrap_or_default().prefers_lower()
+    }
+
     /// Compose the workspace-baseline [`Self::gate_compute`] with a
     /// single-axis mutation — return `Self::gate_compute()` with the
     /// axis slot carrying `axis`'s classification-axis type overwritten
@@ -7887,5 +7989,81 @@ mod tests {
                 "data_classification={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
             );
         }
+    }
+
+    // ── Classification::direction_prefers_lower substrate pins ──────
+    //
+    // Fail-before-pass-after granularity:
+    // [`Classification::direction_prefers_lower`] did not exist before
+    // this commit — the `(Classification) -> bool` derived-nullary-
+    // boolean walk over the [`Horizon::direction`] slot's
+    // [`OptimizationDirection::prefers_lower`] projection had no
+    // substrate owner. Post-lift the shape lives at ONE substrate
+    // primitive and every downstream (the `prefers-lower-direction`
+    // fixed tag in `tatara-check`, the
+    // [`crate::ephemeral::EphemeralSpec::direction_prefers_lower`]
+    // peer, future asymptotic-health rate-window / regression-detector
+    // evaluators keying on the optimization-polarity) composes against
+    // the SAME `direction_prefers_lower()` shape rather than restating
+    // the `self.horizon.direction.unwrap_or_default().prefers_lower()`
+    // chain at its own callsite. FOURTEENTH occupant of the (parent ×
+    // derived-nullary-bool) corner and FIRST occupant threading the
+    // classification-`horizon.direction` axis — opens the SIXTH
+    // classification axis into the fixed-tag algebra.
+
+    /// PER-VARIANT pin — for every [`OptimizationDirection`] variant, a
+    /// [`Classification`] whose `horizon.direction` slot carries
+    /// `Some(variant)` returns `direction_prefers_lower()` matching
+    /// the closed set's own [`OptimizationDirection::prefers_lower`]
+    /// truth table. Sweep [`OptimizationDirection::ALL`] so a regression
+    /// that (a) hard-coded the method body to a fixed answer (silently
+    /// returning `true` regardless of the stored variant, silently
+    /// keeping every Process on the lower-is-better path and inverting
+    /// every rate-window evaluator that expected Maximize polarity),
+    /// (b) inverted the projection (silently promoting `Maximize` to
+    /// "prefers lower"), (c) dropped the `.unwrap_or_default()` hop
+    /// (defaulting a `None` slot to a fixed `false` rather than the
+    /// closed-set-level `Minimize.prefers_lower() = true`), or
+    /// (d) crossed the wires with a sibling classification-axis probe
+    /// fails HERE at the substrate primitive before drifting through
+    /// the `prefers-lower-direction` fixed tag or the peer ephemeral
+    /// surface.
+    #[test]
+    fn classification_direction_prefers_lower_matches_optimization_direction_projection() {
+        for populated in OptimizationDirection::ALL {
+            let c = Classification::gate_compute_with_axis(populated);
+            assert_eq!(
+                c.direction_prefers_lower(),
+                populated.prefers_lower(),
+                "horizon.direction={populated:?}: direction_prefers_lower() drift from OptimizationDirection::prefers_lower()",
+            );
+        }
+    }
+
+    /// GATE-COMPUTE BASELINE — the workspace-baseline
+    /// [`Classification::gate_compute`] shape carries
+    /// `horizon: Horizon::default()` whose `direction` field is `None`,
+    /// so `self.horizon.direction.unwrap_or_default()` defaults to
+    /// [`OptimizationDirection::Minimize`] via `#[default]`, and
+    /// [`OptimizationDirection::Minimize::prefers_lower`] projects
+    /// `true`, so `direction_prefers_lower()` returns `true`. Pins the
+    /// default-arm short-circuit through TWO layers of `Default`
+    /// ([`Horizon::default`] → `direction: None`; then
+    /// [`OptimizationDirection::default = Minimize`]) at ONE narrow
+    /// site — a regression that promoted [`OptimizationDirection::Maximize`]
+    /// to `#[default]` (silently flipping every unadorned Process's
+    /// rate-window evaluator polarity), that wired `Minimize` to
+    /// `prefers_lower() = false`, or that dropped the
+    /// `.unwrap_or_default()` hop (silently defaulting `None` to
+    /// `false` rather than to the closed-set-level `Minimize` baseline),
+    /// would fail HERE before drifting through every unadorned Process's
+    /// optimization-polarity answer.
+    #[test]
+    fn classification_gate_compute_direction_prefers_lower_is_true() {
+        let c = Classification::gate_compute();
+        assert!(
+            c.direction_prefers_lower(),
+            "gate_compute (horizon.direction=None → unwrap_or_default=Minimize → prefers_lower=true) baseline",
+        );
     }
 }

@@ -2455,6 +2455,42 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "public-data",
         probe: |s| s.classification.data_is_public(),
     },
+    // `prefers-lower-direction` — FOURTEENTH occupant on the (parent ×
+    // derived-nullary-bool) corner of the workspace-wide fixed-tag
+    // algebra after the thirteen prior arms opened + populated the
+    // corner; FIRST occupant threading the classification-
+    // `horizon.direction` axis — opens the SIXTH classification axis
+    // into the fixed-tag algebra after the horizon, calm, data, point,
+    // and substrate axes. Composes the ONE substrate primitive
+    // [`tatara_process::classification::Classification::direction_prefers_lower`]
+    // that walks `self.horizon.direction.unwrap_or_default().prefers_lower()`
+    // — the lower-is-better optimization-polarity image (cost / latency
+    // / error rate — decreasing values improve) as a fixed-tag audit
+    // surface. Answers the rate-window-evaluator-facing question "does
+    // this Process's asymptotic-health polarity treat decreasing rate
+    // as improvement?" — `true` on the `Minimize` default AND on
+    // `Some(Minimize)`, `false` on `Some(Maximize)`. Byte-for-byte
+    // symmetrical with the ephemeral surface's `prefers-lower-direction`
+    // arm on [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::direction_prefers_lower`]
+    // — both surfaces route through the SAME
+    // [`Classification::direction_prefers_lower`] primitive after the
+    // ephemeral surface pays ONE resolver hop. Distinct from every
+    // prior corner peer on ONE structural degree: the source carrier
+    // is `Option<OptimizationDirection>` nested inside the `Horizon`
+    // struct rather than a direct scalar or a nested direct-scalar,
+    // so the derived-nullary-bool answer walks through TWO layers of
+    // `Default` (`Horizon::default` → `direction: None`; then
+    // `OptimizationDirection::default = Minimize`) to reach the closed-
+    // set-level projection. A future antisymmetric peer
+    // `prefers-higher-direction` closes the binary XOR partition on
+    // this axis — mirror of the calm-axis (`monotone-calm ⊕
+    // coordination-required`) and data-axis (`public-data ⊕
+    // data-restricted`) closures.
+    FixedTagArm {
+        tag: "prefers-lower-direction",
+        probe: |s| s.classification.direction_prefers_lower(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -2819,6 +2855,28 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "public-data",
         probe: |s| s.data_is_public(),
+    },
+    // `prefers-lower-direction` — byte-for-byte peer of the point
+    // surface's `prefers-lower-direction` arm on
+    // [`POINT_FIXED_TAG_ARMS`] via
+    // [`tatara_process::classification::Classification::direction_prefers_lower`]
+    // reached through the resolver hop
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    // FIRST optimization-direction-axis occupant on the ephemeral
+    // surface's fixed-tag corner — opens the SIXTH classification axis
+    // into the ephemeral fixed-tag algebra after horizon, calm, data,
+    // point, and substrate. Route: `spec.direction_prefers_lower()` →
+    // `resolved_classification().direction_prefers_lower()` →
+    // `classification.horizon.direction.unwrap_or_default().prefers_lower()`.
+    // Guarantees the absent-classification case lands on `true` (the
+    // authored slot's `None` short-circuits through
+    // `default_ephemeral_class → gate_compute → Horizon::default →
+    // direction: None → OptimizationDirection::default = Minimize →
+    // prefers_lower = true`), so every unadorned `(defephemeral …)`
+    // audits under the lower-is-better polarity default.
+    FixedTagArm {
+        tag: "prefers-lower-direction",
+        probe: |s| s.direction_prefers_lower(),
     },
 ];
 
@@ -11618,6 +11676,7 @@ mod tests {
                 "telemetry-substrate",
                 "monotone-calm",
                 "public-data",
+                "prefers-lower-direction",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -11644,6 +11703,7 @@ mod tests {
                 "telemetry-substrate",
                 "monotone-calm",
                 "public-data",
+                "prefers-lower-direction",
             ],
         );
     }

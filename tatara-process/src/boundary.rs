@@ -284,6 +284,111 @@ impl Boundary {
     pub fn find_postcondition_kind(&self, kind: ConditionKind) -> Option<&Condition> {
         self.postconditions.find_kind(kind)
     }
+
+    /// Returns an iterator over every [`Condition`] in
+    /// `preconditions ∪ postconditions` carrying the given
+    /// [`ConditionKind`], walking preconditions first — the
+    /// widened peer of [`Self::find_condition_kind`] one refinement
+    /// higher on the presence-probe algebra. Byte-for-byte
+    /// equivalent to
+    /// `self.iter_precondition_kind(kind).chain(self.iter_postcondition_kind(kind))`.
+    ///
+    /// # Sibling to [`Self::find_condition_kind`]
+    ///
+    /// Same axis, one refinement wider: `find_condition_kind`
+    /// collapses the return to the FIRST match (yielding
+    /// `Option<&Condition>`); this method yields every match across
+    /// both sides. Pinned by the composition law
+    /// `find_condition_kind(K) == iter_condition_kind(K).next()` at
+    /// [`Boundary`]'s substrate-delegation test — the two refinements
+    /// share ONE walk order by construction (preconditions first,
+    /// then postconditions), so a regression that reversed the
+    /// [`Chain`](std::iter::Chain) order or narrowed the union to an
+    /// intersection surfaces HERE at the substrate boundary rather
+    /// than as silent skew between the first-match and stream
+    /// refinements downstream consumers reach through.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::iter_condition_kind`]
+    ///
+    /// Same signature `(ConditionKind) -> Chain<KindMatches<'_>,
+    /// KindMatches<'_>>`, same precondition-first chain body, on the
+    /// sugar-surface type whose pre/post condition vectors live
+    /// directly on the struct. Both methods compose against the SAME
+    /// slice-level substrate primitive [`ConditionSliceExt::iter_kind`]
+    /// — a regression at the per-slice walk fails at that primitive's
+    /// tests rather than as silent drift at either struct-level
+    /// widened caller.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that enforces "each
+    /// [`ConditionKind`] appears at most once across
+    /// preconditions ∪ postconditions" reads
+    /// `boundary.iter_condition_kind(k).nth(1).is_none()` at ONE
+    /// call site rather than restating the count-with-filter closure
+    /// body over the two vector slots. A future diagnostic
+    /// enumerating every match (an operator-facing "N ClosedLoopAuth
+    /// conditions matched, listing sides + params" message emitted
+    /// by the require-tag classifier) reaches this ONE method
+    /// through `boundary.iter_condition_kind(k).collect()` rather
+    /// than chaining two half-slice walks at the callsite.
+    /// The presence-probe axis on [`Boundary`] now carries three
+    /// refinements (bool via `has_condition_kind`,
+    /// `Option<&Condition>` via `find_condition_kind`,
+    /// `impl Iterator<Item = &Condition>` via
+    /// `iter_condition_kind`) at ONE typed algebra surface, byte-
+    /// for-byte peer of the same triad on
+    /// [`crate::ephemeral::EphemeralSpec`].
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the widened stream lives at ONE substrate
+    /// site so every downstream diagnostic + coherence consumer binds
+    /// through the SAME shape rather than restating the two-half
+    /// chain body).
+    pub fn iter_condition_kind(
+        &self,
+        kind: ConditionKind,
+    ) -> std::iter::Chain<KindMatches<'_>, KindMatches<'_>> {
+        self.iter_precondition_kind(kind)
+            .chain(self.iter_postcondition_kind(kind))
+    }
+
+    /// Returns an iterator over every [`Condition`] in
+    /// [`Self::preconditions`] carrying the given [`ConditionKind`]
+    /// — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) iterator triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::iter_kind`] over [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::iter_postcondition_kind`] on the (precondition,
+    /// postcondition) partition of the boundary's two condition-vector
+    /// slots; both peers compose against the SAME slice-level substrate
+    /// primitive and their [`Chain`](std::iter::Chain) composition is
+    /// [`Self::iter_condition_kind`]. Byte-identical semantics to
+    /// [`Self::find_precondition_kind`] with a widened stream return
+    /// rather than only the first match.
+    pub fn iter_precondition_kind(&self, kind: ConditionKind) -> KindMatches<'_> {
+        self.preconditions.iter_kind(kind)
+    }
+
+    /// Returns an iterator over every [`Condition`] in
+    /// [`Self::postconditions`] carrying the given [`ConditionKind`]
+    /// — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) iterator triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::iter_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::iter_precondition_kind`] on the (precondition,
+    /// postcondition) partition of the boundary's two condition-vector
+    /// slots. See [`Self::iter_precondition_kind`] for the full
+    /// rationale — the two methods share ONE lift motivation, ONE
+    /// fail-before-pass-after composition-law pin, and ONE
+    /// two-surface parity contract with the ephemeral sugar type via
+    /// [`crate::ephemeral::EphemeralSpec::iter_postcondition_kind`].
+    pub fn iter_postcondition_kind(&self, kind: ConditionKind) -> KindMatches<'_> {
+        self.postconditions.iter_kind(kind)
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -350,34 +455,78 @@ impl Boundary {
 /// primitive through `slice.has_kind(k)` with no per-caller
 /// restatement of the `.iter().any(|c| c.kind == K)` closure body.
 pub trait ConditionSliceExt {
+    /// Returns an iterator yielding every [`Condition`] in this slice
+    /// whose [`Condition::kind`] equals `kind`, in slice order — the
+    /// ONE widened primitive on the slice-level presence-probe axis
+    /// that both [`Self::find_kind`] (via the default
+    /// `iter_kind(k).next()` body) and [`Self::has_kind`] (via the
+    /// transitive `find_kind(k).is_some()` default) compose against.
+    ///
+    /// # Sibling to [`Self::find_kind`]
+    ///
+    /// One refinement wider: `find_kind` collapses the return to
+    /// `Option<&Condition>` (yielding only the earliest match);
+    /// `iter_kind` returns the whole match stream so callers can
+    /// [`count`](Iterator::count) it, [`collect`](Iterator::collect)
+    /// it into a `Vec<&Condition>`, ask for the
+    /// [`nth`](Iterator::nth) element, or compose it with any other
+    /// std iterator adaptor without re-walking the slice. The default
+    /// body of `find_kind` is `self.iter_kind(kind).next()` — the
+    /// two methods share ONE walk semantics by construction, so a
+    /// regression that drifted the first-match probe from the
+    /// widened stream becomes structurally impossible past the
+    /// trait boundary.
+    ///
+    /// # Semantics
+    ///
+    /// Yields `&c` for each `c` in this slice with `c.kind == kind`,
+    /// in slice order — a slice that carries multiple matches yields
+    /// each in turn (the composition law
+    /// `find_kind(k) == iter_kind(k).next()` binds the first match
+    /// to the earliest position). An empty slice, or a slice with no
+    /// matching kind, yields nothing. Byte-for-byte equivalent to
+    /// `self.iter().filter(|c| c.kind == kind)`.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that verifies "each
+    /// [`ConditionKind`] appears at most once per side" reads
+    /// `slice.iter_kind(k).nth(1).is_none()` at ONE call site
+    /// rather than restating the count-with-filter closure body.
+    /// A future diagnostic that enumerates every match of a kind
+    /// (an operator-facing "3 PromQL preconditions matched" message,
+    /// an audit dump listing every match of a repeated kind) reaches
+    /// this ONE primitive through `slice.iter_kind(k).collect()`
+    /// rather than re-walking the slice with `.iter().filter(...)`
+    /// at the callsite. The presence-probe axis now carries three
+    /// refinements (bool via `has_kind`, `Option<&Condition>` via
+    /// `find_kind`, `impl Iterator<Item = &Condition>` via
+    /// `iter_kind`) at ONE typed algebra surface — every downstream
+    /// consumer picks the coarsest one that answers its question and
+    /// the coarser ones stay compositionally derived from this
+    /// primitive.
+    fn iter_kind(&self, kind: ConditionKind) -> KindMatches<'_>;
+
     /// Returns the first [`Condition`] in this slice that carries the
-    /// given [`ConditionKind`], or `None` if none matches — the ONE
-    /// widened primitive that both [`Self::has_kind`] (via the default
-    /// `find_kind(k).is_some()` body) and future diagnostic consumers
-    /// (an operator-facing "found on {pre|post}conditions with
-    /// param.probeImage=X" message, a coherence check that verifies
-    /// "every `ClosedLoopAuth` postcondition carries a non-empty
-    /// `probeImage`", an editor completion that lists params-keys per
-    /// present kind) compose against.
+    /// given [`ConditionKind`], or `None` if none matches. Default
+    /// body: `self.iter_kind(kind).next()` — a thin projection of the
+    /// widened primitive [`Self::iter_kind`] onto its first element.
+    /// The composition law `find_kind(k) == iter_kind(k).next()`
+    /// binds the first-match probe to the widened stream at the
+    /// trait's default body.
     ///
     /// # Sibling to [`Self::has_kind`]
     ///
     /// One refinement wider: `has_kind` collapses the return to a
-    /// `bool`; `find_kind` returns the matching `&Condition` so callers
-    /// can read [`Condition::params`] without re-walking the slice. The
-    /// default body of `has_kind` is `self.find_kind(kind).is_some()`
-    /// — the two methods share ONE walk semantics by construction, so
-    /// a regression that drifted the presence probe from the widened
-    /// probe becomes structurally impossible past the trait boundary.
-    ///
-    /// # Semantics
-    ///
-    /// Returns `Some(c)` for the FIRST `c` in this slice with `c.kind
-    /// == kind` — a slice that carries multiple matches returns the
-    /// earliest by position. Returns `None` iff no element matches.
-    /// Byte-for-byte equivalent to `self.iter().find(|c| c.kind ==
-    /// kind)`.
-    fn find_kind(&self, kind: ConditionKind) -> Option<&Condition>;
+    /// `bool`; `find_kind` returns the matching `&Condition` so
+    /// callers can read [`Condition::params`] without re-walking the
+    /// slice. The default body of `has_kind` is
+    /// `self.find_kind(kind).is_some()` — the two methods share ONE
+    /// walk semantics by construction. Byte-for-byte equivalent to
+    /// `self.iter().find(|c| c.kind == kind)`.
+    fn find_kind(&self, kind: ConditionKind) -> Option<&Condition> {
+        self.iter_kind(kind).next()
+    }
 
     /// True iff at least one [`Condition`] in this slice carries the
     /// given [`ConditionKind`]. Default body: `self.find_kind(kind).
@@ -390,9 +539,47 @@ pub trait ConditionSliceExt {
     }
 }
 
+/// Iterator yielded by [`ConditionSliceExt::iter_kind`] — the widened
+/// primitive on the slice-level presence-probe axis. Wraps a
+/// [`std::slice::Iter`] over `Condition` values with a
+/// [`ConditionKind`] discriminator; [`Iterator::next`] short-circuits
+/// via [`std::iter::Iterator::find`] on the wrapped iterator so the
+/// filter walk is byte-identical to `self.iter().filter(|c| c.kind ==
+/// kind).next()` without paying for the anonymous-closure type
+/// erasure a chained-adapter return position would carry.
+///
+/// # Why a named type
+///
+/// [`ConditionSliceExt::iter_kind`] returns this concrete type rather
+/// than `impl Iterator<Item = &Condition>` so downstream consumers
+/// (a fleet-wide audit dump that stores match streams in a struct
+/// field, a coherence check that composes the iterator against
+/// [`std::iter::Chain`] across pre-/post-conditions) name the
+/// primitive's return without pulling in RPITIT's unnameable
+/// per-callsite type. [`Boundary::iter_condition_kind`] and
+/// [`crate::ephemeral::EphemeralSpec::iter_condition_kind`] chain two
+/// [`KindMatches`] iterators via [`Iterator::chain`] — the resulting
+/// [`std::iter::Chain<KindMatches<'_>, KindMatches<'_>>`] is itself
+/// a standard nameable type.
+pub struct KindMatches<'a> {
+    inner: std::slice::Iter<'a, Condition>,
+    kind: ConditionKind,
+}
+
+impl<'a> Iterator for KindMatches<'a> {
+    type Item = &'a Condition;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.by_ref().find(|c| c.kind == self.kind)
+    }
+}
+
 impl ConditionSliceExt for [Condition] {
-    fn find_kind(&self, kind: ConditionKind) -> Option<&Condition> {
-        self.iter().find(|c| c.kind == kind)
+    fn iter_kind(&self, kind: ConditionKind) -> KindMatches<'_> {
+        KindMatches {
+            inner: self.iter(),
+            kind,
+        }
     }
 }
 
@@ -1493,5 +1680,284 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ── ConditionSliceExt::iter_kind substrate pins + widened triad ──
+    //
+    // Fail-before-pass-after granularity: `ConditionSliceExt::iter_kind`
+    // + its three struct-level peers (`Boundary::iter_(pre|post|)?
+    // condition_kind`) did not exist before this commit — the existing
+    // `find_*_kind` triad collapses the return to `Option<&Condition>`
+    // (yielding only the FIRST match), losing the full match stream a
+    // future coherence check ("each ConditionKind appears at most
+    // once per side" — `iter_kind(k).nth(1).is_none()`) or diagnostic
+    // consumer ("N ClosedLoopAuth postconditions matched, listing
+    // every param.probeImage" — `iter_kind(k).collect()`) needs. The
+    // lift widens the primitive to `KindMatches<'_>` (a named
+    // Iterator<Item = &Condition>) and re-anchors `find_kind` as a
+    // default composed from it (`self.iter_kind(kind).next()`), so
+    // the three refinements share ONE walk semantics by construction.
+
+    /// EMPTY-SLICE pin (iter) — an empty `&[Condition]` yields
+    /// nothing from `iter_kind` for EVERY [`ConditionKind`]. Sweep
+    /// `ConditionKind::ALL` so a new variant added without a matching
+    /// arm in the primitive surfaces at rustc's exhaustiveness gate
+    /// on the ALL literal rather than as a silent phantom-yield at
+    /// every downstream widened callsite.
+    #[test]
+    fn condition_slice_iter_kind_yields_nothing_on_empty_slice_for_every_kind() {
+        let empty: &[Condition] = &[];
+        for kind in ConditionKind::ALL {
+            assert_eq!(
+                empty.iter_kind(kind).count(),
+                0,
+                "empty slice must yield nothing on iter_kind for {kind:?}",
+            );
+        }
+    }
+
+    /// PER-VARIANT pin (iter) — a single-element slice yields exactly
+    /// that element on the matching kind and nothing on every other
+    /// kind. Sweep the ALL × ALL cross so a regression that (a)
+    /// hard-coded the filter predicate to a single kind (silently
+    /// yielding on every populated slice regardless of query kind),
+    /// or (b) matched on [`Condition::params`] instead of
+    /// [`Condition::kind`] fails HERE at the substrate primitive.
+    #[test]
+    fn condition_slice_iter_kind_reads_kind_field_per_variant() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            for query in ConditionKind::ALL {
+                let collected: Vec<_> = slice.iter_kind(query).map(|c| c.kind).collect();
+                if query == populated {
+                    assert_eq!(
+                        collected,
+                        vec![populated],
+                        "populated={populated:?}: query {query:?} must yield [populated]",
+                    );
+                } else {
+                    assert!(
+                        collected.is_empty(),
+                        "populated={populated:?}: query {query:?} must yield nothing",
+                    );
+                }
+            }
+        }
+    }
+
+    /// ALL-MATCHES pin — a slice with the same kind at MULTIPLE
+    /// positions yields EVERY match in slice order (not just the
+    /// first). Uses params-distinguishable [`Condition`]s so a
+    /// regression that (a) collapsed to a single-match walk
+    /// (`.iter().find(...)` yielding only the earliest and
+    /// terminating), (b) reversed the yield order (`.rev().filter`
+    /// yielding trailing-first), or (c) de-duplicated by kind (an
+    /// erroneous `HashSet::insert`-gated walk) surfaces HERE at the
+    /// params payload rather than silently at a downstream
+    /// count-based coherence check.
+    #[test]
+    fn condition_slice_iter_kind_yields_every_match_in_slice_order_on_duplicates() {
+        let first = Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "probeImage": "first" }),
+        };
+        let middle = Condition {
+            kind: ConditionKind::PromQL,
+            params: json!({ "query": "up" }),
+        };
+        let second_cla = Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "probeImage": "second" }),
+        };
+        let slice = [first, middle, second_cla];
+        let hits: Vec<_> = slice
+            .iter_kind(ConditionKind::ClosedLoopAuth)
+            .map(|c| {
+                c.params
+                    .get("probeImage")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned()
+            })
+            .collect();
+        assert_eq!(
+            hits,
+            vec!["first".to_owned(), "second".to_owned()],
+            "iter_kind must yield every match in slice order (not just the first)",
+        );
+        // The interleaved non-matching kind is skipped: two hits, not three.
+        assert_eq!(
+            slice.iter_kind(ConditionKind::ClosedLoopAuth).count(),
+            2,
+            "iter_kind must skip non-matching kinds, not include them in the stream",
+        );
+    }
+
+    /// SLICE-LEVEL DELEGATION pin (find ↔ iter) — the trait's default
+    /// `find_kind` body equals `iter_kind(k).next()` at EVERY
+    /// (populated arrangement, query) pair on `ConditionKind::ALL`.
+    /// Turns the trait doc's composition-law note
+    /// ("`find_kind(k) == iter_kind(k).next()` by construction")
+    /// into a first-class typed test invariant: a future implementor
+    /// that overrode the default `find_kind` body with a divergent
+    /// walk shape (a `.iter().rev().find(...)` returning trailing-
+    /// first, a hand-rolled loop that walked past the first match)
+    /// surfaces HERE at the substrate boundary rather than as silent
+    /// skew between the two refinements downstream consumers reach
+    /// through.
+    #[test]
+    fn condition_slice_find_kind_equals_iter_kind_next() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let slice = [condition_with(pre_kind), condition_with(post_kind)];
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        slice.find_kind(query).map(|c| c.kind),
+                        slice.iter_kind(query).next().map(|c| c.kind),
+                        "slice-level find/iter refinement bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary iter-triad) — the three
+    /// widened `iter_*_kind` methods on [`Boundary`] delegate verbatim
+    /// to [`ConditionSliceExt::iter_kind`] on the underlying
+    /// [`Vec<Condition>`] slices, no inline reimplementation. The
+    /// `iter_condition_kind` union chains preconditions first then
+    /// postconditions via [`Iterator::chain`]. Sweep
+    /// `ConditionKind::ALL × ConditionKind::ALL × ConditionKind::ALL`
+    /// so a regression that (a) inlined a divergent walk at either
+    /// half-slice arm, (b) reversed the chain order (postcondition
+    /// first — walk-order regression on the union), or (c) collapsed
+    /// the chain to a `.zip(...)` (silently narrowing the union to
+    /// an intersection-by-position) surfaces HERE at the substrate
+    /// boundary rather than as silent skew between the struct-level
+    /// widened arms and the slice-level primitive.
+    #[test]
+    fn iter_condition_kind_triad_delegates_to_slice_iter_kind() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+                for query in ConditionKind::ALL {
+                    let via_pre: Vec<_> =
+                        b.preconditions.iter_kind(query).map(|c| c.kind).collect();
+                    let via_post: Vec<_> =
+                        b.postconditions.iter_kind(query).map(|c| c.kind).collect();
+                    assert_eq!(
+                        b.iter_precondition_kind(query)
+                            .map(|c| c.kind)
+                            .collect::<Vec<_>>(),
+                        via_pre,
+                        "precondition iter arm must delegate to preconditions.iter_kind: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.iter_postcondition_kind(query)
+                            .map(|c| c.kind)
+                            .collect::<Vec<_>>(),
+                        via_post,
+                        "postcondition iter arm must delegate to postconditions.iter_kind: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    let mut expected_union = via_pre.clone();
+                    expected_union.extend(via_post.iter().copied());
+                    assert_eq!(
+                        b.iter_condition_kind(query)
+                            .map(|c| c.kind)
+                            .collect::<Vec<_>>(),
+                        expected_union,
+                        "union iter arm must chain precondition ⨟ postcondition: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// STRUCT-LEVEL DELEGATION pin (find ↔ iter on Boundary) — the
+    /// three [`Boundary`] `find_*_kind` arms equal their widened
+    /// peers' `.next()` projection at EVERY (pre-populated,
+    /// post-populated, query) triple on `ConditionKind::ALL`. Byte-
+    /// for-byte re-anchors the composition-law pin
+    /// `find_condition_kind == iter_condition_kind.next()` through
+    /// the widened axis on the parent surface — a future consumer
+    /// that reads `find_condition_kind(k)` as sugar for
+    /// `iter_condition_kind(k).next()` stays typed against the SAME
+    /// truth table on both the slice-level and struct-level layers.
+    #[test]
+    fn boundary_find_triad_equals_iter_triad_next_projection() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        b.find_precondition_kind(query).map(|c| c.kind),
+                        b.iter_precondition_kind(query).next().map(|c| c.kind),
+                        "precondition find/iter bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.find_postcondition_kind(query).map(|c| c.kind),
+                        b.iter_postcondition_kind(query).next().map(|c| c.kind),
+                        "postcondition find/iter bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.find_condition_kind(query).map(|c| c.kind),
+                        b.iter_condition_kind(query).next().map(|c| c.kind),
+                        "union find/iter bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// PRECONDITION-PRECEDENCE pin (iter) — a kind authored on BOTH
+    /// sides yields precondition-side matches FIRST in the union
+    /// chain. Uses params-distinguishable [`Condition`]s so a
+    /// regression that (a) reversed the chain order on the widened
+    /// axis (postcondition first), (b) interleaved the two sides,
+    /// or (c) collapsed the chain to a `.zip(...)` fails at the
+    /// returned params-payload sequence rather than silently at the
+    /// count.
+    #[test]
+    fn iter_condition_kind_yields_preconditions_before_postconditions_on_dual_populated() {
+        let mut b = Boundary::default();
+        b.preconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "side": "pre-1" }),
+        });
+        b.preconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "side": "pre-2" }),
+        });
+        b.postconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: json!({ "side": "post-1" }),
+        });
+        let sides: Vec<_> = b
+            .iter_condition_kind(ConditionKind::ClosedLoopAuth)
+            .map(|c| {
+                c.params
+                    .get("side")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned()
+            })
+            .collect();
+        assert_eq!(
+            sides,
+            vec!["pre-1".to_owned(), "pre-2".to_owned(), "post-1".to_owned(),],
+            "iter_condition_kind must yield every precondition-side match before any \
+             postcondition-side match (chain order pinned by two-surface parity contract)",
+        );
     }
 }

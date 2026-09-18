@@ -353,6 +353,101 @@ impl EphemeralSpec {
         self.postconditions.find_kind(kind)
     }
 
+    /// Returns an iterator over every [`Condition`] in
+    /// `preconditions ∪ postconditions` carrying the given
+    /// [`ConditionKind`], walking preconditions first — the peer of
+    /// [`crate::boundary::Boundary::iter_condition_kind`] on the
+    /// [`EphemeralSpec`] sugar surface.
+    ///
+    /// # Semantics — byte-identical to [`Boundary::iter_condition_kind`]
+    ///
+    /// Chains [`Self::iter_precondition_kind`] with
+    /// [`Self::iter_postcondition_kind`] via [`Iterator::chain`]:
+    /// yields every precondition-side match in slice order, then
+    /// every postcondition-side match in slice order. Composition
+    /// law:
+    /// `find_condition_kind(K) == iter_condition_kind(K).next()`,
+    /// pinned as a first-class typed invariant. Both halves compose
+    /// through the SAME slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::iter_kind`] that
+    /// [`Boundary::iter_condition_kind`] chains — so a regression at
+    /// the per-slice walk fails at that primitive's tests rather than
+    /// as silent drift at either struct-level widened caller.
+    ///
+    /// # Sibling to [`Self::find_condition_kind`]
+    ///
+    /// Same axis, one refinement wider: `find_condition_kind`
+    /// collapses the return to the FIRST match; this method yields
+    /// every match across both sides. Byte-for-byte peer of the
+    /// point-domain widened triad on [`Boundary`], so the two-surface
+    /// parity contract now covers three refinements (bool via has,
+    /// `&Condition` via find, `impl Iterator<Item = &Condition>` via
+    /// iter) on the condition axis.
+    ///
+    /// # Compounding
+    ///
+    /// A future ephemeral-surface coherence check that enforces
+    /// "each [`ConditionKind`] appears at most once across
+    /// preconditions ∪ postconditions" reads
+    /// `spec.iter_condition_kind(k).nth(1).is_none()` at ONE call
+    /// site. A future ephemeral require-tag classifier arm that
+    /// counts matches (a hypothetical `condition-count-<kind>` prefix
+    /// family that surfaces multiplicity to the operator) reaches
+    /// this ONE method through `spec.iter_condition_kind(k).count()`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the widened stream body composes the SAME
+    /// slice-level substrate primitive on both this ephemeral surface
+    /// and the point-domain [`Boundary`] surface). THEORY.md §VI.1
+    /// (generation over composition — a future [`ConditionKind`]
+    /// variant added to `ALL` reaches both surfaces' iterator triads
+    /// mechanically through the SAME closed-set walk).
+    pub fn iter_condition_kind(
+        &self,
+        kind: ConditionKind,
+    ) -> std::iter::Chain<crate::boundary::KindMatches<'_>, crate::boundary::KindMatches<'_>> {
+        self.iter_precondition_kind(kind)
+            .chain(self.iter_postcondition_kind(kind))
+    }
+
+    /// Returns an iterator over every [`Condition`] in
+    /// [`Self::preconditions`] carrying the given [`ConditionKind`]
+    /// — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) iterator triad on
+    /// [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::iter_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`crate::boundary::Boundary::iter_precondition_kind`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice walk fails at that primitive's tests rather than as
+    /// silent drift at either struct-level widened half-slice arm.
+    /// Byte-identical semantics to [`Self::find_precondition_kind`]
+    /// with a widened stream return rather than only the first match.
+    pub fn iter_precondition_kind(&self, kind: ConditionKind) -> crate::boundary::KindMatches<'_> {
+        self.preconditions.iter_kind(kind)
+    }
+
+    /// Returns an iterator over every [`Condition`] in
+    /// [`Self::postconditions`] carrying the given [`ConditionKind`]
+    /// — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) iterator triad on
+    /// [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::iter_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`crate::boundary::Boundary::iter_postcondition_kind`]
+    /// on the point-domain surface. See
+    /// [`Self::iter_precondition_kind`] for the full rationale — the
+    /// two methods share ONE lift motivation, ONE fail-before-
+    /// pass-after composition-law pin, and ONE two-surface parity
+    /// contract with the point-domain [`crate::boundary::Boundary`]
+    /// widened peer methods.
+    pub fn iter_postcondition_kind(&self, kind: ConditionKind) -> crate::boundary::KindMatches<'_> {
+        self.postconditions.iter_kind(kind)
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -4480,6 +4575,201 @@ mod tests {
                         spec.has_condition_kind(query),
                         spec.find_condition_kind(query).is_some(),
                         "ephemeral union has/find bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    // ── EphemeralSpec::iter_(pre|post|)condition_kind widened triad ──
+    //
+    // Fail-before-pass-after granularity: the three widened
+    // `iter_*_kind` arms did not exist on the ephemeral surface before
+    // this commit — the (widened `impl Iterator<Item = &Condition>`
+    // stream) axis lived at ONE struct-level site
+    // (`Boundary::iter_condition_kind` on the point surface's nested
+    // [`Boundary`] slot). The lift adds the peer inherent methods on
+    // the [`EphemeralSpec`] sugar-surface so both struct-level widened
+    // callers compose against the SAME slice-level substrate primitive
+    // [`crate::boundary::ConditionSliceExt::iter_kind`] in lockstep.
+    // A regression that (a) hard-coded the arm to a single kind, (b)
+    // reversed the chain order on the union (postcondition first), or
+    // (c) collapsed the chain to a `.zip(...)` (silently narrowing the
+    // union to an intersection-by-position) fails HERE at the
+    // substrate primitive rather than as silent operator-facing drift
+    // at the ephemeral require-tag surface.
+
+    /// EMPTY-SPEC pin (iter-triad) — a default [`EphemeralSpec`]
+    /// (empty preconditions, empty postconditions) yields nothing
+    /// from every widened arm for EVERY [`ConditionKind`]. Sweep
+    /// `ConditionKind::ALL` × three-arm cross so a new variant added
+    /// without a matching arm surfaces at rustc's exhaustiveness gate
+    /// on the ALL literal rather than as a silent phantom-yield at
+    /// every downstream widened callsite on the ephemeral surface.
+    #[test]
+    fn ephemeral_iter_condition_kind_triad_yields_nothing_on_empty_spec() {
+        let spec = empty_ephemeral();
+        for kind in ConditionKind::ALL {
+            assert_eq!(
+                spec.iter_precondition_kind(kind).count(),
+                0,
+                "empty ephemeral must yield nothing on precondition iter arm for {kind:?}",
+            );
+            assert_eq!(
+                spec.iter_postcondition_kind(kind).count(),
+                0,
+                "empty ephemeral must yield nothing on postcondition iter arm for {kind:?}",
+            );
+            assert_eq!(
+                spec.iter_condition_kind(kind).count(),
+                0,
+                "empty ephemeral must yield nothing on union iter arm for {kind:?}",
+            );
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (ephemeral iter-triad) — the three
+    /// widened `iter_*_kind` methods on [`EphemeralSpec`] delegate
+    /// verbatim to [`crate::boundary::ConditionSliceExt::iter_kind`]
+    /// on the underlying [`Vec<Condition>`] slices, no inline
+    /// reimplementation. The `iter_condition_kind` union chains
+    /// preconditions first then postconditions via
+    /// [`Iterator::chain`]. Sweep
+    /// `ConditionKind::ALL × ConditionKind::ALL × ConditionKind::ALL`
+    /// so a regression that (a) inlined a divergent walk at either
+    /// half-slice arm, (b) reversed the chain order on the ephemeral
+    /// surface only (breaking two-surface parity with
+    /// [`crate::boundary::Boundary::iter_condition_kind`]), or (c)
+    /// collapsed the chain to a `.zip(...)` surfaces HERE at the
+    /// substrate boundary. Byte-for-byte peer of the point-domain
+    /// `iter_condition_kind_triad_delegates_to_slice_iter_kind` pin.
+    #[test]
+    fn ephemeral_iter_condition_kind_triad_delegates_to_slice_iter_kind() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+                for query in ConditionKind::ALL {
+                    let via_pre: Vec<_> = spec
+                        .preconditions
+                        .iter_kind(query)
+                        .map(|c| c.kind)
+                        .collect();
+                    let via_post: Vec<_> = spec
+                        .postconditions
+                        .iter_kind(query)
+                        .map(|c| c.kind)
+                        .collect();
+                    assert_eq!(
+                        spec.iter_precondition_kind(query)
+                            .map(|c| c.kind)
+                            .collect::<Vec<_>>(),
+                        via_pre,
+                        "ephemeral precondition iter arm must delegate: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.iter_postcondition_kind(query)
+                            .map(|c| c.kind)
+                            .collect::<Vec<_>>(),
+                        via_post,
+                        "ephemeral postcondition iter arm must delegate: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    let mut expected_union = via_pre.clone();
+                    expected_union.extend(via_post.iter().copied());
+                    assert_eq!(
+                        spec.iter_condition_kind(query)
+                            .map(|c| c.kind)
+                            .collect::<Vec<_>>(),
+                        expected_union,
+                        "ephemeral union iter arm must chain precondition ⨟ postcondition: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// PRECONDITION-PRECEDENCE pin (ephemeral iter) — a kind
+    /// authored on BOTH sides yields precondition-side matches
+    /// FIRST in the union chain. Byte-for-byte peer of the
+    /// point-domain
+    /// `iter_condition_kind_yields_preconditions_before_postconditions_on_dual_populated`
+    /// pin — the two-surface parity contract binds the chain order
+    /// on both surfaces through ONE composition law. Uses two
+    /// params-distinguishable [`Condition`]s so a regression on the
+    /// ephemeral surface only that reversed the chain order surfaces
+    /// at the returned params payload rather than silently at the
+    /// count.
+    #[test]
+    fn ephemeral_iter_condition_kind_yields_preconditions_before_postconditions_on_dual_populated()
+    {
+        let mut spec = empty_ephemeral();
+        spec.preconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: serde_json::json!({ "side": "pre-1" }),
+        });
+        spec.postconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: serde_json::json!({ "side": "post-1" }),
+        });
+        spec.postconditions.push(Condition {
+            kind: ConditionKind::ClosedLoopAuth,
+            params: serde_json::json!({ "side": "post-2" }),
+        });
+        let sides: Vec<_> = spec
+            .iter_condition_kind(ConditionKind::ClosedLoopAuth)
+            .map(|c| {
+                c.params
+                    .get("side")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned()
+            })
+            .collect();
+        assert_eq!(
+            sides,
+            vec!["pre-1".to_owned(), "post-1".to_owned(), "post-2".to_owned(),],
+            "ephemeral iter_condition_kind must yield every precondition-side match before \
+             any postcondition-side match (chain order pinned by two-surface parity)",
+        );
+    }
+
+    /// STRUCT-LEVEL DELEGATION pin (find ↔ iter on EphemeralSpec) —
+    /// the three [`EphemeralSpec`] `find_*_kind` arms equal their
+    /// widened peers' `.next()` projection at EVERY (pre-populated,
+    /// post-populated, query) triple on `ConditionKind::ALL`.
+    /// Byte-for-byte peer of the point-domain
+    /// `boundary_find_triad_equals_iter_triad_next_projection` pin,
+    /// so both surfaces' find/iter refinement bridge stays symmetric
+    /// by construction across the two-surface parity contract.
+    #[test]
+    fn ephemeral_find_triad_equals_iter_triad_next_projection() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        spec.find_precondition_kind(query).map(|c| c.kind),
+                        spec.iter_precondition_kind(query).next().map(|c| c.kind),
+                        "ephemeral precondition find/iter bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.find_postcondition_kind(query).map(|c| c.kind),
+                        spec.iter_postcondition_kind(query).next().map(|c| c.kind),
+                        "ephemeral postcondition find/iter bridge drifted: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.find_condition_kind(query).map(|c| c.kind),
+                        spec.iter_condition_kind(query).next().map(|c| c.kind),
+                        "ephemeral union find/iter bridge drifted: \
                          pre={pre_kind:?} post={post_kind:?} query={query:?}",
                     );
                 }

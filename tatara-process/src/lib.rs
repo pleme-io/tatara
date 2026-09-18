@@ -64,7 +64,7 @@ pub mod prelude {
     pub use crate::anyhow_flatten::FlattenCtxExt;
     pub use crate::attestation::ProcessAttestation;
     pub use crate::boundary::{
-        Boundary, Condition, ConditionKind, ConditionSliceExt, UnknownConditionKind,
+        Boundary, Condition, ConditionKind, ConditionSliceExt, KindMatches, UnknownConditionKind,
     };
     pub use crate::classification::{
         Arity, CalmClassification, Classification, ConvergencePointType, DataClassification,

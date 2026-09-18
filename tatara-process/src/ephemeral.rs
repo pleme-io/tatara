@@ -2530,6 +2530,65 @@ mod tests {
     use crate::intent::IntentVariant;
     use crate::lifetime::LifetimeVariant;
 
+    /// LANDMARK PIN — the (ephemeral-surface test-fixture ×
+    /// [`Classification::gate_compute_with_axis`] on horizon-nested
+    /// axes) sweep equivalence. Nine ephemeral-surface probe-sweep
+    /// tests in this module (`has_horizon_kind_*`,
+    /// `has_optimization_direction_*`, `horizon_terminates_*`,
+    /// `horizon_requires_metric_axes_*`, `horizon_terminates_xor_*`)
+    /// pre-sweep restated the SAME `let mut c =
+    /// Classification::gate_compute(); c.horizon = Horizon { <slot>:
+    /// populated, ..Horizon::default() }` five-line fixture at each
+    /// callsite, mutating exactly ONE horizon-nested slot to
+    /// `populated`; post-sweep each callsite reads
+    /// [`Classification::gate_compute_with_axis(populated)`] — one
+    /// line — and the four-baseline-slot restatement lives at ONE
+    /// substrate primitive. This pin asserts byte-parity between the
+    /// pre-sweep hand-authored `Horizon` struct-literal shape (both
+    /// the [`HorizonKind::kind`] mutation shape AND the
+    /// [`OptimizationDirection`]-into-`Some(_)` mutation shape) and
+    /// the post-sweep composer output on every variant of each closed
+    /// set, so a regression that either (a) changed
+    /// [`ClassificationAxis for HorizonKind`] to stomp a non-`kind`
+    /// sub-slot, (b) changed [`ClassificationAxis for OptimizationDirection`]
+    /// to drop the `Some(...)` wrap, or (c) reintroduced a whole-
+    /// `Horizon`-reset shape that dropped a sibling sub-slot would
+    /// fail HERE at ONE landmark site before landing at the peer
+    /// probe-sweep pins that use the composer.
+    ///
+    /// Byte-for-byte peer of the sibling landmark
+    /// `with_axis_optimization_direction_overlay_wraps_variant_in_some`
+    /// on the point-surface classification-module tests — this pin
+    /// carries the same substrate contract through to the ephemeral-
+    /// surface tests that consume the composer.
+    #[test]
+    fn gate_compute_with_axis_on_horizon_nested_axes_matches_hand_authored_shape() {
+        for kind in HorizonKind::ALL {
+            let via_composer = Classification::gate_compute_with_axis(kind);
+            let mut via_hand_authored = Classification::gate_compute();
+            via_hand_authored.horizon = Horizon {
+                kind,
+                ..Horizon::default()
+            };
+            assert_eq!(
+                via_composer, via_hand_authored,
+                "HorizonKind::{kind:?}: composer vs pre-sweep hand-authored struct-literal drift",
+            );
+        }
+        for direction in OptimizationDirection::ALL {
+            let via_composer = Classification::gate_compute_with_axis(direction);
+            let mut via_hand_authored = Classification::gate_compute();
+            via_hand_authored.horizon = Horizon {
+                direction: Some(direction),
+                ..Horizon::default()
+            };
+            assert_eq!(
+                via_composer, via_hand_authored,
+                "OptimizationDirection::{direction:?}: composer vs pre-sweep hand-authored struct-literal drift",
+            );
+        }
+    }
+
     fn demo_overlay() -> AplicacaoIntent {
         AplicacaoIntent {
             chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-demo-app".into(),
@@ -3670,11 +3729,7 @@ mod tests {
     #[test]
     fn has_horizon_kind_returns_true_iff_authored_classification_matches_per_kind() {
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let mut spec = empty_ephemeral();
             spec.classification = Some(classification);
             for query in HorizonKind::ALL {
@@ -3752,11 +3807,7 @@ mod tests {
         // Authored classification: both surfaces read the same authored
         // value verbatim.
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let mut eph = empty_ephemeral();
             eph.classification = Some(classification);
             let lowered: ProcessSpec = eph.clone().into();
@@ -3813,11 +3864,7 @@ mod tests {
     #[test]
     fn has_optimization_direction_returns_true_iff_authored_direction_matches_per_kind() {
         for populated in OptimizationDirection::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                direction: Some(populated),
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let mut spec = empty_ephemeral();
             spec.classification = Some(classification);
             for query in OptimizationDirection::ALL {
@@ -3915,11 +3962,7 @@ mod tests {
         // Authored classification with `direction: Some(_)` — both
         // surfaces read the same authored value verbatim.
         for populated in OptimizationDirection::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                direction: Some(populated),
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let mut eph = empty_ephemeral();
             eph.classification = Some(classification);
             let lowered: ProcessSpec = eph.clone().into();
@@ -4294,11 +4337,7 @@ mod tests {
     #[test]
     fn horizon_terminates_returns_horizon_kind_projection_per_kind() {
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = crate::classification::Horizon {
-                kind: populated,
-                ..crate::classification::Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let mut spec = empty_ephemeral();
             spec.classification = Some(classification);
             assert_eq!(
@@ -4360,11 +4399,7 @@ mod tests {
         // Authored classification: both surfaces read the same authored
         // horizon.kind and route through the same projection.
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = crate::classification::Horizon {
-                kind: populated,
-                ..crate::classification::Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let mut eph = empty_ephemeral();
             eph.classification = Some(classification);
             let lowered: ProcessSpec = eph.clone().into();
@@ -4407,11 +4442,7 @@ mod tests {
     #[test]
     fn horizon_requires_metric_axes_returns_horizon_kind_projection_per_kind() {
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = crate::classification::Horizon {
-                kind: populated,
-                ..crate::classification::Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let mut spec = empty_ephemeral();
             spec.classification = Some(classification);
             assert_eq!(
@@ -4467,11 +4498,7 @@ mod tests {
         );
         // Authored classification.
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = crate::classification::Horizon {
-                kind: populated,
-                ..crate::classification::Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let mut eph = empty_ephemeral();
             eph.classification = Some(classification);
             let lowered: ProcessSpec = eph.clone().into();
@@ -6127,11 +6154,7 @@ mod tests {
         );
         // Authored classification.
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = crate::classification::Horizon {
-                kind: populated,
-                ..crate::classification::Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let mut eph = empty_ephemeral();
             eph.classification = Some(classification);
             let buckets = [eph.horizon_terminates(), eph.horizon_requires_metric_axes()];

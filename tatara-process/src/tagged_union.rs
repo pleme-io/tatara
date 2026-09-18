@@ -302,6 +302,34 @@ macro_rules! declare_tagged_union_impls {
             pub fn find(&self, kind: $kind) -> ::std::option::Option<$variant<'_>> {
                 <Self as $crate::tagged_union::TaggedUnion>::find(self, kind)
             }
+
+            /// Closed-set-inversion peer of [`Self::has`] / [`Self::find`]
+            /// — returns the canonical-ordered `Vec` of populated
+            /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL)
+            /// discriminators.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::populated_kinds`],
+            /// whose default body is
+            /// `<Kind as ClosedSet>::ALL.iter().copied().filter(|k|
+            /// self.has(*k)).collect()`. Every consumer that needs
+            /// to enumerate which slots on a tagged-union parent are
+            /// populated (an operator-facing "Ambiguous named
+            /// [Nix, Container]" diagnostic composed on the malformed
+            /// arm; a closed-set audit dispatcher; a
+            /// `populated-kind-count-<n>` require-tag classifier
+            /// prefix) reads `parent.populated_kinds()` through the
+            /// inherent surface, byte-for-byte symmetrical with
+            /// `parent.has(kind)` / `parent.find(kind)`. The
+            /// composition law
+            /// `parent.populated_kinds().contains(&k) == parent.has(k)`
+            /// is pinned as a first-class typed invariant by the
+            /// trait's own default body and swept substrate-wide by
+            /// [`crate::tagged_union::assert_populated_kinds_matches_has`].
+            pub fn populated_kinds(&self) -> ::std::vec::Vec<$kind> {
+                <Self as $crate::tagged_union::TaggedUnion>::populated_kinds(self)
+            }
         }
 
         impl $crate::tagged_union::VariantSelector<$parent> for $kind {
@@ -684,6 +712,90 @@ pub trait TaggedUnion: Sized {
     fn has(&self, kind: Self::Kind) -> bool {
         self.find(kind).is_some()
     }
+
+    /// Closed-set-inversion refinement — enumerate the set of
+    /// [`Self::Kind`] discriminators whose corresponding slot on
+    /// `self` is populated, in canonical
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) order.
+    ///
+    /// Default body:
+    /// `<Kind as ClosedSet>::ALL.iter().copied().filter(|k| self.has(*k)).collect()`.
+    /// A tagged-union parent that satisfies the exactly-one-slot
+    /// contract returns a `Vec` of length 0 (empty parent — matches
+    /// [`Self::variant`]'s `Empty` arm) or 1 (well-formed — matches
+    /// the `Ok` arm); a malformed parent with multiple populated
+    /// slots returns a `Vec` of length ≥ 2 in canonical `ALL` order
+    /// (matches the `Ambiguous` arm and NAMES which slots are
+    /// populated, unlike the payload-free `Ambiguous` carrier).
+    ///
+    /// # Sibling to [`Self::has`] / [`Self::find`]
+    ///
+    /// One refinement wider on the ORTHOGONAL axis: `has(k) / find(k)`
+    /// fix a `Self::Kind` and vary the return type (`bool` /
+    /// `Option<Variant>`); this refinement INVERTS the axis by fixing
+    /// the parent and varying over `Kind::ALL`, returning the SET of
+    /// populated kinds. The composition law
+    /// `populated_kinds().contains(&k) == has(k)` for every
+    /// `k ∈ Kind::ALL` binds the two axes structurally through the
+    /// default body — a regression that overrode `populated_kinds`
+    /// to skip a kind, return duplicates, or drift the walk order
+    /// surfaces at the substrate testkit
+    /// [`assert_populated_kinds_matches_has`].
+    ///
+    /// # Peer to [`crate::boundary::ConditionSliceExt::distinct_kinds`]
+    ///
+    /// Same shape, same axis, second instance in the workspace-wide
+    /// closed-set-inversion refinement algebra:
+    /// [`ConditionSliceExt::distinct_kinds`] returns
+    /// `Vec<ConditionKind>` on the slice-level presence-probe axis
+    /// (fixes the slice, varies over `ConditionKind::ALL`);
+    /// `populated_kinds` here returns `Vec<Self::Kind>` on the
+    /// tagged-union parent-level presence-probe axis (fixes the
+    /// parent, varies over `<Self::Kind as ClosedSet>::ALL`). Both
+    /// refine their `has(k) / has_kind(k)` bool peer through the
+    /// same `ALL.filter(has).collect()` composition law.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing `Ambiguous(Vec<Kind>)` diagnostic that
+    ///   NAMES which slots collide (upgrading the payload-free
+    ///   [`TaggedUnionError::ambiguous`] carrier without touching the
+    ///   resolver's short-circuit) reads `parent.populated_kinds()`
+    ///   directly on the malformed arm.
+    /// - A closed-set audit dispatcher that enumerates every
+    ///   populated slot for a fleet-wide "which parents carry
+    ///   {Container, Nix, Aplicacao}" query reaches ONE substrate
+    ///   primitive rather than paying for a per-kind `has(k)` sweep
+    ///   at every callsite.
+    /// - A hypothetical `populated-kind-count-<n>` require-tag
+    ///   classifier prefix family that publishes the populated-set
+    ///   cardinality as a scalar reads `parent.populated_kinds().len()`.
+    ///
+    /// A new [`Self::Kind`] variant added to
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) reaches
+    /// this primitive mechanically (the closed-set walk picks up the
+    /// new entry) and every downstream consumer sees the wider set
+    /// without further per-caller edit.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The closed-set-inversion refinement lives at ONE substrate
+    ///   site as a typed projection of [`Self::has`] over the closed
+    ///   set `<Self::Kind as ClosedSet>::ALL`. Every downstream
+    ///   aggregate consumer binds through the SAME shape rather
+    ///   than restating the `ALL`-filter closure body.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically and every downstream consumer sees the wider
+    ///   set with no per-caller edit.
+    fn populated_kinds(&self) -> ::std::vec::Vec<Self::Kind> {
+        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| self.has(*k))
+            .collect()
+    }
 }
 
 /// Generic diagnostic-stability testkit — pins that [`TaggedUnion::KIND_LIST`]
@@ -854,6 +966,203 @@ where
                     "find→variant_kind round-trip failed for {probed:?}",
                 );
             }
+        }
+    }
+}
+
+/// Generic closed-set-inversion testkit — pins that
+/// [`TaggedUnion::populated_kinds`] composes over
+/// [`TaggedUnion::has`] across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) entry on
+/// the single-slot side, that the returned `Vec` is the canonical
+/// [`ClosedSet::ALL`]-ordered filter of `has(k)`, and that on the
+/// populated diagonal `single_slot(k).populated_kinds()` equals
+/// `vec![k]` exactly (length 1, canonical ordered, no drift).
+///
+/// Parent-axis substrate primitive for the tagged-union closed-set-
+/// inversion refinement — the peer of
+/// [`crate::boundary::assert_slice_refinement_composition_laws`]'s
+/// `distinct_kinds` sub-arm on the slice-level presence-probe axis,
+/// lifted here to the tagged-union parent-level presence-probe axis
+/// (same shape, same composition operator, second instance in the
+/// workspace-wide closed-set-inversion refinement algebra).
+///
+/// The three sub-assertions swept per (populated, probed) pair:
+///
+/// 1. Per-kind membership: `parent.populated_kinds().contains(&k) ==
+///    parent.has(k)` for every `k ∈ ClosedSet::ALL` — a regression
+///    that overrode `populated_kinds` to skip a kind, drift the walk
+///    order from canonical `ALL` to slot-encounter order, or return
+///    a superset containing absent kinds surfaces at the specific
+///    kind's per-pair assertion.
+/// 2. Canonical `ALL`-filter equality:
+///    `parent.populated_kinds() == ALL.iter().copied().filter(|k|
+///    parent.has(*k)).collect()` — a regression that returned
+///    duplicates (a naive override that skipped dedup by
+///    construction) or drifted the walk order surfaces at the
+///    post-loop equality assert.
+/// 3. Single-slot diagonal: `single_slot(k).populated_kinds() ==
+///    vec![k]` exactly — pins the single-populated arm's cardinality
+///    (length 1) and ordering (the addressed kind's own position in
+///    `ALL`) together at ONE assert.
+///
+/// Substrate primitive for future per-parent
+/// `X_populated_kinds_matches_has` tests that would otherwise each
+/// restate the same nested-`for populated in K::ALL { for probed in
+/// K::ALL { … } }` sweep + canonical-order equality + single-slot
+/// diagonal pin — every one of the four production `.variant()`
+/// parents on `ProcessSpec` binds through this ONE primitive with a
+/// per-site `single_slot` factory. A fifth sibling picks up the
+/// closed-set-inversion check through ONE call site — no re-authored
+/// `for k in K::ALL { … }` sweep at the test surface, no re-authored
+/// `assert_eq!` triad.
+///
+/// The `single_slot` closure stays per-site — reused verbatim from
+/// the sibling primitives ([`assert_variant_round_trip`],
+/// [`assert_find_agrees_with_has`],
+/// [`assert_single_slot_key_matches_label`]) — the closure IS the
+/// "populate slot k" ground truth for the parent's field structure.
+///
+/// The [`crate::lifetime::Lifetime`] site is DELIBERATELY excluded
+/// through the `T: TaggedUnion` bound — `Lifetime`'s `variant()`
+/// returns `Ok(Permanent)` on empty rather than an `Empty` typed
+/// error, so its projection shape diverges from the four
+/// Empty-projecting parents. Same reasoning as
+/// [`assert_variant_round_trip`]'s /
+/// [`assert_find_agrees_with_has`]'s exclusions.
+#[track_caller]
+pub fn assert_populated_kinds_matches_has<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let kinds = parent.populated_kinds();
+        // Per-kind membership composition law.
+        for probed in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            assert_eq!(
+                kinds.contains(&probed),
+                parent.has(probed),
+                "TaggedUnion::populated_kinds().contains({probed:?}) drifted from has({probed:?}) — populated={populated:?}",
+            );
+        }
+        // Canonical ALL-filter equality — pins dedup, walk order, and
+        // membership consistency at ONE assert.
+        let canonical: Vec<T::Kind> = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| parent.has(*k))
+            .collect();
+        assert_eq!(
+            kinds, canonical,
+            "TaggedUnion::populated_kinds() must yield ClosedSet::ALL-ordered subsequence where has is true (no duplicates, canonical order) — populated={populated:?}",
+        );
+        // Single-slot diagonal — the addressed slot IS the ONLY
+        // populated slot on the parent single_slot produces, so the
+        // canonical filter yields exactly [populated].
+        assert_eq!(
+            kinds,
+            vec![populated],
+            "TaggedUnion::populated_kinds() on single_slot({populated:?}) must return vec![{populated:?}] exactly",
+        );
+    }
+}
+
+/// Generic two-slot closed-set-inversion testkit — peer of
+/// [`assert_populated_kinds_matches_has`] on the ambiguous-parent
+/// side. Pins that a `two_slot(a, b)` parent's `populated_kinds()`
+/// yields the canonical `ClosedSet::ALL`-ordered pair
+/// `[min_all(a,b), max_all(a,b)]` (length exactly 2, dedup + walk
+/// order enforced), and that per-kind membership composes
+/// byte-identically against `has(k)` on the malformed-parent arm.
+///
+/// The two-slot fixture is the SAME factory production sites already
+/// hand [`assert_two_slots_ambiguous`] — every one of the four
+/// production `.variant()` parents on `ProcessSpec` composes
+/// `two_slot(a, b)` through per-field `Option::or` on
+/// `single_slot(a)` and `single_slot(b)`, so BOTH slots on the
+/// resulting parent are populated. The primitive's off-diagonal
+/// sweep (`a != b`) pins that `populated_kinds()` NAMES both
+/// populated slots on the malformed arm — the diagnostic-surface
+/// promise the payload-free
+/// [`TaggedUnionError::ambiguous`] carrier stops short of.
+///
+/// The three sub-assertions swept per `(a, b)` off-diagonal pair:
+///
+/// 1. Cardinality: `populated_kinds().len() == 2` — a regression
+///    that returned a length-1 vec (silently short-circuiting on
+///    the first populated slot; drifting the walk from `ALL` to
+///    single-match `find`) fails HERE at the length assert.
+/// 2. Per-kind membership: `populated_kinds().contains(&k) ==
+///    has(k)` for every `k ∈ ClosedSet::ALL` — the composition law
+///    of the closed-set-inversion refinement, pinned on the
+///    multi-populated arm.
+/// 3. Canonical `ALL`-filter equality:
+///    `populated_kinds() == ALL.iter().copied().filter(|k|
+///    parent.has(*k)).collect()` — pins the walk order (a
+///    regression that yielded `[b, a]` because it walked the two
+///    populated slots in construction order instead of
+///    `ClosedSet::ALL` order fails at the equality assert).
+///
+/// A fifth sibling tagged-union parent picks up the two-slot
+/// closed-set-inversion check through ONE call site — no
+/// re-authored nested-for sweep at the test surface, no re-authored
+/// `assert_eq!` triad.
+///
+/// Same `Lifetime` exclusion as [`assert_populated_kinds_matches_has`]:
+/// the `T: TaggedUnion` bound doesn't reach it.
+#[track_caller]
+pub fn assert_populated_kinds_across_pairs<T, F>(two_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind, T::Kind) -> T,
+{
+    for a in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        for b in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            if a == b {
+                continue;
+            }
+            let parent = two_slot(a, b);
+            let kinds = parent.populated_kinds();
+            assert_eq!(
+                kinds.len(),
+                2,
+                "TaggedUnion::populated_kinds() on two_slot({a:?}, {b:?}) must return exactly two populated kinds, got {kinds:?}",
+            );
+            for probed in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+            {
+                assert_eq!(
+                    kinds.contains(&probed),
+                    parent.has(probed),
+                    "TaggedUnion::populated_kinds().contains({probed:?}) drifted from has({probed:?}) — (a, b)=({a:?}, {b:?})",
+                );
+            }
+            let canonical: Vec<T::Kind> = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+                .filter(|k| parent.has(*k))
+                .collect();
+            assert_eq!(
+                kinds, canonical,
+                "TaggedUnion::populated_kinds() must yield ClosedSet::ALL-ordered pair on two_slot({a:?}, {b:?}) — got {kinds:?}, expected {canonical:?}",
+            );
         }
     }
 }
@@ -3294,6 +3603,281 @@ mod tests {
             }
         }
         assert_find_agrees_with_has::<LocalParent, _>(make_local);
+    }
+
+    // -------------------------------------------------------------------
+    // `TaggedUnion::populated_kinds` default method + the
+    // closed-set-inversion refinement's per-parent semantics — pin the
+    // three arms (empty parent → empty vec, single-slot → vec![k],
+    // multi-populated → vec[a..b] in ClosedSet::ALL order) directly on
+    // the sibling-shaped `LocalParent` scaffold. Peer of the boundary-
+    // side `ConditionSliceExt::distinct_kinds` primitive's three-arm
+    // pin on the slice-level presence-probe axis.
+    // -------------------------------------------------------------------
+
+    /// EMPTY parent — the default body's `ALL.filter(has).collect()`
+    /// sweep yields an empty vec when no slot is populated. Pins the
+    /// zero-cardinality arm: a regression that mis-composed the
+    /// `ALL.iter()` bridge (short-circuiting past the empty case),
+    /// returned a non-empty sentinel on empty input, or leaked stale
+    /// closed-set entries as false-positive members fails HERE at the
+    /// substrate boundary.
+    #[test]
+    fn tagged_union_default_populated_kinds_returns_empty_vec_on_empty_parent() {
+        let empty = LocalParent::default();
+        assert!(
+            <LocalParent as TaggedUnion>::populated_kinds(&empty).is_empty(),
+            "populated_kinds() must return empty Vec when no slot is populated",
+        );
+    }
+
+    /// SINGLE-SLOT parent — the default body sweeps `ClosedSet::ALL`
+    /// with `has(k)` and collects the singleton `[k]` for each
+    /// single-populated arrangement. Pins the length-1 arm's
+    /// cardinality (must be exactly 1) AND ordering (the addressed
+    /// kind's own position in `ClosedSet::ALL`) at ONE `assert_eq!`
+    /// per kind — a regression that projected the wrong Kind, drifted
+    /// the walk from `has` to a divergent projection, or paired two
+    /// kinds together on a single-slot input fails HERE per addressed
+    /// kind. Sweeps every `LocalKind::ALL` entry so no per-variant
+    /// specialization can silently drop the check.
+    #[test]
+    fn tagged_union_default_populated_kinds_returns_single_element_vec_per_variant() {
+        for populated in <LocalKind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let parent = match populated {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            };
+            assert_eq!(
+                <LocalParent as TaggedUnion>::populated_kinds(&parent),
+                vec![populated],
+                "single-slot parent must return exactly [{populated:?}] on populated_kinds",
+            );
+        }
+    }
+
+    /// MULTI-POPULATED parent — the default body yields the canonical
+    /// `ClosedSet::ALL`-ordered pair `[Alpha, Beta]` for a two-slot
+    /// arrangement populated in the CONSTRUCTION order `(Beta, Alpha)`.
+    /// Pins the walk order arm: a regression that yielded slot-
+    /// construction-order (`[Beta, Alpha]`) instead of canonical
+    /// `ALL`-order fails HERE at the equality assert. Also pins the
+    /// non-short-circuiting arm — a regression that inlined the
+    /// resolver's short-circuit body into `populated_kinds` (silently
+    /// narrowing two populated to a length-1 vec containing the first
+    /// slot) fails at the length side of the equality.
+    #[test]
+    fn tagged_union_default_populated_kinds_walks_canonical_all_order_on_multi_populated_parent() {
+        let parent = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: None,
+        };
+        assert_eq!(
+            <LocalParent as TaggedUnion>::populated_kinds(&parent),
+            vec![LocalKind::Alpha, LocalKind::Beta],
+            "multi-populated parent must return canonical ClosedSet::ALL-ordered kinds",
+        );
+    }
+
+    /// SATURATED parent — every slot populated returns
+    /// `LocalKind::ALL.to_vec()` exactly. Pins the full-closed-set-
+    /// coverage arm: a `[1..]` or `[..ALL.len() - 1]` walk bug that
+    /// silently truncated the swept range at either end surfaces at
+    /// the equality assert here.
+    #[test]
+    fn tagged_union_default_populated_kinds_covers_full_closed_set_on_saturated_parent() {
+        let saturated = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: Some(3),
+        };
+        assert_eq!(
+            <LocalParent as TaggedUnion>::populated_kinds(&saturated),
+            <LocalKind as tatara_closed_set::ClosedSet>::ALL.to_vec(),
+            "saturated parent must return ClosedSet::ALL.to_vec() on populated_kinds",
+        );
+    }
+
+    /// `assert_populated_kinds_matches_has` testkit accepts the
+    /// coherent local scaffold — sweeping every `(populated, probed)`
+    /// pair through the three sub-assertions (per-kind membership,
+    /// canonical `ALL`-filter equality, single-slot diagonal). A
+    /// regression on any of the three composition laws fails at the
+    /// substrate primitive's `#[track_caller]` boundary here rather
+    /// than at four per-parent production sites downstream.
+    #[test]
+    fn assert_populated_kinds_matches_has_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_populated_kinds_matches_has::<LocalParent, _>(make_local);
+    }
+
+    /// A factory that yields an all-empty parent (so
+    /// `populated_kinds()` returns `[]`) MUST fail-loudly at the
+    /// caller's site through the primitive's single-slot diagonal
+    /// arm — the empty vec does not equal `vec![populated]` for the
+    /// swept `populated` kind. Pin the diagonal-arm failure mode so
+    /// a regression that silently succeeded on an all-empty factory
+    /// (e.g. the primitive was refactored to skip the diagonal
+    /// assert on `kinds.is_empty()`) is caught here.
+    #[test]
+    #[should_panic(expected = "must return vec![Alpha] exactly")]
+    fn assert_populated_kinds_matches_has_rejects_factory_that_populates_no_slots() {
+        fn empty_factory(_: LocalKind) -> LocalParent {
+            LocalParent::default()
+        }
+        assert_populated_kinds_matches_has::<LocalParent, _>(empty_factory);
+    }
+
+    /// A factory that yields a two-slot parent (so
+    /// `populated_kinds()` returns `[k1, k2]` for TWO populated
+    /// slots on a supposedly single-slot factory) MUST fail-loudly at
+    /// the caller's site through the primitive's single-slot diagonal
+    /// arm — the length-2 vec does not equal `vec![populated]`. Pin
+    /// the diagonal-arm cardinality failure mode so a regression that
+    /// silently succeeded on a broken factory (populating both the
+    /// addressed slot AND an extra one) is caught here.
+    #[test]
+    #[should_panic(expected = "must return vec![Alpha] exactly")]
+    fn assert_populated_kinds_matches_has_rejects_factory_that_populates_extra_slot() {
+        fn always_pair(k: LocalKind) -> LocalParent {
+            let mut p = LocalParent {
+                gamma: Some(99),
+                ..Default::default()
+            };
+            match k {
+                LocalKind::Alpha => p.alpha = Some(11),
+                LocalKind::Beta => p.beta = Some(22),
+                LocalKind::Gamma => p.gamma = Some(33),
+            }
+            p
+        }
+        assert_populated_kinds_matches_has::<LocalParent, _>(always_pair);
+    }
+
+    /// `assert_populated_kinds_across_pairs` testkit accepts the
+    /// coherent local scaffold — sweeping every off-diagonal `(a, b)`
+    /// pair through the three sub-assertions (cardinality-2,
+    /// per-kind membership, canonical `ALL`-filter equality). A
+    /// regression on any of the three composition laws (or on the
+    /// diagonal-skip) fails at the substrate primitive's
+    /// `#[track_caller]` boundary here rather than at four per-parent
+    /// production sites downstream.
+    #[test]
+    fn assert_populated_kinds_across_pairs_accepts_coherent_local_impl() {
+        fn two_local(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(11),
+                    LocalKind::Beta => p.beta = Some(22),
+                    LocalKind::Gamma => p.gamma = Some(33),
+                }
+            }
+            p
+        }
+        assert_populated_kinds_across_pairs::<LocalParent, _>(two_local);
+    }
+
+    /// A two-slot factory that yields a single-populated parent (so
+    /// `populated_kinds()` returns `[k1]` for a two-slot input) MUST
+    /// fail-loudly at the caller's site through the primitive's
+    /// cardinality-2 arm — the length-1 vec does not satisfy
+    /// `kinds.len() == 2`. Pin the cardinality-arm failure mode so a
+    /// regression that silently succeeded on a broken factory
+    /// (populating only the first of the two addressed slots) is
+    /// caught here.
+    #[test]
+    #[should_panic(expected = "must return exactly two populated kinds")]
+    fn assert_populated_kinds_across_pairs_rejects_factory_that_populates_only_one_slot() {
+        fn single_only(a: LocalKind, _: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            match a {
+                LocalKind::Alpha => p.alpha = Some(11),
+                LocalKind::Beta => p.beta = Some(22),
+                LocalKind::Gamma => p.gamma = Some(33),
+            }
+            p
+        }
+        assert_populated_kinds_across_pairs::<LocalParent, _>(single_only);
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the single-slot closed-set-inversion
+    /// primitive `assert_populated_kinds_matches_has` coherently — every
+    /// per-site `single_slot_X(k)` factory produces a parent whose
+    /// `populated_kinds()` equals `vec![k]` and whose per-kind
+    /// composition law `populated_kinds().contains(&k) == has(k)` holds
+    /// for every `k ∈ ClosedSet::ALL`. Sweep every production
+    /// implementor at ONE substrate boundary so a regression that
+    /// drifts a production site's `single_slot_X` factory OR the
+    /// default `populated_kinds` body (a specialization that
+    /// short-circuited, drifted the walk order, or returned duplicates)
+    /// fails BOTH at any future per-crate test site AND at this
+    /// substrate-wide sweep.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_populated_kinds_testkit_primitive() {
+        assert_populated_kinds_matches_has::<crate::intent::Intent, _>(single_slot_intent_probe);
+        assert_populated_kinds_matches_has::<crate::encapsulates::EncapsulationKind, _>(
+            single_slot_encapsulation_kind_probe,
+        );
+        assert_populated_kinds_matches_has::<crate::export::ArtifactSource, _>(
+            single_slot_artifact_source_probe,
+        );
+        assert_populated_kinds_matches_has::<crate::export::VectorChannel, _>(
+            single_slot_vector_channel_probe,
+        );
+    }
+
+    /// Peer of
+    /// `every_production_tagged_union_binds_through_the_populated_kinds_testkit_primitive`
+    /// on the two-slot ambiguous-parent side — every production
+    /// `.variant()` parent binds through the pair primitive
+    /// `assert_populated_kinds_across_pairs` coherently, so a
+    /// regression that inlined the resolver's short-circuit body into
+    /// `populated_kinds` on any production site (silently narrowing
+    /// two populated slots to a length-1 vec) fails at ONE substrate
+    /// boundary across all four parents.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_populated_kinds_pair_testkit_primitive() {
+        assert_populated_kinds_across_pairs::<crate::intent::Intent, _>(two_slot_intent_probe);
+        assert_populated_kinds_across_pairs::<crate::encapsulates::EncapsulationKind, _>(
+            two_slot_encapsulation_kind_probe,
+        );
+        assert_populated_kinds_across_pairs::<crate::export::ArtifactSource, _>(
+            two_slot_artifact_source_probe,
+        );
+        assert_populated_kinds_across_pairs::<crate::export::VectorChannel, _>(
+            two_slot_vector_channel_probe,
+        );
     }
 
     // -------------------------------------------------------------------

@@ -194,7 +194,68 @@ impl EphemeralSpec {
     /// through the SAME closed-set walk).
     #[must_use]
     pub fn has_condition_kind(&self, kind: ConditionKind) -> bool {
-        self.preconditions.has_kind(kind) || self.postconditions.has_kind(kind)
+        self.has_precondition_kind(kind) || self.has_postcondition_kind(kind)
+    }
+
+    /// True iff at least one [`Condition`] in `self.preconditions`
+    /// carries the given [`ConditionKind`] — the precondition-side arm
+    /// of the (precondition, postcondition, condition-union) triad on
+    /// [`EphemeralSpec`], sibling to [`Self::has_postcondition_kind`]
+    /// and half-composition of [`Self::has_condition_kind`].
+    ///
+    /// Thin typed delegate to [`ConditionSliceExt::has_kind`] over
+    /// [`Self::preconditions`]. Peer of
+    /// [`crate::boundary::Boundary::has_precondition_kind`] on the
+    /// point-domain surface — both peers compose against the SAME
+    /// slice-level substrate primitive
+    /// ([`crate::boundary::ConditionSliceExt::has_kind`]) so a
+    /// regression at the per-slice presence probe fails at that
+    /// primitive's tests rather than as silent drift at either
+    /// struct-level half-slice arm.
+    ///
+    /// # Why lift
+    ///
+    /// See [`crate::boundary::Boundary::has_precondition_kind`] for
+    /// the full rationale — the two surfaces (point + ephemeral)
+    /// publish their `precondition-<kind>` / `postcondition-<kind>`
+    /// require-tag prefix families byte-for-byte symmetrical, each
+    /// through its own struct-level half-slice arm. Post-lift the
+    /// (precondition, postcondition, condition-union) triad lives at
+    /// ONE typed algebra surface per struct rather than at a mixed
+    /// (union-arm-via-method, half-slice-arms-via-direct-field-access)
+    /// asymmetry on the ephemeral side.
+    ///
+    /// # Semantics — byte-identical to the point-domain peer
+    ///
+    /// Returns `true` iff `self.preconditions.iter().any(|c| c.kind ==
+    /// kind)`. Ignores `self.postconditions` — an operator who
+    /// authored the kind on ONLY postconditions gets `false` from this
+    /// probe and `true` from [`Self::has_postcondition_kind`]. The two
+    /// half-slice arms partition the (kind, side) matrix exhaustively
+    /// across the four states (kind absent both, pre-only, post-only,
+    /// both).
+    #[must_use]
+    pub fn has_precondition_kind(&self, kind: ConditionKind) -> bool {
+        self.preconditions.has_kind(kind)
+    }
+
+    /// True iff at least one [`Condition`] in `self.postconditions`
+    /// carries the given [`ConditionKind`] — the postcondition-side arm
+    /// of the (precondition, postcondition, condition-union) triad on
+    /// [`EphemeralSpec`], sibling to [`Self::has_precondition_kind`]
+    /// and half-composition of [`Self::has_condition_kind`].
+    ///
+    /// Thin typed delegate to [`ConditionSliceExt::has_kind`] over
+    /// [`Self::postconditions`]. Peer of
+    /// [`crate::boundary::Boundary::has_postcondition_kind`] on the
+    /// point-domain surface. See [`Self::has_precondition_kind`] for
+    /// the full rationale — both half-slice arms share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the point-domain
+    /// [`crate::boundary::Boundary`] peer methods.
+    #[must_use]
+    pub fn has_postcondition_kind(&self, kind: ConditionKind) -> bool {
+        self.postconditions.has_kind(kind)
     }
 
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
@@ -4001,6 +4062,164 @@ mod tests {
                     via_or_of_halves,
                     "populated={populated:?} query={query:?}: struct-level \
                      union drifted from OR of slice-level probes",
+                );
+            }
+        }
+    }
+
+    // ── EphemeralSpec::has_(pre|post)condition_kind substrate pins ──
+    //
+    // Fail-before-pass-after granularity: the two half-slice arms did
+    // not exist on the ephemeral surface before this commit — the
+    // ephemeral require-tag classifier in `tatara-check` and the
+    // `closed-loop-auth` fixed-tag arm reached
+    // `spec.postconditions.has_kind(K)` through direct field access,
+    // asymmetric with the union-arm [`EphemeralSpec::has_condition_kind`]
+    // that already routed through the named struct method. The lift
+    // closes the (precondition, postcondition, union) triad on the
+    // ephemeral sugar surface so a future normalization at the
+    // presence-probe shape lands at ONE site per surface for all
+    // three arms.
+
+    /// EMPTY-SPEC pin — an ephemeral spec with no preconditions and
+    /// no postconditions returns `false` for EVERY [`ConditionKind`]
+    /// on both half-slice arms. Sweep `ConditionKind::ALL` so a new
+    /// variant added without a matching arm surfaces at rustc's
+    /// exhaustiveness gate on the ALL literal (arity forced by the
+    /// closed-set array) rather than as a silent false-positive at
+    /// every downstream require-tag callsite on the ephemeral
+    /// surface.
+    #[test]
+    fn ephemeral_has_precondition_and_postcondition_kind_return_false_on_empty_spec() {
+        let spec = empty_ephemeral();
+        for kind in ConditionKind::ALL {
+            assert!(
+                !spec.has_precondition_kind(kind),
+                "empty ephemeral must return false on precondition arm for {kind:?}",
+            );
+            assert!(
+                !spec.has_postcondition_kind(kind),
+                "empty ephemeral must return false on postcondition arm for {kind:?}",
+            );
+        }
+    }
+
+    /// SLICE-SELECTIVITY pin (precondition arm) — an ephemeral spec
+    /// with a kind on the precondition side ONLY resolves `true` at
+    /// [`EphemeralSpec::has_precondition_kind`] and `false` at
+    /// [`EphemeralSpec::has_postcondition_kind`]. Locks the (side-
+    /// select, kind-select) partition so a regression that pointed
+    /// the precondition arm at `self.postconditions` (a copy-paste
+    /// from the sibling arm during the lift) surfaces HERE.
+    #[test]
+    fn ephemeral_has_precondition_kind_reads_preconditions_slice_only() {
+        for populated in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            spec.preconditions.push(cond(populated));
+            for query in ConditionKind::ALL {
+                let expected_pre = query == populated;
+                assert_eq!(
+                    spec.has_precondition_kind(query),
+                    expected_pre,
+                    "precondition-only populated={populated:?}: query {query:?} \
+                     drifted on ephemeral precondition arm",
+                );
+                assert!(
+                    !spec.has_postcondition_kind(query),
+                    "precondition-only populated={populated:?}: query {query:?} must \
+                     return false on ephemeral postcondition arm (postconditions is empty)",
+                );
+            }
+        }
+    }
+
+    /// SLICE-SELECTIVITY pin (postcondition arm) — mirror of the
+    /// precondition-only sweep on the other half. Locks the
+    /// postcondition arm's binding to `self.postconditions` so a
+    /// regression that pointed it at `self.preconditions` fails HERE
+    /// even though the precondition-arm pin above passes.
+    #[test]
+    fn ephemeral_has_postcondition_kind_reads_postconditions_slice_only() {
+        for populated in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            spec.postconditions.push(cond(populated));
+            for query in ConditionKind::ALL {
+                let expected_post = query == populated;
+                assert_eq!(
+                    spec.has_postcondition_kind(query),
+                    expected_post,
+                    "postcondition-only populated={populated:?}: query {query:?} \
+                     drifted on ephemeral postcondition arm",
+                );
+                assert!(
+                    !spec.has_precondition_kind(query),
+                    "postcondition-only populated={populated:?}: query {query:?} must \
+                     return false on ephemeral precondition arm (preconditions is empty)",
+                );
+            }
+        }
+    }
+
+    /// COMPOSITION-LAW pin — [`EphemeralSpec::has_condition_kind`]
+    /// equals `has_precondition_kind(k) || has_postcondition_kind(k)`
+    /// at EVERY (pre-populated, post-populated, query) triple on
+    /// `ConditionKind::ALL`. Byte-for-byte peer of the
+    /// `boundary_has_condition_kind_composes_precondition_and_postcondition_arms`
+    /// composition-law pin on the [`Boundary`] surface — the
+    /// two-surface parity contract binds the ephemeral sugar type
+    /// and the point-domain boundary type through the SAME
+    /// (`condition_kind = precondition_kind ∨ postcondition_kind`)
+    /// composition, so every downstream `condition-<K>` require-tag
+    /// classifier on either surface inherits the composition
+    /// mechanically.
+    #[test]
+    fn ephemeral_has_condition_kind_composes_precondition_and_postcondition_arms() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+                for query in ConditionKind::ALL {
+                    let via_arms =
+                        spec.has_precondition_kind(query) || spec.has_postcondition_kind(query);
+                    assert_eq!(
+                        spec.has_condition_kind(query),
+                        via_arms,
+                        "ephemeral union arm drifted from OR of half-slice arms: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin — the two half-slice arms on the
+    /// ephemeral surface delegate verbatim to
+    /// [`crate::boundary::ConditionSliceExt::has_kind`] on the
+    /// underlying [`Vec<Condition>`] slice, no inline reimplementation.
+    /// Sweep the full `ConditionKind::ALL` × `ConditionKind::ALL`
+    /// cross so a regression that inlined a divergent walk at either
+    /// arm surfaces HERE at the substrate boundary rather than as
+    /// silent skew between the struct-level arm and the slice-level
+    /// primitive.
+    #[test]
+    fn ephemeral_has_precondition_and_postcondition_kind_delegate_to_slice_has_kind() {
+        for populated in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            spec.preconditions.push(cond(populated));
+            spec.postconditions.push(cond(populated));
+            for query in ConditionKind::ALL {
+                assert_eq!(
+                    spec.has_precondition_kind(query),
+                    spec.preconditions.has_kind(query),
+                    "ephemeral precondition arm must delegate to preconditions.has_kind: \
+                     populated={populated:?} query={query:?}",
+                );
+                assert_eq!(
+                    spec.has_postcondition_kind(query),
+                    spec.postconditions.has_kind(query),
+                    "ephemeral postcondition arm must delegate to postconditions.has_kind: \
+                     populated={populated:?} query={query:?}",
                 );
             }
         }

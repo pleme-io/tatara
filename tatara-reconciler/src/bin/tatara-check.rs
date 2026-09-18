@@ -1576,9 +1576,9 @@ fn evaluate_point_require_tag(
             .has_condition_kind(k)),
         // `precondition-<kind>` + `postcondition-<kind>` — the two typed
         // arms of the `condition-<kind>` union. `precondition-<kind>`
-        // dispatches on `spec.boundary.preconditions.has_kind(k)`;
-        // `postcondition-<kind>` on `spec.boundary.postconditions.has_kind(k)`.
-        // Both compose against the SAME slice-level substrate primitive
+        // dispatches on `spec.boundary.has_precondition_kind(k)`;
+        // `postcondition-<kind>` on `spec.boundary.has_postcondition_kind(k)`.
+        // Both delegate to the SAME slice-level substrate primitive
         // [`ConditionSliceExt::has_kind`] that
         // [`Boundary::has_condition_kind`] composes twice in a union — so
         // by construction `condition-<K>` = `precondition-<K> ∨
@@ -1594,15 +1594,23 @@ fn evaluate_point_require_tag(
         // No ordering constraint against `condition-` because
         // `strip_prefix("condition-")` returns `None` on `precondition-…`
         // + `postcondition-…` (leading char differs); the three prefixes
-        // partition their respective input classes cleanly.
+        // partition their respective input classes cleanly. Post-lift
+        // both dispatchers reach the two [`Boundary`] half-slice arms
+        // through their NAMED [`Boundary::has_precondition_kind`] +
+        // [`Boundary::has_postcondition_kind`] methods rather than
+        // through direct field access, closing an asymmetry with the
+        // union-arm dispatcher (which already routes through the
+        // named [`Boundary::has_condition_kind`] primitive) — a
+        // future normalization at the presence-probe shape (a widened
+        // return, a debug-build audit) lands at ONE site per arm on
+        // [`Boundary`] and every downstream require-tag classifier
+        // picks it up mechanically.
         ("precondition-", ConditionKind, |k| spec
             .boundary
-            .preconditions
-            .has_kind(k)),
+            .has_precondition_kind(k)),
         ("postcondition-", ConditionKind, |k| spec
             .boundary
-            .postconditions
-            .has_kind(k)),
+            .has_postcondition_kind(k)),
         ("must-reach-", MustReachPhase, |k| spec
             .depends_on
             .has_must_reach(k)),
@@ -2734,7 +2742,7 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     },
     FixedTagArm {
         tag: "closed-loop-auth",
-        probe: |s| s.postconditions.has_kind(ConditionKind::ClosedLoopAuth),
+        probe: |s| s.has_postcondition_kind(ConditionKind::ClosedLoopAuth),
     },
     // `terminating-horizon` — byte-for-byte peer of the point
     // surface's `terminating-horizon` arm on [`POINT_FIXED_TAG_ARMS`]

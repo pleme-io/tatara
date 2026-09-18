@@ -88,7 +88,99 @@ impl Boundary {
     /// up mechanically without further per-consumer edits).
     #[must_use]
     pub fn has_condition_kind(&self, kind: ConditionKind) -> bool {
-        self.preconditions.has_kind(kind) || self.postconditions.has_kind(kind)
+        self.has_precondition_kind(kind) || self.has_postcondition_kind(kind)
+    }
+
+    /// True iff at least one [`Condition`] in `self.preconditions`
+    /// carries the given [`ConditionKind`] — the precondition-side arm
+    /// of the (precondition, postcondition, condition-union) triad on
+    /// [`Boundary`], sibling to [`Self::has_postcondition_kind`] and
+    /// half-composition of [`Self::has_condition_kind`].
+    ///
+    /// Thin typed delegate to [`ConditionSliceExt::has_kind`] over
+    /// [`Self::preconditions`]. Peer of [`Self::has_postcondition_kind`]
+    /// on the (precondition, postcondition) partition of the boundary's
+    /// two condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive and their `||` composition is
+    /// [`Self::has_condition_kind`]. A regression that swapped the
+    /// slice at either arm (a copy-paste that pointed the precondition
+    /// probe at `self.postconditions`, an inline `.iter().any` closure
+    /// body that outlasted the lift) surfaces at the composition-law
+    /// pin `boundary_has_condition_kind_composes_precondition_and_postcondition_arms`
+    /// rather than as silent classifier drift at every downstream
+    /// `precondition-<kind>` require-tag callsite.
+    ///
+    /// # Why lift
+    ///
+    /// Pre-lift the point-domain `precondition-<kind>` require-tag
+    /// classifier in `tatara-reconciler::bin::tatara-check` reached the
+    /// precondition-side slice through direct field access
+    /// (`spec.boundary.preconditions.has_kind(k)`) while its sibling
+    /// `condition-<kind>` classifier routed through the named
+    /// [`Self::has_condition_kind`] primitive. The asymmetry meant a
+    /// future normalization at the presence-probe shape (a widened
+    /// return carrying the matching [`Condition`] ref, a debug-build
+    /// assertion on redundant duplicates, a fleet-wide warn on
+    /// pre-only ClosedLoopAuth authoring) would land at the union
+    /// primitive but bypass the two half-slice classifiers. Post-lift
+    /// the (precondition, postcondition, condition-union) triad lives
+    /// at ONE typed algebra surface on [`Boundary`], with the
+    /// `condition-<K> = precondition-<K> ∨ postcondition-<K>`
+    /// composition law pinned as a first-class typed invariant
+    /// (see the composition-pin test in this module) rather than a
+    /// per-caller discipline.
+    ///
+    /// # Semantics
+    ///
+    /// Returns `true` iff `self.preconditions.iter().any(|c| c.kind ==
+    /// kind)`. Ignores `self.postconditions` — an operator who authored
+    /// the kind on ONLY postconditions gets `false` from this probe and
+    /// `true` from [`Self::has_postcondition_kind`]. The two half-slice
+    /// arms partition the (kind, side) matrix exhaustively across the
+    /// four states (kind absent both, pre-only, post-only, both).
+    ///
+    /// # Sibling to [`crate::ephemeral::EphemeralSpec::has_precondition_kind`]
+    ///
+    /// Same shape, same axis, third and fourth methods in the
+    /// workspace-wide `has_(pre|post)condition_kind` two-surface
+    /// family. [`crate::ephemeral::EphemeralSpec::has_precondition_kind`]
+    /// composes byte-identical `preconditions.has_kind(k)` semantics on
+    /// the sugar-surface type's direct `preconditions: Vec<Condition>`
+    /// field, so both surfaces publish a `precondition-<kind>` require-
+    /// tag prefix family byte-for-byte symmetrical (point surface
+    /// through this method, ephemeral surface through its peer).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the per-slice presence-probe body lives at
+    /// ONE substrate site so every downstream `precondition-<kind>`
+    /// require-tag surface, closed-set audit dispatcher, and future
+    /// variant addition binds through the SAME shape). THEORY.md §VI.1
+    /// (generation over composition — the union primitive
+    /// [`Self::has_condition_kind`] emerges from the composition of
+    /// its two half-slice arms rather than as a hand-authored `||`
+    /// closure at every downstream consumer).
+    #[must_use]
+    pub fn has_precondition_kind(&self, kind: ConditionKind) -> bool {
+        self.preconditions.has_kind(kind)
+    }
+
+    /// True iff at least one [`Condition`] in `self.postconditions`
+    /// carries the given [`ConditionKind`] — the postcondition-side arm
+    /// of the (precondition, postcondition, condition-union) triad on
+    /// [`Boundary`], sibling to [`Self::has_precondition_kind`] and
+    /// half-composition of [`Self::has_condition_kind`].
+    ///
+    /// Thin typed delegate to [`ConditionSliceExt::has_kind`] over
+    /// [`Self::postconditions`]. Peer of [`Self::has_precondition_kind`]
+    /// on the (precondition, postcondition) partition of the boundary's
+    /// two condition-vector slots. See [`Self::has_precondition_kind`]
+    /// for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via [`crate::ephemeral::EphemeralSpec::has_postcondition_kind`].
+    #[must_use]
+    pub fn has_postcondition_kind(&self, kind: ConditionKind) -> bool {
+        self.postconditions.has_kind(kind)
     }
 }
 
@@ -847,6 +939,181 @@ mod tests {
                         "union drifted: pre={pre_kind:?} post={post_kind:?} query={query:?}",
                     );
                 }
+            }
+        }
+    }
+
+    // ── Boundary::has_(pre|post)condition_kind substrate pins ────────
+    //
+    // Fail-before-pass-after granularity: the two half-slice arms did
+    // not exist before this commit — the point-domain `precondition-
+    // <kind>` and `postcondition-<kind>` require-tag classifiers in
+    // `tatara-reconciler::bin::tatara-check` reached the two condition
+    // slices through direct field access
+    // (`spec.boundary.preconditions.has_kind(k)`), bypassing the named
+    // [`Boundary`] primitive surface that the union-probe
+    // [`Boundary::has_condition_kind`] already routed through. The
+    // lift closes the (precondition, postcondition, union) triad on
+    // ONE typed algebra surface so a future normalization at the
+    // presence-probe shape lands at ONE site for all three arms.
+
+    /// EMPTY-BOUNDARY pin (precondition arm) — a default [`Boundary`]
+    /// returns `false` for EVERY [`ConditionKind`] on the precondition
+    /// side. Sweep `ConditionKind::ALL` so a new variant added without
+    /// a matching arm on the probe surfaces at rustc's exhaustiveness
+    /// gate on the ALL literal (arity forced by `[Self; 8]`) rather
+    /// than as a silent false-positive at every downstream
+    /// `precondition-<kind>` require-tag callsite.
+    #[test]
+    fn has_precondition_kind_returns_false_on_empty_boundary_for_every_kind() {
+        let b = Boundary::default();
+        for kind in ConditionKind::ALL {
+            assert!(
+                !b.has_precondition_kind(kind),
+                "default boundary must return false on precondition arm for {kind:?}",
+            );
+        }
+    }
+
+    /// EMPTY-BOUNDARY pin (postcondition arm) — sibling of the
+    /// precondition-arm empty pin above on the other half of the
+    /// (precondition, postcondition) partition. Locks the empty-slice
+    /// arm return on the postcondition side so a regression that
+    /// wired the postcondition arm to the precondition slice surfaces
+    /// HERE at fail-before-pass-after granularity.
+    #[test]
+    fn has_postcondition_kind_returns_false_on_empty_boundary_for_every_kind() {
+        let b = Boundary::default();
+        for kind in ConditionKind::ALL {
+            assert!(
+                !b.has_postcondition_kind(kind),
+                "default boundary must return false on postcondition arm for {kind:?}",
+            );
+        }
+    }
+
+    /// SLICE-SELECTIVITY pin (precondition arm) — a boundary with a
+    /// kind on the precondition side ONLY resolves `true` at
+    /// `has_precondition_kind` and `false` at `has_postcondition_kind`.
+    /// Locks the (side-select, kind-select) partition so a regression
+    /// that pointed the precondition arm at `self.postconditions` (a
+    /// copy-paste from the sibling arm) surfaces HERE rather than as
+    /// silent classifier drift at every downstream
+    /// `precondition-<kind>` require-tag callsite.
+    #[test]
+    fn has_precondition_kind_reads_preconditions_slice_only() {
+        for populated in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            b.preconditions.push(condition_with(populated));
+            for query in ConditionKind::ALL {
+                let expected_pre = query == populated;
+                assert_eq!(
+                    b.has_precondition_kind(query),
+                    expected_pre,
+                    "precondition-only populated={populated:?}: query {query:?} drifted \
+                     on precondition arm",
+                );
+                assert!(
+                    !b.has_postcondition_kind(query),
+                    "precondition-only populated={populated:?}: query {query:?} must \
+                     return false on postcondition arm (postconditions is empty)",
+                );
+            }
+        }
+    }
+
+    /// SLICE-SELECTIVITY pin (postcondition arm) — mirror of the
+    /// precondition-only sweep on the other half. Locks the sibling
+    /// arm's binding to `self.postconditions` so a regression that
+    /// pointed the postcondition arm at `self.preconditions` fails
+    /// HERE even though the precondition-arm pin above passes.
+    #[test]
+    fn has_postcondition_kind_reads_postconditions_slice_only() {
+        for populated in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            b.postconditions.push(condition_with(populated));
+            for query in ConditionKind::ALL {
+                let expected_post = query == populated;
+                assert_eq!(
+                    b.has_postcondition_kind(query),
+                    expected_post,
+                    "postcondition-only populated={populated:?}: query {query:?} \
+                     drifted on postcondition arm",
+                );
+                assert!(
+                    !b.has_precondition_kind(query),
+                    "postcondition-only populated={populated:?}: query {query:?} must \
+                     return false on precondition arm (preconditions is empty)",
+                );
+            }
+        }
+    }
+
+    /// COMPOSITION-LAW pin — [`Boundary::has_condition_kind`] equals
+    /// `has_precondition_kind(k) || has_postcondition_kind(k)` at
+    /// EVERY (pre-populated, post-populated, query) triple on
+    /// `ConditionKind::ALL`. This is the load-bearing invariant that
+    /// makes the (precondition, postcondition, union) triad on
+    /// [`Boundary`] a first-class typed algebra rather than a
+    /// per-caller discipline: the two half-slice arms + the union arm
+    /// compose exactly as `union == pre ∨ post`, and every downstream
+    /// `condition-<K> = precondition-<K> ∨ postcondition-<K>` classifier
+    /// invariant on `tatara-reconciler::bin::tatara-check` inherits it
+    /// mechanically. A regression that (a) dropped the composition (by
+    /// re-inlining `.has_kind(kind)` bodies on the union arm), or
+    /// (b) drifted ONE of the two half-slice arms without updating the
+    /// other, surfaces HERE rather than as silent per-side classifier
+    /// drift at the require-tag surfaces.
+    #[test]
+    fn boundary_has_condition_kind_composes_precondition_and_postcondition_arms() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+                for query in ConditionKind::ALL {
+                    let via_arms =
+                        b.has_precondition_kind(query) || b.has_postcondition_kind(query);
+                    assert_eq!(
+                        b.has_condition_kind(query),
+                        via_arms,
+                        "union arm drifted from OR of half-slice arms: \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin — the two half-slice arms delegate
+    /// verbatim to [`ConditionSliceExt::has_kind`] on the underlying
+    /// [`Vec<Condition>`] slice, no inline reimplementation. Sweep the
+    /// full `ConditionKind::ALL` × `ConditionKind::ALL` cross so a
+    /// regression that inlined a divergent walk (`.iter().find(_).
+    /// is_some()`, an `.any(|c| matches!(c.kind, K))` that missed a
+    /// variant) at either arm surfaces HERE at the substrate
+    /// boundary rather than as silent skew between the struct-level
+    /// arm and the slice-level primitive downstream consumers reach
+    /// through.
+    #[test]
+    fn has_precondition_and_postcondition_kind_delegate_to_slice_has_kind() {
+        for populated in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            b.preconditions.push(condition_with(populated));
+            b.postconditions.push(condition_with(populated));
+            for query in ConditionKind::ALL {
+                assert_eq!(
+                    b.has_precondition_kind(query),
+                    b.preconditions.has_kind(query),
+                    "precondition arm must delegate to preconditions.has_kind: \
+                     populated={populated:?} query={query:?}",
+                );
+                assert_eq!(
+                    b.has_postcondition_kind(query),
+                    b.postconditions.has_kind(query),
+                    "postcondition arm must delegate to postconditions.has_kind: \
+                     populated={populated:?} query={query:?}",
+                );
             }
         }
     }

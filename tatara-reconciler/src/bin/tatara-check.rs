@@ -8376,10 +8376,7 @@ mod tests {
     fn evaluate_point_require_tag_returns_true_iff_horizon_kind_matches_variant_per_kind() {
         for populated in HorizonKind::ALL {
             let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            spec.classification = Classification::gate_compute_with_axis(populated);
             for query in HorizonKind::ALL {
                 let tag = format!("horizon-{}", query.as_str());
                 let expected = query == populated;
@@ -8529,14 +8526,11 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_horizon_kind_coexists_with_prior_classification_axes() {
         let mut spec = ProcessSpec::gate_compute_defaults();
-        spec.classification.point_type = ConvergencePointType::Fork;
-        spec.classification.substrate = SubstrateType::Storage;
-        spec.classification.calm = CalmClassification::NonMonotone;
-        spec.classification.data_classification = DataClassification::Pii;
-        spec.classification.horizon = Horizon {
-            kind: HorizonKind::Asymptotic,
-            ..Horizon::default()
-        };
+        spec.classification = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage)
+            .with_axis(CalmClassification::NonMonotone)
+            .with_axis(DataClassification::Pii)
+            .with_axis(HorizonKind::Asymptotic);
         assert_eq!(
             evaluate_point_require_tag(&spec, "point-type-Fork"),
             Ok(true),
@@ -8643,11 +8637,8 @@ mod tests {
     {
         for populated in OptimizationDirection::ALL {
             let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.horizon = Horizon {
-                kind: HorizonKind::Asymptotic,
-                direction: Some(populated),
-                ..Horizon::default()
-            };
+            spec.classification = Classification::gate_compute_with_axis(HorizonKind::Asymptotic)
+                .with_axis(populated);
             for query in OptimizationDirection::ALL {
                 let tag = format!("optimization-direction-{}", query.as_str());
                 let expected = query == populated;
@@ -8811,15 +8802,12 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_optimization_direction_coexists_with_prior_classification_axes() {
         let mut spec = ProcessSpec::gate_compute_defaults();
-        spec.classification.point_type = ConvergencePointType::Fork;
-        spec.classification.substrate = SubstrateType::Storage;
-        spec.classification.calm = CalmClassification::NonMonotone;
-        spec.classification.data_classification = DataClassification::Pii;
-        spec.classification.horizon = Horizon {
-            kind: HorizonKind::Asymptotic,
-            direction: Some(OptimizationDirection::Maximize),
-            ..Horizon::default()
-        };
+        spec.classification = Classification::gate_compute_with_axis(ConvergencePointType::Fork)
+            .with_axis(SubstrateType::Storage)
+            .with_axis(CalmClassification::NonMonotone)
+            .with_axis(DataClassification::Pii)
+            .with_axis(HorizonKind::Asymptotic)
+            .with_axis(OptimizationDirection::Maximize);
         assert_eq!(
             evaluate_point_require_tag(&spec, "point-type-Fork"),
             Ok(true),
@@ -14667,11 +14655,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_true_iff_horizon_kind_matches_authored_classification_per_kind(
     ) {
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let spec = EphemeralSpec {
                 classification: Some(classification),
                 ..ephemeral_fixture()
@@ -14809,11 +14793,7 @@ mod tests {
         // rides across the `From<EphemeralSpec>` lowering byte-for-
         // byte, so both surfaces classify identically on every variant.
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let eph = EphemeralSpec {
                 classification: Some(classification),
                 ..ephemeral_fixture()
@@ -14889,11 +14869,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_true_iff_optimization_direction_matches_authored_classification_per_kind(
     ) {
         for populated in OptimizationDirection::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                direction: Some(populated),
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let spec = EphemeralSpec {
                 classification: Some(classification),
                 ..ephemeral_fixture()
@@ -15055,11 +15031,7 @@ mod tests {
         // Authored classification with `direction: Some(_)` — both
         // surfaces read the same authored value verbatim.
         for populated in OptimizationDirection::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                direction: Some(populated),
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let eph = EphemeralSpec {
                 classification: Some(classification),
                 ..ephemeral_fixture()
@@ -16137,10 +16109,7 @@ mod tests {
     fn evaluate_point_require_tag_returns_horizon_terminates_projection_per_horizon_kind() {
         for populated in HorizonKind::ALL {
             let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            spec.classification = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 evaluate_point_require_tag(&spec, "terminating-horizon"),
                 Ok(populated.terminates()),
@@ -16183,11 +16152,7 @@ mod tests {
     #[test]
     fn evaluate_ephemeral_require_tag_returns_horizon_terminates_projection_per_horizon_kind() {
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let spec = EphemeralSpec {
                 classification: Some(classification),
                 ..ephemeral_fixture()
@@ -16250,11 +16215,7 @@ mod tests {
         // Authored classification: both surfaces read the same authored
         // horizon.kind and route through the same projection.
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let eph = EphemeralSpec {
                 classification: Some(classification),
                 ..ephemeral_fixture()
@@ -16282,10 +16243,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_terminating_horizon_and_horizon_asymptotic_coexist() {
         let mut spec = ProcessSpec::gate_compute_defaults();
-        spec.classification.horizon = Horizon {
-            kind: HorizonKind::Asymptotic,
-            ..Horizon::default()
-        };
+        spec.classification = Classification::gate_compute_with_axis(HorizonKind::Asymptotic);
         assert_eq!(
             evaluate_point_require_tag(&spec, "terminating-horizon"),
             Ok(false),
@@ -16334,10 +16292,7 @@ mod tests {
     {
         for populated in HorizonKind::ALL {
             let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            spec.classification = Classification::gate_compute_with_axis(populated);
             assert_eq!(
                 evaluate_point_require_tag(&spec, "metric-axes-required"),
                 Ok(populated.requires_metric_axes()),
@@ -16378,11 +16333,7 @@ mod tests {
     fn evaluate_ephemeral_require_tag_returns_horizon_requires_metric_axes_projection_per_horizon_kind(
     ) {
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let spec = EphemeralSpec {
                 classification: Some(classification),
                 ..ephemeral_fixture()
@@ -16436,11 +16387,7 @@ mod tests {
         );
         // Authored classification.
         for populated in HorizonKind::ALL {
-            let mut classification = Classification::gate_compute();
-            classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            let classification = Classification::gate_compute_with_axis(populated);
             let eph = EphemeralSpec {
                 classification: Some(classification),
                 ..ephemeral_fixture()
@@ -16469,10 +16416,7 @@ mod tests {
     fn evaluate_point_terminating_horizon_and_metric_axes_required_are_antisymmetric() {
         for populated in HorizonKind::ALL {
             let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.horizon = Horizon {
-                kind: populated,
-                ..Horizon::default()
-            };
+            spec.classification = Classification::gate_compute_with_axis(populated);
             let terminates = evaluate_point_require_tag(&spec, "terminating-horizon");
             let metric = evaluate_point_require_tag(&spec, "metric-axes-required");
             assert_eq!(
@@ -16488,6 +16432,130 @@ mod tests {
             assert!(
                 matches!((terminates, metric), (Ok(a), Ok(b)) if a ^ b),
                 "point horizon.kind={populated:?}: terminating-horizon XOR metric-axes-required must hold at the classifier",
+            );
+        }
+    }
+
+    // ── (populated-horizon-nested-slot × classifier-surface) landmark ─
+    //
+    // Fail-before-pass-after granularity: this run swept the SIXTEEN
+    // `(spec.classification.horizon | classification.horizon) = Horizon
+    // { <sub-slot>: populated, ..Horizon::default() }` restatements at
+    // this file's classifier-facing tests onto ONE substrate primitive
+    // [`tatara_process::classification::Classification::gate_compute_with_axis`].
+    // Prior commit `4e3c2c5` added the substrate-level byte-parity
+    // landmark in `tatara-process/src/ephemeral.rs`
+    // (`gate_compute_with_axis_on_horizon_nested_axes_matches_hand_authored_shape`);
+    // this test extends that guarantee ONE hop past the substrate
+    // primitive — the (Classification-composer × classifier-answer)
+    // parity holds on BOTH tatara-check.rs surfaces
+    // (`evaluate_point_require_tag` + `evaluate_ephemeral_require_tag`)
+    // on every `horizon-<kind>` + `optimization-direction-<kind>` +
+    // `terminating-horizon` + `metric-axes-required` tag on every
+    // [`HorizonKind::ALL`] + [`OptimizationDirection::ALL`] variant. A
+    // regression that (a) changed `ClassificationAxis for HorizonKind`
+    // to stomp the sibling `direction`/`metric`/`healthy_rate_threshold`
+    // sub-slot, (b) changed `ClassificationAxis for OptimizationDirection`
+    // to drop the `Some(...)` wrap or stomp `kind`, or (c) reintroduced
+    // a whole-`Horizon`-reset shape at the composer body would fail
+    // HERE at ONE landmark site on the classifier-facing surface
+    // before drifting through the sixteen swept sites that already
+    // bind through the composer.
+
+    /// (populated-horizon-nested-slot × classifier-surface) parity
+    /// landmark — the post-sweep shape
+    /// `Classification::gate_compute_with_axis(populated)` classifies
+    /// IDENTICALLY to the pre-sweep hand-authored shape
+    /// `Classification::gate_compute()` + `.horizon = Horizon {
+    /// <sub-slot>: populated, ..Horizon::default() }` through BOTH
+    /// surfaces (`evaluate_point_require_tag` +
+    /// `evaluate_ephemeral_require_tag`) on the horizon-nested-axis
+    /// closed sets [`HorizonKind::ALL`] + [`OptimizationDirection::ALL`]
+    /// AND on every horizon-nested-slot classifier tag family
+    /// (`horizon-<kind>` + `optimization-direction-<kind>` +
+    /// `terminating-horizon` + `metric-axes-required`). See the family
+    /// preamble above for the fail-before-pass-after granularity.
+    #[test]
+    fn horizon_axis_sweep_matches_pre_sweep_shape_at_both_classifier_surfaces() {
+        for kind in HorizonKind::ALL {
+            let mut hand = Classification::gate_compute();
+            hand.horizon = Horizon {
+                kind,
+                ..Horizon::default()
+            };
+            let composed = Classification::gate_compute_with_axis(kind);
+            assert_eq!(
+                hand, composed,
+                "pre/post byte-parity drift on HorizonKind::{kind:?}",
+            );
+            let mut point_hand = ProcessSpec::gate_compute_defaults();
+            point_hand.classification = hand.clone();
+            let mut point_composed = ProcessSpec::gate_compute_defaults();
+            point_composed.classification = composed.clone();
+            for tag in [
+                format!("horizon-{}", kind.as_str()),
+                "terminating-horizon".to_string(),
+                "metric-axes-required".to_string(),
+            ] {
+                assert_eq!(
+                    evaluate_point_require_tag(&point_hand, &tag),
+                    evaluate_point_require_tag(&point_composed, &tag),
+                    "point classifier drift on HorizonKind::{kind:?} tag {tag:?}",
+                );
+            }
+            let eph_hand = EphemeralSpec {
+                classification: Some(hand),
+                ..ephemeral_fixture()
+            };
+            let eph_composed = EphemeralSpec {
+                classification: Some(composed),
+                ..ephemeral_fixture()
+            };
+            for tag in [
+                format!("horizon-{}", kind.as_str()),
+                "terminating-horizon".to_string(),
+                "metric-axes-required".to_string(),
+            ] {
+                assert_eq!(
+                    evaluate_ephemeral_require_tag(&eph_hand, &tag),
+                    evaluate_ephemeral_require_tag(&eph_composed, &tag),
+                    "ephemeral classifier drift on HorizonKind::{kind:?} tag {tag:?}",
+                );
+            }
+        }
+        for direction in OptimizationDirection::ALL {
+            let mut hand = Classification::gate_compute();
+            hand.horizon = Horizon {
+                direction: Some(direction),
+                ..Horizon::default()
+            };
+            let composed = Classification::gate_compute_with_axis(direction);
+            assert_eq!(
+                hand, composed,
+                "pre/post byte-parity drift on OptimizationDirection::{direction:?}",
+            );
+            let mut point_hand = ProcessSpec::gate_compute_defaults();
+            point_hand.classification = hand.clone();
+            let mut point_composed = ProcessSpec::gate_compute_defaults();
+            point_composed.classification = composed.clone();
+            let tag = format!("optimization-direction-{}", direction.as_str());
+            assert_eq!(
+                evaluate_point_require_tag(&point_hand, &tag),
+                evaluate_point_require_tag(&point_composed, &tag),
+                "point classifier drift on OptimizationDirection::{direction:?}",
+            );
+            let eph_hand = EphemeralSpec {
+                classification: Some(hand),
+                ..ephemeral_fixture()
+            };
+            let eph_composed = EphemeralSpec {
+                classification: Some(composed),
+                ..ephemeral_fixture()
+            };
+            assert_eq!(
+                evaluate_ephemeral_require_tag(&eph_hand, &tag),
+                evaluate_ephemeral_require_tag(&eph_composed, &tag),
+                "ephemeral classifier drift on OptimizationDirection::{direction:?}",
             );
         }
     }

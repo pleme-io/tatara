@@ -2572,6 +2572,48 @@ static POINT_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::crd::ProcessSpec>] = 
         tag: "single-input-arity",
         probe: |s| s.classification.input_arity_is_one(),
     },
+    // `multi-input-arity` — SEVENTEENTH occupant on the (parent ×
+    // derived-nullary-bool) corner of the workspace-wide fixed-tag
+    // algebra after the sixteen prior arms opened + populated the
+    // corner; SECOND occupant threading the classification-
+    // `point_type`-derived input-arity axis — CLOSES the SEVENTH
+    // classification axis into a binary XOR partition on the point-
+    // surface fixed-tag corner after the horizon, calm, data, point-
+    // type, substrate, and optimization-direction axes' closures.
+    // Composes the ONE substrate primitive
+    // [`tatara_process::classification::Classification::input_arity_is_many`]
+    // that walks `self.point_type.input_arity().is_many()` — the
+    // DAG-composition input-cardinality projection reached through
+    // [`tatara_process::classification::ConvergencePointType::input_arity`]
+    // as a fixed-tag audit surface. Answers the DAG-composition-
+    // facing question "does this Process merge MULTIPLE upstream
+    // edges (fan-in Join | Gate | Select | Reduce topologies)?" —
+    // `true` on the [`Classification::gate_compute`] baseline
+    // (`point_type = Gate` → `input_arity = Many`) and on the
+    // `Join | Gate | Select | Reduce` multi-input variants, `false`
+    // on the `Transform | Fork | Broadcast | Observe` single-input
+    // variants. Antisymmetric peer of the sibling `single-input-arity`
+    // arm on this table — the operator's `:requires (single-input-arity)`
+    // audit is the exact complement of `:requires (multi-input-arity)`
+    // per the closed-set XOR pin
+    // `convergence_point_type_input_arity_one_xor_many` composed
+    // through the parent-composed layer by
+    // `classification_input_arity_probes_form_binary_xor_partition_over_all`.
+    // Byte-for-byte symmetrical with the ephemeral surface's
+    // `multi-input-arity` arm on [`EPHEMERAL_FIXED_TAG_ARMS`] via
+    // [`tatara_process::ephemeral::EphemeralSpec::input_arity_is_many`]
+    // — both surfaces route through the SAME
+    // [`Classification::input_arity_is_many`] primitive after the
+    // ephemeral surface pays ONE resolver hop. With this arm the
+    // input-arity axis is the FOURTH binary-XOR-partition closure
+    // landmark on this corner (after calm, data, optimization-
+    // direction) that structurally twins the ternary partitions
+    // already sealed on the sibling `point_type` and `substrate`
+    // axes.
+    FixedTagArm {
+        tag: "multi-input-arity",
+        probe: |s| s.classification.input_arity_is_many(),
+    },
 ];
 
 /// Ephemeral (EphemeralSpec) surface's fixed `:requires <tag>`
@@ -3010,6 +3052,38 @@ static EPHEMERAL_FIXED_TAG_ARMS: &[FixedTagArm<tatara_process::ephemeral::Epheme
     FixedTagArm {
         tag: "single-input-arity",
         probe: |s| s.input_arity_is_one(),
+    },
+    // `multi-input-arity` — byte-for-byte peer of the point
+    // surface's `multi-input-arity` arm on
+    // [`POINT_FIXED_TAG_ARMS`] via
+    // [`tatara_process::classification::Classification::input_arity_is_many`]
+    // reached through the resolver hop
+    // [`tatara_process::ephemeral::EphemeralSpec::resolved_classification`].
+    // SECOND input-arity-axis occupant on the ephemeral surface's
+    // fixed-tag corner — CLOSES the SEVENTH classification axis into
+    // a binary XOR partition on the ephemeral fixed-tag algebra
+    // after horizon, calm, data, point, substrate, and optimization-
+    // direction. Route: `spec.input_arity_is_many()` →
+    // `resolved_classification().input_arity_is_many()` →
+    // `classification.point_type.input_arity().is_many()`.
+    // Guarantees the absent-classification case lands on `true`
+    // (the authored slot's `None` short-circuits through
+    // `default_ephemeral_class → gate_compute → point_type: Gate →
+    // input_arity = Many → is_many = true`), so every unadorned
+    // `(defephemeral …)` audits FOR the multi-input framing by
+    // default (safe under the substrate arity convention: the Gate
+    // baseline treats fan-in as the multi-input topology). The
+    // resolver-hop XOR closure holds by construction: on the ephemeral
+    // surface too, `single-input-arity ⊕ multi-input-arity` at every
+    // reachable classification because both arms compose the SAME
+    // point-surface primitive pair after one resolver hop, and that
+    // pair is XOR-closed on the parent-composed layer by
+    // `classification_input_arity_probes_form_binary_xor_partition_over_all`
+    // and on the ephemeral surface by
+    // `ephemeral_input_arity_probes_form_binary_xor_partition_over_all`.
+    FixedTagArm {
+        tag: "multi-input-arity",
+        probe: |s| s.input_arity_is_many(),
     },
 ];
 
@@ -11812,6 +11886,7 @@ mod tests {
                 "prefers-lower-direction",
                 "prefers-higher-direction",
                 "single-input-arity",
+                "multi-input-arity",
             ],
         );
         let ephemeral_tags: Vec<&'static str> =
@@ -11841,6 +11916,7 @@ mod tests {
                 "prefers-lower-direction",
                 "prefers-higher-direction",
                 "single-input-arity",
+                "multi-input-arity",
             ],
         );
     }
@@ -18079,6 +18155,93 @@ mod tests {
             assert_eq!(
                 hits, 1,
                 "ephemeral point_type={populated:?}: {buckets:?} — exactly one must be Ok(true) (three-way XOR partition violated)",
+            );
+        }
+    }
+
+    /// POINT-SURFACE BINARY XOR pin — for every
+    /// [`ConvergencePointType`] variant, EXACTLY ONE of the two
+    /// `single-input-arity` / `multi-input-arity` fixed tags answers
+    /// `Ok(true)`. FIRST binary-XOR partition closure at the fixed-tag
+    /// classifier layer — every prior fixed-tag closure on this corner
+    /// (calm, data, optimization-direction) is a two-tag pair asserted
+    /// only through their independent `Ok(bool)` truth-tables and the
+    /// parent-composed
+    /// `classification_<axis>_probes_form_binary_xor_partition_over_all`
+    /// pin; this test IMPORTS that closure onto the classifier layer
+    /// itself. The two arms compose the ONE substrate primitive pair
+    /// [`Classification::input_arity_is_one`] /
+    /// [`Classification::input_arity_is_many`] whose closed-set XOR
+    /// closure is sealed on the closed set by
+    /// `convergence_point_type_input_arity_one_xor_many` and on the
+    /// parent-composed layer by
+    /// `classification_input_arity_probes_form_binary_xor_partition_over_all`;
+    /// this test IMPORTS that closure onto the classifier layer so
+    /// any operator-facing `:requires (single-input-arity multi-input-arity)`
+    /// audit trusts the two tags partition the input-arity axis into
+    /// disjoint buckets whose union covers every point-type variant —
+    /// a regression that hard-coded either arm to a fixed answer or
+    /// crossed the wires between the two probes fails HERE before
+    /// drifting into that audit. Twin of the ternary
+    /// `evaluate_point_type_fixed_tags_form_three_way_xor_partition_over_all_point_variants`
+    /// on the sibling `point_type` axis via the SAME
+    /// `ProcessSpec::gate_compute_with_axis` sweep composer.
+    #[test]
+    fn evaluate_input_arity_fixed_tags_form_binary_xor_partition_over_all_point_variants() {
+        for populated in ConvergencePointType::ALL {
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
+            let buckets = [
+                evaluate_point_require_tag(&spec, "single-input-arity"),
+                evaluate_point_require_tag(&spec, "multi-input-arity"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "point point_type={populated:?}: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+            );
+        }
+    }
+
+    /// EPHEMERAL-SURFACE BINARY XOR pin — the resolver-hop peer of
+    /// the point-surface binary XOR pin above via the ephemeral
+    /// surface's `resolved_classification()` resolver. Sweeps the
+    /// absent-classification case (guaranteed to land in the
+    /// multi-input bucket via `Gate.input_arity() = Many`) plus every
+    /// [`ConvergencePointType::ALL`] variant so a regression on
+    /// either arm of the resolver-hop fixed-tag classifier fails
+    /// HERE. Closes the binary XOR partition contract on the
+    /// ephemeral surface at the classifier layer — twin of the
+    /// ternary
+    /// `evaluate_point_type_fixed_tags_form_three_way_xor_partition_over_all_ephemeral_variants`
+    /// on the sibling `point_type` axis via the SAME
+    /// `ephemeral_fixture().with_classification_axis(...)` sweep
+    /// composer.
+    #[test]
+    fn evaluate_input_arity_fixed_tags_form_binary_xor_partition_over_all_ephemeral_variants() {
+        // Absent classification — resolves through
+        // `default_ephemeral_class → gate_compute → point_type: Gate
+        // → input_arity: Many`, landing in the multi-input bucket.
+        let eph = ephemeral_fixture();
+        let buckets = [
+            evaluate_ephemeral_require_tag(&eph, "single-input-arity"),
+            evaluate_ephemeral_require_tag(&eph, "multi-input-arity"),
+        ];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
+        );
+        // Authored classification.
+        for populated in ConvergencePointType::ALL {
+            let eph = ephemeral_fixture().with_classification_axis(populated);
+            let buckets = [
+                evaluate_ephemeral_require_tag(&eph, "single-input-arity"),
+                evaluate_ephemeral_require_tag(&eph, "multi-input-arity"),
+            ];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b == Ok(true))).sum();
+            assert_eq!(
+                hits, 1,
+                "ephemeral point_type={populated:?}: {buckets:?} — exactly one must be Ok(true) (binary XOR partition violated)",
             );
         }
     }

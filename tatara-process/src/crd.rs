@@ -8,7 +8,7 @@ use tatara_lisp::DeriveTataraDomain;
 
 use crate::attestation::ProcessAttestation;
 use crate::boundary::Boundary;
-use crate::classification::Classification;
+use crate::classification::{Classification, ClassificationAxis};
 use crate::compliance::ComplianceSpec;
 use crate::encapsulates::EncapsulatesSpec;
 use crate::identity::Identity;
@@ -2189,6 +2189,60 @@ impl ProcessSpec {
             suspended: false,
         }
     }
+
+    /// [`Self::gate_compute_defaults`] with `axis` overlaid onto the
+    /// classification slot via [`ClassificationAxis::overlay`] — the peer
+    /// (spec × axis-slice) composer of
+    /// [`Classification::gate_compute_with_axis`] on the (Classification ×
+    /// axis-slice) construction axis.
+    ///
+    /// Pre-lift each `for populated in <ClosedSet>::ALL { let mut spec =
+    /// ProcessSpec::gate_compute_defaults(); spec.classification.<axis> =
+    /// populated; … }` loop-body 2-line fixture in `tatara-check.rs`
+    /// (fifteen sites across `evaluate_point_require_tag` per-axis probes
+    /// on `point-type-<kind>`, `substrate-<kind>`, `calm-<kind>`,
+    /// `data-classification-<kind>`, `input-arity-<kind>`,
+    /// `output-arity-<kind>`, `coordination-required`, `data-regulated`,
+    /// `data-restricted`, `endomorphic-point`, `diffusive-point`,
+    /// `convergent-point`, the three-way XOR partition and the two peer
+    /// implication / mutex fixtures) restated the direct-scalar
+    /// classification-slot assignment inline; post-lift each site reads
+    /// `for populated in <ClosedSet>::ALL { let spec =
+    /// ProcessSpec::gate_compute_with_axis(populated); … }` — one line,
+    /// one immutable binding, and every per-axis loop dispatches its
+    /// per-iteration axis mutation through the SAME
+    /// [`ClassificationAxis::overlay`] trait rather than by directly
+    /// poking `spec.classification.<axis>`.
+    ///
+    /// Sibling to [`Classification::gate_compute_with_axis`] on the
+    /// (Classification-slice × ProcessSpec-full) composition-depth axis
+    /// — that primitive owns the (Classification × single-axis-overlay)
+    /// construction; this primitive owns the (fresh-spec × single-axis-
+    /// overlay) construction that wraps the sibling call in a fresh
+    /// [`Self::gate_compute_defaults`] carrier. A future sixth
+    /// [`ClassificationAxis`] impl (foreshadowed by the six-axis lattice
+    /// language on the CRD-facing prose and by the shared
+    /// [`OptimizationDirection`] and [`HorizonKind`] nested-sub-slot
+    /// impls) picks up every loop-body fixture that binds through this
+    /// primitive mechanically — no `spec.classification.<new-axis> =
+    /// value;` restatement per site.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the [`ClassificationAxis::overlay`] trait owns the axis-
+    /// dispatch proof at ONE site, and this primitive extends that ONE-
+    /// site guarantee to the (fresh-`gate_compute_defaults`-spec × single-
+    /// axis-overlay) construction shape). THEORY.md §VI.1 (generation
+    /// over composition — the 2-line loop-body `let mut spec = …; spec.
+    /// classification.<axis> = populated;` shape recurred at FIFTEEN
+    /// hand-authored callsites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger inside one workspace binary and is lifted onto
+    /// ONE substrate owner here).
+    #[must_use]
+    pub fn gate_compute_with_axis<A: ClassificationAxis>(axis: A) -> Self {
+        let mut spec = Self::gate_compute_defaults();
+        axis.overlay(&mut spec.classification);
+        spec
+    }
 }
 
 /// Process status — every field optional until the reconciler writes it.
@@ -2328,7 +2382,10 @@ impl ProcessStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::classification::{ConvergencePointType, SubstrateType};
+    use crate::classification::{
+        CalmClassification, ConvergencePointType, DataClassification, HorizonKind,
+        OptimizationDirection, SubstrateType,
+    };
     use crate::intent::NixIntent;
 
     #[test]
@@ -6283,6 +6340,250 @@ mod tests {
             serde_json::to_value(&b).unwrap(),
         );
         assert!(!std::ptr::eq(&a, &b));
+    }
+
+    // ─── ProcessSpec::gate_compute_with_axis substrate pins ─────────
+    //
+    // Fail-before-pass-after granularity: `gate_compute_with_axis` on
+    // `ProcessSpec` did not exist before this commit — the
+    // `for populated in <ClosedSet>::ALL { let mut spec = ProcessSpec::
+    // gate_compute_defaults(); spec.classification.<axis> = populated; … }`
+    // 2-line loop-body construction shape recurred at FIFTEEN hand-
+    // authored callsites inside `tatara-reconciler/src/bin/tatara-check.
+    // rs` per-axis `evaluate_point_require_tag` probes past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication trigger inside one workspace
+    // binary. Post-lift the shape lives at ONE substrate primitive that
+    // hands a fresh [`Self::gate_compute_defaults`] carrier to the SAME
+    // trait dispatch [`Classification::gate_compute_with_axis`] uses for
+    // the (Classification-slice × axis-slice) construction, and every
+    // downstream loop-body fixture that binds through this primitive
+    // dispatches its per-iteration axis mutation through
+    // [`ClassificationAxis::overlay`] rather than by directly poking
+    // `spec.classification.<axis>`. The pins below fence the primitive's
+    // contract:
+    // (1) feeding the axis-baseline variant reconstructs
+    //     `gate_compute_defaults` byte-for-byte on `classification` and
+    //     every other spec slot, so the overlay is the IDENTITY under
+    //     baseline input;
+    // (2) at every axis, feeding a variant mutates ONLY that axis slot
+    //     on `spec.classification` and leaves the other four axis slots
+    //     AND every non-classification spec slot at their baseline;
+    // (3) the primitive delegates to the sibling
+    //     [`Classification::gate_compute_with_axis`] under the same axis
+    //     input, so a regression that stomped a `ClassificationAxis`
+    //     impl at either owner surfaces at both pin sets simultaneously.
+    // A regression that (a) hijacked the composer to overlay onto a
+    // stale carrier (a shared static, a call-time `Default::default()`),
+    // (b) crossed the wires between the five per-axis
+    // `ClassificationAxis` impls at only one owner (drifting the
+    // per-spec composer away from the per-classification composer), or
+    // (c) drifted a non-classification spec slot away from its
+    // `gate_compute_defaults` baseline on axis overlay would surface at
+    // ONE substrate primitive rather than at each of the fifteen
+    // downstream loop-body callsites.
+
+    #[test]
+    fn gate_compute_with_axis_is_identity_under_axis_baseline_input() {
+        // For each axis, feeding the baseline-of-that-axis variant
+        // reconstructs exactly `gate_compute_defaults()`. On the two
+        // axes with no `Default` (`ConvergencePointType`,
+        // `SubstrateType`) the baseline is the `gate_compute` chosen
+        // value (`Gate`, `Compute`); on the three defaulted axes the
+        // baseline is the sibling closed-set `#[default]` (`Bounded`,
+        // `Monotone`, `Internal`). Mirrors the sibling
+        // `gate_compute_with_axis_is_identity_under_axis_baseline_input`
+        // pin on `Classification::gate_compute_with_axis`.
+        let baseline = ProcessSpec::gate_compute_defaults();
+        for spec in [
+            ProcessSpec::gate_compute_with_axis(HorizonKind::Bounded),
+            ProcessSpec::gate_compute_with_axis(CalmClassification::Monotone),
+            ProcessSpec::gate_compute_with_axis(DataClassification::Internal),
+            ProcessSpec::gate_compute_with_axis(ConvergencePointType::Gate),
+            ProcessSpec::gate_compute_with_axis(SubstrateType::Compute),
+        ] {
+            assert_eq!(
+                serde_json::to_value(&spec).unwrap(),
+                serde_json::to_value(&baseline).unwrap(),
+            );
+        }
+    }
+
+    #[test]
+    fn gate_compute_with_axis_mutates_only_the_named_axis_slot_on_classification() {
+        // For each axis, sweep every variant and pin that the four
+        // sibling axis slots on `spec.classification` stay at their
+        // `gate_compute` baseline while only the named axis slot
+        // carries the swept variant. A regression that crossed the
+        // per-axis impls (a `ClassificationAxis for HorizonKind` body
+        // that mutated `c.calm` instead of `c.horizon.kind`, or a swap
+        // between `data_classification` and `calm` impls) fails HERE.
+        let baseline = Classification::gate_compute();
+        for populated in HorizonKind::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(s.classification.horizon.kind, populated);
+            assert_eq!(s.classification.calm, baseline.calm);
+            assert_eq!(
+                s.classification.data_classification,
+                baseline.data_classification
+            );
+            assert_eq!(s.classification.point_type, baseline.point_type);
+            assert_eq!(s.classification.substrate, baseline.substrate);
+        }
+        for populated in CalmClassification::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(s.classification.calm, populated);
+            assert_eq!(s.classification.horizon, baseline.horizon);
+            assert_eq!(
+                s.classification.data_classification,
+                baseline.data_classification
+            );
+            assert_eq!(s.classification.point_type, baseline.point_type);
+            assert_eq!(s.classification.substrate, baseline.substrate);
+        }
+        for populated in DataClassification::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(s.classification.data_classification, populated);
+            assert_eq!(s.classification.horizon, baseline.horizon);
+            assert_eq!(s.classification.calm, baseline.calm);
+            assert_eq!(s.classification.point_type, baseline.point_type);
+            assert_eq!(s.classification.substrate, baseline.substrate);
+        }
+        for populated in ConvergencePointType::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(s.classification.point_type, populated);
+            assert_eq!(s.classification.horizon, baseline.horizon);
+            assert_eq!(s.classification.calm, baseline.calm);
+            assert_eq!(
+                s.classification.data_classification,
+                baseline.data_classification
+            );
+            assert_eq!(s.classification.substrate, baseline.substrate);
+        }
+        for populated in SubstrateType::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(s.classification.substrate, populated);
+            assert_eq!(s.classification.horizon, baseline.horizon);
+            assert_eq!(s.classification.calm, baseline.calm);
+            assert_eq!(
+                s.classification.data_classification,
+                baseline.data_classification
+            );
+            assert_eq!(s.classification.point_type, baseline.point_type);
+        }
+        // Sixth-axis-peer coverage — [`OptimizationDirection`] rides
+        // the nested `Horizon.direction: Option<_>` sub-slot, distinct
+        // from the direct-scalar four axes above. The nested-Option
+        // overlay must NOT stomp the sibling `horizon.kind` scalar the
+        // baseline defaulted at `Bounded`.
+        for populated in OptimizationDirection::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(s.classification.horizon.direction, Some(populated));
+            assert_eq!(s.classification.horizon.kind, baseline.horizon.kind);
+            assert_eq!(s.classification.calm, baseline.calm);
+            assert_eq!(
+                s.classification.data_classification,
+                baseline.data_classification
+            );
+            assert_eq!(s.classification.point_type, baseline.point_type);
+            assert_eq!(s.classification.substrate, baseline.substrate);
+        }
+    }
+
+    #[test]
+    fn gate_compute_with_axis_preserves_every_non_classification_spec_slot_at_baseline() {
+        // Pin the (spec × axis-slice) composer's carrier discipline:
+        // the axis overlay MUST NOT leak into a non-classification
+        // slot on the spec. A regression that misrouted an overlay
+        // through `spec.intent` / `spec.boundary` / `spec.lifetime` /
+        // any of the other nine spec slots would surface HERE at ONE
+        // narrow site rather than as silent drift across the fifteen
+        // downstream loop-body callsites that key their assertions on
+        // `evaluate_point_require_tag` against the axis slot.
+        let baseline = ProcessSpec::gate_compute_defaults();
+        for populated in ConvergencePointType::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(
+                serde_json::to_value(&s.identity).unwrap(),
+                serde_json::to_value(&baseline.identity).unwrap(),
+            );
+            assert_eq!(
+                serde_json::to_value(&s.intent).unwrap(),
+                serde_json::to_value(&baseline.intent).unwrap(),
+            );
+            assert_eq!(
+                serde_json::to_value(&s.boundary).unwrap(),
+                serde_json::to_value(&baseline.boundary).unwrap(),
+            );
+            assert_eq!(
+                serde_json::to_value(&s.compliance).unwrap(),
+                serde_json::to_value(&baseline.compliance).unwrap(),
+            );
+            assert!(s.depends_on.is_empty());
+            assert_eq!(
+                serde_json::to_value(&s.signals).unwrap(),
+                serde_json::to_value(&baseline.signals).unwrap(),
+            );
+            assert_eq!(
+                serde_json::to_value(&s.lifetime).unwrap(),
+                serde_json::to_value(&baseline.lifetime).unwrap(),
+            );
+            assert!(s.routing.is_none());
+            assert!(s.encapsulates.is_none());
+            assert_eq!(s.suspended, baseline.suspended);
+        }
+    }
+
+    #[test]
+    fn gate_compute_with_axis_delegates_to_sibling_classification_composer() {
+        // Byte-parity pin between the (spec × axis-slice) composer's
+        // classification output and the sibling (Classification ×
+        // axis-slice) composer's output under the same axis input.
+        // Pin every direct-scalar closed-set axis so a regression
+        // that drifted the per-spec composer away from the per-
+        // classification composer at ANY axis surfaces HERE at ONE
+        // narrow site.
+        for populated in ConvergencePointType::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(
+                s.classification,
+                Classification::gate_compute_with_axis(populated),
+            );
+        }
+        for populated in SubstrateType::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(
+                s.classification,
+                Classification::gate_compute_with_axis(populated),
+            );
+        }
+        for populated in CalmClassification::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(
+                s.classification,
+                Classification::gate_compute_with_axis(populated),
+            );
+        }
+        for populated in DataClassification::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(
+                s.classification,
+                Classification::gate_compute_with_axis(populated),
+            );
+        }
+        for populated in HorizonKind::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(
+                s.classification,
+                Classification::gate_compute_with_axis(populated),
+            );
+        }
+        for populated in OptimizationDirection::ALL {
+            let s = ProcessSpec::gate_compute_with_axis(populated);
+            assert_eq!(
+                s.classification,
+                Classification::gate_compute_with_axis(populated),
+            );
+        }
     }
 
     // ─── ProcessStatus::at_phase substrate pins ─────────────────────

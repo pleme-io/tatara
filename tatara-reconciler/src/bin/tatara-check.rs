@@ -7594,8 +7594,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_returns_true_iff_point_type_matches_variant_per_kind() {
         for populated in ConvergencePointType::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.point_type = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             for query in ConvergencePointType::ALL {
                 let tag = format!("point-type-{}", query.as_str());
                 let expected = query == populated;
@@ -7757,8 +7756,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_returns_true_iff_substrate_matches_variant_per_kind() {
         for populated in SubstrateType::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.substrate = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             for query in SubstrateType::ALL {
                 let tag = format!("substrate-{}", query.as_str());
                 let expected = query == populated;
@@ -7915,8 +7913,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_returns_true_iff_calm_matches_variant_per_kind() {
         for populated in CalmClassification::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.calm = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             for query in CalmClassification::ALL {
                 let tag = format!("calm-{}", query.as_str());
                 let expected = query == populated;
@@ -8133,8 +8130,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_returns_true_iff_data_classification_matches_variant_per_kind() {
         for populated in DataClassification::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.data_classification = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             for query in DataClassification::ALL {
                 let tag = format!("data-classification-{}", query.as_str());
                 let expected = query == populated;
@@ -10699,8 +10695,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_returns_true_iff_input_arity_matches_projection_per_point_type() {
         for populated in ConvergencePointType::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.point_type = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             let expected_arity = populated.input_arity();
             for query in Arity::ALL {
                 let tag = format!("input-arity-{}", query.as_str());
@@ -10866,8 +10861,7 @@ mod tests {
     fn evaluate_point_require_tag_returns_true_iff_output_arity_matches_projection_per_point_type()
     {
         for populated in ConvergencePointType::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.point_type = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             let expected_arity = populated.output_arity();
             for query in Arity::ALL {
                 let tag = format!("output-arity-{}", query.as_str());
@@ -16560,6 +16554,111 @@ mod tests {
         }
     }
 
+    // ── (per-axis-loop-body × classifier-surface) landmark ────────────
+    //
+    // Fail-before-pass-after granularity: this run swept the FIFTEEN
+    // remaining `for populated in <ClosedSet>::ALL { let mut spec =
+    // ProcessSpec::gate_compute_defaults(); spec.classification.<axis>
+    // = populated; … }` per-axis-loop-body 2-line fixtures onto ONE
+    // substrate primitive
+    // [`tatara_process::crd::ProcessSpec::gate_compute_with_axis`] — the
+    // (spec × axis-slice) peer composer of
+    // [`tatara_process::classification::Classification::gate_compute_with_axis`]
+    // (Classification × axis-slice) that prior commits `76d469c` +
+    // `08714f6` + `7f14656` + `4e3c2c5` + `6fc16e9` + `0e3b367`
+    // routed the classifier's classifier-slice sweeps through. Post-lift
+    // every per-iteration axis mutation dispatches through the SAME
+    // [`ClassificationAxis::overlay`] trait rather than by directly
+    // poking `spec.classification.<axis>`.
+    //
+    // This landmark pins that the post-sweep shape
+    // `ProcessSpec::gate_compute_with_axis(v)` classifies IDENTICALLY
+    // to the pre-sweep hand-authored `let mut spec = ProcessSpec::
+    // gate_compute_defaults(); spec.classification.<axis> = v;` shape
+    // at every direct-scalar closed-set axis. A regression that
+    // (a) stomped a non-classification spec slot from
+    // `gate_compute_defaults`'s baseline in the new composer,
+    // (b) drifted the trait-dispatch axis from the corresponding
+    // `Classification` composer at only one owner (the per-spec
+    // composer diverging from the per-classification composer),
+    // or (c) reintroduced a direct-scalar assignment that bypassed
+    // the `ClassificationAxis::overlay` trait would fail HERE at
+    // ONE landmark site before drifting through the fifteen swept
+    // sites that already bind through the composer.
+
+    /// (per-axis-loop-body × classifier-surface) parity landmark — the
+    /// post-sweep shape `ProcessSpec::gate_compute_with_axis(v)`
+    /// classifies IDENTICALLY to the pre-sweep hand-authored `let mut
+    /// spec = ProcessSpec::gate_compute_defaults(); spec.classification.
+    /// <axis> = v;` shape at every direct-scalar closed-set axis
+    /// (`ConvergencePointType`, `SubstrateType`, `CalmClassification`,
+    /// `DataClassification`) through `evaluate_point_require_tag`. Sweep
+    /// every variant on every axis so a regression that dropped an axis
+    /// on the composer, stomped a sibling slot on any
+    /// [`ClassificationAxis`] impl, or drifted a non-classification
+    /// spec slot away from `gate_compute_defaults`'s baseline surfaces
+    /// HERE at ONE landmark site rather than at the fifteen swept
+    /// classifier-facing sites downstream.
+    #[test]
+    fn per_axis_loop_body_sweep_matches_pre_sweep_shape_at_classifier_surface() {
+        // For every direct-scalar closed-set axis, sweep every variant
+        // and pin that the composed spec answers every fine +
+        // off-diagonal tag on the axis identically to the pre-sweep
+        // shape.
+        for populated in ConvergencePointType::ALL {
+            let mut hand = ProcessSpec::gate_compute_defaults();
+            hand.classification.point_type = populated;
+            let composed = ProcessSpec::gate_compute_with_axis(populated);
+            for query in ConvergencePointType::ALL {
+                let tag = format!("point-type-{}", query.as_str());
+                assert_eq!(
+                    evaluate_point_require_tag(&hand, &tag),
+                    evaluate_point_require_tag(&composed, &tag),
+                    "point_type={populated:?}: tag {tag:?} classifier drift",
+                );
+            }
+        }
+        for populated in SubstrateType::ALL {
+            let mut hand = ProcessSpec::gate_compute_defaults();
+            hand.classification.substrate = populated;
+            let composed = ProcessSpec::gate_compute_with_axis(populated);
+            for query in SubstrateType::ALL {
+                let tag = format!("substrate-{}", query.as_str());
+                assert_eq!(
+                    evaluate_point_require_tag(&hand, &tag),
+                    evaluate_point_require_tag(&composed, &tag),
+                    "substrate={populated:?}: tag {tag:?} classifier drift",
+                );
+            }
+        }
+        for populated in CalmClassification::ALL {
+            let mut hand = ProcessSpec::gate_compute_defaults();
+            hand.classification.calm = populated;
+            let composed = ProcessSpec::gate_compute_with_axis(populated);
+            for query in CalmClassification::ALL {
+                let tag = format!("calm-{}", query.as_str());
+                assert_eq!(
+                    evaluate_point_require_tag(&hand, &tag),
+                    evaluate_point_require_tag(&composed, &tag),
+                    "calm={populated:?}: tag {tag:?} classifier drift",
+                );
+            }
+        }
+        for populated in DataClassification::ALL {
+            let mut hand = ProcessSpec::gate_compute_defaults();
+            hand.classification.data_classification = populated;
+            let composed = ProcessSpec::gate_compute_with_axis(populated);
+            for query in DataClassification::ALL {
+                let tag = format!("data-classification-{}", query.as_str());
+                assert_eq!(
+                    evaluate_point_require_tag(&hand, &tag),
+                    evaluate_point_require_tag(&composed, &tag),
+                    "data_classification={populated:?}: tag {tag:?} classifier drift",
+                );
+            }
+        }
+    }
+
     // ── (direct-scalar-axis-conjunction × classifier-surface) landmark ─
     //
     // Fail-before-pass-after granularity: this run swept the THREE
@@ -16710,8 +16809,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_returns_calm_requires_coordination_projection_per_calm_kind() {
         for populated in CalmClassification::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.calm = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             assert_eq!(
                 evaluate_point_require_tag(&spec, "coordination-required"),
                 Ok(populated.requires_coordination()),
@@ -16896,8 +16994,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_returns_data_is_regulated_projection_per_data_kind() {
         for populated in DataClassification::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.data_classification = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             assert_eq!(
                 evaluate_point_require_tag(&spec, "data-regulated"),
                 Ok(populated.is_regulated()),
@@ -17087,8 +17184,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_returns_data_is_restricted_projection_per_data_kind() {
         for populated in DataClassification::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.data_classification = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             assert_eq!(
                 evaluate_point_require_tag(&spec, "data-restricted"),
                 Ok(populated.is_restricted()),
@@ -17229,8 +17325,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_data_regulated_implies_data_restricted_over_all() {
         for populated in DataClassification::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.data_classification = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             let regulated = evaluate_point_require_tag(&spec, "data-regulated")
                 .expect("data-regulated is a registered fixed tag");
             let restricted = evaluate_point_require_tag(&spec, "data-restricted")
@@ -17279,8 +17374,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_returns_point_is_endomorphic_projection_per_point_kind() {
         for populated in ConvergencePointType::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.point_type = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             assert_eq!(
                 evaluate_point_require_tag(&spec, "endomorphic-point"),
                 Ok(populated.is_endomorphic()),
@@ -17431,8 +17525,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_returns_point_is_diffusive_projection_per_point_kind() {
         for populated in ConvergencePointType::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.point_type = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             assert_eq!(
                 evaluate_point_require_tag(&spec, "diffusive-point"),
                 Ok(populated.is_diffusive()),
@@ -17558,8 +17651,7 @@ mod tests {
     #[test]
     fn evaluate_endomorphic_point_and_diffusive_point_are_mutex_over_all_point_variants() {
         for populated in ConvergencePointType::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.point_type = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             let endo = evaluate_point_require_tag(&spec, "endomorphic-point");
             let diff = evaluate_point_require_tag(&spec, "diffusive-point");
             assert!(
@@ -17629,8 +17721,7 @@ mod tests {
     #[test]
     fn evaluate_point_require_tag_returns_point_is_convergent_projection_per_point_kind() {
         for populated in ConvergencePointType::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.point_type = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             assert_eq!(
                 evaluate_point_require_tag(&spec, "convergent-point"),
                 Ok(populated.is_convergent()),
@@ -17764,8 +17855,7 @@ mod tests {
     #[test]
     fn evaluate_point_type_fixed_tags_form_three_way_xor_partition_over_all_point_variants() {
         for populated in ConvergencePointType::ALL {
-            let mut spec = ProcessSpec::gate_compute_defaults();
-            spec.classification.point_type = populated;
+            let spec = ProcessSpec::gate_compute_with_axis(populated);
             let buckets = [
                 evaluate_point_require_tag(&spec, "endomorphic-point"),
                 evaluate_point_require_tag(&spec, "diffusive-point"),

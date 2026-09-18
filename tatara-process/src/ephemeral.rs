@@ -2588,6 +2588,207 @@ impl EphemeralSpec {
         self.resolved_classification().direction_prefers_higher()
     }
 
+    /// Derived-boolean predicate — does this ephemeral spec's resolved
+    /// [`Classification`]'s `point_type` slot project to `Arity::One`
+    /// under
+    /// [`crate::classification::ConvergencePointType::input_arity`]?
+    /// Byte-for-byte peer of
+    /// [`crate::classification::Classification::input_arity_is_one`]
+    /// wrapped through the [`Self::resolved_classification`] resolver
+    /// so an operator-omitted `:classification` slot on
+    /// `(defephemeral …)` still answers via the substrate default. The
+    /// ONE ephemeral-surface substrate primitive that owns the
+    /// `(&EphemeralSpec) -> bool` derived-nullary-boolean walk on the
+    /// single-input side of the DAG-composition input-arity projection.
+    ///
+    /// # Sixteenth derived-nullary-boolean peer on the ephemeral surface — opens the input-arity axis
+    ///
+    /// Peer of the fifteen prior nullary-boolean substrate primitives
+    /// on [`EphemeralSpec`] ([`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], [`Self::data_is_regulated`],
+    /// [`Self::data_is_restricted`], [`Self::point_is_endomorphic`],
+    /// [`Self::point_is_diffusive`], [`Self::point_is_convergent`],
+    /// [`Self::substrate_is_resource`], [`Self::substrate_is_policy`],
+    /// [`Self::substrate_is_telemetry`], [`Self::calm_is_monotone`],
+    /// [`Self::data_is_public`], [`Self::direction_prefers_lower`],
+    /// [`Self::direction_prefers_higher`]) on the ephemeral surface's
+    /// (resolver-hop × derived-nullary-bool) shape — the SIXTEENTH
+    /// peer overall and the FIRST peer threading the classification-
+    /// `point_type`-derived input-arity axis on this surface. Opens
+    /// the SEVENTH classification axis into the ephemeral fixed-tag
+    /// algebra after the horizon, calm, data, point-type, substrate,
+    /// and optimization-direction axes. First peer on the derived-
+    /// typed-projection stratum of the ephemeral surface — composes
+    /// an extra closed-set-level projection hop
+    /// ([`crate::classification::ConvergencePointType::input_arity`])
+    /// compared to the sibling `point_is_*` triple that walks the raw
+    /// `point_type` slot through the resolver. The resolver-hop shape
+    /// is byte-identical across all sixteen peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `input_arity_is_one()` returns `true` iff
+    /// `self.resolved_classification().input_arity_is_one()`. The
+    /// resolver returns the authored [`Classification`] when present
+    /// and the substrate default [`Classification::gate_compute`] on
+    /// absence. Because [`Classification::gate_compute`] carries
+    /// `point_type: Gate` and `Gate.input_arity() = Many`, a bare
+    /// ephemeral spec with no `:classification` slot answers `false` —
+    /// every unadorned `(defephemeral …)` lands in the multi-input
+    /// bucket under the substrate default (`Gate` gates a
+    /// many-to-one bucket dispatch, so the single-input bucket only
+    /// applies to operator-authored specs on the `Transform | Fork |
+    /// Broadcast | Observe` arms). A regression that dropped the
+    /// resolver hop, probed the wrong closed-set arm, or crossed the
+    /// wires with the sibling
+    /// [`crate::classification::ConvergencePointType::output_arity`]
+    /// projection (which disagrees on six of the eight variants) fails
+    /// HERE at ONE narrow substrate site before drifting through
+    /// every unadorned ephemeral spec's DAG-composition input-arity
+    /// audit.
+    ///
+    /// # Compounding — opens the input-arity axis on the ephemeral surface
+    ///
+    /// The ephemeral require-tag classifier will compose this
+    /// primitive as a fixed tag `single-input-arity` on
+    /// `EPHEMERAL_FIXED_TAG_ARMS` — byte-for-byte peer of the point
+    /// surface's `single-input-arity` fixed tag on
+    /// `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::input_arity_is_one`] directly. The
+    /// two-surface parity contract holds by construction: both
+    /// surfaces route through the SAME
+    /// [`Classification::input_arity_is_one`] primitive after the
+    /// ephemeral surface pays ONE resolver hop. A future antisymmetric
+    /// peer ([`Self::input_arity_is_many`]) closes the binary XOR
+    /// partition on this axis — mirror of the calm-axis
+    /// (`monotone-calm ⊕ coordination-required`), data-axis
+    /// (`public-data ⊕ data-restricted`), and optimization-direction-
+    /// axis (`prefers-lower-direction ⊕ prefers-higher-direction`)
+    /// closures on this surface.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-`point_type`-derived
+    /// input-arity-axis derived-nullary-boolean probe body composes
+    /// ONE resolver primitive ([`Self::resolved_classification`])
+    /// with ONE [`Classification`] primitive
+    /// ([`Classification::input_arity_is_one`]) so every downstream
+    /// (the future `single-input-arity` fixed tag on the ephemeral
+    /// surface in tatara-check, future DAG-composition input-arity
+    /// validators keying on the single-input framing, future variant
+    /// additions on
+    /// [`crate::classification::ConvergencePointType`]) binds through
+    /// the SAME `input_arity_is_one()` shape rather than restating
+    /// either the resolver walk or the two-hop closed-set projection
+    /// composition at the callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future
+    /// [`crate::classification::ConvergencePointType`] variant lands
+    /// at ONE `ALL` entry + ONE `input_arity` arm on the closed set
+    /// and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn input_arity_is_one(&self) -> bool {
+        self.resolved_classification().input_arity_is_one()
+    }
+
+    /// ANTISYMMETRIC PEER of [`Self::input_arity_is_one`] — does
+    /// this ephemeral spec's resolved [`Classification`]'s `point_type`
+    /// slot project to `Arity::Many` under
+    /// [`crate::classification::ConvergencePointType::input_arity`]?
+    /// Byte-for-byte peer of
+    /// [`crate::classification::Classification::input_arity_is_many`]
+    /// wrapped through the [`Self::resolved_classification`] resolver
+    /// so an operator-omitted `:classification` slot on
+    /// `(defephemeral …)` still answers via the substrate default. The
+    /// ONE ephemeral-surface substrate primitive that owns the
+    /// `(&EphemeralSpec) -> bool` derived-nullary-boolean walk on the
+    /// multi-input side of the DAG-composition input-arity projection.
+    ///
+    /// # Seventeenth derived-nullary-boolean peer on the ephemeral surface — CLOSES the input-arity axis
+    ///
+    /// Peer of the sixteen prior nullary-boolean substrate primitives
+    /// on [`EphemeralSpec`] ([`Self::horizon_terminates`],
+    /// [`Self::horizon_requires_metric_axes`],
+    /// [`Self::calm_requires_coordination`], [`Self::data_is_regulated`],
+    /// [`Self::data_is_restricted`], [`Self::point_is_endomorphic`],
+    /// [`Self::point_is_diffusive`], [`Self::point_is_convergent`],
+    /// [`Self::substrate_is_resource`], [`Self::substrate_is_policy`],
+    /// [`Self::substrate_is_telemetry`], [`Self::calm_is_monotone`],
+    /// [`Self::data_is_public`], [`Self::direction_prefers_lower`],
+    /// [`Self::direction_prefers_higher`], [`Self::input_arity_is_one`])
+    /// on the ephemeral surface's (resolver-hop × derived-nullary-
+    /// bool) shape — the SEVENTEENTH peer overall and the SECOND peer
+    /// threading the classification-`point_type`-derived input-arity
+    /// axis on this surface. CLOSES the SEVENTH classification axis
+    /// into the FULL binary XOR partition contract
+    /// `input_arity_is_one ⊕ input_arity_is_many` on the ephemeral
+    /// surface — the resolver-hop peer of the parent-composed
+    /// `classification_input_arity_probes_form_binary_xor_partition_over_all`.
+    /// The resolver-hop shape is byte-identical across all seventeen
+    /// peers.
+    ///
+    /// # Semantics — resolver hop + derived-nullary-boolean
+    ///
+    /// `input_arity_is_many()` returns `true` iff
+    /// `self.resolved_classification().input_arity_is_many()`. The
+    /// resolver returns the authored [`Classification`] when present
+    /// and the substrate default [`Classification::gate_compute`] on
+    /// absence. Because [`Classification::gate_compute`] carries
+    /// `point_type: Gate` and `Gate.input_arity() = Many`, a bare
+    /// ephemeral spec with no `:classification` slot answers `true` —
+    /// every unadorned `(defephemeral …)` lands in the multi-input
+    /// bucket under the substrate default. Direct antisymmetric
+    /// mirror of [`Self::input_arity_is_one`] on the SAME resolver
+    /// walk + SAME projection through the SAME closed set.
+    ///
+    /// # Compounding — CLOSES the input-arity axis on the ephemeral surface
+    ///
+    /// The ephemeral require-tag classifier will compose this
+    /// primitive as a fixed tag `multi-input-arity` on
+    /// `EPHEMERAL_FIXED_TAG_ARMS` — byte-for-byte peer of the point
+    /// surface's `multi-input-arity` fixed tag on
+    /// `POINT_FIXED_TAG_ARMS` via
+    /// [`Classification::input_arity_is_many`] directly. The
+    /// two-surface parity contract holds by construction: both
+    /// surfaces route through the SAME
+    /// [`Classification::input_arity_is_many`] primitive after the
+    /// ephemeral surface pays ONE resolver hop. SECOND input-arity-
+    /// axis peer CLOSES the axis into the FULL binary XOR partition
+    /// contract on this surface — the resolver-hop peer of the
+    /// parent-composed
+    /// `classification_input_arity_probes_form_binary_xor_partition_over_all`,
+    /// mirror of the calm-axis (`monotone-calm ⊕
+    /// coordination-required`), data-axis (`public-data ⊕
+    /// data-restricted`), and optimization-direction-axis
+    /// (`prefers-lower-direction ⊕ prefers-higher-direction`)
+    /// closures on this surface — the SEVENTH classification axis to
+    /// reach the closed XOR partition landmark on the ephemeral
+    /// resolver-hop surface, opening the derived-typed-projection
+    /// stratum on this surface for the first time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the classification-`point_type`-derived
+    /// input-arity-axis derived-nullary-boolean probe body composes
+    /// ONE resolver primitive ([`Self::resolved_classification`])
+    /// with ONE [`Classification`] primitive
+    /// ([`Classification::input_arity_is_many`]) so every downstream
+    /// (the future `multi-input-arity` fixed tag on the ephemeral
+    /// surface in tatara-check, future DAG-composition input-arity
+    /// validators keying on the multi-input framing, future variant
+    /// additions on
+    /// [`crate::classification::ConvergencePointType`]) binds through
+    /// the SAME `input_arity_is_many()` shape rather than restating
+    /// either `!self.input_arity_is_one()` or the two-hop
+    /// `self.resolved_classification().point_type.input_arity().is_many()`
+    /// chain at each callsite. THEORY.md §VI.1 — generation over
+    /// composition; a future
+    /// [`crate::classification::ConvergencePointType`] variant lands
+    /// at ONE `ALL` entry + ONE `input_arity` arm on the closed set
+    /// and both surfaces pick it up mechanically.
+    #[must_use]
+    pub fn input_arity_is_many(&self) -> bool {
+        self.resolved_classification().input_arity_is_many()
+    }
+
     /// True iff this ephemeral spec's [`Self::routing`] slot is
     /// populated AND the inner [`RoutingSpec`]'s derived
     /// [`RoutingForm`] equals `kind` — the substrate primitive that
@@ -6987,6 +7188,263 @@ mod tests {
             assert_eq!(
                 hits, 1,
                 "authored horizon.direction={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::input_arity_is_one pins ──────────────────────
+    //
+    // Fail-before-pass-after granularity: `input_arity_is_one` did not
+    // exist pre-lift on `impl EphemeralSpec` — every consumer walking
+    // the "does this ephemeral spec's DAG-composition input port
+    // accept a single upstream edge?" question went through
+    // `.resolved_classification().point_type.input_arity().is_one()`.
+    // Post-lift the SIXTEENTH derived-nullary-boolean peer on the
+    // ephemeral surface (FIRST on the input-arity axis, opening the
+    // SEVENTH classification axis into the fixed-tag algebra + the
+    // derived-typed-projection stratum on this surface for the first
+    // time) routes through the SAME [`Self::resolved_classification`]
+    // resolver + the sibling substrate primitive
+    // [`crate::classification::Classification::input_arity_is_one`],
+    // so the two-surface parity contract holds by construction.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries `point_type: kind` answers
+    /// [`Self::input_arity_is_one`] matching the closed set's own
+    /// [`crate::classification::ConvergencePointType::input_arity`]
+    /// truth table projected through [`Arity::is_one`]. Sweep
+    /// [`crate::classification::ConvergencePointType::ALL`] so a
+    /// regression that (a) hard-coded the body to a fixed answer,
+    /// (b) inverted the projection, (c) dropped the resolver hop, or
+    /// (d) crossed the wires with the sibling `output_arity`
+    /// projection (which disagrees on six of eight variants) fails
+    /// HERE at the substrate primitive before drifting through the
+    /// future `single-input-arity` fixed tag or the peer point
+    /// surface.
+    #[test]
+    fn input_arity_is_one_returns_input_arity_projection_per_kind() {
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.input_arity_is_one(),
+                populated.input_arity().is_one(),
+                "authored point_type={populated:?}: input_arity_is_one() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries `point_type:
+    /// Gate` and `Gate.input_arity() = Many`, so
+    /// [`Self::input_arity_is_one`] returns `false`. Pins the
+    /// resolver's default-arm short-circuit reaching this derived-
+    /// nullary predicate — every unadorned `(defephemeral …)` lands
+    /// in the multi-input bucket under the substrate default. Mirror-
+    /// inverted from the sibling `input_arity_is_many` baseline on
+    /// the same resolver walk (the XOR partition forces exactly one
+    /// bucket per baseline).
+    #[test]
+    fn input_arity_is_one_probes_false_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            !spec.input_arity_is_one(),
+            "absent classification (defaults to gate_compute, point_type=Gate → input_arity=Many → is_one=false)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::input_arity_is_one`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.input_arity_is_one()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`crate::classification::ConvergencePointType::ALL`] variant)
+    /// so a future regression on either side of the resolver fails
+    /// HERE at the parity boundary. Byte-for-byte peer of
+    /// `direction_prefers_lower_matches_point_peer_through_lowered_classification`
+    /// on the same resolver-hop shape.
+    #[test]
+    fn input_arity_is_one_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.input_arity_is_one(),
+            lowered.classification.input_arity_is_one(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.input_arity_is_one(),
+                lowered.classification.input_arity_is_one(),
+                "authored point_type={populated:?}: parity drift",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::input_arity_is_many pins ─────────────────────
+    //
+    // Fail-before-pass-after granularity: `input_arity_is_many` did
+    // not exist pre-lift on `impl EphemeralSpec` — the multi-input
+    // framing peer of [`Self::input_arity_is_one`] had no ephemeral-
+    // surface substrate owner. Post-lift the SEVENTEENTH derived-
+    // nullary-boolean peer on the ephemeral surface (SECOND on the
+    // input-arity axis, CLOSING the SEVENTH classification axis into
+    // a binary XOR partition on this surface) routes through the SAME
+    // [`Self::resolved_classification`] resolver + the sibling
+    // substrate primitive
+    // [`crate::classification::Classification::input_arity_is_many`],
+    // so the two-surface parity contract holds by construction, AND
+    // the two-way single/many split on this surface CLOSES the
+    // input-arity axis into the FULL binary XOR partition contract
+    // via `ephemeral_input_arity_probes_form_binary_xor_partition_over_all`.
+
+    /// PER-VARIANT pin — an [`EphemeralSpec`] whose authored
+    /// [`Classification`] carries `point_type: kind` answers
+    /// [`Self::input_arity_is_many`] matching the closed set's own
+    /// [`crate::classification::ConvergencePointType::input_arity`]
+    /// truth table projected through [`Arity::is_many`]. Sweep
+    /// [`crate::classification::ConvergencePointType::ALL`] so a
+    /// regression that (a) hard-coded the body to a fixed answer,
+    /// (b) inverted the projection, (c) dropped the resolver hop, or
+    /// (d) crossed the wires with the sibling `output_arity`
+    /// projection fails HERE at the substrate primitive before
+    /// drifting through the future `multi-input-arity` fixed tag or
+    /// the peer point surface.
+    #[test]
+    fn input_arity_is_many_returns_input_arity_projection_per_kind() {
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut spec = empty_ephemeral();
+            spec.classification = Some(classification);
+            assert_eq!(
+                spec.input_arity_is_many(),
+                populated.input_arity().is_many(),
+                "authored point_type={populated:?}: input_arity_is_many() drift",
+            );
+        }
+    }
+
+    /// ABSENT-CLASSIFICATION SHORT-CIRCUIT pin — an [`EphemeralSpec`]
+    /// with `classification: None` routes through the
+    /// [`Self::resolved_classification`] resolver's substrate default
+    /// [`Classification::gate_compute`], which carries `point_type:
+    /// Gate` and `Gate.input_arity() = Many`, so
+    /// [`Self::input_arity_is_many`] returns `true`. Pins the
+    /// resolver's default-arm short-circuit reaching this derived-
+    /// nullary predicate — every unadorned `(defephemeral …)` lands
+    /// in the multi-input bucket under the substrate default. Mirror-
+    /// inverted from the sibling `input_arity_is_one` baseline on
+    /// the same resolver walk (the XOR partition forces exactly one
+    /// bucket per baseline).
+    #[test]
+    fn input_arity_is_many_probes_true_on_absent_classification() {
+        let spec = empty_ephemeral();
+        assert!(spec.classification.is_none());
+        assert!(
+            spec.input_arity_is_many(),
+            "absent classification (defaults to gate_compute, point_type=Gate → input_arity=Many → is_many=true)",
+        );
+    }
+
+    /// TWO-SURFACE PARITY pin — the SAME [`EphemeralSpec`] classifies
+    /// identically through [`Self::input_arity_is_many`] AND through
+    /// `<eph.clone().into::<ProcessSpec>>().classification.input_arity_is_many()`
+    /// on the mechanically-lowered `ProcessSpec`. Sweeps (`None`
+    /// classification, `Some(_)` classification on every
+    /// [`crate::classification::ConvergencePointType::ALL`] variant)
+    /// so a future regression on either side of the resolver fails
+    /// HERE at the parity boundary. Byte-for-byte peer of
+    /// `input_arity_is_one_matches_point_peer_through_lowered_classification`
+    /// on the antisymmetric closed-set arm via the same resolver-hop
+    /// shape.
+    #[test]
+    fn input_arity_is_many_matches_point_peer_through_lowered_classification() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let lowered: ProcessSpec = eph.clone().into();
+        assert_eq!(
+            eph.input_arity_is_many(),
+            lowered.classification.input_arity_is_many(),
+            "None-classification parity drift",
+        );
+        // Authored classification.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let lowered: ProcessSpec = eph.clone().into();
+            assert_eq!(
+                eph.input_arity_is_many(),
+                lowered.classification.input_arity_is_many(),
+                "authored point_type={populated:?}: parity drift",
+            );
+        }
+    }
+
+    /// BINARY XOR PARTITION pin — for the absent-classification
+    /// baseline AND every
+    /// [`crate::classification::ConvergencePointType::ALL`] variant,
+    /// EXACTLY ONE of [`Self::input_arity_is_one`] and
+    /// [`Self::input_arity_is_many`] returns `true`. CLOSES the
+    /// input-arity axis into the FULL binary XOR partition contract
+    /// on the ephemeral surface — the resolver-hop peer of the
+    /// parent-composed
+    /// `classification_input_arity_probes_form_binary_xor_partition_over_all`
+    /// test. Binary counterpart of the ternary XOR partitions sealed
+    /// on the sibling `point_type` and `substrate` axes by
+    /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`
+    /// and
+    /// `ephemeral_substrate_probes_form_three_way_xor_partition_over_all`,
+    /// structural twin of the calm/data/direction binary partitions
+    /// `ephemeral_calm_probes_form_binary_xor_partition_over_all`,
+    /// `ephemeral_data_probes_form_binary_xor_partition_over_all`,
+    /// and
+    /// `ephemeral_direction_probes_form_binary_xor_partition_over_all`.
+    /// This pin is the SEVENTH classification axis to reach the
+    /// closed XOR partition landmark on the ephemeral resolver-hop
+    /// surface — the FIRST closed axis on the derived-typed-
+    /// projection stratum of this surface, opening the stratum beyond
+    /// the six stored classification slots. Guarantees the absent-
+    /// classification case lands in the definite multi-input bucket
+    /// (`gate_compute` → point_type=Gate → input_arity=Many →
+    /// is_one=false, is_many=true), so every unadorned
+    /// `(defephemeral …)` audits under a definite non-empty input-
+    /// arity bucket.
+    #[test]
+    fn ephemeral_input_arity_probes_form_binary_xor_partition_over_all() {
+        // Absent classification.
+        let eph = empty_ephemeral();
+        let buckets = [eph.input_arity_is_one(), eph.input_arity_is_many()];
+        let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+        assert_eq!(
+            hits, 1,
+            "None-classification: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
+        );
+        // Authored classification.
+        for populated in ConvergencePointType::ALL {
+            let mut classification = Classification::gate_compute();
+            classification.point_type = populated;
+            let mut eph = empty_ephemeral();
+            eph.classification = Some(classification);
+            let buckets = [eph.input_arity_is_one(), eph.input_arity_is_many()];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "authored point_type={populated:?}: probes {buckets:?} — exactly one must be true (binary XOR partition violated)",
             );
         }
     }

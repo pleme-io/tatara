@@ -591,6 +591,97 @@ impl Boundary {
     pub fn distinct_postcondition_kinds(&self) -> Vec<ConditionKind> {
         self.postconditions.distinct_kinds()
     }
+
+    /// Scalar cardinality of the [`ConditionKind`] set appearing at
+    /// least once in `preconditions ∪ postconditions` — the
+    /// condition-union arm of the (precondition, postcondition,
+    /// condition-union) distinct-kind-count triad on [`Boundary`].
+    ///
+    /// # Composed body
+    ///
+    /// `ConditionKind::ALL.iter().filter(|k|
+    /// self.has_condition_kind(**k)).count()` — a thin projection over
+    /// the closed set composed against the two-slice union primitive
+    /// [`Self::has_condition_kind`], byte-identical to the trait-level
+    /// [`ConditionSliceExt::distinct_kind_count`] but reaching through
+    /// the boundary's two-slice union rather than a single slice.
+    /// Equivalent to `self.distinct_condition_kinds().len()` without
+    /// materializing the intermediate `Vec<ConditionKind>`.
+    ///
+    /// # Sibling to [`Self::distinct_condition_kinds`]
+    ///
+    /// Scalar projection of the closed-set-inversion widened primitive
+    /// on the boundary-union surface — where `distinct_condition_kinds`
+    /// returns the SET, `distinct_condition_kind_count` collapses it to
+    /// its cardinality. Byte-for-byte peer of the point-domain scalar
+    /// projection [`ConditionSliceExt::distinct_kind_count`] one
+    /// struct-layer down, and of the peer surface sugar
+    /// [`crate::ephemeral::EphemeralSpec::distinct_condition_kind_count`]
+    /// one struct-layer sideways.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that enforces "every process boundary
+    /// carries at least ONE distinct kind" now reads
+    /// `spec.boundary.distinct_condition_kind_count() > 0` at ONE call
+    /// site rather than paying for
+    /// `spec.boundary.distinct_condition_kinds().len() > 0` (with its
+    /// intermediate heap allocation) or the eight-way `has_*_kind`
+    /// sweep at the callsite. A future require-tag classifier arm that
+    /// publishes the distinct-set cardinality as a scalar (a
+    /// hypothetical `condition-kinds-distinct-<n>` prefix family)
+    /// reaches this ONE primitive without allocating.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs (the scalar cardinality composes the SAME
+    /// closed-set walk on both this boundary surface and the
+    /// slice-level substrate primitive). THEORY.md §VI.1 — generation
+    /// over composition (a new [`ConditionKind`] variant added to
+    /// `ALL` reaches this primitive mechanically through the closed-set
+    /// walk).
+    #[must_use]
+    pub fn distinct_condition_kind_count(&self) -> usize {
+        ConditionKind::ALL
+            .iter()
+            .filter(|k| self.has_condition_kind(**k))
+            .count()
+    }
+
+    /// Scalar cardinality of the [`ConditionKind`] set appearing at
+    /// least once in [`Self::preconditions`] — the precondition-side
+    /// arm of the (precondition, postcondition, condition-union)
+    /// distinct-kind-count triad on [`Boundary`]. Thin typed delegate
+    /// to [`ConditionSliceExt::distinct_kind_count`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::distinct_postcondition_kind_count`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-slice
+    /// closed-set walk fails at that primitive's tests rather than as
+    /// silent drift at either struct-level scalar-cardinality arm.
+    #[must_use]
+    pub fn distinct_precondition_kind_count(&self) -> usize {
+        self.preconditions.distinct_kind_count()
+    }
+
+    /// Scalar cardinality of the [`ConditionKind`] set appearing at
+    /// least once in [`Self::postconditions`] — the postcondition-side
+    /// arm of the (precondition, postcondition, condition-union)
+    /// distinct-kind-count triad on [`Boundary`]. Thin typed delegate
+    /// to [`ConditionSliceExt::distinct_kind_count`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::distinct_precondition_kind_count`]. See that
+    /// method for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via
+    /// [`crate::ephemeral::EphemeralSpec::distinct_postcondition_kind_count`].
+    #[must_use]
+    pub fn distinct_postcondition_kind_count(&self) -> usize {
+        self.postconditions.distinct_kind_count()
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -875,6 +966,80 @@ pub trait ConditionSliceExt {
             .filter(|k| self.has_kind(*k))
             .collect()
     }
+
+    /// Scalar cardinality projection of [`Self::distinct_kinds`] onto
+    /// its `.len()` — the number of [`ConditionKind`] variants that
+    /// appear at least once in this slice. Default body:
+    /// `ConditionKind::ALL.iter().filter(|k| self.has_kind(**k)).count()`
+    /// — a closed-set walk that composes against [`Self::has_kind`] per
+    /// variant WITHOUT materializing an intermediate `Vec<ConditionKind>`.
+    /// A slice that carries the same [`ConditionKind`] at multiple
+    /// positions contributes `1` to the count (the closed-set projection
+    /// collapses multiplicity — a caller that needs the per-kind
+    /// cardinality reaches for [`Self::count_kind`]).
+    ///
+    /// # Sibling to [`Self::distinct_kinds`]
+    ///
+    /// Scalar projection of the closed-set-inversion widened primitive
+    /// — where `distinct_kinds` returns the SET (a `Vec<ConditionKind>`
+    /// in canonical [`ConditionKind::ALL`] order), `distinct_kind_count`
+    /// collapses that set to its cardinality. The composition law
+    /// `distinct_kind_count() == distinct_kinds().len()` binds the
+    /// scalar projection to the widened primitive at the trait's
+    /// default body and is swept substrate-wide by
+    /// [`assert_slice_refinement_composition_laws`] as its sixth arm.
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::populated_kind_count`]
+    ///
+    /// Same shape at the peer axis one struct layer up: where
+    /// `populated_kind_count` scalar-projects `populated_kinds` on the
+    /// tagged-union parent-level closed-set-inversion axis,
+    /// `distinct_kind_count` scalar-projects `distinct_kinds` on the
+    /// slice-level closed-set-inversion axis. The two primitives close
+    /// the scalar-cardinality refinement at two adjacent typescape
+    /// sites — one per closed-set-addressed slice-level refinement,
+    /// one per closed-set-addressed tagged-union parent-level
+    /// refinement — through the SAME `ClosedSet::ALL`-walk shape.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A future coherence check that enforces "every boundary carries
+    ///   at least ONE distinct kind" now reads
+    ///   `slice.distinct_kind_count() > 0` at ONE call site rather than
+    ///   paying for `slice.distinct_kinds().len() > 0` (with its
+    ///   intermediate heap allocation) or the eight-way sweep with
+    ///   `has_kind` at the callsite.
+    /// - A future require-tag classifier arm that surfaces the
+    ///   distinct-set cardinality as a scalar (a hypothetical
+    ///   `condition-kinds-distinct-<n>` prefix family named in
+    ///   [`Self::distinct_kinds`]'s doc-comment as a compounding-future
+    ///   consumer) reaches this ONE primitive without allocating.
+    /// - A future audit dump reporting "boundary carries N distinct
+    ///   kinds" reaches `slice.distinct_kind_count()` directly rather
+    ///   than restating the `.iter().filter(...).count()` closure body.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The scalar cardinality lives at ONE substrate site as a typed
+    ///   projection of [`Self::distinct_kinds`] onto its `.len()`, and
+    ///   the default body composes against [`Self::has_kind`] over the
+    ///   closed set [`ConditionKind::ALL`] byte-identically to
+    ///   `distinct_kinds` without the intermediate `Vec`. Every
+    ///   downstream aggregate consumer binds through the SAME shape
+    ///   rather than paying for the allocation to reach the
+    ///   cardinality.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically (the closed-set walk picks up the new
+    ///   entry) and every downstream consumer sees the wider
+    ///   cardinality without further per-caller edit.
+    fn distinct_kind_count(&self) -> usize {
+        ConditionKind::ALL
+            .iter()
+            .filter(|k| self.has_kind(**k))
+            .count()
+    }
 }
 
 /// Iterator yielded by [`ConditionSliceExt::iter_kind`] — the widened
@@ -1068,6 +1233,19 @@ where
     assert_eq!(
         distinct, canonical,
         "distinct_kinds() must yield ConditionKind::ALL-ordered subsequence of kinds where has_kind is true (no duplicates, canonical order)",
+    );
+
+    // distinct_kind_count ↔ distinct_kinds.len() — the scalar
+    // cardinality projection of the closed-set-inversion widened
+    // primitive. A regression that overrode `distinct_kind_count` to
+    // skip a kind, double-count a slot, or drift the walk from
+    // `ConditionKind::ALL` surfaces HERE at the substrate boundary,
+    // not as silent drift at every downstream `distinct-count-<n>`
+    // require-tag classifier or audit-dump callsite.
+    assert_eq!(
+        slice.distinct_kind_count(),
+        distinct.len(),
+        "distinct_kind_count() drifted from distinct_kinds().len()",
     );
 }
 
@@ -3027,6 +3205,131 @@ mod tests {
         );
     }
 
+    // ── distinct_kind_count — slice-level scalar-cardinality pins ──────
+    //
+    // The trait-level scalar-cardinality projection of the closed-set-
+    // inversion widened primitive: `distinct_kind_count()` collapses
+    // `distinct_kinds()` to its cardinality without materializing the
+    // intermediate `Vec<ConditionKind>`. Composition law
+    // `distinct_kind_count() == distinct_kinds().len()` pinned as the
+    // sixth arm of the substrate testkit primitive
+    // [`assert_slice_refinement_composition_laws`].
+
+    /// ZERO-ELEMENT pin — an empty slice returns `0` on
+    /// `distinct_kind_count`, byte-for-byte with `distinct_kinds().len()`
+    /// on the same slice. Locks the zero-element identity so a
+    /// regression that (a) returned `ConditionKind::ALL.len()` (the
+    /// wrong direction of the closed-set walk — every kind counted
+    /// regardless of presence), (b) returned a placeholder `1` (a
+    /// copy-paste of a single-slot factory's cardinality), or (c) drifted
+    /// off `distinct_kinds().len()` surfaces HERE.
+    #[test]
+    fn condition_slice_distinct_kind_count_returns_zero_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        assert_eq!(
+            empty.distinct_kind_count(),
+            0,
+            "empty slice must return 0 on distinct_kind_count",
+        );
+        assert_eq!(
+            empty.distinct_kind_count(),
+            empty.distinct_kinds().len(),
+            "empty slice distinct_kind_count must equal distinct_kinds().len()",
+        );
+    }
+
+    /// PER-VARIANT pin — a slice with EXACTLY ONE `Condition` carrying
+    /// the addressed kind returns `1` on `distinct_kind_count` — the
+    /// single-slot diagonal cardinality. Sweep [`ConditionKind::ALL`]
+    /// so a regression that (a) always returned `0` regardless of the
+    /// actual kind, (b) always returned `ConditionKind::ALL.len()`
+    /// (missed the `filter` step), or (c) collapsed the walk to a
+    /// single fixed variant surfaces HERE.
+    #[test]
+    fn condition_slice_distinct_kind_count_returns_one_per_variant() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            assert_eq!(
+                slice.distinct_kind_count(),
+                1,
+                "single-populated slice must return 1 on distinct_kind_count for {populated:?}",
+            );
+            assert_eq!(
+                slice.distinct_kind_count(),
+                slice.distinct_kinds().len(),
+                "single-populated distinct_kind_count must equal distinct_kinds().len() for {populated:?}",
+            );
+        }
+    }
+
+    /// DEDUP pin — a slice with the SAME kind at multiple positions
+    /// (three interleaved with distinct kinds — two `PromQL`, three
+    /// `ClosedLoopAuth`) returns `2` on `distinct_kind_count` (the
+    /// scalar cardinality of the DISTINCT presence set, byte-for-byte
+    /// with `distinct_kinds().len()` on the same slice). Locks the
+    /// closed-set projection against a regression that (a) counted
+    /// every occurrence (returning `5` — byte-identical to
+    /// `slice.len()`), (b) omitted the dedup and returned `5` via
+    /// `.iter().map(|c| c.kind).count()`.
+    #[test]
+    fn condition_slice_distinct_kind_count_dedups_across_duplicates() {
+        let interleaved = [
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "first" }),
+            },
+            Condition {
+                kind: ConditionKind::PromQL,
+                params: json!({ "query": "up" }),
+            },
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "second" }),
+            },
+            Condition {
+                kind: ConditionKind::PromQL,
+                params: json!({ "query": "healthy" }),
+            },
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "third" }),
+            },
+        ];
+        assert_eq!(
+            interleaved.distinct_kind_count(),
+            2,
+            "interleaved-duplicate slice must return 2 on distinct_kind_count (PromQL + ClosedLoopAuth)",
+        );
+        assert_eq!(
+            interleaved.distinct_kind_count(),
+            interleaved.distinct_kinds().len(),
+            "interleaved-duplicate distinct_kind_count must equal distinct_kinds().len()",
+        );
+    }
+
+    /// FULL-COVERAGE pin — a slice that carries every [`ConditionKind`]
+    /// variant returns `ConditionKind::ALL.len()` on `distinct_kind_count`.
+    /// The scalar cardinality projection covers the full closed set at
+    /// ONE call site — a regression that missed one variant in the walk
+    /// (skipping the FIRST or LAST `ALL` entry via a `[1..]` or
+    /// `[..ALL.len() - 1]` slice bug in the closed-set walk) surfaces
+    /// HERE.
+    #[test]
+    fn condition_slice_distinct_kind_count_covers_full_closed_set_on_saturated_slice() {
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert_eq!(
+            saturated.as_slice().distinct_kind_count(),
+            ConditionKind::ALL.len(),
+            "slice containing every ConditionKind must return ConditionKind::ALL.len() on distinct_kind_count",
+        );
+        assert_eq!(
+            saturated.as_slice().distinct_kind_count(),
+            saturated.as_slice().distinct_kinds().len(),
+            "saturated distinct_kind_count must equal distinct_kinds().len()",
+        );
+    }
+
     // ── Boundary distinct-set triad — substrate-delegation pins ────────
     //
     // The (precondition, postcondition, condition-union) distinct-set
@@ -3038,6 +3341,90 @@ mod tests {
     // `assert_surface_union_composition_laws` (extended in this commit
     // with the closed-set-inversion arm) pins the union composition law
     // against the two half-slice arms in canonical ALL-order.
+
+    /// SUBSTRATE-DELEGATION pin (Boundary distinct-kind-count triad)
+    /// — the three `distinct_*_kind_count` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::distinct_kind_count`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union scalar via
+    /// `ConditionKind::ALL.filter(|k| has_condition_kind(*k)).count()`.
+    /// Sweep `ConditionKind::ALL × ConditionKind::ALL` so a regression
+    /// that (a) inlined a divergent closed-set walk at either half-slice
+    /// arm, (b) reversed the union walk order, or (c) narrowed the
+    /// union to an intersection surfaces HERE. Also pins the
+    /// composition law
+    /// `distinct_*_kind_count() == distinct_*_kinds().len()` at each
+    /// arm — a regression that overrode the scalar projection to skip a
+    /// kind or double-count a slot fails HERE.
+    #[test]
+    fn distinct_condition_kind_count_triad_delegates_and_matches_distinct_kinds_len() {
+        // Empty boundary — every arm returns 0.
+        let b = Boundary::default();
+        for kind in ConditionKind::ALL {
+            assert_eq!(
+                b.distinct_precondition_kind_count(),
+                0,
+                "empty boundary must return 0 on distinct_precondition_kind_count, kind={kind:?}",
+            );
+            assert_eq!(
+                b.distinct_postcondition_kind_count(),
+                0,
+                "empty boundary must return 0 on distinct_postcondition_kind_count, kind={kind:?}",
+            );
+            assert_eq!(
+                b.distinct_condition_kind_count(),
+                0,
+                "empty boundary must return 0 on distinct_condition_kind_count, kind={kind:?}",
+            );
+        }
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                assert_eq!(
+                    b.distinct_precondition_kind_count(),
+                    b.preconditions.distinct_kind_count(),
+                    "Boundary::distinct_precondition_kind_count must delegate verbatim to \
+                     preconditions.distinct_kind_count() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.distinct_precondition_kind_count(),
+                    b.distinct_precondition_kinds().len(),
+                    "Boundary::distinct_precondition_kind_count must equal \
+                     distinct_precondition_kinds().len() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.distinct_postcondition_kind_count(),
+                    b.postconditions.distinct_kind_count(),
+                    "Boundary::distinct_postcondition_kind_count must delegate verbatim to \
+                     postconditions.distinct_kind_count() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.distinct_postcondition_kind_count(),
+                    b.distinct_postcondition_kinds().len(),
+                    "Boundary::distinct_postcondition_kind_count must equal \
+                     distinct_postcondition_kinds().len() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let expected_union_count = if pre_kind == post_kind { 1 } else { 2 };
+                assert_eq!(
+                    b.distinct_condition_kind_count(),
+                    expected_union_count,
+                    "Boundary::distinct_condition_kind_count must count distinct union kinds \
+                     for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.distinct_condition_kind_count(),
+                    b.distinct_condition_kinds().len(),
+                    "Boundary::distinct_condition_kind_count must equal \
+                     distinct_condition_kinds().len() for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
 
     /// SUBSTRATE-DELEGATION pin (Boundary distinct-set triad) — the
     /// three `distinct_*_kinds` methods on [`Boundary`] delegate to the

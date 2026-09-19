@@ -639,6 +639,94 @@ impl EphemeralSpec {
         self.postconditions.distinct_kinds()
     }
 
+    /// Scalar cardinality of the [`ConditionKind`] set appearing at
+    /// least once in `preconditions ∪ postconditions` — the peer of
+    /// [`crate::boundary::Boundary::distinct_condition_kind_count`] on
+    /// the [`EphemeralSpec`] sugar surface.
+    ///
+    /// # Composed body — byte-identical to
+    /// [`crate::boundary::Boundary::distinct_condition_kind_count`]
+    ///
+    /// `ConditionKind::ALL.iter().filter(|k|
+    /// self.has_condition_kind(**k)).count()` — the scalar cardinality
+    /// projection of [`Self::distinct_condition_kinds`] onto its
+    /// `.len()`, without materializing the intermediate
+    /// `Vec<ConditionKind>`. Byte-identical to the peer method on the
+    /// point-domain [`crate::boundary::Boundary`] surface — both
+    /// compose against the SAME slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::distinct_kind_count`] via
+    /// the two-slice union composed through [`Self::has_condition_kind`]
+    /// so a regression at the per-slice closed-set walk fails at that
+    /// primitive's tests rather than as silent drift at either
+    /// struct-level scalar-cardinality caller.
+    ///
+    /// # Sibling to [`Self::distinct_condition_kinds`]
+    ///
+    /// Scalar projection of the closed-set-inversion widened primitive
+    /// on the ephemeral-union surface — where `distinct_condition_kinds`
+    /// returns the SET, `distinct_condition_kind_count` collapses it to
+    /// its cardinality. The two-surface parity contract now covers SIX
+    /// refinements (bool / `&Condition` / `impl Iterator` / `usize` /
+    /// `Vec<ConditionKind>` closed-set-inversion / `usize` scalar
+    /// cardinality of the closed-set-inversion) on the condition axis,
+    /// byte-for-byte peer of the point-domain triad on
+    /// [`crate::boundary::Boundary`].
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the scalar cardinality composes the SAME closed-set
+    /// walk on both this ephemeral surface and the point-domain
+    /// [`crate::boundary::Boundary`] surface). THEORY.md §VI.1
+    /// (generation over composition — a future [`ConditionKind`] variant
+    /// added to `ALL` reaches both surfaces' distinct-kind-count triads
+    /// mechanically through the SAME closed-set walk).
+    #[must_use]
+    pub fn distinct_condition_kind_count(&self) -> usize {
+        ConditionKind::ALL
+            .iter()
+            .filter(|k| self.has_condition_kind(**k))
+            .count()
+    }
+
+    /// Scalar cardinality of the [`ConditionKind`] set appearing at
+    /// least once in [`Self::preconditions`] — the precondition-side
+    /// arm of the (precondition, postcondition, condition-union)
+    /// distinct-kind-count triad on [`EphemeralSpec`]. Thin typed
+    /// delegate to
+    /// [`crate::boundary::ConditionSliceExt::distinct_kind_count`]
+    /// over [`Self::preconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::distinct_precondition_kind_count`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice closed-set walk fails at that primitive's tests rather
+    /// than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn distinct_precondition_kind_count(&self) -> usize {
+        self.preconditions.distinct_kind_count()
+    }
+
+    /// Scalar cardinality of the [`ConditionKind`] set appearing at
+    /// least once in [`Self::postconditions`] — the postcondition-side
+    /// arm of the (precondition, postcondition, condition-union)
+    /// distinct-kind-count triad on [`EphemeralSpec`]. Thin typed
+    /// delegate to
+    /// [`crate::boundary::ConditionSliceExt::distinct_kind_count`]
+    /// over [`Self::postconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::distinct_postcondition_kind_count`]
+    /// on the point-domain surface. See
+    /// [`Self::distinct_precondition_kind_count`] for the full rationale
+    /// — the two methods share ONE lift motivation, ONE fail-before-
+    /// pass-after composition-law pin, and ONE two-surface parity
+    /// contract with the point-domain
+    /// [`crate::boundary::Boundary`] distinct-kind-count peer methods.
+    #[must_use]
+    pub fn distinct_postcondition_kind_count(&self) -> usize {
+        self.postconditions.distinct_kind_count()
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -5099,6 +5187,89 @@ mod tests {
     // now covers FIVE refinements on the condition axis: the four
     // point-probe refinements (has / find / iter / count) AND the ONE
     // closed-set-inversion refinement (distinct-set) on both surfaces.
+
+    /// SUBSTRATE-DELEGATION pin (ephemeral surface, distinct-kind-count
+    /// triad) — the three `distinct_*_kind_count` methods on
+    /// [`EphemeralSpec`] delegate to the slice-level substrate
+    /// primitive [`crate::boundary::ConditionSliceExt::distinct_kind_count`]
+    /// over the two `Vec<Condition>` slots and compose the union
+    /// scalar via `ConditionKind::ALL.filter(|k|
+    /// has_condition_kind(*k)).count()`. Byte-for-byte peer of the
+    /// point-surface pin
+    /// `distinct_condition_kind_count_triad_delegates_to_slice_distinct_kind_count`
+    /// on [`crate::boundary::Boundary`] — the two-surface parity
+    /// contract now binds every downstream scalar-cardinality consumer
+    /// on either surface to the SAME closed-set walk through ONE
+    /// substrate rather than through per-surface `.distinct_*_kinds().len()`
+    /// re-materializations that pay for a heap allocation.
+    #[test]
+    fn ephemeral_distinct_condition_kind_count_triad_delegates_and_matches_distinct_kinds_len() {
+        // Empty spec — every arm returns 0.
+        let spec = empty_ephemeral();
+        for kind in ConditionKind::ALL {
+            assert_eq!(
+                spec.distinct_precondition_kind_count(),
+                0,
+                "empty ephemeral spec must return 0 on distinct_precondition_kind_count, kind={kind:?}",
+            );
+            assert_eq!(
+                spec.distinct_postcondition_kind_count(),
+                0,
+                "empty ephemeral spec must return 0 on distinct_postcondition_kind_count, kind={kind:?}",
+            );
+            assert_eq!(
+                spec.distinct_condition_kind_count(),
+                0,
+                "empty ephemeral spec must return 0 on distinct_condition_kind_count, kind={kind:?}",
+            );
+        }
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+
+                assert_eq!(
+                    spec.distinct_precondition_kind_count(),
+                    spec.preconditions.distinct_kind_count(),
+                    "EphemeralSpec::distinct_precondition_kind_count must delegate verbatim to \
+                     preconditions.distinct_kind_count() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.distinct_precondition_kind_count(),
+                    spec.distinct_precondition_kinds().len(),
+                    "EphemeralSpec::distinct_precondition_kind_count must equal \
+                     distinct_precondition_kinds().len() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.distinct_postcondition_kind_count(),
+                    spec.postconditions.distinct_kind_count(),
+                    "EphemeralSpec::distinct_postcondition_kind_count must delegate verbatim to \
+                     postconditions.distinct_kind_count() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.distinct_postcondition_kind_count(),
+                    spec.distinct_postcondition_kinds().len(),
+                    "EphemeralSpec::distinct_postcondition_kind_count must equal \
+                     distinct_postcondition_kinds().len() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let expected_union_count = if pre_kind == post_kind { 1 } else { 2 };
+                assert_eq!(
+                    spec.distinct_condition_kind_count(),
+                    expected_union_count,
+                    "EphemeralSpec::distinct_condition_kind_count must count distinct union kinds \
+                     for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.distinct_condition_kind_count(),
+                    spec.distinct_condition_kinds().len(),
+                    "EphemeralSpec::distinct_condition_kind_count must equal \
+                     distinct_condition_kinds().len() for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
 
     /// SUBSTRATE-DELEGATION pin (ephemeral surface, distinct-set triad)
     /// — the three `distinct_*_kinds` methods on [`EphemeralSpec`]

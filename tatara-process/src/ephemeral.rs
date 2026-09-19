@@ -727,6 +727,105 @@ impl EphemeralSpec {
         self.postconditions.distinct_kind_count()
     }
 
+    /// The set of [`ConditionKind`] variants that do NOT appear in
+    /// `preconditions ∪ postconditions`, projected in
+    /// [`ConditionKind::ALL`] order — the closed-set-inversion
+    /// COMPLEMENT of [`Self::distinct_condition_kinds`] on the
+    /// (precondition, postcondition, condition-union) missing-set triad.
+    /// Byte-identical peer of
+    /// [`crate::boundary::Boundary::missing_condition_kinds`] on the
+    /// ephemeral sugar surface.
+    ///
+    /// # Composed body — byte-identical to
+    /// [`crate::boundary::Boundary::missing_condition_kinds`]
+    ///
+    /// `ConditionKind::ALL.into_iter().filter(|k|
+    /// !self.has_condition_kind(*k)).collect()` — a thin projection
+    /// over the closed set composed against the two-slice union
+    /// primitive [`Self::has_condition_kind`] under a negated
+    /// predicate. Equivalent to the SET-INTERSECTION of
+    /// [`Self::missing_precondition_kinds`] and
+    /// [`Self::missing_postcondition_kinds`] projected in canonical
+    /// [`ConditionKind::ALL`] order (the union-composition law pinned
+    /// by [`crate::assert_surface_union_composition_laws`]).
+    ///
+    /// # Peer on the point surface — [`crate::boundary::Boundary::missing_condition_kinds`]
+    ///
+    /// Same signature `(&Self) -> Vec<ConditionKind>`, same closed-set-
+    /// complement body, on the point-domain [`crate::boundary::Boundary`]
+    /// nested-slot carrier. Both methods compose against the SAME
+    /// slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::missing_kinds`] via the
+    /// two-slice union composed through [`Self::has_condition_kind`] —
+    /// a regression at the per-slice walk fails at that primitive's
+    /// tests rather than as silent drift at either struct-level
+    /// complement caller.
+    ///
+    /// # Sibling to [`Self::distinct_condition_kinds`]
+    ///
+    /// SIXTH refinement on the ephemeral-surface presence-probe algebra,
+    /// on the SAME closed-set-inversion axis as `distinct_condition_kinds`
+    /// but under a NEGATED point-probe. The two-surface parity contract
+    /// now covers SEVEN refinements (bool / `&Condition` /
+    /// `impl Iterator` / `usize` / `Vec<ConditionKind>` closed-set-
+    /// inversion / `usize` scalar cardinality of the closed-set-
+    /// inversion / `Vec<ConditionKind>` closed-set-complement) on the
+    /// condition axis, byte-for-byte peer of the point-domain triad on
+    /// [`crate::boundary::Boundary`].
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the closed-set complement composes the SAME
+    /// closed-set walk on both this ephemeral surface and the point-
+    /// domain [`crate::boundary::Boundary`] surface).
+    /// THEORY.md §VI.1 (generation over composition — a future
+    /// [`ConditionKind`] variant added to `ALL` reaches both surfaces'
+    /// missing-set triads mechanically through the SAME closed-set walk).
+    #[must_use]
+    pub fn missing_condition_kinds(&self) -> Vec<ConditionKind> {
+        ConditionKind::ALL
+            .into_iter()
+            .filter(|k| !self.has_condition_kind(*k))
+            .collect()
+    }
+
+    /// The set of [`ConditionKind`] variants that do NOT appear in
+    /// [`Self::preconditions`], projected in [`ConditionKind::ALL`]
+    /// order — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) missing-set triad on
+    /// [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::missing_kinds`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`crate::boundary::Boundary::missing_precondition_kinds`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice closed-set walk fails at that primitive's tests
+    /// rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn missing_precondition_kinds(&self) -> Vec<ConditionKind> {
+        self.preconditions.missing_kinds()
+    }
+
+    /// The set of [`ConditionKind`] variants that do NOT appear in
+    /// [`Self::postconditions`], projected in [`ConditionKind::ALL`]
+    /// order — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) missing-set triad on
+    /// [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::missing_kinds`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`crate::boundary::Boundary::missing_postcondition_kinds`]
+    /// on the point-domain surface. See
+    /// [`Self::missing_precondition_kinds`] for the full rationale —
+    /// the two methods share ONE lift motivation, ONE fail-before-
+    /// pass-after composition-law pin, and ONE two-surface parity
+    /// contract with the point-domain
+    /// [`crate::boundary::Boundary`] missing-set peer methods.
+    #[must_use]
+    pub fn missing_postcondition_kinds(&self) -> Vec<ConditionKind> {
+        self.postconditions.missing_kinds()
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -5311,6 +5410,88 @@ mod tests {
                     expected_union,
                     "EphemeralSpec::distinct_condition_kinds must equal ConditionKind::ALL-ordered \
                      set-union of the two half-slice distinct-sets for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (EphemeralSpec missing-set triad) —
+    /// the three `missing_*_kinds` methods on [`EphemeralSpec`]
+    /// delegate to the slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::missing_kinds`] over the
+    /// two `Vec<Condition>` slots and compose the union via
+    /// `ConditionKind::ALL.filter(|k| !has_condition_kind(*k))`. Sweep
+    /// `ConditionKind::ALL × ConditionKind::ALL`. Byte-for-byte peer of
+    /// `missing_condition_kinds_triad_delegates_to_slice_missing_kinds`
+    /// on the point-domain [`crate::boundary::Boundary`] surface —
+    /// both peers compose against the SAME slice-level substrate
+    /// primitive so a regression at the per-slice complement walk
+    /// fails at that primitive's tests rather than as silent drift at
+    /// either struct-level arm.
+    #[test]
+    fn ephemeral_missing_condition_kinds_triad_delegates_to_slice_missing_kinds() {
+        // Empty ephemeral spec — every arm returns ConditionKind::ALL.
+        let empty = empty_ephemeral();
+        let all_kinds = ConditionKind::ALL.to_vec();
+        assert_eq!(
+            empty.missing_precondition_kinds(),
+            all_kinds,
+            "empty ephemeral spec must return ConditionKind::ALL on missing_precondition_kinds",
+        );
+        assert_eq!(
+            empty.missing_postcondition_kinds(),
+            all_kinds,
+            "empty ephemeral spec must return ConditionKind::ALL on missing_postcondition_kinds",
+        );
+        assert_eq!(
+            empty.missing_condition_kinds(),
+            all_kinds,
+            "empty ephemeral spec must return ConditionKind::ALL on missing_condition_kinds",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+
+                assert_eq!(
+                    spec.missing_precondition_kinds(),
+                    spec.preconditions.missing_kinds(),
+                    "EphemeralSpec::missing_precondition_kinds must delegate verbatim to \
+                     preconditions.missing_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.missing_postcondition_kinds(),
+                    spec.postconditions.missing_kinds(),
+                    "EphemeralSpec::missing_postcondition_kinds must delegate verbatim to \
+                     postconditions.missing_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                // Union: a kind is missing from the union iff it is
+                // missing from BOTH half-slices (SET-INTERSECTION).
+                let expected_union: Vec<_> = ConditionKind::ALL
+                    .into_iter()
+                    .filter(|k| pre_kind != *k && post_kind != *k)
+                    .collect();
+                assert_eq!(
+                    spec.missing_condition_kinds(),
+                    expected_union,
+                    "EphemeralSpec::missing_condition_kinds must equal ConditionKind::ALL-ordered \
+                     set-INTERSECTION of the two half-slice missing-sets for pre={pre_kind:?} post={post_kind:?}",
+                );
+                // Partition invariant (distinct ∪ missing == ALL, disjoint).
+                let distinct = spec.distinct_condition_kinds();
+                let missing = spec.missing_condition_kinds();
+                for kind in ConditionKind::ALL {
+                    assert!(
+                        distinct.contains(&kind) ^ missing.contains(&kind),
+                        "EphemeralSpec (distinct, missing) partition violated on {kind:?} for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+                assert_eq!(
+                    distinct.len() + missing.len(),
+                    ConditionKind::ALL.len(),
+                    "EphemeralSpec (distinct, missing) cardinality partition drift for pre={pre_kind:?} post={post_kind:?}",
                 );
             }
         }

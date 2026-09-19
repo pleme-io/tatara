@@ -682,6 +682,115 @@ impl Boundary {
     pub fn distinct_postcondition_kind_count(&self) -> usize {
         self.postconditions.distinct_kind_count()
     }
+
+    /// The set of [`ConditionKind`] variants that do NOT appear in
+    /// `preconditions ∪ postconditions`, projected in
+    /// [`ConditionKind::ALL`] order — the closed-set-inversion
+    /// COMPLEMENT of [`Self::distinct_condition_kinds`] on the
+    /// (precondition, postcondition, condition-union) missing-set triad.
+    ///
+    /// # Composed body
+    ///
+    /// `ConditionKind::ALL.into_iter().filter(|k|
+    /// !self.has_condition_kind(*k)).collect()` — a thin projection
+    /// over the closed set composed against the two-slice union
+    /// primitive [`Self::has_condition_kind`] under a negated
+    /// predicate. Equivalent to the SET-INTERSECTION of
+    /// [`Self::missing_precondition_kinds`] and
+    /// [`Self::missing_postcondition_kinds`] projected in canonical
+    /// [`ConditionKind::ALL`] order — a kind is missing from the
+    /// union iff it is missing from BOTH half-slices (the union-
+    /// composition law pinned by the substrate testkit macro
+    /// [`crate::assert_surface_union_composition_laws`]).
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::missing_condition_kinds`]
+    ///
+    /// Same signature `(&Self) -> Vec<ConditionKind>`, same closed-set-
+    /// complement body, on the sugar-surface type. Both methods compose
+    /// against the SAME slice-level substrate primitive
+    /// [`ConditionSliceExt::missing_kinds`] via the two-slice union
+    /// composed through [`Self::has_condition_kind`] — a regression at
+    /// the per-slice walk fails at that primitive's tests rather than
+    /// as silent drift at either struct-level complement caller.
+    ///
+    /// # Sibling to [`Self::distinct_condition_kinds`]
+    ///
+    /// SIXTH refinement on the boundary-surface presence-probe algebra,
+    /// on the SAME closed-set-inversion axis as `distinct_condition_kinds`
+    /// but under a NEGATED point-probe. The composition law
+    /// `missing_condition_kinds().contains(&k) ==
+    /// !has_condition_kind(k)` for every `k ∈ ConditionKind::ALL`
+    /// binds the complement to the point probe at the triad — and the
+    /// two widened primitives PARTITION `ConditionKind::ALL` (their
+    /// union covers `ALL`, their intersection is empty, their
+    /// cardinalities sum to `ALL.len()`).
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that enforces "every process boundary
+    /// carries a [`ConditionKind::JobAttested`] postcondition" surfaces
+    /// the operator-facing gap diagnostic
+    /// `spec.boundary.postconditions.missing_kinds()` verbatim (naming
+    /// EVERY kind absent from postconditions in canonical order). A
+    /// future operator-facing "boundary is MISSING [JobAttested,
+    /// ClosedLoopAuth]" audit dump reads this ONE method rather than
+    /// restating the negated closed-set walk at every consumer. A
+    /// hypothetical `condition-kinds-missing-<n>` require-tag classifier
+    /// prefix family that publishes the missing-set cardinality as a
+    /// scalar reaches `.missing_condition_kinds().len()`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the closed-set complement is a typed
+    /// projection of [`Self::has_condition_kind`] over
+    /// [`ConditionKind::ALL`] under negation, and every downstream
+    /// gap-analysis consumer binds through the SAME shape).
+    /// THEORY.md §VI.1 (generation over composition — a new
+    /// [`ConditionKind`] variant added to `ALL` reaches this method
+    /// mechanically through the closed-set walk).
+    #[must_use]
+    pub fn missing_condition_kinds(&self) -> Vec<ConditionKind> {
+        ConditionKind::ALL
+            .into_iter()
+            .filter(|k| !self.has_condition_kind(*k))
+            .collect()
+    }
+
+    /// The set of [`ConditionKind`] variants that do NOT appear in
+    /// [`Self::preconditions`], projected in [`ConditionKind::ALL`]
+    /// order — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) missing-set triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::missing_kinds`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::missing_postcondition_kinds`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive and their SET-INTERSECTION
+    /// (projected in [`ConditionKind::ALL`] order) is
+    /// [`Self::missing_condition_kinds`].
+    #[must_use]
+    pub fn missing_precondition_kinds(&self) -> Vec<ConditionKind> {
+        self.preconditions.missing_kinds()
+    }
+
+    /// The set of [`ConditionKind`] variants that do NOT appear in
+    /// [`Self::postconditions`], projected in [`ConditionKind::ALL`]
+    /// order — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) missing-set triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::missing_kinds`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::missing_precondition_kinds`]. See that method
+    /// for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via [`crate::ephemeral::EphemeralSpec::missing_postcondition_kinds`].
+    #[must_use]
+    pub fn missing_postcondition_kinds(&self) -> Vec<ConditionKind> {
+        self.postconditions.missing_kinds()
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -1040,6 +1149,98 @@ pub trait ConditionSliceExt {
             .filter(|k| self.has_kind(**k))
             .count()
     }
+
+    /// The set of [`ConditionKind`] variants that do NOT appear in this
+    /// slice, projected in [`ConditionKind::ALL`] order — the closed-
+    /// set-inversion COMPLEMENT of [`Self::distinct_kinds`]. Default
+    /// body: `ConditionKind::ALL.into_iter().filter(|k|
+    /// !self.has_kind(*k)).collect()` — a thin projection over the
+    /// closed set that composes against [`Self::has_kind`] per variant
+    /// under a negated predicate.
+    ///
+    /// # Sibling to [`Self::distinct_kinds`]
+    ///
+    /// Complement peer of the closed-set-inversion widened primitive on
+    /// the slice-level presence-probe axis. Where `distinct_kinds`
+    /// returns the SET of kinds that DO appear at least once,
+    /// `missing_kinds` returns the SET of kinds that DO NOT appear.
+    /// Both walk [`ConditionKind::ALL`] in canonical order and compose
+    /// against the same [`Self::has_kind`] point probe. The two
+    /// widened primitives PARTITION [`ConditionKind::ALL`]: their union
+    /// equals `ConditionKind::ALL`, their intersection is empty, and
+    /// their cardinalities sum to `ConditionKind::ALL.len()` — three
+    /// composition laws pinned as the seventh, eighth, and ninth arms
+    /// of the substrate testkit
+    /// [`assert_slice_refinement_composition_laws`].
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::populated_kinds`]'s
+    /// hypothetical `unpopulated_kinds` complement
+    ///
+    /// Same shape at the peer axis one struct layer up: fixing the
+    /// parent-side carrier and inverting the presence probe over the
+    /// closed set. The two primitives close the "closed-set complement"
+    /// refinement at two adjacent typescape sites — one per closed-set-
+    /// addressed slice-level refinement (this primitive), one per
+    /// closed-set-addressed tagged-union parent-level refinement (a
+    /// symmetric future addition).
+    ///
+    /// # Semantics — canonical subsequence of [`ConditionKind::ALL`]
+    ///
+    /// Returns a `Vec<ConditionKind>` whose elements appear in
+    /// [`ConditionKind::ALL`] order with no duplicates. An empty slice
+    /// returns `ConditionKind::ALL.to_vec()` (every kind is missing).
+    /// A slice that carries every variant returns an empty vec (no kind
+    /// is missing). A slice that carries the same [`ConditionKind`] at
+    /// multiple positions still contributes ZERO entries to the missing
+    /// set at that kind (the closed-set complement is a SET operation —
+    /// multiplicity on the present side is irrelevant to absence on the
+    /// missing side).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A future coherence check that enforces "every process boundary
+    ///   carries a [`ConditionKind::JobAttested`] postcondition" now
+    ///   surfaces the operator-facing diagnostic
+    ///   `spec.boundary.postconditions.missing_kinds()` verbatim
+    ///   (naming EVERY kind absent from postconditions in canonical
+    ///   order) rather than reaching for `!has_kind(JobAttested)` at a
+    ///   per-kind callsite and paying to re-author the diagnostic list.
+    /// - An operator-facing "boundary is MISSING [JobAttested,
+    ///   ClosedLoopAuth]" audit dump reads
+    ///   `boundary.postconditions.missing_kinds()` directly at ONE call
+    ///   site rather than restating the negated closed-set walk at
+    ///   every consumer.
+    /// - A fleet-wide gap analysis ("which processes are missing a
+    ///   `ClosedLoopAuth` postcondition") reaches this ONE primitive
+    ///   through `spec.boundary.postconditions.missing_kinds()
+    ///   .contains(&ConditionKind::ClosedLoopAuth)` rather than paying
+    ///   for the negated `.has_kind` sweep at every callsite.
+    /// - A hypothetical `condition-kinds-missing-<n>` require-tag
+    ///   classifier prefix family that publishes the missing-set
+    ///   cardinality as a scalar reads
+    ///   `boundary.postconditions.missing_kinds().len()` (or its
+    ///   future `missing_kind_count` scalar peer, once opened).
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The closed-set complement lives at ONE substrate site as a
+    ///   typed projection of [`Self::has_kind`] over the closed set
+    ///   [`ConditionKind::ALL`] under negation. Every downstream gap-
+    ///   analysis consumer binds through the SAME shape rather than
+    ///   restating the negated ALL-filter closure body.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically (the closed-set walk picks up the new
+    ///   entry on the missing side WITHOUT further per-caller edit —
+    ///   any slice that doesn't yet populate the new kind sees it
+    ///   listed as missing at every downstream callsite).
+    fn missing_kinds(&self) -> Vec<ConditionKind> {
+        ConditionKind::ALL
+            .into_iter()
+            .filter(|k| !self.has_kind(*k))
+            .collect()
+    }
 }
 
 /// Iterator yielded by [`ConditionSliceExt::iter_kind`] — the widened
@@ -1247,6 +1448,69 @@ where
         distinct.len(),
         "distinct_kind_count() drifted from distinct_kinds().len()",
     );
+
+    // missing ↔ has (per-kind complement on the closed-set-inversion
+    // axis). Byte-for-byte peer to the `distinct ↔ has` arm above: the
+    // present-side widened primitive `distinct_kinds` binds to
+    // `has_kind` via `contains(&k) == has_kind(k)`; the missing-side
+    // widened primitive `missing_kinds` binds via
+    // `contains(&k) == !has_kind(k)` — the SAME point-probe primitive
+    // reached under a negated predicate. A regression that overrode
+    // `missing_kinds` to omit the negation (returning `distinct_kinds`
+    // instead), inverted the wrong side, or dropped a variant surfaces
+    // HERE.
+    let missing = slice.missing_kinds();
+    for kind in ConditionKind::ALL {
+        assert_eq!(
+            missing.contains(&kind),
+            !slice.has_kind(kind),
+            "missing_kinds().contains({kind:?}) drifted from !has_kind({kind:?})",
+        );
+    }
+
+    // missing ↔ ALL-filter (canonical subsequence — closed-set
+    // complement walks ConditionKind::ALL in order, filters by
+    // !has_kind, dedups by construction). Peer to the `distinct ↔
+    // ALL-filter` arm above; catches ordering + dedup drift on the
+    // complement side that the per-kind membership arm cannot detect
+    // on its own.
+    let canonical_missing: Vec<ConditionKind> = ConditionKind::ALL
+        .into_iter()
+        .filter(|k| !slice.has_kind(*k))
+        .collect();
+    assert_eq!(
+        missing, canonical_missing,
+        "missing_kinds() must yield ConditionKind::ALL-ordered subsequence of kinds where has_kind is false (no duplicates, canonical order)",
+    );
+
+    // (distinct, missing) partition ConditionKind::ALL — three peer
+    // laws that bind the closed-set-inversion widened primitive
+    // `distinct_kinds` to its complement peer `missing_kinds`:
+    //
+    // 1. Disjoint: every kind appears in AT MOST one of the two sets.
+    // 2. Covering: every kind appears in AT LEAST one of the two sets
+    //    (equivalent to the union covering ConditionKind::ALL).
+    // 3. Cardinality partition: `distinct.len() + missing.len() ==
+    //    ConditionKind::ALL.len()` — the scalar consequence of (1) +
+    //    (2) that a caller reaching for the cardinality peer would
+    //    otherwise pay for the two allocations at every callsite.
+    for kind in ConditionKind::ALL {
+        assert!(
+            !(distinct.contains(&kind) && missing.contains(&kind)),
+            "(distinct_kinds, missing_kinds) partition invariant violated — both contain {kind:?}",
+        );
+        assert!(
+            distinct.contains(&kind) || missing.contains(&kind),
+            "(distinct_kinds, missing_kinds) partition invariant violated — neither contains {kind:?}",
+        );
+    }
+    assert_eq!(
+        distinct.len() + missing.len(),
+        ConditionKind::ALL.len(),
+        "(distinct_kinds, missing_kinds) cardinality partition drift — sum {} ≠ ConditionKind::ALL.len() {}",
+        distinct.len() + missing.len(),
+        ConditionKind::ALL.len(),
+    );
 }
 
 /// Substrate testkit macro — pins the FOUR union composition laws that
@@ -1384,6 +1648,9 @@ macro_rules! assert_surface_union_composition_laws {
         let __distinct_pre_kinds = __surface.distinct_precondition_kinds();
         let __distinct_post_kinds = __surface.distinct_postcondition_kinds();
         let __distinct_union_kinds = __surface.distinct_condition_kinds();
+        let __missing_pre_kinds = __surface.missing_precondition_kinds();
+        let __missing_post_kinds = __surface.missing_postcondition_kinds();
+        let __missing_union_kinds = __surface.missing_condition_kinds();
         for __kind in $crate::boundary::ConditionKind::ALL {
             // has: union == pre || post (bool OR)
             let __has_via_arms =
@@ -1438,6 +1705,26 @@ macro_rules! assert_surface_union_composition_laws {
                 "surface distinct union arm drifted from OR-membership of half-slice distinct arms for {:?}",
                 __kind,
             );
+            // missing: union.contains(k) == pre.contains(k) && post.contains(k)
+            // (set-INTERSECTION membership per kind — a kind is missing
+            // from the union iff it is missing from BOTH half-slices,
+            // dual of the distinct-set OR composition).
+            ::core::assert_eq!(
+                __missing_union_kinds.contains(&__kind),
+                __missing_pre_kinds.contains(&__kind)
+                    && __missing_post_kinds.contains(&__kind),
+                "surface missing union arm drifted from AND-membership of half-slice missing arms for {:?}",
+                __kind,
+            );
+            // missing ↔ has: union.contains(k) == !has_condition_kind(k)
+            // — binds the missing-set primitive to the point-probe
+            // primitive on the surface under a negated predicate.
+            ::core::assert_eq!(
+                __missing_union_kinds.contains(&__kind),
+                !__surface.has_condition_kind(__kind),
+                "surface missing union arm drifted from !has_condition_kind for {:?}",
+                __kind,
+            );
         }
         // distinct: union == canonical(pre ∪ post) — closed-set-inversion
         // set-union projected in ConditionKind::ALL order. A regression that
@@ -1458,6 +1745,26 @@ macro_rules! assert_surface_union_composition_laws {
         ::core::assert_eq!(
             __distinct_union_kinds, __expected_distinct_union,
             "surface distinct union arm drifted from canonical ConditionKind::ALL-ordered set-union of half-slice distinct arms",
+        );
+        // missing: union == canonical(pre ∩ post) — closed-set-inversion
+        // set-INTERSECTION projected in ConditionKind::ALL order. Dual
+        // of the distinct union canonical-order arm above. A regression
+        // that (a) reversed the walk order, (b) widened the intersection
+        // to a union (returning kinds missing from either side rather
+        // than both), or (c) preserved slice-encounter order rather
+        // than ConditionKind::ALL order surfaces HERE at the substrate
+        // boundary.
+        let __expected_missing_union: ::std::vec::Vec<_> =
+            $crate::boundary::ConditionKind::ALL
+                .into_iter()
+                .filter(|__k| {
+                    __missing_pre_kinds.contains(__k)
+                        && __missing_post_kinds.contains(__k)
+                })
+                .collect();
+        ::core::assert_eq!(
+            __missing_union_kinds, __expected_missing_union,
+            "surface missing union arm drifted from canonical ConditionKind::ALL-ordered set-INTERSECTION of half-slice missing arms",
         );
     }};
 }
@@ -3330,6 +3637,119 @@ mod tests {
         );
     }
 
+    // ── ConditionSliceExt::missing_kinds — closed-set-complement axis ──
+    //
+    // The complement peer of `distinct_kinds` on the closed-set-
+    // inversion axis: `missing_kinds` returns the SET of kinds that
+    // do NOT appear in the slice, in canonical [`ConditionKind::ALL`]
+    // order. The four tests below pin each authored arrangement's
+    // returned VALUE (empty, single-populated, saturated, interleaved-
+    // duplicate); the composition-law arms in
+    // `assert_slice_refinement_composition_laws` pin the closed-set-
+    // partition invariants against `distinct_kinds` and `has_kind`.
+
+    /// EMPTY-SLICE pin — an empty slice returns
+    /// `ConditionKind::ALL.to_vec()` on `missing_kinds` (every kind is
+    /// missing). Locks the maximum-cardinality identity on the
+    /// complement side, byte-for-byte dual to the empty-slice arm of
+    /// `distinct_kinds` (which returns an empty vec). A regression that
+    /// returned an empty vec (forgot the negation) or a placeholder
+    /// `[ProcessPhase]` (a copy-paste of the first-variant default)
+    /// surfaces HERE.
+    #[test]
+    fn condition_slice_missing_kinds_returns_full_closed_set_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        assert_eq!(
+            empty.missing_kinds(),
+            ConditionKind::ALL.to_vec(),
+            "empty slice must return ConditionKind::ALL on missing_kinds (every kind is missing)",
+        );
+    }
+
+    /// PER-VARIANT pin — a slice with EXACTLY ONE `Condition` carrying
+    /// the addressed kind returns `ConditionKind::ALL` MINUS that kind
+    /// on `missing_kinds`. Sweep [`ConditionKind::ALL`] so a regression
+    /// that (a) returned an empty vec regardless of the kind, (b)
+    /// returned the full ALL vec (forgot to filter), or (c) inverted
+    /// the negation and returned only the addressed kind surfaces HERE.
+    #[test]
+    fn condition_slice_missing_kinds_returns_all_minus_populated_kind() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            let expected: Vec<_> = ConditionKind::ALL
+                .into_iter()
+                .filter(|k| *k != populated)
+                .collect();
+            assert_eq!(
+                slice.missing_kinds(),
+                expected,
+                "single-populated slice must return ConditionKind::ALL minus {populated:?} on missing_kinds",
+            );
+        }
+    }
+
+    /// FULL-COVERAGE pin — a slice that carries every [`ConditionKind`]
+    /// variant returns an empty vec on `missing_kinds` (no kind is
+    /// missing). Dual of the empty-slice arm above; a regression that
+    /// returned the full ALL vec regardless of population or inverted
+    /// the presence direction surfaces HERE.
+    #[test]
+    fn condition_slice_missing_kinds_returns_empty_vec_on_saturated_slice() {
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert_eq!(
+            saturated.as_slice().missing_kinds(),
+            Vec::<ConditionKind>::new(),
+            "slice containing every ConditionKind must return empty vec on missing_kinds",
+        );
+    }
+
+    /// DEDUP pin — a slice with the SAME kind at multiple positions
+    /// (three ClosedLoopAuth, two PromQL, none of the other six)
+    /// returns those SIX absent kinds on `missing_kinds`, in canonical
+    /// [`ConditionKind::ALL`] order — multiplicity on the present side
+    /// is irrelevant to the complement. A regression that (a) counted
+    /// duplicates as decreasing the missing set (a `saturating_sub`
+    /// bug in a cardinality-tracking override), (b) yielded the
+    /// missing set in slice-encounter order (which is undefined when
+    /// no positions carry the missing kind — a subtle failure mode
+    /// that must yield the ALL-ordered subsequence regardless)
+    /// surfaces HERE.
+    #[test]
+    fn condition_slice_missing_kinds_yields_canonical_all_order_on_duplicates() {
+        let interleaved = [
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "first" }),
+            },
+            Condition {
+                kind: ConditionKind::PromQL,
+                params: json!({ "query": "up" }),
+            },
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "second" }),
+            },
+            Condition {
+                kind: ConditionKind::PromQL,
+                params: json!({ "query": "healthy" }),
+            },
+            Condition {
+                kind: ConditionKind::ClosedLoopAuth,
+                params: json!({ "probeImage": "third" }),
+            },
+        ];
+        let expected: Vec<_> = ConditionKind::ALL
+            .into_iter()
+            .filter(|k| *k != ConditionKind::PromQL && *k != ConditionKind::ClosedLoopAuth)
+            .collect();
+        assert_eq!(
+            interleaved.missing_kinds(),
+            expected,
+            "interleaved-duplicate slice must return canonical ALL-ordered complement of {{PromQL, ClosedLoopAuth}}",
+        );
+    }
+
     // ── Boundary distinct-set triad — substrate-delegation pins ────────
     //
     // The (precondition, postcondition, condition-union) distinct-set
@@ -3464,6 +3884,90 @@ mod tests {
                     expected_union,
                     "Boundary::distinct_condition_kinds must equal ConditionKind::ALL-ordered \
                      set-union of the two half-slice distinct-sets for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary missing-set triad) — the
+    /// three `missing_*_kinds` methods on [`Boundary`] delegate to the
+    /// slice-level substrate primitive
+    /// [`ConditionSliceExt::missing_kinds`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via
+    /// `ConditionKind::ALL.filter(|k| !has_condition_kind(*k))`. Sweep
+    /// `ConditionKind::ALL × ConditionKind::ALL` so a regression that
+    /// (a) inlined a divergent closed-set walk at either half-slice
+    /// arm, (b) reversed the union walk order, (c) widened the union
+    /// intersection to a union (a `||` inlined where `&&` is required
+    /// on the missing side), or (d) forgot the negation surfaces HERE.
+    /// Also pins the empty-boundary edge case: every arm returns
+    /// `ConditionKind::ALL.to_vec()` on an empty boundary.
+    #[test]
+    fn missing_condition_kinds_triad_delegates_to_slice_missing_kinds() {
+        // Empty boundary — every arm returns ConditionKind::ALL (nothing
+        // is populated, so every kind is missing on all three slots).
+        let b = Boundary::default();
+        let all_kinds = ConditionKind::ALL.to_vec();
+        assert_eq!(
+            b.missing_precondition_kinds(),
+            all_kinds,
+            "empty boundary must return ConditionKind::ALL on missing_precondition_kinds",
+        );
+        assert_eq!(
+            b.missing_postcondition_kinds(),
+            all_kinds,
+            "empty boundary must return ConditionKind::ALL on missing_postcondition_kinds",
+        );
+        assert_eq!(
+            b.missing_condition_kinds(),
+            all_kinds,
+            "empty boundary must return ConditionKind::ALL on missing_condition_kinds",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                assert_eq!(
+                    b.missing_precondition_kinds(),
+                    b.preconditions.missing_kinds(),
+                    "Boundary::missing_precondition_kinds must delegate verbatim to \
+                     preconditions.missing_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.missing_postcondition_kinds(),
+                    b.postconditions.missing_kinds(),
+                    "Boundary::missing_postcondition_kinds must delegate verbatim to \
+                     postconditions.missing_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                // Union: a kind is missing from the union iff it is
+                // missing from BOTH half-slices (SET-INTERSECTION).
+                let expected_union: Vec<_> = ConditionKind::ALL
+                    .into_iter()
+                    .filter(|k| pre_kind != *k && post_kind != *k)
+                    .collect();
+                assert_eq!(
+                    b.missing_condition_kinds(),
+                    expected_union,
+                    "Boundary::missing_condition_kinds must equal ConditionKind::ALL-ordered \
+                     set-INTERSECTION of the two half-slice missing-sets for pre={pre_kind:?} post={post_kind:?}",
+                );
+                // Partition invariant: distinct ∪ missing == ALL, disjoint.
+                let distinct = b.distinct_condition_kinds();
+                let missing = b.missing_condition_kinds();
+                for kind in ConditionKind::ALL {
+                    assert!(
+                        distinct.contains(&kind) ^ missing.contains(&kind),
+                        "(distinct, missing) partition violated on {kind:?} for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+                assert_eq!(
+                    distinct.len() + missing.len(),
+                    ConditionKind::ALL.len(),
+                    "Boundary (distinct, missing) cardinality partition drift for pre={pre_kind:?} post={post_kind:?}",
                 );
             }
         }

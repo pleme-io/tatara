@@ -523,6 +523,68 @@ macro_rules! declare_tagged_union_impls {
             pub fn last_missing_kind(&self) -> ::std::option::Option<$kind> {
                 <Self as $crate::tagged_union::TaggedUnion>::last_missing_kind(self)
             }
+
+            /// Exactly-one-populated `Option<$kind>` peer of
+            /// [`Self::populated_kinds`] — `Some(k)` iff `k` is the
+            /// SOLE populated kind on this tagged union, else `None`.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::unique_populated_kind`],
+            /// whose default body is a two-step-short-circuit walk
+            /// over `<Kind as ClosedSet>::ALL` returning `Some(k)`
+            /// only when EXACTLY ONE `has(k)` is `true`. Every
+            /// consumer that needs the resolved kind identity on the
+            /// well-formed arm (without paying for the borrowed
+            /// variant view [`Self::variant`] returns, and without
+            /// materializing the [`Self::Error`] carrier on the
+            /// empty / malformed arms) reads
+            /// `parent.unique_populated_kind()` through the inherent
+            /// surface — `Some(k)` names well-formed exactly-one,
+            /// `None` collapses BOTH the empty AND the malformed
+            /// (ambiguous) arms.
+            ///
+            /// The composition laws
+            /// `parent.unique_populated_kind().is_some() ==
+            /// (parent.populated_kind_count() == 1)` and (on the
+            /// `Some` arm) `parent.unique_populated_kind() ==
+            /// parent.first_populated_kind() ==
+            /// parent.last_populated_kind()` are pinned as first-
+            /// class typed invariants by the trait's own default body
+            /// and swept substrate-wide by
+            /// [`crate::tagged_union::assert_unique_populated_kind_matches_populated_kinds`].
+            pub fn unique_populated_kind(&self) -> ::std::option::Option<$kind> {
+                <Self as $crate::tagged_union::TaggedUnion>::unique_populated_kind(self)
+            }
+
+            /// Exactly-one-missing `Option<$kind>` peer of
+            /// [`Self::missing_kinds`] — `Some(k)` iff `k` is the
+            /// SOLE missing kind on this tagged union, else `None`.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::unique_missing_kind`],
+            /// whose default body is a two-step-short-circuit walk
+            /// over `<Kind as ClosedSet>::ALL` under a NEGATED `has`
+            /// predicate returning `Some(k)` only when EXACTLY ONE
+            /// `!has(k)` is `true`. Byte-for-byte symmetrical with
+            /// `parent.unique_populated_kind()` under complement; on
+            /// tagged unions with `<Kind as ClosedSet>::ALL.len() >
+            /// 2` the primitive returns `Some` only on the near-
+            /// saturation arm (`ALL.len() - 1` populated).
+            ///
+            /// The composition laws
+            /// `parent.unique_missing_kind().is_some() ==
+            /// (parent.missing_kind_count() == 1)` and (on the
+            /// `Some` arm) `parent.unique_missing_kind() ==
+            /// parent.first_missing_kind() ==
+            /// parent.last_missing_kind()` are pinned as first-class
+            /// typed invariants by the trait's own default body and
+            /// swept substrate-wide by
+            /// [`crate::tagged_union::assert_unique_missing_kind_matches_missing_kinds`].
+            pub fn unique_missing_kind(&self) -> ::std::option::Option<$kind> {
+                <Self as $crate::tagged_union::TaggedUnion>::unique_missing_kind(self)
+            }
         }
 
         impl $crate::tagged_union::VariantSelector<$parent> for $kind {
@@ -1603,6 +1665,196 @@ pub trait TaggedUnion: Sized {
             .copied()
             .find(|k| !self.has(*k))
     }
+
+    /// Exactly-one-populated `Option<Self::Kind>` peer of
+    /// [`Self::populated_kinds`] — `Some(k)` iff `k` is the SOLE
+    /// populated kind on this tagged union, else `None`.
+    ///
+    /// Default body walks `<Self::Kind as ClosedSet>::ALL` under
+    /// [`Self::has`] and returns `Some(k)` iff EXACTLY ONE hit is seen,
+    /// short-circuiting at the SECOND hit — a two-step iterator peer
+    /// of the earliest / latest short-circuit walks whose truth-table
+    /// projection is disjoint from `first_populated_kind` /
+    /// `last_populated_kind` on the malformed arm (both endpoints name
+    /// SOME populated slot on a two-populated parent, `unique` names
+    /// `None`).
+    ///
+    /// # Sibling to [`Self::first_populated_kind`] / [`Self::last_populated_kind`]
+    ///
+    /// FIFTH refinement on the closed-set-inversion axis under
+    /// exactly-one-hit semantics, `Option<Kind>`-valued: together with
+    /// [`Self::first_populated_kind`] and [`Self::last_populated_kind`]
+    /// the three primitives project [`Self::populated_kinds`] onto its
+    /// cardinality-conditioned scalar identity. On the well-formed
+    /// (exactly-one) arm all three agree (`unique == first == last =
+    /// Some(k)`); on the empty arm all three agree (`None`); on the
+    /// malformed (Ambiguous, cardinality ≥ 2) arm the three DIVERGE:
+    /// `first`/`last` name the endpoint populated slots (Some), while
+    /// `unique` returns `None` — the ONLY endpoint-projection primitive
+    /// in the algebra that distinguishes well-formed from malformed at
+    /// its return type without paying for a [`Self::variant`] error-
+    /// carrier allocation.
+    ///
+    /// The composition laws
+    /// `unique_populated_kind().is_some() == (populated_kind_count() == 1)`
+    /// and (on the `Some` arm) `unique_populated_kind() ==
+    /// first_populated_kind() == last_populated_kind()` bind the
+    /// exactly-one scalar identity to the widened primitives at the
+    /// trait's default body — pinned substrate-wide by
+    /// [`assert_unique_populated_kind_matches_populated_kinds`].
+    ///
+    /// # Peer to [`Self::variant`] as a kind-only projection
+    ///
+    /// Byte-for-byte equivalent to
+    /// `self.variant().ok().map(|v| v.variant_kind())` on the trait's
+    /// exactly-one contract, but WITHOUT paying for the [`Self::Error`]
+    /// carrier's allocation on the failing arms, and WITHOUT reaching
+    /// [`VariantSelector::Variant`] / [`VariantKind::variant_kind`]. A
+    /// `use TaggedUnion` scope at the consumer is enough; the borrowed
+    /// variant view is not needed. On well-formed parents the two
+    /// projections agree; on empty AND malformed parents they agree by
+    /// returning `None` (unlike `first_populated_kind`, which returns
+    /// `Some` on malformed).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A closed-set-driven "resolved kind identity" dispatch that
+    ///   only needs the Kind (not the borrowed variant) reads
+    ///   `parent.unique_populated_kind()` at ONE substrate site — one
+    ///   short-circuit walk, no error-carrier allocation, no
+    ///   VariantKind projection.
+    /// - A coherence check that verifies "every well-formed process
+    ///   parent has a unique populated kind" now reads
+    ///   `parent.unique_populated_kind().is_some()` at ONE site rather
+    ///   than restating `parent.populated_kind_count() == 1` (which
+    ///   discards the resolved kind identity) or
+    ///   `parent.variant().is_ok()` (which pays for the error carrier).
+    /// - A future require-tag classifier arm that publishes the
+    ///   exactly-one resolved kind (`unique-populated-<kind>`) at fleet
+    ///   audit time reads this primitive with no allocation, byte-for-
+    ///   byte symmetrical with the `first-populated-<kind>` and
+    ///   `last-populated-<kind>` sibling classifier families.
+    /// - A fast-path branch on the (empty, well-formed, ambiguous)
+    ///   trichotomy that needs to distinguish "well-formed with kind X"
+    ///   from BOTH "empty" AND "ambiguous" reaches this primitive at
+    ///   ONE call site: `Some(k)` names the well-formed arm's kind,
+    ///   `None` collapses the two failing arms together.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The exactly-one-hit projection lives at ONE substrate site as
+    ///   a typed two-step-short-circuit walk over
+    ///   `<Self::Kind as ClosedSet>::ALL` under [`Self::has`]. The
+    ///   composition laws above compose the SAME shape as the endpoint
+    ///   projections, differing only in the truth-table arm on the
+    ///   malformed side.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically — any parent populating only the new variant
+    ///   returns `Some(new_variant)` at every downstream callsite
+    ///   without further per-caller edit.
+    fn unique_populated_kind(&self) -> Option<Self::Kind> {
+        let mut iter = <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| self.has(*k));
+        let first = iter.next()?;
+        match iter.next() {
+            None => Some(first),
+            Some(_) => None,
+        }
+    }
+
+    /// Exactly-one-missing `Option<Self::Kind>` peer of
+    /// [`Self::missing_kinds`] — `Some(k)` iff `k` is the SOLE missing
+    /// kind on this tagged union, else `None`.
+    ///
+    /// Default body walks `<Self::Kind as ClosedSet>::ALL` under a
+    /// NEGATED [`Self::has`] predicate and returns `Some(k)` iff
+    /// EXACTLY ONE empty slot is seen, short-circuiting at the SECOND
+    /// empty slot. Byte-for-byte peer of
+    /// [`Self::unique_populated_kind`] under the complement axis.
+    ///
+    /// # Sibling to [`Self::first_missing_kind`] / [`Self::last_missing_kind`]
+    ///
+    /// FIFTH refinement on the closed-set-complement axis under
+    /// exactly-one-hit semantics, `Option<Kind>`-valued: together with
+    /// [`Self::first_missing_kind`] and [`Self::last_missing_kind`] the
+    /// three primitives project [`Self::missing_kinds`] onto its
+    /// cardinality-conditioned scalar identity on the empty side. The
+    /// composition laws
+    /// `unique_missing_kind().is_some() == (missing_kind_count() == 1)`
+    /// and (on the `Some` arm) `unique_missing_kind() ==
+    /// first_missing_kind() == last_missing_kind()` bind the exactly-
+    /// one scalar identity to the widened primitives at the trait's
+    /// default body — pinned substrate-wide by
+    /// [`assert_unique_missing_kind_matches_missing_kinds`].
+    ///
+    /// # Truth table on the exactly-one-slot tagged-union contract
+    ///
+    /// For a tagged union with `<Self::Kind as ClosedSet>::ALL` of
+    /// cardinality `N`:
+    ///
+    /// - Empty parent (0 populated, N missing): `None` (N ≥ 2 missing
+    ///   on any non-degenerate closed set, so not unique).
+    /// - Well-formed parent (1 populated, N-1 missing): `None` when
+    ///   `N > 2` (N-1 ≥ 2 missing, not unique), `Some(the-one-missing)`
+    ///   when `N == 2` (exactly one missing — the peer of the
+    ///   populated slot).
+    /// - N-1-populated parent (structurally the missing-side peer of
+    ///   the well-formed arm): `Some(the-lone-empty)` — the ONLY arm
+    ///   where `unique_missing_kind` returns `Some` on a `N > 2`
+    ///   closed set.
+    /// - Saturated parent (N populated, 0 missing): `None`.
+    ///
+    /// # Peer to [`Self::unique_populated_kind`]
+    ///
+    /// Closed-set-complement peer of the closed-set-inversion exactly-
+    /// one-hit primitive under a negated `has` predicate. The two
+    /// primitives are useful in DIFFERENT structural regimes: the
+    /// populated peer names well-formed parents (1 populated of N),
+    /// the missing peer names the missing-side complement (1 missing
+    /// of N). On tagged unions with `N == 2` (rare — most `ALL`s are
+    /// ≥ 3) the two coincide (a well-formed 1-of-2 parent has 1
+    /// missing too).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing "one dependency still unfulfilled: X"
+    ///   diagnostic on an aggregate boundary check reads
+    ///   `parent.unique_missing_kind()` at ONE substrate site — one
+    ///   short-circuit walk, no allocation.
+    /// - A `unique-missing-<kind>` require-tag classifier arm reads
+    ///   this primitive with no allocation, byte-for-byte symmetrical
+    ///   with `parent.unique_populated_kind()`.
+    /// - A fast-path branch on the near-saturation arm that
+    ///   discriminates "exactly one slot still empty" from "0 or ≥ 2
+    ///   still empty" reads `parent.unique_missing_kind().is_some()`
+    ///   at ONE call site.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The complement-exactly-one-hit projection lives at ONE
+    ///   substrate site as a typed two-step-short-circuit walk over
+    ///   `<Self::Kind as ClosedSet>::ALL` under a negated
+    ///   [`Self::has`] predicate — byte-for-byte peer of the
+    ///   populated-side primitive under complement.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically on the missing side.
+    fn unique_missing_kind(&self) -> Option<Self::Kind> {
+        let mut iter = <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| !self.has(*k));
+        let first = iter.next()?;
+        match iter.next() {
+            None => Some(first),
+            Some(_) => None,
+        }
+    }
 }
 
 /// Generic diagnostic-stability testkit — pins that [`TaggedUnion::KIND_LIST`]
@@ -2582,6 +2834,185 @@ where
             parent.missing_kind_count() > 0,
             "last_missing_kind().is_some() drifted from (missing_kind_count() > 0) — populated={populated:?}",
         );
+    }
+}
+
+/// Generic exactly-one-populated-kind testkit — pins that
+/// [`TaggedUnion::unique_populated_kind`] returns `Some(k)` iff exactly
+/// one slot is populated (and names that slot's kind), and `None` on
+/// every empty / ambiguous parent, across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-slot
+/// arrangement.
+///
+/// Parent-axis substrate primitive for the exactly-one-hit scalar
+/// projection of the tagged-union closed-set-inversion axis — the
+/// `Option<Kind>`-valued exactly-one peer of
+/// [`assert_first_populated_kind_matches_populated_kinds`] and
+/// [`assert_last_populated_kind_matches_populated_kinds`]'s endpoint
+/// projections. The four sub-assertions swept per populated slot:
+///
+/// 1. **`unique ↔ exactly-one on kinds`**: `unique_populated_kind() ==
+///    Some(k)` iff `populated_kinds() == vec![k]` — a regression that
+///    dropped the second-hit short-circuit (returning `Some(first)`
+///    on a two-populated parent) fails on the sibling
+///    two-populated pin above.
+/// 2. **Single-slot diagonal**: `single_slot(k).unique_populated_kind()
+///    == Some(k)` — the sole populated slot IS the unique populated
+///    kind.
+/// 3. **Cardinality composition law**:
+///    `unique_populated_kind().is_some() == (populated_kind_count()
+///    == 1)` — the exactly-one predicate agrees with the scalar
+///    cardinality on every well-formed / empty / ambiguous arm.
+/// 4. **Endpoint agreement on Some**: on the `Some` arm,
+///    `unique_populated_kind() == first_populated_kind() ==
+///    last_populated_kind()` — the three endpoint-projection
+///    primitives coincide on the exactly-one arm and DIVERGE only on
+///    the ambiguous arm.
+///
+/// A fifth sibling picks up the exactly-one-populated check through
+/// ONE call site — no re-authored `count == 1` composition at the
+/// test surface, no re-authored `single_slot(k).unique_populated_kind()
+/// == Some(k)` diagonal pin, no re-authored endpoint-agreement
+/// projection.
+///
+/// Same `Lifetime` exclusion as the sibling primitives.
+#[track_caller]
+pub fn assert_unique_populated_kind_matches_populated_kinds<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let unique = parent.unique_populated_kind();
+        // Composition law: exactly-one predicate on the widened primitive.
+        let kinds = parent.populated_kinds();
+        let expected = if kinds.len() == 1 {
+            Some(kinds[0])
+        } else {
+            None
+        };
+        assert_eq!(
+            unique, expected,
+            "TaggedUnion::unique_populated_kind() drifted from (populated_kinds().len() == 1 ? Some(kinds[0]) : None) — populated={populated:?}",
+        );
+        // Single-slot diagonal — a well-formed parent from single_slot
+        // populates exactly the addressed slot, so the unique populated
+        // kind IS that slot.
+        assert_eq!(
+            unique,
+            Some(populated),
+            "TaggedUnion::unique_populated_kind() on single_slot({populated:?}) must equal Some({populated:?}) exactly",
+        );
+        // Cardinality composition law — exactly-one predicate agrees
+        // with the scalar cardinality's equality-to-one.
+        assert_eq!(
+            unique.is_some(),
+            parent.populated_kind_count() == 1,
+            "unique_populated_kind().is_some() drifted from (populated_kind_count() == 1) — populated={populated:?}",
+        );
+        // Endpoint-agreement — on the Some arm the three endpoint
+        // projections coincide.
+        if unique.is_some() {
+            assert_eq!(
+                unique,
+                parent.first_populated_kind(),
+                "unique_populated_kind() must equal first_populated_kind() on the Some arm — populated={populated:?}",
+            );
+            assert_eq!(
+                unique,
+                parent.last_populated_kind(),
+                "unique_populated_kind() must equal last_populated_kind() on the Some arm — populated={populated:?}",
+            );
+        }
+    }
+}
+
+/// Generic exactly-one-missing-kind testkit — pins that
+/// [`TaggedUnion::unique_missing_kind`] returns `Some(k)` iff exactly
+/// one slot is missing (and names that slot's kind), and `None` on
+/// every parent whose missing-set cardinality is not one, across
+/// every [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-
+/// slot arrangement.
+///
+/// Parent-axis substrate primitive for the exactly-one-hit scalar
+/// projection of the tagged-union closed-set-COMPLEMENT axis under a
+/// negated `has` predicate. The three sub-assertions swept per
+/// populated slot (single-slot diagonal only — on any tagged union
+/// with `ALL.len() > 2` the single-slot arrangement has ≥ 2 missing
+/// slots, so the primitive returns `None`; the load-bearing `Some`
+/// pins are the sibling near-saturation probes outside this
+/// primitive):
+///
+/// 1. **`unique ↔ exactly-one on missing`**: `unique_missing_kind()
+///    == Some(k)` iff `missing_kinds() == vec![k]` — a regression
+///    that dropped the second-hit short-circuit (returning
+///    `Some(first)` on a two-missing parent) fails here.
+/// 2. **Cardinality composition law**:
+///    `unique_missing_kind().is_some() == (missing_kind_count() ==
+///    1)` — the exactly-one predicate agrees with the scalar
+///    complement cardinality on every well-formed / empty / ambiguous
+///    arm.
+/// 3. **Endpoint agreement on Some**: on the `Some` arm,
+///    `unique_missing_kind() == first_missing_kind() ==
+///    last_missing_kind()` — the three endpoint-projection
+///    primitives on the missing axis coincide when exactly one slot
+///    is empty.
+///
+/// A fifth sibling picks up the exactly-one-missing check through
+/// ONE call site.
+///
+/// Same `Lifetime` exclusion as the sibling primitives.
+#[track_caller]
+pub fn assert_unique_missing_kind_matches_missing_kinds<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let unique = parent.unique_missing_kind();
+        // Composition law: exactly-one predicate on the widened
+        // primitive.
+        let missing = parent.missing_kinds();
+        let expected = if missing.len() == 1 {
+            Some(missing[0])
+        } else {
+            None
+        };
+        assert_eq!(
+            unique, expected,
+            "TaggedUnion::unique_missing_kind() drifted from (missing_kinds().len() == 1 ? Some(missing[0]) : None) — populated={populated:?}",
+        );
+        // Cardinality composition law — exactly-one predicate agrees
+        // with the scalar complement cardinality's equality-to-one.
+        assert_eq!(
+            unique.is_some(),
+            parent.missing_kind_count() == 1,
+            "unique_missing_kind().is_some() drifted from (missing_kind_count() == 1) — populated={populated:?}",
+        );
+        // Endpoint-agreement — on the Some arm the three endpoint
+        // projections on the missing axis coincide.
+        if unique.is_some() {
+            assert_eq!(
+                unique,
+                parent.first_missing_kind(),
+                "unique_missing_kind() must equal first_missing_kind() on the Some arm — populated={populated:?}",
+            );
+            assert_eq!(
+                unique,
+                parent.last_missing_kind(),
+                "unique_missing_kind() must equal last_missing_kind() on the Some arm — populated={populated:?}",
+            );
+        }
     }
 }
 
@@ -6404,6 +6835,249 @@ mod tests {
             single_slot_artifact_source_probe,
         );
         assert_last_missing_kind_matches_missing_kinds::<crate::export::VectorChannel, _>(
+            single_slot_vector_channel_probe,
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // `TaggedUnion::unique_populated_kind` / `unique_missing_kind` — the
+    // short-circuiting `Option<Kind>` peers on the exactly-one-hit axis.
+    // Pin the four-outcome truth table (empty parent → both `None`;
+    // single-slot diagonal → `unique_populated_kind` is `Some(k)`,
+    // `unique_missing_kind` is `None` on `ALL.len() > 2`; two-populated
+    // parent → `unique_populated_kind` is `None`, `unique_missing_kind`
+    // is `Some(the-one-missing)`; saturated → both `None`) directly on
+    // the `LocalParent` scaffold AND via the substrate testkit
+    // primitives, so a regression on the two-step short-circuit's
+    // second-hit truncation or the negation composition fails here
+    // before any per-parent inherent test surfaces the drift.
+    // -------------------------------------------------------------------
+
+    /// EMPTY-PARENT pin — a default [`LocalParent`] returns `None` at
+    /// BOTH `unique_populated_kind` (zero populated, not exactly-one)
+    /// and `unique_missing_kind` (three missing on a `ALL.len() == 3`
+    /// closed set, not exactly-one). Pins the empty-arm collapse — the
+    /// two primitives agree on `None` when the closed-set cardinality
+    /// is ≥ 3, distinguishing the exactly-one primitive from the
+    /// endpoint primitives (`first_missing_kind` on an empty parent
+    /// returns `Some(ALL[0])`, not `None`).
+    #[test]
+    fn tagged_union_default_unique_kinds_on_empty_parent() {
+        let empty = LocalParent::default();
+        assert_eq!(
+            <LocalParent as TaggedUnion>::unique_populated_kind(&empty),
+            None,
+        );
+        assert_eq!(
+            <LocalParent as TaggedUnion>::unique_missing_kind(&empty),
+            None,
+        );
+    }
+
+    /// SINGLE-SLOT DIAGONAL pin — every populated position across
+    /// [`LocalKind::ALL`] returns `Some(k)` at `unique_populated_kind`
+    /// (the sole populated slot IS the exactly-one hit) AND `None` at
+    /// `unique_missing_kind` (two missing slots on the `ALL.len() == 3`
+    /// closed set, not exactly-one). The `Some` arm's endpoint
+    /// agreement composes with `first_populated_kind` /
+    /// `last_populated_kind` at the trait defaults (`unique == first
+    /// == last` on exactly-one).
+    #[test]
+    fn tagged_union_default_unique_kinds_on_single_slot_diagonal() {
+        for populated in <LocalKind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let parent = match populated {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            };
+            assert_eq!(
+                <LocalParent as TaggedUnion>::unique_populated_kind(&parent),
+                Some(populated),
+            );
+            assert_eq!(
+                <LocalParent as TaggedUnion>::unique_missing_kind(&parent),
+                None,
+            );
+            // Endpoint-agreement composition — on Some, the three
+            // endpoint-projection primitives agree.
+            assert_eq!(
+                parent.unique_populated_kind(),
+                parent.first_populated_kind()
+            );
+            assert_eq!(parent.unique_populated_kind(), parent.last_populated_kind());
+        }
+    }
+
+    /// TWO-POPULATED pin — a `LocalParent` with two populated slots
+    /// returns `unique_populated_kind() == None` (two populated, not
+    /// exactly-one) and `unique_missing_kind() == Some(the-one-missing)`
+    /// (one missing, exactly-one — the ONLY arm where the missing-side
+    /// primitive returns `Some` on a `ALL.len() == 3` closed set). Pins
+    /// the two-step short-circuit's second-hit collapse at ONE
+    /// substrate boundary — a regression that returned `Some(first)`
+    /// after seeing two populated slots (defeating the exactly-one
+    /// contract) fails here.
+    #[test]
+    fn tagged_union_default_unique_kinds_on_two_populated_parent() {
+        // Alpha + Beta populated → 2 populated (unique_populated=None),
+        // 1 missing = Gamma (unique_missing=Some(Gamma)).
+        let p = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: None,
+        };
+        assert_eq!(p.unique_populated_kind(), None);
+        assert_eq!(p.unique_missing_kind(), Some(LocalKind::Gamma));
+        // Endpoint-agreement composition on the missing-side Some arm.
+        assert_eq!(p.unique_missing_kind(), p.first_missing_kind());
+        assert_eq!(p.unique_missing_kind(), p.last_missing_kind());
+
+        // Beta + Gamma populated → unique_missing=Some(Alpha).
+        let p = LocalParent {
+            alpha: None,
+            beta: Some(1),
+            gamma: Some(2),
+        };
+        assert_eq!(p.unique_populated_kind(), None);
+        assert_eq!(p.unique_missing_kind(), Some(LocalKind::Alpha));
+
+        // Alpha + Gamma populated → unique_missing=Some(Beta).
+        let p = LocalParent {
+            alpha: Some(1),
+            beta: None,
+            gamma: Some(2),
+        };
+        assert_eq!(p.unique_populated_kind(), None);
+        assert_eq!(p.unique_missing_kind(), Some(LocalKind::Beta));
+    }
+
+    /// SATURATED-PARENT pin — a `LocalParent` with EVERY slot
+    /// populated returns `None` at BOTH `unique_populated_kind` (three
+    /// populated, not exactly-one) AND `unique_missing_kind` (zero
+    /// missing, not exactly-one). Pins the saturated-arm collapse — the
+    /// two primitives agree on `None` when the closed-set cardinality
+    /// is ≥ 3, distinguishing the exactly-one primitive from the
+    /// endpoint primitives (`last_populated_kind` on a saturated
+    /// parent returns `Some(ALL[ALL.len()-1])`, not `None`).
+    #[test]
+    fn tagged_union_default_unique_kinds_on_saturated_parent() {
+        let p = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: Some(3),
+        };
+        assert_eq!(p.unique_populated_kind(), None);
+        assert_eq!(p.unique_missing_kind(), None);
+    }
+
+    /// The `assert_unique_populated_kind_matches_populated_kinds`
+    /// primitive accepts the [`LocalParent`] scaffold coherently — the
+    /// Ok arm is the "no drift" outcome.
+    #[test]
+    fn assert_unique_populated_kind_matches_populated_kinds_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_unique_populated_kind_matches_populated_kinds::<LocalParent, _>(make_local);
+    }
+
+    /// A factory that yields an all-empty parent (so
+    /// `unique_populated_kind()` returns `None`) MUST fail-loudly at
+    /// the caller's site through the primitive's single-slot diagonal
+    /// arm — `None` does not equal `Some(populated)`.
+    #[test]
+    #[should_panic(expected = "must equal Some(")]
+    fn assert_unique_populated_kind_matches_populated_kinds_rejects_empty_factory() {
+        fn empty_factory(_: LocalKind) -> LocalParent {
+            LocalParent::default()
+        }
+        assert_unique_populated_kind_matches_populated_kinds::<LocalParent, _>(empty_factory);
+    }
+
+    /// The `assert_unique_missing_kind_matches_missing_kinds` primitive
+    /// accepts the [`LocalParent`] scaffold coherently.
+    #[test]
+    fn assert_unique_missing_kind_matches_missing_kinds_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_unique_missing_kind_matches_missing_kinds::<LocalParent, _>(make_local);
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the exactly-one-populated primitive
+    /// coherently — every per-site `single_slot_X(k)` factory produces
+    /// a parent whose `unique_populated_kind()` equals `Some(k)`.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_unique_populated_kind_testkit_primitive() {
+        assert_unique_populated_kind_matches_populated_kinds::<crate::intent::Intent, _>(
+            single_slot_intent_probe,
+        );
+        assert_unique_populated_kind_matches_populated_kinds::<
+            crate::encapsulates::EncapsulationKind,
+            _,
+        >(single_slot_encapsulation_kind_probe);
+        assert_unique_populated_kind_matches_populated_kinds::<crate::export::ArtifactSource, _>(
+            single_slot_artifact_source_probe,
+        );
+        assert_unique_populated_kind_matches_populated_kinds::<crate::export::VectorChannel, _>(
+            single_slot_vector_channel_probe,
+        );
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the exactly-one-missing primitive
+    /// coherently.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_unique_missing_kind_testkit_primitive() {
+        assert_unique_missing_kind_matches_missing_kinds::<crate::intent::Intent, _>(
+            single_slot_intent_probe,
+        );
+        assert_unique_missing_kind_matches_missing_kinds::<crate::encapsulates::EncapsulationKind, _>(
+            single_slot_encapsulation_kind_probe,
+        );
+        assert_unique_missing_kind_matches_missing_kinds::<crate::export::ArtifactSource, _>(
+            single_slot_artifact_source_probe,
+        );
+        assert_unique_missing_kind_matches_missing_kinds::<crate::export::VectorChannel, _>(
             single_slot_vector_channel_probe,
         );
     }

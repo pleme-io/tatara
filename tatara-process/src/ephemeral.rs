@@ -915,6 +915,186 @@ impl EphemeralSpec {
         self.postconditions.missing_kind_count()
     }
 
+    /// Earliest [`ConditionKind::ALL`] entry present in
+    /// `preconditions ∪ postconditions`, or `None` when neither side
+    /// populates any variant — the peer of
+    /// [`crate::boundary::Boundary::first_distinct_condition_kind`]
+    /// on the [`EphemeralSpec`] sugar surface.
+    ///
+    /// # Composed body — byte-identical to
+    /// [`crate::boundary::Boundary::first_distinct_condition_kind`]
+    ///
+    /// `ConditionKind::ALL.iter().copied().find(|k|
+    /// self.has_condition_kind(*k))` — the earliest-element scalar
+    /// projection of [`Self::distinct_condition_kinds`] onto its first
+    /// entry, without materializing the intermediate
+    /// `Vec<ConditionKind>`. Byte-identical to the peer method on the
+    /// point-domain [`crate::boundary::Boundary`] surface — both
+    /// compose against the SAME slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::first_distinct_kind`] via
+    /// the two-slice union composed through
+    /// [`Self::has_condition_kind`] so a regression at the per-slice
+    /// short-circuit walk fails at that primitive's tests rather than
+    /// as silent drift at either struct-level earliest-element caller.
+    ///
+    /// # Sibling to [`Self::distinct_condition_kinds`]
+    ///
+    /// Third scalar projection of the closed-set-inversion widened
+    /// primitive on the ephemeral-union surface. The two-surface
+    /// parity contract now covers NINE refinements on the condition
+    /// axis (bool / `&Condition` / `impl Iterator` / `usize` /
+    /// `Vec<ConditionKind>` closed-set-inversion / `usize` scalar
+    /// cardinality of the closed-set-inversion / `Vec<ConditionKind>`
+    /// closed-set-complement / `usize` scalar cardinality of the
+    /// closed-set-complement / `Option<ConditionKind>` earliest-element
+    /// scalar of the closed-set-inversion), byte-for-byte peer of the
+    /// point-domain triad on [`crate::boundary::Boundary`].
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the earliest-element projection composes the
+    /// SAME closed-set walk on both this ephemeral surface and the
+    /// point-domain [`crate::boundary::Boundary`] surface under short-
+    /// circuit semantics). THEORY.md §VI.1 (generation over composition
+    /// — a future [`ConditionKind`] variant added to `ALL` reaches both
+    /// surfaces' first-distinct-kind triads mechanically through the
+    /// SAME closed-set walk).
+    #[must_use]
+    pub fn first_distinct_condition_kind(&self) -> Option<ConditionKind> {
+        ConditionKind::ALL
+            .iter()
+            .copied()
+            .find(|k| self.has_condition_kind(*k))
+    }
+
+    /// Earliest [`ConditionKind::ALL`] entry present in
+    /// [`Self::preconditions`], or `None` when preconditions carry no
+    /// matching kind — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) first-distinct-kind triad on
+    /// [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::first_distinct_kind`]
+    /// over [`Self::preconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::first_distinct_precondition_kind`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice short-circuit walk fails at that primitive's tests
+    /// rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn first_distinct_precondition_kind(&self) -> Option<ConditionKind> {
+        self.preconditions.first_distinct_kind()
+    }
+
+    /// Earliest [`ConditionKind::ALL`] entry present in
+    /// [`Self::postconditions`], or `None` when postconditions carry
+    /// no matching kind — the postcondition-side arm of the
+    /// (precondition, postcondition, condition-union) first-distinct-
+    /// kind triad on [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::first_distinct_kind`]
+    /// over [`Self::postconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::first_distinct_postcondition_kind`]
+    /// on the point-domain surface. See
+    /// [`Self::first_distinct_precondition_kind`] for the full
+    /// rationale — the two methods share ONE lift motivation, ONE
+    /// fail-before-pass-after composition-law pin, and ONE two-surface
+    /// parity contract with the point-domain
+    /// [`crate::boundary::Boundary`] first-distinct-kind peer methods.
+    #[must_use]
+    pub fn first_distinct_postcondition_kind(&self) -> Option<ConditionKind> {
+        self.postconditions.first_distinct_kind()
+    }
+
+    /// Earliest [`ConditionKind::ALL`] entry ABSENT from
+    /// `preconditions ∪ postconditions`, or `None` when the union
+    /// carries every variant — the peer of
+    /// [`crate::boundary::Boundary::first_missing_condition_kind`]
+    /// on the [`EphemeralSpec`] sugar surface.
+    ///
+    /// # Composed body — byte-identical to
+    /// [`crate::boundary::Boundary::first_missing_condition_kind`]
+    ///
+    /// `ConditionKind::ALL.iter().copied().find(|k|
+    /// !self.has_condition_kind(*k))` — the earliest-element scalar
+    /// projection of [`Self::missing_condition_kinds`] onto its first
+    /// entry under a NEGATED predicate. Byte-identical to the peer
+    /// method on the point-domain [`crate::boundary::Boundary`]
+    /// surface — both compose against the SAME slice-level substrate
+    /// primitive [`crate::boundary::ConditionSliceExt::first_missing_kind`]
+    /// via the two-slice union composed through
+    /// [`Self::has_condition_kind`] so a regression at the per-slice
+    /// negated short-circuit walk fails at that primitive's tests
+    /// rather than as silent drift at either struct-level earliest-
+    /// element caller.
+    ///
+    /// # Sibling to [`Self::missing_condition_kinds`]
+    ///
+    /// Third scalar projection of the closed-set-complement widened
+    /// primitive on the ephemeral-union surface. The two-surface
+    /// parity contract now covers TEN refinements on the condition
+    /// axis (the nine listed at [`Self::first_distinct_condition_kind`]
+    /// plus `Option<ConditionKind>` earliest-element scalar of the
+    /// closed-set-complement), byte-for-byte peer of the point-domain
+    /// triad on [`crate::boundary::Boundary`].
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the complement-earliest-element projection
+    /// composes the SAME closed-set walk on both this ephemeral
+    /// surface and the point-domain [`crate::boundary::Boundary`]
+    /// surface under short-circuit semantics with a negated predicate).
+    /// THEORY.md §VI.1 (generation over composition — a future
+    /// [`ConditionKind`] variant added to `ALL` reaches both surfaces'
+    /// first-missing-kind triads mechanically through the SAME closed-
+    /// set walk).
+    #[must_use]
+    pub fn first_missing_condition_kind(&self) -> Option<ConditionKind> {
+        ConditionKind::ALL
+            .iter()
+            .copied()
+            .find(|k| !self.has_condition_kind(*k))
+    }
+
+    /// Earliest [`ConditionKind::ALL`] entry ABSENT from
+    /// [`Self::preconditions`], or `None` when preconditions carry
+    /// every variant — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) first-missing-kind triad on
+    /// [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::first_missing_kind`]
+    /// over [`Self::preconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::first_missing_precondition_kind`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice negated short-circuit walk fails at that primitive's
+    /// tests rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn first_missing_precondition_kind(&self) -> Option<ConditionKind> {
+        self.preconditions.first_missing_kind()
+    }
+
+    /// Earliest [`ConditionKind::ALL`] entry ABSENT from
+    /// [`Self::postconditions`], or `None` when postconditions carry
+    /// every variant — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) first-missing-kind triad on
+    /// [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::first_missing_kind`]
+    /// over [`Self::postconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::first_missing_postcondition_kind`]
+    /// on the point-domain surface. See
+    /// [`Self::first_missing_precondition_kind`] for the full
+    /// rationale — the two methods share ONE lift motivation, ONE
+    /// fail-before-pass-after composition-law pin, and ONE two-surface
+    /// parity contract with the point-domain
+    /// [`crate::boundary::Boundary`] first-missing-kind peer methods.
+    #[must_use]
+    pub fn first_missing_postcondition_kind(&self) -> Option<ConditionKind> {
+        self.postconditions.first_missing_kind()
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -5667,6 +5847,167 @@ mod tests {
                     spec.distinct_condition_kind_count() + spec.missing_condition_kind_count(),
                     ConditionKind::ALL.len(),
                     "EphemeralSpec (distinct, missing) scalar partition drift for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (EphemeralSpec first-distinct-kind
+    /// triad) — the three `first_distinct_*_kind` methods on
+    /// [`EphemeralSpec`] delegate to the slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::first_distinct_kind`] over
+    /// the two `Vec<Condition>` slots and compose the union via
+    /// `ConditionKind::ALL.iter().copied().find(|k|
+    /// has_condition_kind(*k))`. Byte-for-byte peer of
+    /// `first_distinct_condition_kind_triad_delegates_to_slice_first_distinct_kind`
+    /// on the point-domain [`crate::boundary::Boundary`] surface — both
+    /// peers compose against the SAME slice-level substrate primitive
+    /// so a regression at the per-slice short-circuit walk fails at
+    /// that primitive's tests rather than as silent drift at either
+    /// struct-level earliest-element arm.
+    #[test]
+    fn ephemeral_first_distinct_condition_kind_triad_delegates_to_slice_first_distinct_kind() {
+        // Empty ephemeral spec — every arm returns None.
+        let empty = empty_ephemeral();
+        assert_eq!(
+            empty.first_distinct_precondition_kind(),
+            None,
+            "empty ephemeral spec must return None on first_distinct_precondition_kind",
+        );
+        assert_eq!(
+            empty.first_distinct_postcondition_kind(),
+            None,
+            "empty ephemeral spec must return None on first_distinct_postcondition_kind",
+        );
+        assert_eq!(
+            empty.first_distinct_condition_kind(),
+            None,
+            "empty ephemeral spec must return None on first_distinct_condition_kind",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+
+                assert_eq!(
+                    spec.first_distinct_precondition_kind(),
+                    spec.preconditions.first_distinct_kind(),
+                    "EphemeralSpec::first_distinct_precondition_kind must delegate verbatim to \
+                     preconditions.first_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.first_distinct_precondition_kind(),
+                    spec.distinct_precondition_kinds().first().copied(),
+                    "EphemeralSpec::first_distinct_precondition_kind must equal \
+                     distinct_precondition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.first_distinct_postcondition_kind(),
+                    spec.postconditions.first_distinct_kind(),
+                    "EphemeralSpec::first_distinct_postcondition_kind must delegate verbatim to \
+                     postconditions.first_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.first_distinct_postcondition_kind(),
+                    spec.distinct_postcondition_kinds().first().copied(),
+                    "EphemeralSpec::first_distinct_postcondition_kind must equal \
+                     distinct_postcondition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let expected_union = ConditionKind::ALL
+                    .into_iter()
+                    .find(|k| pre_kind == *k || post_kind == *k);
+                assert_eq!(
+                    spec.first_distinct_condition_kind(),
+                    expected_union,
+                    "EphemeralSpec::first_distinct_condition_kind must equal earliest ALL entry \
+                     populated by either half-slice for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.first_distinct_condition_kind(),
+                    spec.distinct_condition_kinds().first().copied(),
+                    "EphemeralSpec::first_distinct_condition_kind must equal \
+                     distinct_condition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (EphemeralSpec first-missing-kind triad)
+    /// — the three `first_missing_*_kind` methods on [`EphemeralSpec`]
+    /// delegate to the slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::first_missing_kind`] over
+    /// the two `Vec<Condition>` slots and compose the union via
+    /// `ConditionKind::ALL.iter().copied().find(|k|
+    /// !has_condition_kind(*k))`. Byte-for-byte peer of
+    /// `first_missing_condition_kind_triad_delegates_to_slice_first_missing_kind`
+    /// on the point-domain [`crate::boundary::Boundary`] surface.
+    #[test]
+    fn ephemeral_first_missing_condition_kind_triad_delegates_to_slice_first_missing_kind() {
+        // Empty ephemeral spec — every arm returns Some(ConditionKind::ALL[0]).
+        let empty = empty_ephemeral();
+        let first = Some(ConditionKind::ALL[0]);
+        assert_eq!(
+            empty.first_missing_precondition_kind(),
+            first,
+            "empty ephemeral spec must return Some(ConditionKind::ALL[0]) on first_missing_precondition_kind",
+        );
+        assert_eq!(
+            empty.first_missing_postcondition_kind(),
+            first,
+            "empty ephemeral spec must return Some(ConditionKind::ALL[0]) on first_missing_postcondition_kind",
+        );
+        assert_eq!(
+            empty.first_missing_condition_kind(),
+            first,
+            "empty ephemeral spec must return Some(ConditionKind::ALL[0]) on first_missing_condition_kind",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+
+                assert_eq!(
+                    spec.first_missing_precondition_kind(),
+                    spec.preconditions.first_missing_kind(),
+                    "EphemeralSpec::first_missing_precondition_kind must delegate verbatim to \
+                     preconditions.first_missing_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.first_missing_precondition_kind(),
+                    spec.missing_precondition_kinds().first().copied(),
+                    "EphemeralSpec::first_missing_precondition_kind must equal \
+                     missing_precondition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.first_missing_postcondition_kind(),
+                    spec.postconditions.first_missing_kind(),
+                    "EphemeralSpec::first_missing_postcondition_kind must delegate verbatim to \
+                     postconditions.first_missing_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.first_missing_postcondition_kind(),
+                    spec.missing_postcondition_kinds().first().copied(),
+                    "EphemeralSpec::first_missing_postcondition_kind must equal \
+                     missing_postcondition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let expected_union = ConditionKind::ALL
+                    .into_iter()
+                    .find(|k| pre_kind != *k && post_kind != *k);
+                assert_eq!(
+                    spec.first_missing_condition_kind(),
+                    expected_union,
+                    "EphemeralSpec::first_missing_condition_kind must equal earliest ALL entry \
+                     NOT populated by either half-slice for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.first_missing_condition_kind(),
+                    spec.missing_condition_kinds().first().copied(),
+                    "EphemeralSpec::first_missing_condition_kind must equal \
+                     missing_condition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
                 );
             }
         }

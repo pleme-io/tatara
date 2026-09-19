@@ -894,6 +894,198 @@ impl Boundary {
     pub fn missing_postcondition_kind_count(&self) -> usize {
         self.postconditions.missing_kind_count()
     }
+
+    /// Earliest [`ConditionKind::ALL`] entry present in
+    /// `preconditions ∪ postconditions`, or `None` when neither side
+    /// populates any variant — the union arm of the (precondition,
+    /// postcondition, condition-union) first-distinct-kind triad on
+    /// [`Boundary`].
+    ///
+    /// # Composed body
+    ///
+    /// `ConditionKind::ALL.iter().copied().find(|k|
+    /// self.has_condition_kind(*k))` — a closed-set walk composed
+    /// against the two-slice union primitive
+    /// [`Self::has_condition_kind`] that SHORT-CIRCUITS at the earliest
+    /// match. Byte-identical to the trait-level
+    /// [`ConditionSliceExt::first_distinct_kind`] but reaching through
+    /// the boundary's two-slice union rather than a single slice.
+    /// Equivalent to `self.distinct_condition_kinds().first().copied()`
+    /// without materializing the intermediate `Vec<ConditionKind>`.
+    ///
+    /// # Sibling to [`Self::distinct_condition_kinds`] /
+    /// [`Self::distinct_condition_kind_count`]
+    ///
+    /// Third scalar projection of the closed-set-inversion widened
+    /// primitive on the boundary-union surface: `distinct_condition_kinds`
+    /// returns the SET, `distinct_condition_kind_count` collapses it to
+    /// its cardinality, and `first_distinct_condition_kind` collapses
+    /// it to its earliest element. Byte-for-byte peer of the point-domain
+    /// scalar projection [`ConditionSliceExt::first_distinct_kind`] one
+    /// struct-layer down, and of the peer surface sugar
+    /// [`crate::ephemeral::EphemeralSpec::first_distinct_condition_kind`]
+    /// one struct-layer sideways.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that surfaces "boundary starts with
+    /// PromQL" reads `spec.boundary.first_distinct_condition_kind() ==
+    /// Some(ConditionKind::PromQL)` at ONE call site rather than
+    /// paying for `spec.boundary.distinct_condition_kinds().first() ==
+    /// Some(&ConditionKind::PromQL)` (with its intermediate heap
+    /// allocation) or the eight-way `has_*_kind` sweep at the callsite.
+    /// A future require-tag classifier arm that publishes the earliest
+    /// distinct kind as a scalar
+    /// (`condition-kinds-first-distinct-<kind>`) reaches this ONE
+    /// primitive without allocating.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs (the earliest-element projection composes the
+    /// SAME closed-set walk on both this boundary surface and the
+    /// slice-level substrate primitive under short-circuit semantics).
+    /// THEORY.md §VI.1 — generation over composition (a new
+    /// [`ConditionKind`] variant added to `ALL` reaches this primitive
+    /// mechanically through the closed-set walk).
+    #[must_use]
+    pub fn first_distinct_condition_kind(&self) -> Option<ConditionKind> {
+        ConditionKind::ALL
+            .iter()
+            .copied()
+            .find(|k| self.has_condition_kind(*k))
+    }
+
+    /// Earliest [`ConditionKind::ALL`] entry present in
+    /// [`Self::preconditions`], or `None` when preconditions carry no
+    /// matching kind — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) first-distinct-kind triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::first_distinct_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::first_distinct_postcondition_kind`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-slice
+    /// short-circuit walk fails at that primitive's tests rather than
+    /// as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn first_distinct_precondition_kind(&self) -> Option<ConditionKind> {
+        self.preconditions.first_distinct_kind()
+    }
+
+    /// Earliest [`ConditionKind::ALL`] entry present in
+    /// [`Self::postconditions`], or `None` when postconditions carry no
+    /// matching kind — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) first-distinct-kind triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::first_distinct_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::first_distinct_precondition_kind`]. See that
+    /// method for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via
+    /// [`crate::ephemeral::EphemeralSpec::first_distinct_postcondition_kind`].
+    #[must_use]
+    pub fn first_distinct_postcondition_kind(&self) -> Option<ConditionKind> {
+        self.postconditions.first_distinct_kind()
+    }
+
+    /// Earliest [`ConditionKind::ALL`] entry ABSENT from
+    /// `preconditions ∪ postconditions`, or `None` when the union
+    /// carries every variant — the union arm of the (precondition,
+    /// postcondition, condition-union) first-missing-kind triad on
+    /// [`Boundary`].
+    ///
+    /// # Composed body
+    ///
+    /// `ConditionKind::ALL.iter().copied().find(|k|
+    /// !self.has_condition_kind(*k))` — a closed-set walk composed
+    /// against the two-slice union primitive
+    /// [`Self::has_condition_kind`] under a NEGATED predicate that
+    /// SHORT-CIRCUITS at the earliest empty slot. Byte-identical to the
+    /// trait-level [`ConditionSliceExt::first_missing_kind`] but
+    /// reaching through the boundary's two-slice union rather than a
+    /// single slice. Equivalent to
+    /// `self.missing_condition_kinds().first().copied()` without
+    /// materializing the intermediate `Vec<ConditionKind>`.
+    ///
+    /// # Sibling to [`Self::missing_condition_kinds`] /
+    /// [`Self::missing_condition_kind_count`]
+    ///
+    /// Third scalar projection of the closed-set-complement widened
+    /// primitive on the boundary-union surface. Byte-for-byte peer of
+    /// [`Self::first_distinct_condition_kind`] one axis over under a
+    /// negated predicate: where `first_distinct_condition_kind` scalar-
+    /// projects the closed-set-INVERSION widened primitive onto its
+    /// earliest element, this method scalar-projects the closed-set-
+    /// COMPLEMENT widened primitive onto its earliest element.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that surfaces "boundary starts missing
+    /// ProcessPhase" reads `spec.boundary.first_missing_condition_kind()
+    /// == Some(ConditionKind::ProcessPhase)` at ONE call site rather
+    /// than paying for `spec.boundary.missing_condition_kinds().first()
+    /// == Some(&ConditionKind::ProcessPhase)` (with its intermediate
+    /// heap allocation). An operator-facing "first still-unfilled
+    /// closed-loop kind" audit reaches this ONE substrate site rather
+    /// than restating the negated closed-set walk at every consumer.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the complement-earliest-element projection
+    /// composes the SAME closed-set walk on both this boundary surface
+    /// and the slice-level substrate primitive under short-circuit
+    /// semantics with a negated predicate). THEORY.md §VI.1
+    /// (generation over composition — a new [`ConditionKind`] variant
+    /// added to `ALL` reaches this primitive mechanically through the
+    /// closed-set walk).
+    #[must_use]
+    pub fn first_missing_condition_kind(&self) -> Option<ConditionKind> {
+        ConditionKind::ALL
+            .iter()
+            .copied()
+            .find(|k| !self.has_condition_kind(*k))
+    }
+
+    /// Earliest [`ConditionKind::ALL`] entry ABSENT from
+    /// [`Self::preconditions`], or `None` when preconditions carry
+    /// every variant — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) first-missing-kind triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::first_missing_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::first_missing_postcondition_kind`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-slice
+    /// negated short-circuit walk fails at that primitive's tests
+    /// rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn first_missing_precondition_kind(&self) -> Option<ConditionKind> {
+        self.preconditions.first_missing_kind()
+    }
+
+    /// Earliest [`ConditionKind::ALL`] entry ABSENT from
+    /// [`Self::postconditions`], or `None` when postconditions carry
+    /// every variant — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) first-missing-kind triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::first_missing_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::first_missing_precondition_kind`]. See that
+    /// method for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via
+    /// [`crate::ephemeral::EphemeralSpec::first_missing_postcondition_kind`].
+    #[must_use]
+    pub fn first_missing_postcondition_kind(&self) -> Option<ConditionKind> {
+        self.postconditions.first_missing_kind()
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -1435,6 +1627,176 @@ pub trait ConditionSliceExt {
             .filter(|k| !self.has_kind(**k))
             .count()
     }
+
+    /// Short-circuiting `Option<ConditionKind>` peer of
+    /// [`Self::distinct_kinds`] — the FIRST [`ConditionKind`] variant
+    /// present in this slice, in canonical [`ConditionKind::ALL`] order,
+    /// or `None` when the slice carries no matching kind. Default body:
+    /// `ConditionKind::ALL.iter().copied().find(|k| self.has_kind(*k))`
+    /// — a closed-set walk composed against [`Self::has_kind`] per
+    /// variant that SHORT-CIRCUITS at the earliest match.
+    ///
+    /// # Sibling to [`Self::distinct_kinds`] / [`Self::distinct_kind_count`]
+    ///
+    /// Third refinement on the closed-set-inversion axis, `Option<ConditionKind>`-
+    /// valued: `distinct_kinds` returns the SET, `distinct_kind_count`
+    /// scalar-projects the cardinality, and `first_distinct_kind`
+    /// scalar-projects the SET onto its earliest element. The composition
+    /// law `first_distinct_kind() == distinct_kinds().first().copied()`
+    /// binds the earliest-element projection to the widened primitive at
+    /// the trait's default body — pinned substrate-wide by
+    /// [`assert_slice_refinement_composition_laws`] as its
+    /// earliest-element-inversion arm. Both coarser projections agree on
+    /// emptiness: `first_distinct_kind().is_none() ==
+    /// (distinct_kind_count() == 0)`.
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::first_populated_kind`]
+    ///
+    /// Same shape at the peer axis one struct layer up: fixing the
+    /// carrier and short-circuiting on the earliest [`ConditionKind::ALL`]
+    /// hit under [`Self::has_kind`]. `TaggedUnion::first_populated_kind`
+    /// walks the tagged-union parent's closed set; `first_distinct_kind`
+    /// here walks [`ConditionKind::ALL`] on the slice-level presence-probe
+    /// axis. The two primitives close the "earliest-element scalar-
+    /// projection of the closed-set-inversion widened primitive"
+    /// refinement at two adjacent typescape sites — one per closed-set-
+    /// addressed slice-level refinement (this primitive), one per closed-
+    /// set-addressed tagged-union parent-level refinement.
+    ///
+    /// # Semantics
+    ///
+    /// Returns `Some(k)` where `k` is the earliest [`ConditionKind::ALL`]
+    /// entry with `self.has_kind(k) == true`, or `None` when no kind is
+    /// present. An empty slice returns `None`. A slice carrying multiple
+    /// variants returns the earliest one in [`ConditionKind::ALL`] order
+    /// — a strictly more informative projection than
+    /// `distinct_kinds().first().copied()` without materializing the
+    /// intermediate `Vec<ConditionKind>` the widened primitive
+    /// otherwise pays for.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing "first present kind" diagnostic on an audit
+    ///   dump that names ONE kind rather than the full set reaches this
+    ///   ONE substrate site rather than paying for
+    ///   `slice.distinct_kinds().first().copied()` (with its
+    ///   intermediate heap allocation).
+    /// - A `first-distinct-<kind>` require-tag classifier arm reads this
+    ///   primitive with no allocation, byte-for-byte symmetrical with
+    ///   `slice.has_kind(kind)` under a closed-set-inversion projection.
+    /// - A fast-path branch that discriminates "empty" from "any
+    ///   populated" reads `slice.first_distinct_kind().is_some()` at ONE
+    ///   call site rather than allocating a `Vec<ConditionKind>` through
+    ///   `!distinct_kinds().is_empty()` or paying for the full
+    ///   `distinct_kind_count() > 0` walk.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+    ///   earliest-element projection lives at ONE substrate site as a
+    ///   typed projection of [`Self::has_kind`] over the closed set
+    ///   [`ConditionKind::ALL`] under short-circuit walk semantics.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this primitive
+    ///   mechanically (the closed-set walk picks up the new entry) —
+    ///   every downstream consumer sees the wider earliest-hit projection
+    ///   without further per-caller edit.
+    fn first_distinct_kind(&self) -> Option<ConditionKind> {
+        ConditionKind::ALL
+            .iter()
+            .copied()
+            .find(|k| self.has_kind(*k))
+    }
+
+    /// Short-circuiting `Option<ConditionKind>` peer of
+    /// [`Self::missing_kinds`] — the FIRST [`ConditionKind`] variant
+    /// ABSENT from this slice, in canonical [`ConditionKind::ALL`] order,
+    /// or `None` when the slice carries every variant. Default body:
+    /// `ConditionKind::ALL.iter().copied().find(|k| !self.has_kind(*k))`
+    /// — a closed-set walk composed against [`Self::has_kind`] per
+    /// variant under NEGATION with SHORT-CIRCUIT at the earliest empty
+    /// slot.
+    ///
+    /// # Sibling to [`Self::missing_kinds`] / [`Self::missing_kind_count`]
+    ///
+    /// Third refinement on the closed-set-complement axis,
+    /// `Option<ConditionKind>`-valued: `missing_kinds` returns the SET,
+    /// `missing_kind_count` scalar-projects the cardinality, and
+    /// `first_missing_kind` scalar-projects the SET onto its earliest
+    /// element. The composition law
+    /// `first_missing_kind() == missing_kinds().first().copied()` binds
+    /// the earliest-element projection to the widened primitive at the
+    /// trait's default body — pinned substrate-wide by
+    /// [`assert_slice_refinement_composition_laws`] as its
+    /// earliest-element-complement arm. Both coarser projections agree
+    /// on saturation: `first_missing_kind().is_none() ==
+    /// (missing_kind_count() == 0)`.
+    ///
+    /// # Peer to [`Self::first_distinct_kind`]
+    ///
+    /// Closed-set-complement peer of the closed-set-inversion earliest-
+    /// element primitive under a negated `has_kind` predicate. The two
+    /// primitives PARTITION [`ConditionKind::ALL`]'s earliest-element
+    /// projection: at least one of `first_distinct_kind()` and
+    /// `first_missing_kind()` is `Some` on any non-degenerate closed set
+    /// (both are `Some` iff `1 ≤ distinct_kind_count() <
+    /// ConditionKind::ALL.len()`; only the distinct-side is `Some` on a
+    /// saturated slice; only the missing-side is `Some` on an empty
+    /// slice).
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::first_missing_kind`]
+    ///
+    /// Same shape at the peer axis one struct layer up under a negated
+    /// predicate. The two primitives close the "earliest-element scalar-
+    /// projection of the closed-set-complement widened primitive"
+    /// refinement at two adjacent typescape sites — one per closed-set-
+    /// addressed slice-level refinement (this primitive), one per closed-
+    /// set-addressed tagged-union parent-level refinement.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `Some(ConditionKind::ALL[0])` (every kind
+    /// missing, first hit is index 0). A slice populating exactly `k`
+    /// returns `Some(ConditionKind::ALL[0])` if `k != ALL[0]`, else
+    /// `Some(ALL[1])` (the earliest non-`k` entry). A saturated slice
+    /// carrying every variant returns `None`.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing "first still-unfilled kind" diagnostic on a
+    ///   partially-populated boundary reads
+    ///   `boundary.postconditions.first_missing_kind()` at ONE substrate
+    ///   site — a strictly-more-informative projection than
+    ///   `!has_kind(JobAttested)` at a per-kind callsite for a fleet-wide
+    ///   "which processes are missing at least one closed-loop kind"
+    ///   audit.
+    /// - A `first-missing-<kind>` require-tag classifier arm reads this
+    ///   primitive with no allocation, byte-for-byte symmetrical with
+    ///   `slice.first_distinct_kind()`.
+    /// - A fast-path branch that discriminates "saturated" from "at least
+    ///   one missing" reads `slice.first_missing_kind().is_some()` at ONE
+    ///   call site rather than allocating through
+    ///   `!missing_kinds().is_empty()` or paying for the full
+    ///   `missing_kind_count() > 0` walk.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+    ///   complement-earliest-element projection lives at ONE substrate
+    ///   site as a typed projection of [`Self::has_kind`] over the
+    ///   closed set [`ConditionKind::ALL`] under negation with short-
+    ///   circuit walk semantics.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this primitive
+    ///   mechanically (the closed-set walk picks up the new entry on the
+    ///   missing side) — every downstream consumer sees the wider
+    ///   complement's earliest hit without further per-caller edit.
+    fn first_missing_kind(&self) -> Option<ConditionKind> {
+        ConditionKind::ALL
+            .iter()
+            .copied()
+            .find(|k| !self.has_kind(*k))
+    }
 }
 
 /// Iterator yielded by [`ConditionSliceExt::iter_kind`] — the widened
@@ -1734,6 +2096,43 @@ where
         "(distinct_kind_count, missing_kind_count) scalar partition drift — sum {} ≠ ConditionKind::ALL.len() {}",
         slice.distinct_kind_count() + slice.missing_kind_count(),
         ConditionKind::ALL.len(),
+    );
+
+    // first_distinct_kind ↔ distinct_kinds.first().copied() — the
+    // earliest-element scalar projection of the closed-set-inversion
+    // widened primitive. Peer of `distinct_kind_count ↔ distinct_kinds
+    // .len()` on the scalar-projection axis: where the cardinality peer
+    // collapses the SET to its length, the earliest-element peer
+    // collapses the SET to its first element. A regression that
+    // overrode `first_distinct_kind` to skip a kind, drift the walk
+    // from ConditionKind::ALL, forget the short-circuit (returning
+    // the LAST hit), or diverge from the widened primitive's canonical
+    // ordering surfaces HERE at the substrate boundary, not as silent
+    // drift at every downstream `first-distinct-<kind>` require-tag
+    // classifier callsite.
+    assert_eq!(
+        slice.first_distinct_kind(),
+        distinct.first().copied(),
+        "first_distinct_kind() drifted from distinct_kinds().first().copied()",
+    );
+
+    // first_missing_kind ↔ missing_kinds.first().copied() — the
+    // earliest-element scalar projection of the closed-set-complement
+    // widened primitive. Byte-for-byte peer of `first_distinct_kind`
+    // one axis over under a negated predicate: where
+    // `first_distinct_kind` scalar-projects the closed-set-INVERSION
+    // widened primitive onto its earliest element, this arm scalar-
+    // projects the closed-set-COMPLEMENT widened primitive onto its
+    // earliest element. A regression that overrode `first_missing_kind`
+    // to drop the negation (returning `first_distinct_kind`), skip a
+    // kind, drift the walk from ConditionKind::ALL, or forget the
+    // short-circuit (returning the LAST missing hit) surfaces HERE at
+    // the substrate boundary, not as silent drift at every downstream
+    // `first-missing-<kind>` require-tag classifier callsite.
+    assert_eq!(
+        slice.first_missing_kind(),
+        missing.first().copied(),
+        "first_missing_kind() drifted from missing_kinds().first().copied()",
     );
 }
 
@@ -4052,6 +4451,134 @@ mod tests {
         );
     }
 
+    // ── ConditionSliceExt::first_distinct_kind — earliest-element pins ─
+    //
+    // Short-circuiting Option<ConditionKind> peer of the closed-set-
+    // inversion widened primitive `distinct_kinds`: `first_distinct_kind()`
+    // returns the earliest present kind in canonical ConditionKind::ALL
+    // order without materializing the intermediate Vec<ConditionKind>.
+    // The composition law `first_distinct_kind() == distinct_kinds()
+    // .first().copied()` is pinned as the earliest-element-inversion arm
+    // of `assert_slice_refinement_composition_laws`.
+
+    /// EMPTY-SLICE pin — an empty slice returns `None` on
+    /// `first_distinct_kind`, byte-for-byte with
+    /// `distinct_kinds().first().copied()`.
+    #[test]
+    fn condition_slice_first_distinct_kind_returns_none_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        assert_eq!(
+            empty.first_distinct_kind(),
+            None,
+            "empty slice must return None on first_distinct_kind",
+        );
+        assert_eq!(
+            empty.first_distinct_kind(),
+            empty.distinct_kinds().first().copied(),
+            "empty first_distinct_kind must equal distinct_kinds().first().copied()",
+        );
+    }
+
+    /// PER-VARIANT pin — a slice with EXACTLY ONE `Condition` carrying
+    /// the addressed kind returns `Some(that_kind)` on
+    /// `first_distinct_kind`.
+    #[test]
+    fn condition_slice_first_distinct_kind_returns_populated_variant() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            assert_eq!(
+                slice.first_distinct_kind(),
+                Some(populated),
+                "single-populated slice must return Some({populated:?}) on first_distinct_kind",
+            );
+            assert_eq!(
+                slice.first_distinct_kind(),
+                slice.distinct_kinds().first().copied(),
+                "single-populated first_distinct_kind must equal distinct_kinds().first().copied() for {populated:?}",
+            );
+        }
+    }
+
+    /// FULL-COVERAGE pin — a slice that carries every [`ConditionKind`]
+    /// variant returns `Some(ConditionKind::ALL[0])` on
+    /// `first_distinct_kind` (the first ALL entry hits at the earliest
+    /// walk step).
+    #[test]
+    fn condition_slice_first_distinct_kind_returns_first_all_on_saturated_slice() {
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert_eq!(
+            saturated.as_slice().first_distinct_kind(),
+            Some(ConditionKind::ALL[0]),
+            "saturated slice must return Some(ConditionKind::ALL[0]) on first_distinct_kind",
+        );
+        assert_eq!(
+            saturated.as_slice().first_distinct_kind(),
+            saturated.as_slice().distinct_kinds().first().copied(),
+            "saturated first_distinct_kind must equal distinct_kinds().first().copied()",
+        );
+    }
+
+    // ── ConditionSliceExt::first_missing_kind — earliest-element pins ──
+
+    /// EMPTY-SLICE pin — an empty slice returns
+    /// `Some(ConditionKind::ALL[0])` on `first_missing_kind` (every
+    /// kind missing, first hit is index 0). Dual of the empty-slice arm
+    /// on `first_distinct_kind` which returns `None`.
+    #[test]
+    fn condition_slice_first_missing_kind_returns_first_all_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        assert_eq!(
+            empty.first_missing_kind(),
+            Some(ConditionKind::ALL[0]),
+            "empty slice must return Some(ConditionKind::ALL[0]) on first_missing_kind",
+        );
+        assert_eq!(
+            empty.first_missing_kind(),
+            empty.missing_kinds().first().copied(),
+            "empty first_missing_kind must equal missing_kinds().first().copied()",
+        );
+    }
+
+    /// PER-VARIANT pin — a slice populating exactly `k` returns
+    /// `Some(ALL[0])` if `k != ALL[0]`, else `Some(ALL[1])` (the earliest
+    /// non-`k` entry).
+    #[test]
+    fn condition_slice_first_missing_kind_returns_earliest_absent_variant() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            let expected = ConditionKind::ALL.into_iter().find(|k| *k != populated);
+            assert_eq!(
+                slice.first_missing_kind(),
+                expected,
+                "single-populated slice must return earliest ALL entry != {populated:?} on first_missing_kind",
+            );
+            assert_eq!(
+                slice.first_missing_kind(),
+                slice.missing_kinds().first().copied(),
+                "single-populated first_missing_kind must equal missing_kinds().first().copied() for {populated:?}",
+            );
+        }
+    }
+
+    /// FULL-COVERAGE pin — a slice that carries every [`ConditionKind`]
+    /// variant returns `None` on `first_missing_kind` (no kind missing).
+    #[test]
+    fn condition_slice_first_missing_kind_returns_none_on_saturated_slice() {
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert_eq!(
+            saturated.as_slice().first_missing_kind(),
+            None,
+            "saturated slice must return None on first_missing_kind",
+        );
+        assert_eq!(
+            saturated.as_slice().first_missing_kind(),
+            saturated.as_slice().missing_kinds().first().copied(),
+            "saturated first_missing_kind must equal missing_kinds().first().copied()",
+        );
+    }
+
     // ── Boundary distinct-set triad — substrate-delegation pins ────────
     //
     // The (precondition, postcondition, condition-union) distinct-set
@@ -4346,6 +4873,168 @@ mod tests {
                     b.distinct_condition_kind_count() + b.missing_condition_kind_count(),
                     ConditionKind::ALL.len(),
                     "Boundary (distinct, missing) scalar partition drift for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary first-distinct-kind triad) —
+    /// the three `first_distinct_*_kind` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::first_distinct_kind`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via `ConditionKind::ALL.iter().copied()
+    /// .find(|k| has_condition_kind(*k))`. Sweep
+    /// `ConditionKind::ALL × ConditionKind::ALL` so a regression that
+    /// inlined a divergent short-circuit walk at either half-slice arm,
+    /// reversed the walk order, or dropped the short-circuit surfaces
+    /// HERE. Also pins the composition law `first_distinct_*_kind() ==
+    /// distinct_*_kinds().first().copied()` at each arm.
+    #[test]
+    fn first_distinct_condition_kind_triad_delegates_to_slice_first_distinct_kind() {
+        // Empty boundary — every arm returns None.
+        let b = Boundary::default();
+        assert_eq!(
+            b.first_distinct_precondition_kind(),
+            None,
+            "empty boundary must return None on first_distinct_precondition_kind",
+        );
+        assert_eq!(
+            b.first_distinct_postcondition_kind(),
+            None,
+            "empty boundary must return None on first_distinct_postcondition_kind",
+        );
+        assert_eq!(
+            b.first_distinct_condition_kind(),
+            None,
+            "empty boundary must return None on first_distinct_condition_kind",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                assert_eq!(
+                    b.first_distinct_precondition_kind(),
+                    b.preconditions.first_distinct_kind(),
+                    "Boundary::first_distinct_precondition_kind must delegate verbatim to \
+                     preconditions.first_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.first_distinct_precondition_kind(),
+                    b.distinct_precondition_kinds().first().copied(),
+                    "Boundary::first_distinct_precondition_kind must equal \
+                     distinct_precondition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.first_distinct_postcondition_kind(),
+                    b.postconditions.first_distinct_kind(),
+                    "Boundary::first_distinct_postcondition_kind must delegate verbatim to \
+                     postconditions.first_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.first_distinct_postcondition_kind(),
+                    b.distinct_postcondition_kinds().first().copied(),
+                    "Boundary::first_distinct_postcondition_kind must equal \
+                     distinct_postcondition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let expected_union = ConditionKind::ALL
+                    .into_iter()
+                    .find(|k| pre_kind == *k || post_kind == *k);
+                assert_eq!(
+                    b.first_distinct_condition_kind(),
+                    expected_union,
+                    "Boundary::first_distinct_condition_kind must equal earliest ALL entry \
+                     populated by either half-slice for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.first_distinct_condition_kind(),
+                    b.distinct_condition_kinds().first().copied(),
+                    "Boundary::first_distinct_condition_kind must equal \
+                     distinct_condition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary first-missing-kind triad) —
+    /// the three `first_missing_*_kind` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::first_missing_kind`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via `ConditionKind::ALL.iter().copied()
+    /// .find(|k| !has_condition_kind(*k))`. Sweep
+    /// `ConditionKind::ALL × ConditionKind::ALL` so a regression that
+    /// dropped the negation or drifted the short-circuit walk surfaces
+    /// HERE. Also pins the composition law `first_missing_*_kind() ==
+    /// missing_*_kinds().first().copied()` at each arm.
+    #[test]
+    fn first_missing_condition_kind_triad_delegates_to_slice_first_missing_kind() {
+        // Empty boundary — every arm returns Some(ConditionKind::ALL[0]).
+        let b = Boundary::default();
+        let first = Some(ConditionKind::ALL[0]);
+        assert_eq!(
+            b.first_missing_precondition_kind(),
+            first,
+            "empty boundary must return Some(ConditionKind::ALL[0]) on first_missing_precondition_kind",
+        );
+        assert_eq!(
+            b.first_missing_postcondition_kind(),
+            first,
+            "empty boundary must return Some(ConditionKind::ALL[0]) on first_missing_postcondition_kind",
+        );
+        assert_eq!(
+            b.first_missing_condition_kind(),
+            first,
+            "empty boundary must return Some(ConditionKind::ALL[0]) on first_missing_condition_kind",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                assert_eq!(
+                    b.first_missing_precondition_kind(),
+                    b.preconditions.first_missing_kind(),
+                    "Boundary::first_missing_precondition_kind must delegate verbatim to \
+                     preconditions.first_missing_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.first_missing_precondition_kind(),
+                    b.missing_precondition_kinds().first().copied(),
+                    "Boundary::first_missing_precondition_kind must equal \
+                     missing_precondition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.first_missing_postcondition_kind(),
+                    b.postconditions.first_missing_kind(),
+                    "Boundary::first_missing_postcondition_kind must delegate verbatim to \
+                     postconditions.first_missing_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.first_missing_postcondition_kind(),
+                    b.missing_postcondition_kinds().first().copied(),
+                    "Boundary::first_missing_postcondition_kind must equal \
+                     missing_postcondition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let expected_union = ConditionKind::ALL
+                    .into_iter()
+                    .find(|k| pre_kind != *k && post_kind != *k);
+                assert_eq!(
+                    b.first_missing_condition_kind(),
+                    expected_union,
+                    "Boundary::first_missing_condition_kind must equal earliest ALL entry \
+                     NOT populated by either half-slice for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.first_missing_condition_kind(),
+                    b.missing_condition_kinds().first().copied(),
+                    "Boundary::first_missing_condition_kind must equal \
+                     missing_condition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
                 );
             }
         }

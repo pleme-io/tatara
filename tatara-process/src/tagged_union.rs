@@ -766,6 +766,41 @@ macro_rules! declare_tagged_union_impls {
             pub fn has_multiple_missing_kinds(&self) -> bool {
                 <Self as $crate::tagged_union::TaggedUnion>::has_multiple_missing_kinds(self)
             }
+
+            /// Boolean parent-state middle-arm projection — `true` iff
+            /// this tagged union has AT LEAST ONE populated slot AND AT
+            /// LEAST ONE missing slot, i.e. it is neither
+            /// [`Self::is_empty`] nor [`Self::is_saturated`].
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::is_partially_populated`],
+            /// whose default body is a FUSED short-circuit closed-set
+            /// walk that returns `true` at the EARLIEST slot where both
+            /// a populated AND a missing kind have been observed —
+            /// byte-for-byte cheaper than the widened composition
+            /// `!self.is_empty() && !self.is_saturated()` (two closed-
+            /// set walks) on every partially-populated arm.
+            ///
+            /// # Sibling to the parent-state trichotomy
+            ///
+            /// Middle arm of the natural `{Empty | Partial | Saturated}`
+            /// parent-state trichotomy — orthogonal to the {0, 1, ≥2}
+            /// cardinality trichotomies on the populated / missing
+            /// axes. Together with [`Self::is_empty`] (all-missing arm)
+            /// and [`Self::is_saturated`] (all-populated arm), these
+            /// three Boolean primitives partition every tagged-union
+            /// state coherently on the parent-state axis — EXACTLY ONE
+            /// of the three returns `true` on any given parent. The
+            /// trichotomy partition law
+            /// `usize::from(is_empty()) + usize::from(is_partially_populated())
+            /// + usize::from(is_saturated()) == 1` is pinned as a first-
+            /// class typed invariant by the trait's own default body
+            /// and swept substrate-wide by
+            /// [`crate::tagged_union::assert_is_partially_populated_matches_cardinality`].
+            pub fn is_partially_populated(&self) -> bool {
+                <Self as $crate::tagged_union::TaggedUnion>::is_partially_populated(self)
+            }
         }
 
         impl $crate::tagged_union::VariantSelector<$parent> for $kind {
@@ -2573,6 +2608,145 @@ pub trait TaggedUnion: Sized {
             .copied()
             .filter(|k| !self.has(*k));
         iter.next().is_some() && iter.next().is_some()
+    }
+
+    /// Boolean parent-state middle-arm projection — `true` iff this
+    /// tagged union has AT LEAST ONE populated slot AND AT LEAST ONE
+    /// missing slot, i.e. it is neither [`Self::is_empty`] nor
+    /// [`Self::is_saturated`].
+    ///
+    /// Default body: a FUSED short-circuit closed-set walk that tracks
+    /// two Boolean flags (`has_populated`, `has_missing`) across
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) under
+    /// [`Self::has`] and returns `true` at the EARLIEST slot where
+    /// both flags have flipped. Best-case O(2) walk (index 0 populated
+    /// combined with index 1 missing, or vice versa); worst case walks
+    /// the full closed set only when EVERY slot is populated or EVERY
+    /// slot is missing (the two arms where the return value is `false`).
+    /// Byte-for-byte cheaper than the widened composition
+    /// `!self.is_empty() && !self.is_saturated()` (which walks the
+    /// closed set TWICE — once under `any`, once under `all`) on every
+    /// partially-populated arm.
+    ///
+    /// # Sibling to the parent-state trichotomy
+    ///
+    /// Middle arm of the natural `{Empty | Partial | Saturated}`
+    /// parent-state trichotomy — orthogonal to the {0, 1, ≥2}
+    /// cardinality trichotomies already closed on the populated /
+    /// missing axes. Together with [`Self::is_empty`] (all-missing
+    /// arm) and [`Self::is_saturated`] (all-populated arm), these three
+    /// Boolean primitives partition every tagged-union state on the
+    /// parent-state axis — EXACTLY ONE of the three returns `true` on
+    /// any given parent whose `<Self::Kind as ClosedSet>::ALL.len() ≥
+    /// 1`:
+    ///
+    /// | parent state | primitive                          | populated cardinality       |
+    /// |--------------|------------------------------------|-----------------------------|
+    /// | Empty        | [`Self::is_empty`]                 | `0`                         |
+    /// | Partial      | `is_partially_populated` (this)    | `0 < populated < ALL.len()` |
+    /// | Saturated    | [`Self::is_saturated`]             | `ALL.len()`                 |
+    ///
+    /// The trichotomy partition law
+    /// `usize::from(is_empty()) + usize::from(is_partially_populated())
+    /// + usize::from(is_saturated()) == 1` on every arm is a genuinely
+    /// new proof binding the three parent-state endpoints together as
+    /// a typed algebraic invariant — swept substrate-wide by
+    /// [`assert_is_partially_populated_matches_cardinality`].
+    ///
+    /// # Composition laws
+    ///
+    /// - `is_partially_populated() == !is_empty() && !is_saturated()`
+    ///   — the negation-of-both-endpoints composition, at the trait
+    ///   default body's SAME fused short-circuit walk.
+    /// - `is_partially_populated() == (populated_kind_count() > 0
+    ///   && missing_kind_count() > 0)` — the paired scalar-projection
+    ///   composition.
+    /// - `is_partially_populated() == (0 < populated_kind_count()
+    ///   && populated_kind_count() < ALL.len())` — the single-axis
+    ///   strict-inequality composition (populated cardinality lies in
+    ///   the open interval `(0, ALL.len())`).
+    ///
+    /// # Truth table on the exactly-one-slot tagged-union contract
+    ///
+    /// For a tagged union with `<Self::Kind as ClosedSet>::ALL` of
+    /// cardinality `N ≥ 2`:
+    ///
+    /// - Empty parent (0 populated, N missing): `false` (empty arm).
+    /// - Well-formed parent (1 populated, N-1 missing on any `N ≥ 2`):
+    ///   `true` — the SOLE `Ok` arm of [`Self::variant`] lies inside
+    ///   the partial region.
+    /// - K-populated parent for `0 < K < N`: `true`.
+    /// - Saturated parent (N populated, 0 missing on any `N ≥ 2`):
+    ///   `false` (saturated arm).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A boundary-progress "some done, some pending" diagnostic on
+    ///   an aggregate condition-carrier reads
+    ///   `parent.is_partially_populated()` at ONE substrate site —
+    ///   the exact "in flight" arm — rather than composing
+    ///   `!parent.is_empty() && !parent.is_saturated()` (two closed-
+    ///   set walks) or `parent.populated_kind_count() > 0 &&
+    ///   parent.missing_kind_count() > 0` (two counter walks).
+    /// - A fast-path branch that discriminates "mixed" from "empty or
+    ///   saturated" reads this primitive with ONE fused short-circuit
+    ///   walk, strictly cheaper than either widened composition.
+    /// - An `is-partially-populated` require-tag classifier arm
+    ///   reaches this primitive at ONE call site, byte-for-byte
+    ///   symmetrical with the sibling `is-empty` / `is-saturated`
+    ///   arms on the closed parent-state trichotomy.
+    /// - An operator-facing "in-flight ambiguous carrier" diagnostic
+    ///   (the resolver's `Err(Ambiguous)` arm's non-saturated sub-arm)
+    ///   reads `parent.is_partially_populated() && parent.has_multiple_populated_kinds()`
+    ///   composing two short-circuit walks — strictly cheaper than
+    ///   materializing the `variant()` error carrier.
+    ///
+    /// A new [`Self::Kind`] variant added to
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) reaches
+    /// this primitive mechanically — the fused walk picks up the new
+    /// slot as an additional short-circuit candidate (a parent that
+    /// previously satisfied `is_partially_populated` because it had
+    /// both populated and missing slots continues to satisfy it; a
+    /// previously-saturated parent that leaves the new slot missing
+    /// becomes partially populated at every downstream callsite
+    /// without further per-caller edit).
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The parent-state middle-arm projection lives at ONE
+    ///   substrate site as a fused short-circuit walk over
+    ///   `<Self::Kind as ClosedSet>::ALL` under [`Self::has`] with
+    ///   early exit on the first observed populated/missing pair —
+    ///   byte-for-byte cheaper than the widened negation-of-both-
+    ///   endpoints composition, and semantically identical on every
+    ///   arm. The trichotomy partition law
+    ///   `is_empty + is_partially_populated + is_saturated == 1`
+    ///   lives at ONE substrate site inside the testkit's per-arm
+    ///   sweep — pinned across every production tagged union at
+    ///   compile time via the trait's default body composition, not
+    ///   per-parent.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically through the fused walk — the trichotomy holds
+    ///   on the widened kind set without further per-caller edit.
+    fn is_partially_populated(&self) -> bool {
+        let mut has_populated = false;
+        let mut has_missing = false;
+        for k in <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            if self.has(k) {
+                has_populated = true;
+            } else {
+                has_missing = true;
+            }
+            if has_populated && has_missing {
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -4490,6 +4664,240 @@ pub fn assert_has_multiple_missing_kinds_matches_missing_kind_count<T, F, G, H>(
                     + usize::from(has_multiple),
                 1,
                 "two_slot({a:?}, {b:?}) must satisfy EXACTLY ONE of is_saturated / has_unique_missing_kind / has_multiple_missing_kinds",
+            );
+        }
+    }
+}
+
+/// Generic parent-state-middle-arm Boolean testkit — pins that
+/// [`TaggedUnion::is_partially_populated`] agrees with the paired
+/// scalar-cardinality strict-inequality composition
+/// `(populated_kind_count() > 0 && missing_kind_count() > 0)` across
+/// every [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-
+/// slot arrangement, every off-diagonal two-slot pair, AND the empty-
+/// parent baseline.
+///
+/// Parent-state-axis substrate primitive for the Boolean middle-arm
+/// projection of the `{Empty | Partial | Saturated}` trichotomy —
+/// orthogonal to the {0, 1, ≥2} cardinality trichotomies already
+/// closed on the populated / missing axes. The four sub-assertions
+/// swept per populated slot + the four baseline sub-assertions on the
+/// empty parent + the four sub-assertions swept per off-diagonal pair
+/// bind FOUR composition laws per arm:
+///
+/// 1. **Widened negation-of-both-endpoints composition law**:
+///    `is_partially_populated() == !is_empty() && !is_saturated()` —
+///    the natural composition that the trait's default body's fused
+///    walk collapses into ONE closed-set traversal. Pinned so a
+///    regression that overrides `is_partially_populated` to skip the
+///    sweep or return the wrong Boolean fails here at the widened
+///    negation.
+/// 2. **Paired scalar-cardinality composition law**:
+///    `is_partially_populated() == (populated_kind_count() > 0 &&
+///    missing_kind_count() > 0)` — the Boolean projection agrees with
+///    the paired scalar-cardinality strict-inequality composition on
+///    every empty / well-formed / partial / saturated arm.
+/// 3. **Single-axis open-interval composition law**:
+///    `is_partially_populated() == (0 < populated_kind_count() &&
+///    populated_kind_count() < ALL.len())` — the Boolean projection
+///    agrees with the single-axis strict-inequality composition
+///    (populated cardinality lies in the open interval `(0, ALL.len())`).
+/// 4. **Parent-state trichotomy partition law**:
+///    `usize::from(is_empty()) + usize::from(is_partially_populated()) + usize::from(is_saturated()) == 1`
+///    — EXACTLY ONE of the three parent-state Boolean primitives
+///    returns `true` on every arm. This is the genuinely new proof
+///    this testkit adds: the natural parent-state trichotomy
+///    partitions every tagged-union state coherently, and this law
+///    lives at ONE substrate site inside the testkit's per-arm sweep,
+///    pinned across every production tagged union.
+///
+/// The three arm expectations:
+///
+/// - **Empty-parent baseline** (swept once outside the per-`k` loop):
+///   `empty_parent().is_partially_populated() == false` (zero
+///   populated, so the negation `!is_empty()` fails). Pins the
+///   primitive's opposite-arm on the same fixture the empty-Boolean
+///   peer pins its zero-arm.
+/// - **Single-slot diagonal** (on `ALL.len() ≥ 2` closed sets):
+///   `single_slot(k).is_partially_populated() == true` — a well-formed
+///   parent from `single_slot` populates exactly one slot (0 <
+///   populated < N), so the middle arm returns `true`. Pins the
+///   primitive doesn't drift onto either endpoint.
+/// - **Two-slot sweep** (on `ALL.len() ≥ 3` closed sets, which every
+///   production tagged union in the workspace satisfies):
+///   `two_slot(a, b).is_partially_populated() == true` — an
+///   off-diagonal pair populates exactly two slots (0 < 2 <= N-1 < N
+///   for N ≥ 3), so the middle arm returns `true`. On `ALL.len() ==
+///   2` (production `Lifetime` excluded via the `TaggedUnion` bound)
+///   two_slot would be saturated (`false`), but no production tagged
+///   union has `ALL.len() == 2`.
+///
+/// A fifth sibling tagged-union parent picks up the middle-arm-
+/// Boolean check through ONE `impl TaggedUnion for X` block plus ONE
+/// per-site `single_slot_X` factory plus ONE per-site `two_slot_X`
+/// factory plus ONE per-site `empty_X` factory plus ONE call site —
+/// no re-authored `is_partially_populated` sweep at the test surface.
+///
+/// Same `Lifetime` exclusion as the sibling primitives — see
+/// [`assert_two_slots_ambiguous`].
+///
+/// # Theory grounding
+///
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+///   Boolean parent-state middle-arm projection binds through the
+///   SAME shape the two endpoint primitives bind through (a closed-
+///   set walk under `Self::has`), differing only in the fused
+///   short-circuit gate (both flags flipped) versus the endpoint
+///   primitives' single-flag `any` / `all` short-circuits. The
+///   trichotomy partition law lives at ONE substrate site inside the
+///   testkit's per-arm sweep — pinned across every production tagged
+///   union at compile time via the trait's default body composition,
+///   not per-parent.
+/// - THEORY.md §VI.1 — generation over composition. A new
+///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+///   mechanically through the fused walk at the trait's default body.
+#[track_caller]
+pub fn assert_is_partially_populated_matches_cardinality<T, F, G, H>(
+    single_slot: F,
+    two_slot: G,
+    empty_parent: H,
+) where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+    G: Fn(T::Kind, T::Kind) -> T,
+    H: Fn() -> T,
+{
+    let all_len = <T::Kind as tatara_closed_set::ClosedSet>::ALL.len();
+
+    // Empty-parent baseline — zero populated slots, so
+    // `is_partially_populated()` returns `false` (the empty arm of the
+    // parent-state trichotomy, not the partial arm).
+    let empty = empty_parent();
+    // Anchor the baseline factory on the genuine empty arm — a saturated
+    // factory would also return `false` from `is_partially_populated()`
+    // (both endpoints of the trichotomy sit on the `false` side of the
+    // middle-arm), so this explicit `is_empty()` pin distinguishes the
+    // empty arm from the saturated arm on the baseline.
+    assert!(
+        empty.is_empty(),
+        "TaggedUnion::is_partially_populated() testkit: empty_parent() must satisfy is_empty() == true",
+    );
+    assert!(
+        !empty.is_partially_populated(),
+        "TaggedUnion::is_partially_populated() on empty_parent() must equal false",
+    );
+    // Widened negation-of-both-endpoints composition law on the empty
+    // arm.
+    assert_eq!(
+        empty.is_partially_populated(),
+        !empty.is_empty() && !empty.is_saturated(),
+        "empty_parent().is_partially_populated() drifted from (!is_empty() && !is_saturated())",
+    );
+    // Paired scalar-cardinality composition law on the empty arm.
+    assert_eq!(
+        empty.is_partially_populated(),
+        empty.populated_kind_count() > 0 && empty.missing_kind_count() > 0,
+        "empty_parent().is_partially_populated() drifted from (populated_kind_count() > 0 && missing_kind_count() > 0)",
+    );
+    // Parent-state trichotomy partition law on the empty arm —
+    // is_empty is true, the other two are false.
+    assert_eq!(
+        usize::from(empty.is_empty())
+            + usize::from(empty.is_partially_populated())
+            + usize::from(empty.is_saturated()),
+        1,
+        "empty_parent() must satisfy EXACTLY ONE of is_empty / is_partially_populated / is_saturated",
+    );
+
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let is_partial = parent.is_partially_populated();
+        // Widened negation-of-both-endpoints composition law.
+        assert_eq!(
+            is_partial,
+            !parent.is_empty() && !parent.is_saturated(),
+            "TaggedUnion::is_partially_populated() drifted from (!is_empty() && !is_saturated()) — populated={populated:?}",
+        );
+        // Paired scalar-cardinality composition law.
+        assert_eq!(
+            is_partial,
+            parent.populated_kind_count() > 0 && parent.missing_kind_count() > 0,
+            "TaggedUnion::is_partially_populated() drifted from (populated_kind_count() > 0 && missing_kind_count() > 0) — populated={populated:?}",
+        );
+        // Single-axis open-interval composition law.
+        assert_eq!(
+            is_partial,
+            0 < parent.populated_kind_count() && parent.populated_kind_count() < all_len,
+            "TaggedUnion::is_partially_populated() drifted from (0 < populated_kind_count() < ALL.len()) — populated={populated:?}",
+        );
+        // Single-slot diagonal (on any `ALL.len() ≥ 2` closed set) —
+        // well-formed has 1 populated + `ALL.len() - 1 ≥ 1` missing,
+        // so the middle arm returns `true`. This holds for every
+        // production tagged union in the workspace (all have
+        // `ALL.len() ≥ 2`).
+        assert!(
+            is_partial,
+            "TaggedUnion::is_partially_populated() on single_slot({populated:?}) must equal true — ALL.len() >= 2",
+        );
+        // Parent-state trichotomy partition on the well-formed arm.
+        assert_eq!(
+            usize::from(parent.is_empty())
+                + usize::from(is_partial)
+                + usize::from(parent.is_saturated()),
+            1,
+            "single_slot({populated:?}) must satisfy EXACTLY ONE of is_empty / is_partially_populated / is_saturated",
+        );
+    }
+
+    // Two-slot sweep — every off-diagonal pair has 2 populated
+    // + `ALL.len() - 2` missing.
+    for a in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        for b in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            if a == b {
+                continue;
+            }
+            let parent = two_slot(a, b);
+            let is_partial = parent.is_partially_populated();
+            // Widened negation-of-both-endpoints composition law.
+            assert_eq!(
+                is_partial,
+                !parent.is_empty() && !parent.is_saturated(),
+                "TaggedUnion::is_partially_populated() drifted from (!is_empty() && !is_saturated()) — pair=({a:?}, {b:?})",
+            );
+            // Paired scalar-cardinality composition law.
+            assert_eq!(
+                is_partial,
+                parent.populated_kind_count() > 0 && parent.missing_kind_count() > 0,
+                "TaggedUnion::is_partially_populated() drifted from (populated_kind_count() > 0 && missing_kind_count() > 0) — pair=({a:?}, {b:?})",
+            );
+            // Two-slot diagonal — on `ALL.len() >= 3` the two-slot
+            // parent has 2 populated + `ALL.len() - 2 >= 1` missing,
+            // so the middle arm returns `true`. On `ALL.len() == 2`
+            // (excluded via the `TaggedUnion` bound anyway) two_slot
+            // would be saturated (`false`).
+            let expected_two_slot = all_len >= 3;
+            assert_eq!(
+                is_partial,
+                expected_two_slot,
+                "TaggedUnion::is_partially_populated() on two_slot({a:?}, {b:?}) must equal {expected_two_slot} (ALL.len() == {all_len})",
+            );
+            // Parent-state trichotomy partition on the two-slot arm.
+            assert_eq!(
+                usize::from(parent.is_empty())
+                    + usize::from(is_partial)
+                    + usize::from(parent.is_saturated()),
+                1,
+                "two_slot({a:?}, {b:?}) must satisfy EXACTLY ONE of is_empty / is_partially_populated / is_saturated",
             );
         }
     }
@@ -9881,6 +10289,170 @@ mod tests {
             _,
             _,
         >(
+            single_slot_vector_channel_probe,
+            two_slot_vector_channel_probe,
+            crate::export::VectorChannel::default,
+        );
+    }
+
+    /// The `assert_is_partially_populated_matches_cardinality` primitive
+    /// accepts the [`LocalParent`] scaffold coherently — the middle-arm
+    /// Boolean projection reads `true` on every single-slot and two-slot
+    /// arrangement (0 < populated < 3) and `false` on the empty
+    /// baseline (0 populated), and the parent-state trichotomy partition
+    /// (`is_empty + is_partially_populated + is_saturated == 1`) holds
+    /// on every arm.
+    #[test]
+    fn assert_is_partially_populated_matches_cardinality_accepts_coherent_local_impl() {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        assert_is_partially_populated_matches_cardinality::<LocalParent, _, _, _>(
+            single_slot,
+            two_slot,
+            LocalParent::default,
+        );
+    }
+
+    /// The primitive rejects a `single_slot` factory that yields an
+    /// empty parent (single-slot expects `is_partially_populated() ==
+    /// true` because on `ALL.len() == 3` a well-formed parent has
+    /// `1 populated + 2 missing` — but an empty factory yields 0
+    /// populated, so the middle-arm assertion drifts).
+    #[test]
+    #[should_panic(expected = "must equal true")]
+    fn assert_is_partially_populated_matches_cardinality_rejects_empty_single_slot_factory() {
+        fn empty_single_slot(_: LocalKind) -> LocalParent {
+            LocalParent::default()
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        assert_is_partially_populated_matches_cardinality::<LocalParent, _, _, _>(
+            empty_single_slot,
+            two_slot,
+            LocalParent::default,
+        );
+    }
+
+    /// The primitive rejects an `empty_parent` factory that yields a
+    /// saturated parent (empty baseline expects
+    /// `is_partially_populated() == false` because 0 populated is the
+    /// empty arm — a saturated factory has `ALL.len()` populated + 0
+    /// missing, which is ALSO the `false` arm of the middle Boolean
+    /// but drifts on the trichotomy partition since
+    /// `is_saturated == true` while the primitive expected
+    /// `is_empty == true` on the baseline).
+    #[test]
+    #[should_panic]
+    fn assert_is_partially_populated_matches_cardinality_rejects_saturated_empty_baseline() {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        fn saturated_baseline() -> LocalParent {
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            }
+        }
+        assert_is_partially_populated_matches_cardinality::<LocalParent, _, _, _>(
+            single_slot,
+            two_slot,
+            saturated_baseline,
+        );
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the parent-state-middle-arm Boolean
+    /// primitive coherently — every per-site `single_slot_X(k)` factory
+    /// produces `is_partially_populated() == true` (well-formed has
+    /// `1 populated + ALL.len() - 1 ≥ 1 missing`), every
+    /// `two_slot_X(a, b)` produces `== true` (`ALL.len() ≥ 3` on every
+    /// production union so two_slot has `2 populated + ALL.len() - 2
+    /// ≥ 1 missing`), and `X::default().is_partially_populated() ==
+    /// false` on the empty-parent baseline. The parent-state
+    /// trichotomy partition law (`is_empty + is_partially_populated
+    /// + is_saturated == 1`) is pinned inside the testkit on every arm.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_is_partially_populated_testkit_primitive() {
+        assert_is_partially_populated_matches_cardinality::<crate::intent::Intent, _, _, _>(
+            single_slot_intent_probe,
+            two_slot_intent_probe,
+            crate::intent::Intent::default,
+        );
+        assert_is_partially_populated_matches_cardinality::<
+            crate::encapsulates::EncapsulationKind,
+            _,
+            _,
+            _,
+        >(
+            single_slot_encapsulation_kind_probe,
+            two_slot_encapsulation_kind_probe,
+            crate::encapsulates::EncapsulationKind::default,
+        );
+        assert_is_partially_populated_matches_cardinality::<crate::export::ArtifactSource, _, _, _>(
+            single_slot_artifact_source_probe,
+            two_slot_artifact_source_probe,
+            crate::export::ArtifactSource::default,
+        );
+        assert_is_partially_populated_matches_cardinality::<crate::export::VectorChannel, _, _, _>(
             single_slot_vector_channel_probe,
             two_slot_vector_channel_probe,
             crate::export::VectorChannel::default,

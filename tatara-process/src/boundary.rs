@@ -1274,6 +1274,85 @@ impl Boundary {
     pub fn last_missing_postcondition_kind(&self) -> Option<ConditionKind> {
         self.postconditions.last_missing_kind()
     }
+
+    /// `true` iff `preconditions ∪ postconditions` carries every
+    /// [`ConditionKind::ALL`] variant at least once — the union arm
+    /// of the (precondition, postcondition, condition-union)
+    /// saturation-predicate triad on [`Boundary`].
+    ///
+    /// # Composed body
+    ///
+    /// `ConditionKind::ALL.iter().all(|k| self.has_condition_kind(*k))`
+    /// — a SHORT-CIRCUITING closed-set walk composed against the
+    /// two-slice union primitive [`Self::has_condition_kind`], byte-
+    /// identical to the trait-level [`ConditionSliceExt::is_kind_saturated`]
+    /// but reaching through the boundary's two-slice union rather than
+    /// a single slice. Equivalent to `self.missing_condition_kinds()
+    /// .is_empty()` without materializing the `Vec<ConditionKind>`, and
+    /// to `self.missing_condition_kind_count() == 0` without paying for
+    /// the counter walk on every arm.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::is_condition_kind_saturated`]
+    ///
+    /// Byte-identical signature `(&Self) -> bool`, byte-identical
+    /// closed-set-walk body, on the sugar-surface type whose pre/post
+    /// condition vectors live directly on the struct. Both methods
+    /// compose against the SAME slice-level substrate primitive
+    /// [`ConditionSliceExt::is_kind_saturated`] via the two-slice
+    /// union composed through [`Self::has_condition_kind`] — a
+    /// regression at the per-slice `all` short-circuit fails at that
+    /// primitive's tests rather than as silent drift at either
+    /// struct-level saturation caller.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs (the saturation-endpoint projection composes
+    /// the SAME closed-set walk on both this boundary surface and the
+    /// slice-level substrate primitive under short-circuit semantics).
+    /// THEORY.md §VI.1 — generation over composition (a new
+    /// [`ConditionKind`] variant added to `ALL` reaches this primitive
+    /// mechanically through the `all` short-circuit).
+    #[must_use]
+    pub fn is_condition_kind_saturated(&self) -> bool {
+        ConditionKind::ALL
+            .iter()
+            .all(|k| self.has_condition_kind(*k))
+    }
+
+    /// `true` iff [`Self::preconditions`] carries every
+    /// [`ConditionKind::ALL`] variant at least once — the precondition-
+    /// side arm of the (precondition, postcondition, condition-union)
+    /// saturation-predicate triad on [`Boundary`]. Thin typed delegate
+    /// to [`ConditionSliceExt::is_kind_saturated`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::is_postcondition_kind_saturated`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice `all` short-circuit fails at that primitive's tests
+    /// rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn is_precondition_kind_saturated(&self) -> bool {
+        self.preconditions.is_kind_saturated()
+    }
+
+    /// `true` iff [`Self::postconditions`] carries every
+    /// [`ConditionKind::ALL`] variant at least once — the postcondition-
+    /// side arm of the (precondition, postcondition, condition-union)
+    /// saturation-predicate triad on [`Boundary`]. Thin typed delegate
+    /// to [`ConditionSliceExt::is_kind_saturated`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::is_precondition_kind_saturated`]. See that
+    /// method for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via
+    /// [`crate::ephemeral::EphemeralSpec::is_postcondition_kind_saturated`].
+    #[must_use]
+    pub fn is_postcondition_kind_saturated(&self) -> bool {
+        self.postconditions.is_kind_saturated()
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -2170,6 +2249,90 @@ pub trait ConditionSliceExt {
             .copied()
             .find(|k| !self.has_kind(*k))
     }
+
+    /// Boolean saturation predicate on the closed-set-inversion axis —
+    /// `true` iff EVERY [`ConditionKind::ALL`] variant appears at least
+    /// once in this slice (equivalently, [`Self::missing_kinds`] is
+    /// empty).
+    ///
+    /// Default body:
+    /// `ConditionKind::ALL.iter().all(|k| self.has_kind(*k))` — a
+    /// SHORT-CIRCUITING closed-set walk composed against [`Self::has_kind`]
+    /// per variant that returns `false` at the FIRST missing kind,
+    /// WITHOUT materializing [`Self::missing_kinds`]'s `Vec` and WITHOUT
+    /// walking every entry to build [`Self::missing_kind_count`]'s
+    /// scalar. Strictly cheaper than either widened primitive on every
+    /// partially-populated arm (returns at the first empty slot rather
+    /// than sweeping the full closed set).
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::is_saturated`]
+    ///
+    /// Slice-level peer of the tagged-union parent-level saturation
+    /// predicate one struct-layer up: where `is_saturated` names the
+    /// tagged-union arm where every `<Self::Kind as ClosedSet>::ALL`
+    /// slot is populated, `is_kind_saturated` names the slice arm where
+    /// every [`ConditionKind::ALL`] variant appears at least once. Both
+    /// short-circuit at the first missing entry under the SAME
+    /// `<CLOSED_SET>::ALL.iter().all(has)` walk shape at two adjacent
+    /// typescape sites.
+    ///
+    /// # Sibling to [`Self::missing_kind_count`] / [`Self::missing_kinds`]
+    ///
+    /// Boolean cardinality-endpoint peer of the scalar cardinality
+    /// primitive on the closed-set-complement axis — where
+    /// `missing_kind_count` returns the FULL scalar (any `usize` in
+    /// `0..=ConditionKind::ALL.len()`), `is_kind_saturated` collapses
+    /// that scalar to its zero-arm Boolean projection. The composition
+    /// law `is_kind_saturated() == (missing_kind_count() == 0)` binds
+    /// the Boolean projection to the scalar primitive at the trait's
+    /// default body — swept substrate-wide by
+    /// [`assert_slice_refinement_composition_laws`] as its
+    /// saturation-endpoint arm.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `false` (no kind is populated). A slice
+    /// carrying a strict subset of [`ConditionKind::ALL`] returns
+    /// `false`. A slice that carries every variant at least once
+    /// (multiplicity is irrelevant) returns `true` — the SOLE arm
+    /// where `is_kind_saturated` returns `true`.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A future coherence check that enforces "every process boundary
+    ///   exhaustively covers every [`ConditionKind`]" reads
+    ///   `boundary.postconditions.is_kind_saturated()` at ONE call site
+    ///   — one short-circuit walk, no allocation, no scalar equality
+    ///   comparison against `ConditionKind::ALL.len()`.
+    /// - An `is-kind-saturated` require-tag classifier arm reaches this
+    ///   primitive with no allocation, byte-for-byte peer of the
+    ///   tagged-union `is-saturated` classifier one struct-layer up.
+    /// - A fleet-wide gap-analysis dashboard fast-path that discriminates
+    ///   "boundary spans every kind" from "boundary is missing some
+    ///   kind" reads `boundary.postconditions.is_kind_saturated()` at
+    ///   ONE call site rather than restating either
+    ///   `boundary.postconditions.missing_kind_count() == 0` (which
+    ///   walks every slot to count) or
+    ///   `boundary.postconditions.missing_kinds().is_empty()` (which
+    ///   allocates the Vec before the emptiness check).
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The saturation-endpoint projection lives at ONE substrate
+    ///   site as a typed short-circuiting closed-set walk
+    ///   `ConditionKind::ALL.iter().all(has_kind)`. Every downstream
+    ///   consumer binds through the SAME shape rather than restating
+    ///   the `== ConditionKind::ALL.len()` scalar composition body.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically through the `all` short-circuit — a
+    ///   slice that was previously saturated is no longer saturated
+    ///   at every downstream callsite unless it also carries the new
+    ///   variant.
+    fn is_kind_saturated(&self) -> bool {
+        ConditionKind::ALL.iter().all(|k| self.has_kind(*k))
+    }
 }
 
 /// Iterator yielded by [`ConditionSliceExt::iter_kind`] — the widened
@@ -2545,6 +2708,32 @@ where
         slice.last_missing_kind(),
         missing.last().copied(),
         "last_missing_kind() drifted from missing_kinds().last().copied()",
+    );
+
+    // is_kind_saturated ↔ (missing_kind_count == 0) — the Boolean
+    // saturation-endpoint projection of the closed-set-complement
+    // scalar cardinality. Peer of `first_missing_kind ↔ missing_kinds
+    // .first().copied()` on the endpoint-projection axis: where the
+    // earliest-element peer collapses the missing SET to its first
+    // element, this Boolean peer collapses the missing scalar to its
+    // zero-arm test. A regression that overrode `is_kind_saturated` to
+    // drop the negation (returning `slice.is_empty()`), skip a kind,
+    // or drift the walk from `ConditionKind::ALL` surfaces HERE at
+    // the substrate boundary, not as silent drift at every downstream
+    // `is-kind-saturated` require-tag classifier or fleet-wide gap-
+    // analysis dashboard callsite. Byte-for-byte peer of
+    // `crate::tagged_union::TaggedUnion::is_saturated` one struct-
+    // layer up under the same `<CLOSED_SET>::ALL.iter().all(has)`
+    // short-circuit shape.
+    assert_eq!(
+        slice.is_kind_saturated(),
+        slice.missing_kind_count() == 0,
+        "is_kind_saturated() drifted from (missing_kind_count() == 0)",
+    );
+    assert_eq!(
+        slice.is_kind_saturated(),
+        missing.is_empty(),
+        "is_kind_saturated() drifted from missing_kinds().is_empty()",
     );
 }
 
@@ -4863,6 +5052,100 @@ mod tests {
         );
     }
 
+    // ── ConditionSliceExt::is_kind_saturated — Boolean saturation pins ─
+    //
+    // Short-circuiting Boolean saturation-endpoint peer of the closed-set-
+    // complement widened + scalar primitives: `is_kind_saturated()`
+    // returns `true` iff every ConditionKind::ALL variant appears at
+    // least once in the slice, WITHOUT allocating `missing_kinds` or
+    // walking every entry to build `missing_kind_count`. The composition
+    // laws `is_kind_saturated() == (missing_kind_count() == 0)` and
+    // `is_kind_saturated() == missing_kinds().is_empty()` are pinned as
+    // the saturation-endpoint arm of
+    // `assert_slice_refinement_composition_laws`. Byte-for-byte peer of
+    // `crate::tagged_union::TaggedUnion::is_saturated` one struct-layer
+    // up under the SAME `<CLOSED_SET>::ALL.iter().all(has)` short-
+    // circuit walk shape.
+
+    /// EMPTY-SLICE pin — an empty slice returns `false` on
+    /// `is_kind_saturated` (every kind is missing).
+    #[test]
+    fn condition_slice_is_kind_saturated_returns_false_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        assert!(
+            !empty.is_kind_saturated(),
+            "empty slice must return false on is_kind_saturated",
+        );
+        assert_eq!(
+            empty.is_kind_saturated(),
+            empty.missing_kind_count() == 0,
+            "empty is_kind_saturated must equal (missing_kind_count() == 0)",
+        );
+    }
+
+    /// SINGLE-KIND pin — a slice populating exactly one variant returns
+    /// `false` on any [`ConditionKind::ALL`] closed set with `N ≥ 2`
+    /// (the other `N - 1` variants are missing).
+    #[test]
+    fn condition_slice_is_kind_saturated_returns_false_on_single_kind_slice() {
+        assert!(
+            ConditionKind::ALL.len() >= 2,
+            "test assumes ConditionKind::ALL has ≥ 2 variants",
+        );
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            assert!(
+                !slice.is_kind_saturated(),
+                "single-populated slice with {populated:?} must return false on is_kind_saturated",
+            );
+            assert_eq!(
+                slice.is_kind_saturated(),
+                slice.missing_kind_count() == 0,
+                "single-populated is_kind_saturated must equal (missing_kind_count() == 0) for {populated:?}",
+            );
+        }
+    }
+
+    /// FULL-COVERAGE pin — a slice that carries every [`ConditionKind`]
+    /// variant returns `true` on `is_kind_saturated` — the SOLE arm
+    /// where the primitive returns `true`.
+    #[test]
+    fn condition_slice_is_kind_saturated_returns_true_on_saturated_slice() {
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert!(
+            saturated.as_slice().is_kind_saturated(),
+            "slice containing every ConditionKind must return true on is_kind_saturated",
+        );
+        assert_eq!(
+            saturated.as_slice().is_kind_saturated(),
+            saturated.as_slice().missing_kind_count() == 0,
+            "saturated is_kind_saturated must equal (missing_kind_count() == 0)",
+        );
+        assert_eq!(
+            saturated.as_slice().is_kind_saturated(),
+            saturated.as_slice().missing_kinds().is_empty(),
+            "saturated is_kind_saturated must equal missing_kinds().is_empty()",
+        );
+    }
+
+    /// DUPLICATE-COVERAGE pin — a slice that carries every
+    /// [`ConditionKind`] variant multiple times still returns `true`
+    /// (multiplicity is irrelevant to the saturation predicate on the
+    /// closed-set-inversion axis).
+    #[test]
+    fn condition_slice_is_kind_saturated_ignores_multiplicity() {
+        let mut doubled: Vec<Condition> = Vec::new();
+        for k in ConditionKind::ALL {
+            doubled.push(condition_with(k));
+            doubled.push(condition_with(k));
+        }
+        assert!(
+            doubled.as_slice().is_kind_saturated(),
+            "slice carrying every ConditionKind twice must return true on is_kind_saturated",
+        );
+    }
+
     // ── ConditionSliceExt::first_distinct_kind — earliest-element pins ─
     //
     // Short-circuiting Option<ConditionKind> peer of the closed-set-
@@ -5756,6 +6039,104 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary saturation-predicate triad)
+    /// — the three `is_*_kind_saturated` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::is_kind_saturated`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via `ConditionKind::ALL.iter().all(|k|
+    /// has_condition_kind(*k))`. Sweeps the empty boundary (every arm
+    /// returns `false`), a single-populated-per-side arrangement (both
+    /// per-slice arms return `false` on any `N ≥ 2` closed set; the
+    /// union returns `false` unless the two kinds are distinct AND
+    /// `N == 2`), and the saturated boundary (both slices carry every
+    /// [`ConditionKind`], every arm returns `true`). Also pins the
+    /// composition law `is_*_kind_saturated() ==
+    /// missing_*_kinds().is_empty()` at each arm — a regression that
+    /// dropped the `all` short-circuit, drifted the walk from
+    /// `ConditionKind::ALL`, or negated the wrong side surfaces HERE.
+    #[test]
+    fn is_condition_kind_saturated_triad_delegates_to_slice_is_kind_saturated() {
+        // Empty boundary — every arm returns false; missing_*_kinds
+        // covers the full closed set on every arm.
+        let b = Boundary::default();
+        assert!(
+            !b.is_precondition_kind_saturated(),
+            "empty boundary must return false on is_precondition_kind_saturated",
+        );
+        assert!(
+            !b.is_postcondition_kind_saturated(),
+            "empty boundary must return false on is_postcondition_kind_saturated",
+        );
+        assert!(
+            !b.is_condition_kind_saturated(),
+            "empty boundary must return false on is_condition_kind_saturated",
+        );
+        assert_eq!(
+            b.is_precondition_kind_saturated(),
+            b.missing_precondition_kinds().is_empty(),
+            "empty is_precondition_kind_saturated must equal missing_precondition_kinds().is_empty()",
+        );
+
+        // Single-populated per side — every per-slice arm returns
+        // false on any N ≥ 2 closed set; the union returns false too
+        // (needs every ALL kind covered).
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+                assert_eq!(
+                    b.is_precondition_kind_saturated(),
+                    b.preconditions.is_kind_saturated(),
+                    "Boundary::is_precondition_kind_saturated must delegate verbatim to \
+                     preconditions.is_kind_saturated() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.is_postcondition_kind_saturated(),
+                    b.postconditions.is_kind_saturated(),
+                    "Boundary::is_postcondition_kind_saturated must delegate verbatim to \
+                     postconditions.is_kind_saturated() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let expected_union = ConditionKind::ALL
+                    .iter()
+                    .all(|k| pre_kind == *k || post_kind == *k);
+                assert_eq!(
+                    b.is_condition_kind_saturated(),
+                    expected_union,
+                    "Boundary::is_condition_kind_saturated must equal all-ALL-covered-by-either-slice \
+                     for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.is_condition_kind_saturated(),
+                    b.missing_condition_kinds().is_empty(),
+                    "Boundary::is_condition_kind_saturated must equal missing_condition_kinds().is_empty() \
+                     for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+
+        // Saturated boundary — both slices carry every ConditionKind
+        // at least once, every arm returns true.
+        let mut b = Boundary::default();
+        for k in ConditionKind::ALL {
+            b.preconditions.push(condition_with(k));
+            b.postconditions.push(condition_with(k));
+        }
+        assert!(
+            b.is_precondition_kind_saturated(),
+            "saturated boundary must return true on is_precondition_kind_saturated",
+        );
+        assert!(
+            b.is_postcondition_kind_saturated(),
+            "saturated boundary must return true on is_postcondition_kind_saturated",
+        );
+        assert!(
+            b.is_condition_kind_saturated(),
+            "saturated boundary must return true on is_condition_kind_saturated",
+        );
     }
 
     // ── assert_slice_refinement_composition_laws — substrate testkit ──

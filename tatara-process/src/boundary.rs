@@ -791,6 +791,109 @@ impl Boundary {
     pub fn missing_postcondition_kinds(&self) -> Vec<ConditionKind> {
         self.postconditions.missing_kinds()
     }
+
+    /// Scalar cardinality of the [`ConditionKind`] set NOT appearing in
+    /// `preconditions ∪ postconditions` — the condition-union arm of the
+    /// (precondition, postcondition, condition-union) missing-kind-count
+    /// triad on [`Boundary`].
+    ///
+    /// # Composed body
+    ///
+    /// `ConditionKind::ALL.iter().filter(|k|
+    /// !self.has_condition_kind(**k)).count()` — a thin projection over
+    /// the closed set composed against the two-slice union primitive
+    /// [`Self::has_condition_kind`] under a NEGATED predicate, byte-
+    /// identical to the trait-level
+    /// [`ConditionSliceExt::missing_kind_count`] but reaching through
+    /// the boundary's two-slice union rather than a single slice.
+    /// Equivalent to `self.missing_condition_kinds().len()` without
+    /// materializing the intermediate `Vec<ConditionKind>`.
+    ///
+    /// # Sibling to [`Self::missing_condition_kinds`] /
+    /// [`Self::distinct_condition_kind_count`]
+    ///
+    /// Scalar projection of the closed-set-complement widened primitive
+    /// on the boundary-union surface — where `missing_condition_kinds`
+    /// returns the SET, `missing_condition_kind_count` collapses it to
+    /// its cardinality. Byte-for-byte peer of the point-domain scalar
+    /// projection [`ConditionSliceExt::missing_kind_count`] one struct-
+    /// layer down, and of the peer surface sugar
+    /// [`crate::ephemeral::EphemeralSpec::missing_condition_kind_count`]
+    /// one struct-layer sideways.
+    ///
+    /// The scalar-partition composition law
+    /// `distinct_condition_kind_count() + missing_condition_kind_count()
+    /// == ConditionKind::ALL.len()` binds this method's return to its
+    /// distinct-side peer through the closed-set cardinality — the
+    /// scalar consequence of the widened-primitive partition law that
+    /// [`assert_slice_refinement_composition_laws`] pins on each slice
+    /// and that [`crate::assert_surface_union_composition_laws`] lifts
+    /// to the two-slice union.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that enforces "every process boundary
+    /// carries EVERY [`ConditionKind`] under some slot" now reads
+    /// `spec.boundary.missing_condition_kind_count() == 0` at ONE call
+    /// site rather than paying for
+    /// `spec.boundary.missing_condition_kinds().is_empty()` (with its
+    /// intermediate heap allocation) or the eight-way negated `has_*_kind`
+    /// sweep at the callsite. A future require-tag classifier arm that
+    /// publishes the missing-set cardinality as a scalar (a hypothetical
+    /// `condition-kinds-missing-<n>` prefix family) reaches this ONE
+    /// primitive without allocating.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs (the scalar cardinality composes the SAME
+    /// closed-set walk under negation on both this boundary surface and
+    /// the slice-level substrate primitive). THEORY.md §VI.1 —
+    /// generation over composition (a new [`ConditionKind`] variant
+    /// added to `ALL` reaches this primitive mechanically through the
+    /// closed-set walk).
+    #[must_use]
+    pub fn missing_condition_kind_count(&self) -> usize {
+        ConditionKind::ALL
+            .iter()
+            .filter(|k| !self.has_condition_kind(**k))
+            .count()
+    }
+
+    /// Scalar cardinality of the [`ConditionKind`] set NOT appearing in
+    /// [`Self::preconditions`] — the precondition-side arm of the
+    /// (precondition, postcondition, condition-union) missing-kind-count
+    /// triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::missing_kind_count`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::missing_postcondition_kind_count`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-slice
+    /// negated closed-set walk fails at that primitive's tests rather
+    /// than as silent drift at either struct-level scalar-cardinality
+    /// arm.
+    #[must_use]
+    pub fn missing_precondition_kind_count(&self) -> usize {
+        self.preconditions.missing_kind_count()
+    }
+
+    /// Scalar cardinality of the [`ConditionKind`] set NOT appearing in
+    /// [`Self::postconditions`] — the postcondition-side arm of the
+    /// (precondition, postcondition, condition-union) missing-kind-count
+    /// triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::missing_kind_count`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::missing_precondition_kind_count`]. See that
+    /// method for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via
+    /// [`crate::ephemeral::EphemeralSpec::missing_postcondition_kind_count`].
+    #[must_use]
+    pub fn missing_postcondition_kind_count(&self) -> usize {
+        self.postconditions.missing_kind_count()
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -1218,8 +1321,8 @@ pub trait ConditionSliceExt {
     /// - A hypothetical `condition-kinds-missing-<n>` require-tag
     ///   classifier prefix family that publishes the missing-set
     ///   cardinality as a scalar reads
-    ///   `boundary.postconditions.missing_kinds().len()` (or its
-    ///   future `missing_kind_count` scalar peer, once opened).
+    ///   [`Self::missing_kind_count`] (the scalar-cardinality peer of
+    ///   this widened primitive) without allocating.
     ///
     /// # Theory grounding
     ///
@@ -1240,6 +1343,97 @@ pub trait ConditionSliceExt {
             .into_iter()
             .filter(|k| !self.has_kind(*k))
             .collect()
+    }
+
+    /// Scalar cardinality projection of [`Self::missing_kinds`] onto its
+    /// `.len()` — the number of [`ConditionKind`] variants that do NOT
+    /// appear in this slice. Default body:
+    /// `ConditionKind::ALL.iter().filter(|k| !self.has_kind(**k)).count()`
+    /// — a closed-set walk composed against [`Self::has_kind`] per variant
+    /// under a NEGATED point-probe, WITHOUT materializing the intermediate
+    /// `Vec<ConditionKind>` a caller reaching only for the scalar
+    /// cardinality otherwise pays for. An empty slice returns
+    /// `ConditionKind::ALL.len()` (every kind is missing); a slice
+    /// carrying every variant returns `0` (no kind is missing).
+    ///
+    /// # Sibling to [`Self::missing_kinds`] / [`Self::distinct_kind_count`]
+    ///
+    /// Scalar projection of the closed-set-complement widened primitive
+    /// — where `missing_kinds` returns the SET (a `Vec<ConditionKind>`
+    /// in canonical [`ConditionKind::ALL`] order), `missing_kind_count`
+    /// collapses that set to its cardinality. The composition law
+    /// `missing_kind_count() == missing_kinds().len()` binds the scalar
+    /// projection to the widened primitive at the trait's default body
+    /// and is swept substrate-wide by
+    /// [`assert_slice_refinement_composition_laws`] as its scalar-
+    /// cardinality-complement arm.
+    ///
+    /// Byte-for-byte peer of [`Self::distinct_kind_count`] one axis over
+    /// (under a negated `has_kind` predicate): where `distinct_kind_count`
+    /// scalar-projects the closed-set-INVERSION widened primitive
+    /// `distinct_kinds`, this method scalar-projects the closed-set-
+    /// COMPLEMENT widened primitive `missing_kinds`. The two scalar
+    /// projections PARTITION the closed-set cardinality:
+    /// `distinct_kind_count() + missing_kind_count() ==
+    /// ConditionKind::ALL.len()` — the scalar consequence of the
+    /// `(distinct_kinds, missing_kinds)` partition law that
+    /// [`assert_slice_refinement_composition_laws`] pins at the
+    /// widened-primitive layer.
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::populated_kind_count`]'s
+    /// hypothetical complement peer
+    ///
+    /// Same shape at the peer axis one struct layer up: fixing the
+    /// slice-side carrier and inverting the presence probe over the
+    /// closed set under a negated predicate. The two primitives close
+    /// the "closed-set-complement scalar cardinality" refinement at
+    /// two adjacent typescape sites — one per closed-set-addressed
+    /// slice-level refinement (this primitive), one per closed-set-
+    /// addressed tagged-union parent-level refinement (a symmetric
+    /// future addition).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A future coherence check that enforces "every process boundary
+    ///   carries EVERY [`ConditionKind`] under some slot" now reads
+    ///   `spec.boundary.postconditions.missing_kind_count() == 0` at
+    ///   ONE call site rather than paying for
+    ///   `spec.boundary.postconditions.missing_kinds().is_empty()`
+    ///   (with its intermediate heap allocation) or the eight-way
+    ///   negated sweep with `has_kind` at the callsite.
+    /// - A future require-tag classifier arm that surfaces the missing-
+    ///   set cardinality as a scalar (the exact
+    ///   `condition-kinds-missing-<n>` require-tag classifier prefix
+    ///   family called out in [`Self::missing_kinds`]'s doc-comment as
+    ///   a hypothetical compounding-future consumer) reaches this ONE
+    ///   primitive without allocating.
+    /// - A future gap-analysis dashboard reporting "boundary is missing
+    ///   N of {N_TOTAL} distinct kinds" reaches
+    ///   `slice.missing_kind_count()` directly rather than restating the
+    ///   negated `.iter().filter(...).count()` closure body.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The scalar cardinality lives at ONE substrate site as a typed
+    ///   projection of [`Self::missing_kinds`] onto its `.len()`, and
+    ///   the default body composes against [`Self::has_kind`] over the
+    ///   closed set [`ConditionKind::ALL`] under negation byte-
+    ///   identically to `missing_kinds` without the intermediate `Vec`.
+    ///   Every downstream aggregate consumer binds through the SAME
+    ///   shape rather than paying for the allocation to reach the
+    ///   cardinality.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this primitive
+    ///   mechanically (the closed-set walk picks up the new entry on
+    ///   the missing side WITHOUT further per-caller edit — any slice
+    ///   that doesn't yet populate the new kind sees the cardinality
+    ///   rise by one at every downstream callsite).
+    fn missing_kind_count(&self) -> usize {
+        ConditionKind::ALL
+            .iter()
+            .filter(|k| !self.has_kind(**k))
+            .count()
     }
 }
 
@@ -1509,6 +1703,36 @@ where
         ConditionKind::ALL.len(),
         "(distinct_kinds, missing_kinds) cardinality partition drift — sum {} ≠ ConditionKind::ALL.len() {}",
         distinct.len() + missing.len(),
+        ConditionKind::ALL.len(),
+    );
+
+    // missing_kind_count ↔ missing_kinds.len() — the scalar cardinality
+    // projection of the closed-set-complement widened primitive. A
+    // regression that overrode `missing_kind_count` to drop the
+    // negation (returning `distinct_kind_count`), skip a kind, double-
+    // count a slot, or drift the walk from `ConditionKind::ALL`
+    // surfaces HERE at the substrate boundary, not as silent drift at
+    // every downstream `condition-kinds-missing-<n>` require-tag
+    // classifier or gap-analysis-dashboard callsite.
+    assert_eq!(
+        slice.missing_kind_count(),
+        missing.len(),
+        "missing_kind_count() drifted from missing_kinds().len()",
+    );
+
+    // (distinct_kind_count, missing_kind_count) partition
+    // ConditionKind::ALL's cardinality — the scalar consequence of the
+    // widened-primitive partition law `distinct ∪ missing == ALL,
+    // disjoint` above. A regression that (a) drifted the scalar
+    // cardinality peer from the widened primitive on either side or
+    // (b) drifted the partition invariant surfaces HERE at ONE typed
+    // arm rather than as silent drift at every scalar-cardinality
+    // callsite that reaches for the sum.
+    assert_eq!(
+        slice.distinct_kind_count() + slice.missing_kind_count(),
+        ConditionKind::ALL.len(),
+        "(distinct_kind_count, missing_kind_count) scalar partition drift — sum {} ≠ ConditionKind::ALL.len() {}",
+        slice.distinct_kind_count() + slice.missing_kind_count(),
         ConditionKind::ALL.len(),
     );
 }
@@ -3750,6 +3974,84 @@ mod tests {
         );
     }
 
+    // ── ConditionSliceExt::missing_kind_count — scalar cardinality pins ─
+    //
+    // Scalar-cardinality peer of the closed-set-complement widened
+    // primitive `missing_kinds`: `missing_kind_count()` collapses the
+    // set to its cardinality without allocating. The composition law
+    // `missing_kind_count() == missing_kinds().len()` is pinned as the
+    // scalar-cardinality-complement arm of
+    // `assert_slice_refinement_composition_laws`. The three tests below
+    // pin each authored arrangement's returned VALUE (empty, single-
+    // populated, saturated) directly against `missing_kinds().len()`.
+
+    /// EMPTY-SLICE pin — an empty slice returns
+    /// `ConditionKind::ALL.len()` on `missing_kind_count`, byte-for-byte
+    /// with `missing_kinds().len()`. Locks the maximum-cardinality
+    /// identity on the complement side; dual of the empty-slice arm on
+    /// `distinct_kind_count` which returns `0`. A regression that
+    /// forgot the negation, returned `0` (the distinct-kind-count
+    /// identity on empty), or returned the wrong constant surfaces
+    /// HERE.
+    #[test]
+    fn condition_slice_missing_kind_count_returns_full_closed_set_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        assert_eq!(
+            empty.missing_kind_count(),
+            ConditionKind::ALL.len(),
+            "empty slice must return ConditionKind::ALL.len() on missing_kind_count",
+        );
+        assert_eq!(
+            empty.missing_kind_count(),
+            empty.missing_kinds().len(),
+            "empty slice missing_kind_count must equal missing_kinds().len()",
+        );
+    }
+
+    /// PER-VARIANT pin — a slice with EXACTLY ONE `Condition` carrying
+    /// the addressed kind returns `ConditionKind::ALL.len() - 1` on
+    /// `missing_kind_count` (every OTHER kind is missing). Sweep
+    /// [`ConditionKind::ALL`] so a regression that returned `0` (forgot
+    /// to negate), `ConditionKind::ALL.len()` (forgot the populated
+    /// kind), or a per-kind constant surfaces HERE.
+    #[test]
+    fn condition_slice_missing_kind_count_returns_all_minus_one_per_variant() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            assert_eq!(
+                slice.missing_kind_count(),
+                ConditionKind::ALL.len() - 1,
+                "single-populated slice must return ConditionKind::ALL.len() - 1 on missing_kind_count for {populated:?}",
+            );
+            assert_eq!(
+                slice.missing_kind_count(),
+                slice.missing_kinds().len(),
+                "single-populated missing_kind_count must equal missing_kinds().len() for {populated:?}",
+            );
+        }
+    }
+
+    /// FULL-COVERAGE pin — a slice that carries every [`ConditionKind`]
+    /// variant returns `0` on `missing_kind_count` (no kind is missing).
+    /// Dual of the empty-slice arm above; a regression that returned
+    /// `ConditionKind::ALL.len()` regardless of population or inverted
+    /// the presence direction surfaces HERE.
+    #[test]
+    fn condition_slice_missing_kind_count_returns_zero_on_saturated_slice() {
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert_eq!(
+            saturated.as_slice().missing_kind_count(),
+            0,
+            "slice containing every ConditionKind must return 0 on missing_kind_count",
+        );
+        assert_eq!(
+            saturated.as_slice().missing_kind_count(),
+            saturated.as_slice().missing_kinds().len(),
+            "saturated missing_kind_count must equal missing_kinds().len()",
+        );
+    }
+
     // ── Boundary distinct-set triad — substrate-delegation pins ────────
     //
     // The (precondition, postcondition, condition-union) distinct-set
@@ -3968,6 +4270,82 @@ mod tests {
                     distinct.len() + missing.len(),
                     ConditionKind::ALL.len(),
                     "Boundary (distinct, missing) cardinality partition drift for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary missing-kind-count triad) —
+    /// the three `missing_*_kind_count` methods on [`Boundary`] delegate
+    /// to the slice-level substrate primitive
+    /// [`ConditionSliceExt::missing_kind_count`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via
+    /// `ConditionKind::ALL.iter().filter(|k|
+    /// !self.has_condition_kind(**k)).count()`. Sweep
+    /// `ConditionKind::ALL × ConditionKind::ALL` so a regression that
+    /// (a) inlined a divergent negated closed-set walk at either half-
+    /// slice arm, (b) dropped the negation on the union arm, or (c)
+    /// drifted from the widened-primitive length surfaces HERE. Also
+    /// pins the scalar-partition invariant
+    /// `distinct_kind_count + missing_kind_count == ConditionKind::ALL.len()`
+    /// per arrangement.
+    #[test]
+    fn missing_condition_kind_count_triad_delegates_to_slice_missing_kind_count() {
+        // Empty boundary — every arm returns ConditionKind::ALL.len()
+        // (nothing is populated, so every kind is missing on all three
+        // slots).
+        let b = Boundary::default();
+        let total = ConditionKind::ALL.len();
+        assert_eq!(
+            b.missing_precondition_kind_count(),
+            total,
+            "empty boundary must return ConditionKind::ALL.len() on missing_precondition_kind_count",
+        );
+        assert_eq!(
+            b.missing_postcondition_kind_count(),
+            total,
+            "empty boundary must return ConditionKind::ALL.len() on missing_postcondition_kind_count",
+        );
+        assert_eq!(
+            b.missing_condition_kind_count(),
+            total,
+            "empty boundary must return ConditionKind::ALL.len() on missing_condition_kind_count",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                // Half-slice arms delegate byte-for-byte to the slice
+                // substrate primitive.
+                assert_eq!(
+                    b.missing_precondition_kind_count(),
+                    b.preconditions.missing_kind_count(),
+                    "Boundary::missing_precondition_kind_count must delegate verbatim to \
+                     preconditions.missing_kind_count() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.missing_postcondition_kind_count(),
+                    b.postconditions.missing_kind_count(),
+                    "Boundary::missing_postcondition_kind_count must delegate verbatim to \
+                     postconditions.missing_kind_count() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                // Union arm equals missing_condition_kinds().len() — the
+                // scalar cardinality of the two-slice intersection.
+                assert_eq!(
+                    b.missing_condition_kind_count(),
+                    b.missing_condition_kinds().len(),
+                    "Boundary::missing_condition_kind_count must equal missing_condition_kinds().len() \
+                     for pre={pre_kind:?} post={post_kind:?}",
+                );
+                // Scalar-partition invariant: distinct + missing == ALL.
+                assert_eq!(
+                    b.distinct_condition_kind_count() + b.missing_condition_kind_count(),
+                    ConditionKind::ALL.len(),
+                    "Boundary (distinct, missing) scalar partition drift for pre={pre_kind:?} post={post_kind:?}",
                 );
             }
         }

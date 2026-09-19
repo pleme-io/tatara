@@ -411,6 +411,60 @@ macro_rules! declare_tagged_union_impls {
             pub fn missing_kind_count(&self) -> usize {
                 <Self as $crate::tagged_union::TaggedUnion>::missing_kind_count(self)
             }
+
+            /// Short-circuiting `Option<$kind>` peer of
+            /// [`Self::populated_kinds`] — the FIRST populated kind on
+            /// this tagged union in canonical
+            /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL)
+            /// order, or `None` when no slot is populated.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::first_populated_kind`],
+            /// whose default body is
+            /// `<Kind as ClosedSet>::ALL.iter().copied().find(|k|
+            /// self.has(*k))`. Every consumer that needs the earliest
+            /// populated slot on a tagged-union parent as an
+            /// `Option<Kind>` (an operator-facing "Ambiguous, starting
+            /// at Nix" diagnostic on the malformed arm; a
+            /// `first-populated-<kind>` require-tag classifier arm; a
+            /// fast-path branch that discriminates "empty" from "any
+            /// populated") reads `parent.first_populated_kind()` through
+            /// the inherent surface, byte-for-byte symmetrical with
+            /// `parent.populated_kinds()` / `parent.has(kind)`. The
+            /// composition law `parent.first_populated_kind() ==
+            /// parent.populated_kinds().first().copied()` is pinned as
+            /// a first-class typed invariant by the trait's own default
+            /// body and swept substrate-wide by
+            /// [`crate::tagged_union::assert_first_populated_kind_matches_populated_kinds`].
+            pub fn first_populated_kind(&self) -> ::std::option::Option<$kind> {
+                <Self as $crate::tagged_union::TaggedUnion>::first_populated_kind(self)
+            }
+
+            /// Short-circuiting `Option<$kind>` peer of
+            /// [`Self::missing_kinds`] — the FIRST missing kind on this
+            /// tagged union in canonical
+            /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL)
+            /// order, or `None` when EVERY slot is populated.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::first_missing_kind`],
+            /// whose default body is
+            /// `<Kind as ClosedSet>::ALL.iter().copied().find(|k|
+            /// !self.has(*k))`. Byte-for-byte symmetrical with
+            /// `parent.first_populated_kind()` under a negated
+            /// predicate; the two primitives PARTITION
+            /// `ClosedSet::ALL`'s earliest-element projection on the
+            /// (populated, missing) split. The composition law
+            /// `parent.first_missing_kind() ==
+            /// parent.missing_kinds().first().copied()` is pinned as a
+            /// first-class typed invariant by the trait's own default
+            /// body and swept substrate-wide by
+            /// [`crate::tagged_union::assert_first_missing_kind_matches_missing_kinds`].
+            pub fn first_missing_kind(&self) -> ::std::option::Option<$kind> {
+                <Self as $crate::tagged_union::TaggedUnion>::first_missing_kind(self)
+            }
         }
 
         impl $crate::tagged_union::VariantSelector<$parent> for $kind {
@@ -1176,6 +1230,162 @@ pub trait TaggedUnion: Sized {
             .filter(|k| !self.has(*k))
             .count()
     }
+
+    /// Short-circuiting `Option<Self::Kind>` peer of
+    /// [`Self::populated_kinds`] — the FIRST populated kind on this
+    /// tagged union in canonical
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) order, or
+    /// `None` when no slot is populated.
+    ///
+    /// Default body:
+    /// `<Kind as ClosedSet>::ALL.iter().copied().find(|k| self.has(*k))`
+    /// — a closed-set walk that composes against [`Self::has`] per
+    /// variant and SHORT-CIRCUITS at the earliest match. An empty parent
+    /// returns `None` (matches [`Self::variant`]'s `Empty` arm); a
+    /// well-formed parent returns `Some(k)` where `k` is the sole
+    /// populated slot (matches the `Ok` arm's variant kind through
+    /// [`VariantKind`]); a malformed parent with multiple populated
+    /// slots returns `Some(k)` where `k` is the EARLIEST populated
+    /// slot in canonical `ALL` order — a strictly more informative
+    /// projection than the payload-free [`TaggedUnionError::ambiguous`]
+    /// carrier, without materializing the intermediate
+    /// `Vec<Self::Kind>` [`Self::populated_kinds`] otherwise pays for.
+    ///
+    /// # Sibling to [`Self::populated_kinds`] / [`Self::populated_kind_count`]
+    ///
+    /// Third refinement on the closed-set-inversion axis, `Option<Kind>`-
+    /// valued: `populated_kinds` returns the SET, `populated_kind_count`
+    /// scalar-projects that set's cardinality, and `first_populated_kind`
+    /// scalar-projects the SET onto its earliest element. The
+    /// composition law `first_populated_kind() ==
+    /// populated_kinds().first().copied()` binds the earliest-element
+    /// projection to the widened primitive at the trait's default body —
+    /// pinned substrate-wide by
+    /// [`assert_first_populated_kind_matches_populated_kinds`]. Both
+    /// coarser projections agree on emptiness:
+    /// `first_populated_kind().is_none() == (populated_kind_count() == 0)`.
+    ///
+    /// # Peer to [`Self::variant`] on the malformed arm
+    ///
+    /// On well-formed parents the two projections agree
+    /// (`self.variant().ok().map(|v| v.variant_kind()) ==
+    /// first_populated_kind()`). On malformed (Ambiguous) parents they
+    /// diverge: `variant()` returns `Err(Ambiguous)` payload-free,
+    /// while `first_populated_kind()` names the earliest populated
+    /// slot. Operator diagnostics that want "started at X first" text
+    /// on the Ambiguous arm reach this ONE primitive with O(1) storage
+    /// and short-circuit walk cost, without paying for the widened
+    /// `populated_kinds().first().copied()` allocation the
+    /// composition law equates it to.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing "Ambiguous, starting at Nix" upgrade of the
+    ///   payload-free [`TaggedUnionError::ambiguous`] carrier reads
+    ///   `parent.first_populated_kind()` at ONE substrate site.
+    /// - A `first-populated-<kind>` require-tag classifier arm reads
+    ///   this primitive with no allocation, byte-for-byte symmetrical
+    ///   with `parent.has(kind)`.
+    /// - A fast-path branch that discriminates "empty" from "any
+    ///   populated" reads `parent.first_populated_kind().is_some()` at
+    ///   ONE call site rather than allocating a `Vec` through
+    ///   `!populated_kinds().is_empty()`.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The earliest-element projection lives at ONE substrate site as
+    ///   a typed projection of [`Self::has`] over the closed set
+    ///   `<Self::Kind as ClosedSet>::ALL` under short-circuit walk
+    ///   semantics. Every downstream consumer binds through the SAME
+    ///   shape rather than reaching for
+    ///   `populated_kinds().first().copied()` with its allocation cost.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically (the closed-set walk picks up the new entry) —
+    ///   any parent that populates only the new variant returns
+    ///   `Some(new_variant)` at every downstream callsite without
+    ///   further per-caller edit.
+    fn first_populated_kind(&self) -> Option<Self::Kind> {
+        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .find(|k| self.has(*k))
+    }
+
+    /// Short-circuiting `Option<Self::Kind>` peer of
+    /// [`Self::missing_kinds`] — the FIRST missing kind on this tagged
+    /// union in canonical
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) order, or
+    /// `None` when EVERY slot is populated.
+    ///
+    /// Default body:
+    /// `<Kind as ClosedSet>::ALL.iter().copied().find(|k| !self.has(*k))`
+    /// — a closed-set walk composed against [`Self::has`] per variant
+    /// under NEGATION with SHORT-CIRCUIT at the earliest empty slot. An
+    /// empty parent returns `Some(ALL[0])` (every slot missing, first
+    /// hit is index 0); a well-formed parent populating slot `k`
+    /// returns `Some(ALL[0])` if `k != ALL[0]`, else `Some(ALL[1])`
+    /// (the earliest non-`k` entry); a saturated parent with every
+    /// slot populated (structurally impossible on the exactly-one
+    /// contract but semantically well-defined) returns `None`.
+    ///
+    /// # Sibling to [`Self::missing_kinds`] / [`Self::missing_kind_count`]
+    ///
+    /// Third refinement on the closed-set-complement axis,
+    /// `Option<Kind>`-valued: `missing_kinds` returns the COMPLEMENT SET,
+    /// `missing_kind_count` scalar-projects its cardinality, and
+    /// `first_missing_kind` scalar-projects the SET onto its earliest
+    /// element. The composition law `first_missing_kind() ==
+    /// missing_kinds().first().copied()` binds the earliest-element
+    /// projection to the widened primitive at the trait's default
+    /// body — pinned substrate-wide by
+    /// [`assert_first_missing_kind_matches_missing_kinds`]. Both
+    /// coarser projections agree on saturation:
+    /// `first_missing_kind().is_none() == (missing_kind_count() == 0)`.
+    ///
+    /// # Peer to [`Self::first_populated_kind`]
+    ///
+    /// Closed-set-complement peer of the closed-set-inversion earliest-
+    /// element primitive under a negated `has` predicate. The two
+    /// primitives PARTITION `ClosedSet::ALL`'s earliest-element
+    /// projection: at least one of `first_populated_kind()` and
+    /// `first_missing_kind()` is `Some` on any non-degenerate closed
+    /// set (they are both `Some` iff `1 ≤ populated_kind_count() <
+    /// ALL.len()`).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing "first still-unfilled dependency" diagnostic
+    ///   on the partially-populated arm of an aggregate boundary check
+    ///   reads `parent.first_missing_kind()` at ONE substrate site.
+    /// - A `first-missing-<kind>` require-tag classifier arm reads this
+    ///   primitive with no allocation, byte-for-byte symmetrical with
+    ///   `parent.first_populated_kind()`.
+    /// - A fast-path branch that discriminates "saturated" from "at
+    ///   least one missing" reads `parent.first_missing_kind().is_some()`
+    ///   at ONE call site rather than allocating through
+    ///   `!missing_kinds().is_empty()` or paying for the full
+    ///   `missing_kind_count() > 0` walk.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The complement-earliest-element projection lives at ONE
+    ///   substrate site as a typed projection of [`Self::has`] over the
+    ///   closed set `<Self::Kind as ClosedSet>::ALL` under negation
+    ///   with short-circuit walk semantics.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically (the closed-set walk picks up the new entry on
+    ///   the missing side) — every downstream consumer sees the wider
+    ///   complement's earliest hit without further per-caller edit.
+    fn first_missing_kind(&self) -> Option<Self::Kind> {
+        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .find(|k| !self.has(*k))
+    }
 }
 
 /// Generic diagnostic-stability testkit — pins that [`TaggedUnion::KIND_LIST`]
@@ -1855,6 +2065,155 @@ where
             populated_count + count,
             all_len,
             "scalar partition law violated — populated_kind_count + missing_kind_count must equal ClosedSet::ALL.len() (populated={populated:?})",
+        );
+    }
+}
+
+/// Generic earliest-populated-kind testkit — pins that
+/// [`TaggedUnion::first_populated_kind`] agrees with
+/// [`TaggedUnion::populated_kinds`]`.first().copied()` across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-slot
+/// arrangement AND that on the populated diagonal
+/// `single_slot(k).first_populated_kind()` equals `Some(k)` exactly.
+///
+/// Parent-axis substrate primitive for the earliest-element scalar
+/// projection of the tagged-union closed-set-inversion axis — the
+/// `Option<Kind>`-valued projection of
+/// [`assert_populated_kinds_matches_has`]'s widened primitive. The
+/// three sub-assertions swept per populated slot:
+///
+/// 1. **`first ↔ kinds.first().copied()`**: `first_populated_kind() ==
+///    populated_kinds().first().copied()` — a regression that
+///    overrode `first_populated_kind` to skip the earliest match (a
+///    `.rev().find(...)` inlined by mistake), drop the short-circuit
+///    (allocating a full `Vec` at the callsite), or drift the walk
+///    from `ClosedSet::ALL` surfaces here.
+/// 2. **Single-slot diagonal**: `single_slot(k).first_populated_kind()
+///    == Some(k)` — the earliest populated slot on a well-formed
+///    parent IS the sole populated slot.
+/// 3. **Emptiness composition law**: `first_populated_kind().is_none()
+///    == (populated_kind_count() == 0)` — the earliest-element
+///    projection agrees with the scalar cardinality on the empty
+///    boundary. (Trivially `false == false` on every single-slot
+///    arrangement; the load-bearing case is the sibling
+///    empty-parent probe outside this primitive.)
+///
+/// A fifth sibling picks up the earliest-populated check through ONE
+/// call site — no re-authored `for k in K::ALL` sweep, no re-authored
+/// `assert_eq!(single_slot(k).first_populated_kind(), Some(k))`.
+///
+/// Same `Lifetime` exclusion as the sibling primitives.
+#[track_caller]
+pub fn assert_first_populated_kind_matches_populated_kinds<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let first = parent.first_populated_kind();
+        let via_kinds = parent.populated_kinds().first().copied();
+        // Composition law: earliest-element projection agrees with the
+        // widened primitive's `Vec::first().copied()`.
+        assert_eq!(
+            first, via_kinds,
+            "TaggedUnion::first_populated_kind() drifted from populated_kinds().first().copied() — populated={populated:?}",
+        );
+        // Single-slot diagonal — a well-formed parent from single_slot
+        // populates exactly the addressed slot, so the earliest
+        // populated slot IS that slot.
+        assert_eq!(
+            first,
+            Some(populated),
+            "TaggedUnion::first_populated_kind() on single_slot({populated:?}) must equal Some({populated:?}) exactly",
+        );
+        // Emptiness composition law on the well-formed diagonal —
+        // exactly-one is a strictly non-empty populated set, so the
+        // scalar cardinality and the earliest-element `is_some()`
+        // agree.
+        assert_eq!(
+            first.is_some(),
+            parent.populated_kind_count() > 0,
+            "first_populated_kind().is_some() drifted from (populated_kind_count() > 0) — populated={populated:?}",
+        );
+    }
+}
+
+/// Generic earliest-missing-kind testkit — pins that
+/// [`TaggedUnion::first_missing_kind`] agrees with
+/// [`TaggedUnion::missing_kinds`]`.first().copied()` across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-slot
+/// arrangement AND that on the populated diagonal
+/// `single_slot(k).first_missing_kind()` equals the earliest `ALL`
+/// entry NOT equal to `k`.
+///
+/// Parent-axis substrate primitive for the earliest-element scalar
+/// projection of the tagged-union closed-set-complement axis — the
+/// `Option<Kind>`-valued projection of
+/// [`assert_missing_kinds_matches_has`]'s widened primitive under a
+/// negated `has` predicate. The three sub-assertions swept per
+/// populated slot:
+///
+/// 1. **`first ↔ missing.first().copied()`**: `first_missing_kind()
+///    == missing_kinds().first().copied()` — a regression that
+///    overrode `first_missing_kind` to drop the negation (returning
+///    the populated side instead) or drift the walk from
+///    `ClosedSet::ALL` surfaces here.
+/// 2. **Single-slot diagonal**: `single_slot(k).first_missing_kind()`
+///    equals the earliest `ALL` entry not equal to `k` — a well-
+///    formed parent's missing set is `ALL \ {k}` in canonical order,
+///    so its earliest element is `ALL[0]` when `k != ALL[0]`, else
+///    `ALL[1]`.
+/// 3. **Emptiness composition law**: `first_missing_kind().is_some()
+///    == (missing_kind_count() > 0)` — the earliest-missing
+///    projection agrees with the scalar complement cardinality.
+///    Non-trivial on the single-slot arm when `ALL.len() > 1`.
+///
+/// A fifth sibling picks up the earliest-missing check through ONE
+/// call site.
+///
+/// Same `Lifetime` exclusion as the sibling primitives.
+#[track_caller]
+pub fn assert_first_missing_kind_matches_missing_kinds<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let first = parent.first_missing_kind();
+        let via_missing = parent.missing_kinds().first().copied();
+        // Composition law: earliest-element projection agrees with the
+        // widened primitive's `Vec::first().copied()`.
+        assert_eq!(
+            first, via_missing,
+            "TaggedUnion::first_missing_kind() drifted from missing_kinds().first().copied() — populated={populated:?}",
+        );
+        // Single-slot diagonal — the missing set is ALL \ {populated}
+        // in canonical order, so its earliest element is the earliest
+        // ALL entry not equal to populated.
+        let expected_first_missing = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .find(|k| *k != populated);
+        assert_eq!(
+            first, expected_first_missing,
+            "TaggedUnion::first_missing_kind() on single_slot({populated:?}) must equal earliest ClosedSet::ALL entry != {populated:?}",
+        );
+        // Emptiness composition law — the earliest-missing projection
+        // agrees with the scalar complement cardinality's positivity.
+        assert_eq!(
+            first.is_some(),
+            parent.missing_kind_count() > 0,
+            "first_missing_kind().is_some() drifted from (missing_kind_count() > 0) — populated={populated:?}",
         );
     }
 }
@@ -5182,6 +5541,250 @@ mod tests {
             single_slot_artifact_source_probe,
         );
         assert_missing_kind_count_matches_missing_kinds::<crate::export::VectorChannel, _>(
+            single_slot_vector_channel_probe,
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // `TaggedUnion::first_populated_kind` / `first_missing_kind` — the
+    // short-circuiting `Option<Kind>` peers of `populated_kinds` /
+    // `missing_kinds`. Pin the four-outcome truth table (empty parent
+    // → `first_populated_kind` is `None`, `first_missing_kind` is
+    // `Some(ALL[0])`; populated diagonal → `first_populated_kind` is
+    // `Some(k)`, `first_missing_kind` is the earliest `ALL` entry
+    // != `k`; multi-populated → `first_populated_kind` names the
+    // EARLIEST populated slot in canonical `ALL` order) directly on
+    // the `LocalParent` scaffold AND via the substrate testkit
+    // primitives, so a regression on the default body's short-circuit
+    // or negation composition fails here before any per-parent
+    // inherent test surfaces the drift.
+    // -------------------------------------------------------------------
+
+    /// EMPTY-PARENT pin — a default [`LocalParent`] returns `None` at
+    /// `first_populated_kind` (no slot populated) and `Some(ALL[0])` at
+    /// `first_missing_kind` (every slot missing, earliest hit is
+    /// index 0 of the canonical closed-set walk). Composition-law pin:
+    /// `first_populated_kind().is_none() == (populated_kind_count() ==
+    /// 0)` and `first_missing_kind() == Some(ALL[0])` on the empty
+    /// boundary.
+    #[test]
+    fn tagged_union_default_first_kinds_on_empty_parent() {
+        let empty = LocalParent::default();
+        assert_eq!(
+            <LocalParent as TaggedUnion>::first_populated_kind(&empty),
+            None,
+        );
+        assert_eq!(
+            <LocalParent as TaggedUnion>::first_missing_kind(&empty),
+            Some(<LocalKind as tatara_closed_set::ClosedSet>::ALL[0]),
+        );
+    }
+
+    /// SINGLE-SLOT DIAGONAL pin — every populated position across
+    /// [`LocalKind::ALL`] returns `Some(k)` at `first_populated_kind`
+    /// (the sole populated slot IS the earliest one) AND the earliest
+    /// `ALL` entry != `k` at `first_missing_kind`. Both projections
+    /// agree with the widened primitives via
+    /// `first_populated_kind() == populated_kinds().first().copied()`
+    /// and `first_missing_kind() == missing_kinds().first().copied()`.
+    #[test]
+    fn tagged_union_default_first_kinds_on_single_slot_diagonal() {
+        for populated in <LocalKind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let parent = match populated {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            };
+            assert_eq!(
+                <LocalParent as TaggedUnion>::first_populated_kind(&parent),
+                Some(populated),
+            );
+            let expected_first_missing = <LocalKind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+                .find(|k| *k != populated);
+            assert_eq!(
+                <LocalParent as TaggedUnion>::first_missing_kind(&parent),
+                expected_first_missing,
+            );
+            // Composition laws vs. widened primitives.
+            assert_eq!(
+                parent.first_populated_kind(),
+                parent.populated_kinds().first().copied(),
+            );
+            assert_eq!(
+                parent.first_missing_kind(),
+                parent.missing_kinds().first().copied(),
+            );
+        }
+    }
+
+    /// TWO-POPULATED pin — a `LocalParent` with two populated slots
+    /// returns `first_populated_kind() == Some(min_all(a, b))` (the
+    /// EARLIEST populated slot in canonical `ClosedSet::ALL` order —
+    /// strictly more informative than the payload-free
+    /// [`LocalParentError::Ambiguous`] carrier `variant()` returns on
+    /// the same input). Pins the walk order on the Ambiguous arm at
+    /// ONE substrate boundary — a regression that iterates `ALL` in
+    /// reverse or in construction order fails here.
+    #[test]
+    fn tagged_union_default_first_populated_kind_names_earliest_of_two_populated_slots() {
+        // Alpha + Beta populated → earliest is Alpha (ALL[0]).
+        let p = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: None,
+        };
+        assert_eq!(p.first_populated_kind(), Some(LocalKind::Alpha));
+        // Missing set is [Gamma]; earliest missing is Gamma.
+        assert_eq!(p.first_missing_kind(), Some(LocalKind::Gamma));
+
+        // Beta + Gamma populated → earliest is Beta.
+        let p = LocalParent {
+            alpha: None,
+            beta: Some(1),
+            gamma: Some(2),
+        };
+        assert_eq!(p.first_populated_kind(), Some(LocalKind::Beta));
+        assert_eq!(p.first_missing_kind(), Some(LocalKind::Alpha));
+
+        // Alpha + Gamma populated → earliest is Alpha.
+        let p = LocalParent {
+            alpha: Some(1),
+            beta: None,
+            gamma: Some(2),
+        };
+        assert_eq!(p.first_populated_kind(), Some(LocalKind::Alpha));
+        assert_eq!(p.first_missing_kind(), Some(LocalKind::Beta));
+    }
+
+    /// SATURATED-PARENT pin — a `LocalParent` with EVERY slot
+    /// populated returns `Some(ALL[0])` at `first_populated_kind`
+    /// (earliest hit on the all-`true` predicate is index 0) and
+    /// `None` at `first_missing_kind` (no missing slot exists). Pins
+    /// the earliest-missing projection's `None` arm at ONE substrate
+    /// boundary — a regression that returned `Some(ALL[0])` (dropping
+    /// the negation) or `Some(ALL[ALL.len()-1])` (walking in reverse)
+    /// fails here.
+    #[test]
+    fn tagged_union_default_first_missing_kind_returns_none_on_saturated_parent() {
+        let p = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: Some(3),
+        };
+        assert_eq!(p.first_populated_kind(), Some(LocalKind::Alpha));
+        assert_eq!(p.first_missing_kind(), None);
+    }
+
+    /// The `assert_first_populated_kind_matches_populated_kinds`
+    /// primitive accepts the [`LocalParent`] scaffold coherently — the
+    /// Ok arm is the "no drift" outcome.
+    #[test]
+    fn assert_first_populated_kind_matches_populated_kinds_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_first_populated_kind_matches_populated_kinds::<LocalParent, _>(make_local);
+    }
+
+    /// A factory that yields an all-empty parent (so
+    /// `first_populated_kind()` returns `None`) MUST fail-loudly at
+    /// the caller's site through the primitive's single-slot diagonal
+    /// arm — `None` does not equal `Some(populated)`.
+    #[test]
+    #[should_panic(expected = "must equal Some(")]
+    fn assert_first_populated_kind_matches_populated_kinds_rejects_empty_factory() {
+        fn empty_factory(_: LocalKind) -> LocalParent {
+            LocalParent::default()
+        }
+        assert_first_populated_kind_matches_populated_kinds::<LocalParent, _>(empty_factory);
+    }
+
+    /// The `assert_first_missing_kind_matches_missing_kinds` primitive
+    /// accepts the [`LocalParent`] scaffold coherently.
+    #[test]
+    fn assert_first_missing_kind_matches_missing_kinds_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_first_missing_kind_matches_missing_kinds::<LocalParent, _>(make_local);
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the earliest-populated primitive
+    /// coherently — every per-site `single_slot_X(k)` factory produces
+    /// a parent whose `first_populated_kind()` equals `Some(k)`.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_first_populated_kind_testkit_primitive() {
+        assert_first_populated_kind_matches_populated_kinds::<crate::intent::Intent, _>(
+            single_slot_intent_probe,
+        );
+        assert_first_populated_kind_matches_populated_kinds::<
+            crate::encapsulates::EncapsulationKind,
+            _,
+        >(single_slot_encapsulation_kind_probe);
+        assert_first_populated_kind_matches_populated_kinds::<crate::export::ArtifactSource, _>(
+            single_slot_artifact_source_probe,
+        );
+        assert_first_populated_kind_matches_populated_kinds::<crate::export::VectorChannel, _>(
+            single_slot_vector_channel_probe,
+        );
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the earliest-missing primitive
+    /// coherently.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_first_missing_kind_testkit_primitive() {
+        assert_first_missing_kind_matches_missing_kinds::<crate::intent::Intent, _>(
+            single_slot_intent_probe,
+        );
+        assert_first_missing_kind_matches_missing_kinds::<crate::encapsulates::EncapsulationKind, _>(
+            single_slot_encapsulation_kind_probe,
+        );
+        assert_first_missing_kind_matches_missing_kinds::<crate::export::ArtifactSource, _>(
+            single_slot_artifact_source_probe,
+        );
+        assert_first_missing_kind_matches_missing_kinds::<crate::export::VectorChannel, _>(
             single_slot_vector_channel_probe,
         );
     }

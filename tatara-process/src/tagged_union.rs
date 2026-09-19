@@ -837,6 +837,43 @@ macro_rules! declare_tagged_union_impls {
             pub fn has_only(&self, kind: $kind) -> bool {
                 <Self as $crate::tagged_union::TaggedUnion>::has_only(self, kind)
             }
+
+            /// Closed-set-complement peer of [`Self::has_only`] —
+            /// `true` iff the given `kind` is MISSING AND no OTHER slot
+            /// on this tagged union is missing.
+            ///
+            /// One-line inherent forwarder that delegates the fused
+            /// short-circuit walk to the substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::lacks_only`], whose
+            /// default body walks
+            /// `<Self::Kind as ClosedSet>::ALL` under a negated
+            /// [`crate::tagged_union::TaggedUnion::has`] and returns
+            /// `false` at the EARLIEST missing slot whose kind is not
+            /// `kind`. Byte-for-byte cheaper than either widened
+            /// composition
+            /// `self.unique_missing_kind() == Some(kind)` (which walks
+            /// until the SECOND missing slot before comparing) or
+            /// `!self.has(kind) && self.has_unique_missing_kind()`
+            /// (two closed-set walks) on every arm where the parent
+            /// carries a missing slot that isn't `kind`.
+            ///
+            /// # Sibling to [`Self::has_only`]
+            ///
+            /// Closed-set-complement peer: `has_only(kind)` names
+            /// parents whose SOLE populated slot is `kind`;
+            /// `lacks_only(kind)` names parents whose SOLE missing slot
+            /// is `kind`. The composition law
+            /// `parent.lacks_only(kind) ==
+            /// (parent.unique_missing_kind() == Some(kind))` and the
+            /// cardinality-refinement law
+            /// `parent.lacks_only(kind) == (!parent.has(kind) &&
+            /// parent.has_unique_missing_kind())` are pinned as first-
+            /// class typed invariants by the trait's own default body
+            /// and swept substrate-wide by
+            /// [`crate::tagged_union::assert_lacks_only_matches_unique_missing_kind`].
+            pub fn lacks_only(&self, kind: $kind) -> bool {
+                <Self as $crate::tagged_union::TaggedUnion>::lacks_only(self, kind)
+            }
         }
 
         impl $crate::tagged_union::VariantSelector<$parent> for $kind {
@@ -2896,6 +2933,152 @@ pub trait TaggedUnion: Sized {
             .copied()
         {
             if !self.has(k) {
+                continue;
+            }
+            if k == kind {
+                saw_kind = true;
+            } else {
+                return false;
+            }
+        }
+        saw_kind
+    }
+
+    /// Kind-scoped strict refinement of `!Self::has(kind)` — `true` iff
+    /// the given `kind` is MISSING AND no OTHER slot on this tagged
+    /// union is missing. The "exactly this one variant is absent"
+    /// predicate — closed-set-complement mirror of [`Self::has_only`].
+    ///
+    /// Default body: a FUSED short-circuit closed-set walk under a
+    /// negated [`Self::has`] that returns `false` at the EARLIEST
+    /// missing slot whose kind is NOT `kind`, and returns `true` iff
+    /// the sweep completes with `kind` seen as the sole missing slot.
+    /// Byte-for-byte cheaper than either widened composition
+    /// `self.unique_missing_kind() == Some(kind)` (which walks until
+    /// the SECOND missing slot before comparing) or
+    /// `!self.has(kind) && self.has_unique_missing_kind()` (two
+    /// closed-set walks) on every arm where the parent carries a
+    /// missing slot that isn't `kind`.
+    ///
+    /// # Sibling to [`Self::has_only`]
+    ///
+    /// Closed-set-complement peer of [`Self::has_only`] under a negated
+    /// [`Self::has`] predicate — where `has_only(kind)` names parents
+    /// whose SOLE populated slot is `kind`, `lacks_only(kind)` names
+    /// parents whose SOLE missing slot is `kind`. Byte-for-byte
+    /// symmetrical fused-walk shape; the two primitives are useful in
+    /// DIFFERENT structural regimes: `has_only` names well-formed
+    /// parents (1 of N populated); `lacks_only` names the missing-side
+    /// complement (N-1 of N populated — the near-saturation arm). On
+    /// tagged unions with `N == 2` the two coincide (a well-formed
+    /// 1-of-2 parent has 1 missing too, so `has_only(a)` and
+    /// `lacks_only(b)` name the same arm iff `a != b`).
+    ///
+    /// # Peer to [`Self::unique_missing_kind`]
+    ///
+    /// Same axis, argument-scoped projection: where
+    /// `unique_missing_kind()` returns `Some(k)` iff exactly one slot
+    /// is missing AND names which one, `lacks_only(kind)` returns
+    /// `true` iff exactly one slot is missing AND that slot is the
+    /// passed `kind`. The composition law
+    /// `lacks_only(kind) == (unique_missing_kind() == Some(kind))`
+    /// binds the two primitives at the trait's default body — swept
+    /// substrate-wide by
+    /// [`assert_lacks_only_matches_unique_missing_kind`].
+    ///
+    /// # Truth table on the exactly-one-slot tagged-union contract
+    ///
+    /// For a tagged union with `<Self::Kind as ClosedSet>::ALL` of
+    /// cardinality `N ≥ 2` and a fixed argument `kind`:
+    ///
+    /// - Empty parent (0 populated, N missing): `false` on any `N ≥ 2`
+    ///   — N missing slots, so `kind` isn't the sole missing kind.
+    /// - Well-formed parent (1 populated, N-1 missing): `false` when
+    ///   `N > 2` (N-1 ≥ 2 missing, no unique missing); on `N == 2`
+    ///   with populated `p`, `lacks_only(kind) == (kind != p)` (the
+    ///   one missing slot is the non-populated one).
+    /// - N-1-populated parent (missing-side peer of the well-formed
+    ///   arm, 1 missing): `true` iff `kind` names the sole missing
+    ///   slot — the SOLE arm where `lacks_only(kind)` returns `true`
+    ///   on any `N > 2` closed set.
+    /// - Saturated parent (N populated, 0 missing): `false`.
+    ///
+    /// # Kind-domain exhaustivity
+    ///
+    /// A parent satisfies `lacks_only(k)` for AT MOST one `k`, since
+    /// two distinct kinds cannot both be the sole missing slot. On
+    /// the near-saturation arm the count is exactly 1 (the addressed
+    /// missing kind); on every other arm the count is 0. This kind-
+    /// domain exhaustivity law binds the argument-scoped projection
+    /// to the arg-less uniqueness predicate at ONE substrate site,
+    /// byte-for-byte peer of the `has_only` exhaustivity law under
+    /// complement.
+    ///
+    /// # Kind-scoped implication
+    ///
+    /// `lacks_only(kind) → !has(kind)` — if `kind` is the sole missing
+    /// slot then `kind` cannot be populated. Complement mirror of the
+    /// `has_only(kind) → has(kind)` implication that binds
+    /// [`Self::has_only`] to [`Self::has`] on the strict-refinement
+    /// axis; here the implication binds `lacks_only` to `!has` on the
+    /// closed-set-complement axis.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing "exactly one dependency still unfulfilled:
+    ///   X" diagnostic on an aggregate boundary check whose `X` is
+    ///   known statically reads `parent.lacks_only(X)` at ONE
+    ///   substrate site — one fused short-circuit walk, no allocation,
+    ///   strictly cheaper than the widened composition.
+    /// - A `lacks-only-<kind>` require-tag classifier arm reaches this
+    ///   primitive at ONE call site — the argument-scoped peer of the
+    ///   arg-less `has_unique_missing_kind` classifier, closed-set-
+    ///   complement mirror of the `is-only-<kind>` classifier arm on
+    ///   the populated axis.
+    /// - A coherence check verifying "the near-saturation parent from
+    ///   an `all_but_one_slot_X(k)` factory is unambiguously missing
+    ///   kind `k`" reads `parent.lacks_only(k)` at ONE site — the
+    ///   strongest structural pin on the missing-side well-formed
+    ///   diagonal.
+    /// - A fast-path branch on the near-saturation arm that
+    ///   discriminates "exactly one specific slot still empty" from
+    ///   "0 or ≥ 2 still empty or some OTHER slot empty" reads
+    ///   `parent.lacks_only(kind)` at ONE call site — the fused-walk
+    ///   short-circuit is strictly cheaper than
+    ///   `parent.unique_missing_kind() == Some(kind)` on every arm
+    ///   where a first-missing-slot mismatch would prune the walk
+    ///   before the second missing slot.
+    ///
+    /// A new [`Self::Kind`] variant added to
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) reaches
+    /// this primitive mechanically — the fused walk picks up the new
+    /// slot as an additional short-circuit candidate at every
+    /// downstream callsite without further per-caller edit.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The kind-scoped strict-refinement projection on the missing
+    ///   axis lives at ONE substrate site as a fused short-circuit
+    ///   walk over `<Self::Kind as ClosedSet>::ALL` under a negated
+    ///   [`Self::has`] with early exit on the first missing slot
+    ///   whose kind is not `kind` — byte-for-byte peer of
+    ///   [`Self::has_only`]'s fused walk under complement,
+    ///   semantically identical to
+    ///   `unique_missing_kind() == Some(kind)` on every arm.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically through the fused walk.
+    fn lacks_only(&self, kind: Self::Kind) -> bool
+    where
+        Self::Kind: PartialEq,
+    {
+        let mut saw_kind = false;
+        for k in <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            if self.has(k) {
                 continue;
             }
             if k == kind {
@@ -5301,6 +5484,321 @@ pub fn assert_has_only_matches_unique_populated_kind<T, F, G, H>(
             assert_eq!(
                 multi_count, 0,
                 "two_slot({a:?}, {b:?}): exactly 0 kinds must satisfy has_only, got {multi_count}",
+            );
+        }
+    }
+}
+
+/// Generic kind-scoped strict-refinement testkit on the MISSING axis —
+/// pins that [`TaggedUnion::lacks_only`] agrees with
+/// [`TaggedUnion::unique_missing_kind`]'s
+/// argument-scoped projection, [`TaggedUnion::has`]'s negated
+/// cardinality-refinement, AND the kind-scoped implication
+/// `lacks_only(kind) → !has(kind)` across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-slot
+/// arrangement, every off-diagonal two-slot pair, AND the empty-parent
+/// baseline.
+///
+/// Closed-set-complement mirror of
+/// [`assert_has_only_matches_unique_populated_kind`] under the
+/// (populated, missing) duality — where the populated-axis primitive
+/// binds `has_only(kind)` to `unique_populated_kind()`, this primitive
+/// binds `lacks_only(kind)` to `unique_missing_kind()` through the
+/// same shape (a closed-set walk under `Self::has`, differing only in
+/// the negation of the presence probe). The four sub-assertions swept
+/// per single-slot arrangement + the two-slot sweep + the empty-parent
+/// baseline:
+///
+/// 1. **Widened uniqueness composition law**:
+///    `lacks_only(kind) == (unique_missing_kind() == Some(kind))` on
+///    every arm — the fused walk's argument-scoped projection agrees
+///    with the arg-less unique-missing primitive's `Option::eq` on
+///    `Some(kind)`. Byte-for-byte peer of
+///    [`assert_has_only_matches_unique_populated_kind`]'s widened
+///    uniqueness law under complement.
+/// 2. **Cardinality-refinement composition law**:
+///    `lacks_only(kind) == (!has(kind) && has_unique_missing_kind())`
+///    on every arm — the fused walk agrees with the two-step
+///    composition of the negated presence probe and the arg-less
+///    missing-cardinality Boolean. Closed-set-complement mirror of
+///    the populated-axis cardinality-refinement law.
+/// 3. **Kind-scoped implication law**:
+///    `lacks_only(kind) → !has(kind)` on every arm — if `kind` is the
+///    sole missing slot then `kind` cannot be populated. Complement
+///    mirror of the `has_only(kind) → has(kind)` implication that
+///    binds [`TaggedUnion::has_only`] to [`TaggedUnion::has`] on the
+///    strict-refinement axis; here the implication binds `lacks_only`
+///    to `!has` on the closed-set-complement axis.
+/// 4. **Kind-domain exhaustivity law**: `<T::Kind as ClosedSet>::ALL
+///    .iter().filter(|k| parent.lacks_only(*k)).count() ≤ 1` on every
+///    arm — a parent satisfies `lacks_only(k)` for AT MOST one `k`,
+///    since two distinct kinds cannot both be the sole missing slot.
+///    On the near-saturation arm (exactly 1 missing) the count is 1;
+///    on every other arm the count is 0. Closed-set-complement mirror
+///    of the populated-axis exhaustivity law under complement.
+/// 5. **Missing-diagonal well-formed law**:
+///    `unique_missing_kind()` is the source of truth for which kind
+///    (if any) is uniquely missing on each arm — the testkit reads it
+///    directly and asserts `lacks_only(k) == (unique_missing_kind()
+///    == Some(k))` for every `k`, so the testkit doesn't hard-code
+///    `ALL.len()`-dependent arm expectations (an empty parent on
+///    `ALL.len() == 1` is uniquely missing that one kind, whereas on
+///    `ALL.len() >= 2` no kind is uniquely missing; a single-slot
+///    parent on `ALL.len() == 2` has one missing kind, whereas on
+///    `ALL.len() >= 3` it has ≥ 2 missing; a two-slot parent on
+///    `ALL.len() == 3` has one missing kind, whereas on `ALL.len()
+///    >= 4` it has ≥ 2 missing). The composition-law shape binds
+///    every `ALL.len()` regime through the same substrate site.
+///
+/// The three arm expectations:
+///
+/// - **Empty-parent baseline** (swept `× ALL` outside the per-slot
+///   loop): on any `ALL.len() >= 2` closed set every kind is missing,
+///   so `lacks_only(k) == false` for every `k` — no kind is the sole
+///   missing kind. Every production parent is `ALL.len() >= 3`.
+/// - **Single-slot sweep** (swept on `ClosedSet::ALL × ALL`): the
+///   composition-law shape reads `unique_missing_kind()` directly, so
+///   the testkit binds every `ALL.len()` regime without a hard-coded
+///   arm expectation. Assertion messages carry the (`populated`,
+///   `probed`) pair verbatim.
+/// - **Two-slot sweep** (swept on the off-diagonal `× ALL`): on
+///   `ALL.len() == 3` every off-diagonal pair leaves exactly 1 slot
+///   missing (the third kind) — the SOLE `ALL.len()` regime where
+///   `lacks_only(third) == true` on the two-slot arm. On `ALL.len()
+///   >= 4` the two-slot arm has ≥ 2 missing, so `lacks_only(k) ==
+///   false` for every `k`. The composition-law shape binds every
+///   regime.
+///
+/// A fifth sibling tagged-union parent picks up the kind-scoped-
+/// strict-refinement check on the missing axis through ONE `impl
+/// TaggedUnion for X` block plus ONE per-site `single_slot_X` factory
+/// plus ONE per-site `two_slot_X` factory plus ONE per-site `empty_X`
+/// factory plus ONE call site — no re-authored `lacks_only` sweep at
+/// the test surface.
+///
+/// Same [`crate::lifetime::Lifetime`] exclusion as the sibling
+/// primitives — the `T: TaggedUnion` bound doesn't reach it.
+///
+/// # Theory grounding
+///
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+///   kind-scoped strict-refinement projection on the MISSING axis
+///   binds through the SAME shape the populated-axis peer binds
+///   through (a closed-set walk under `Self::has`), differing only in
+///   the negation of the presence probe. The composition laws
+///   (widened uniqueness on the missing side, cardinality-refinement
+///   under complement, kind-scoped implication under complement,
+///   kind-domain exhaustivity on the missing side) live at ONE
+///   substrate site inside the testkit's per-arm sweep — pinned
+///   across every production tagged union at compile time via the
+///   trait's default body composition, not per-parent.
+/// - THEORY.md §VI.1 — generation over composition. A new
+///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+///   mechanically through the fused walk at the trait's default body.
+#[track_caller]
+pub fn assert_lacks_only_matches_unique_missing_kind<T, F, G, H>(
+    single_slot: F,
+    two_slot: G,
+    empty_parent: H,
+) where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+    G: Fn(T::Kind, T::Kind) -> T,
+    H: Fn() -> T,
+{
+    // Empty-parent baseline — every `lacks_only(k)` returns `false` on
+    // any `ALL.len() >= 2` closed set (every production union) because
+    // every kind is missing so no kind is uniquely missing. The
+    // composition-law shape below reads `unique_missing_kind()`
+    // directly, so the testkit binds every `ALL.len()` regime without
+    // a hard-coded arm expectation.
+    let empty = empty_parent();
+    assert!(
+        empty.is_empty(),
+        "TaggedUnion::lacks_only() testkit: empty_parent() must satisfy is_empty() == true",
+    );
+    for k in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let via_lacks_only = empty.lacks_only(k);
+        // Widened uniqueness composition law on the empty arm.
+        assert_eq!(
+            via_lacks_only,
+            empty.unique_missing_kind() == Some(k),
+            "empty_parent().lacks_only({k:?}) drifted from (unique_missing_kind() == Some({k:?}))",
+        );
+        // Cardinality-refinement composition law on the empty arm
+        // under complement.
+        assert_eq!(
+            via_lacks_only,
+            !empty.has(k) && empty.has_unique_missing_kind(),
+            "empty_parent().lacks_only({k:?}) drifted from (!has({k:?}) && has_unique_missing_kind())",
+        );
+        // Kind-scoped implication law on the empty arm — lacks_only
+        // implies !has.
+        if via_lacks_only {
+            assert!(
+                !empty.has(k),
+                "empty_parent().lacks_only({k:?}) == true but has({k:?}) == true",
+            );
+        }
+    }
+    // Kind-domain exhaustivity on the empty arm — at most 1 kind is
+    // the sole missing kind. On `ALL.len() >= 2` the count is 0; on
+    // the degenerate `ALL.len() == 1` regime (no production parent)
+    // the count is 1.
+    let empty_count = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+        .filter(|k| empty.lacks_only(*k))
+        .count();
+    assert!(
+        empty_count <= 1,
+        "empty_parent(): at most 1 kind may satisfy lacks_only, got {empty_count}",
+    );
+
+    let all_len = <T::Kind as tatara_closed_set::ClosedSet>::ALL.len();
+
+    // Single-slot sweep — the composition-law shape across
+    // `ClosedSet::ALL × ALL`, plus a factory-precondition truth-table
+    // pin whose expected shape is derived from the abstract factory
+    // contract (`single_slot(populated)` populates exactly `populated`
+    // → the missing set is `ALL - {populated}`, size `all_len - 1`).
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        for probed in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let via_lacks_only = parent.lacks_only(probed);
+            // Factory-precondition truth table on the well-formed
+            // single-slot arm: the missing set is `ALL - {populated}`,
+            // so lacks_only(probed) is `true` iff exactly one slot is
+            // missing (`all_len == 2`) AND probed names that missing
+            // slot (`probed != populated`). This hard-codes the well-
+            // formed diagonal expectation so a factory drift that
+            // populates the wrong kind — or an empty parent, or the
+            // saturated parent — surfaces here BEFORE any composition
+            // law reconciles two internally-drifted trait bodies.
+            let expected_single = all_len == 2 && probed != populated;
+            assert_eq!(
+                via_lacks_only, expected_single,
+                "single_slot({populated:?}).lacks_only({probed:?}) must equal {expected_single} on ALL.len() == {all_len}",
+            );
+            // Widened uniqueness composition law — the primary
+            // pin-point on the missing axis.
+            assert_eq!(
+                via_lacks_only,
+                parent.unique_missing_kind() == Some(probed),
+                "single_slot({populated:?}).lacks_only({probed:?}) drifted from (unique_missing_kind() == Some({probed:?}))",
+            );
+            // Cardinality-refinement composition law under complement.
+            assert_eq!(
+                via_lacks_only,
+                !parent.has(probed) && parent.has_unique_missing_kind(),
+                "single_slot({populated:?}).lacks_only({probed:?}) drifted from (!has({probed:?}) && has_unique_missing_kind())",
+            );
+            // Kind-scoped implication law under complement —
+            // lacks_only implies !has.
+            if via_lacks_only {
+                assert!(
+                    !parent.has(probed),
+                    "single_slot({populated:?}).lacks_only({probed:?}) == true but has({probed:?}) == true",
+                );
+            }
+        }
+        // Kind-domain exhaustivity on the well-formed arm — at most 1
+        // kind satisfies lacks_only. On `ALL.len() == 2` the count is
+        // exactly 1 (the non-populated kind); on `ALL.len() >= 3` the
+        // count is 0.
+        let well_formed_count = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| parent.lacks_only(*k))
+            .count();
+        let expected_well_formed_count = usize::from(all_len == 2);
+        assert_eq!(
+            well_formed_count, expected_well_formed_count,
+            "single_slot({populated:?}): exactly {expected_well_formed_count} kinds must satisfy lacks_only on ALL.len() == {all_len}, got {well_formed_count}",
+        );
+    }
+
+    // Two-slot sweep — every off-diagonal pair populates two slots, so
+    // the missing set is `ALL - {a, b}`, size `all_len - 2`. On
+    // `ALL.len() == 3` exactly 1 slot is missing (the third kind), so
+    // exactly 1 kind satisfies lacks_only. On `ALL.len() >= 4` ≥ 2
+    // slots are missing, so no kind satisfies lacks_only. The
+    // composition-law shape binds every regime; the factory-
+    // precondition truth-table pin catches drift like a saturated /
+    // empty / single-slot two_slot factory that would otherwise slip
+    // past the internally-consistent composition laws.
+    for a in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        for b in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            if a == b {
+                continue;
+            }
+            let parent = two_slot(a, b);
+            for k in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+            {
+                let via_lacks_only = parent.lacks_only(k);
+                // Factory-precondition truth table on the two-slot
+                // arm: the missing set is `ALL - {a, b}`, so
+                // lacks_only(k) is `true` iff exactly one slot is
+                // missing (`all_len == 3`) AND k names that missing
+                // slot (`k != a && k != b`).
+                let expected_two = all_len == 3 && k != a && k != b;
+                assert_eq!(
+                    via_lacks_only, expected_two,
+                    "two_slot({a:?}, {b:?}).lacks_only({k:?}) must equal {expected_two} on ALL.len() == {all_len}",
+                );
+                // Widened uniqueness composition law on the multi-
+                // populated arm.
+                assert_eq!(
+                    via_lacks_only,
+                    parent.unique_missing_kind() == Some(k),
+                    "two_slot({a:?}, {b:?}).lacks_only({k:?}) drifted from (unique_missing_kind() == Some({k:?}))",
+                );
+                // Cardinality-refinement composition law under
+                // complement.
+                assert_eq!(
+                    via_lacks_only,
+                    !parent.has(k) && parent.has_unique_missing_kind(),
+                    "two_slot({a:?}, {b:?}).lacks_only({k:?}) drifted from (!has({k:?}) && has_unique_missing_kind())",
+                );
+                // Kind-scoped implication law under complement.
+                if via_lacks_only {
+                    assert!(
+                        !parent.has(k),
+                        "two_slot({a:?}, {b:?}).lacks_only({k:?}) == true but has({k:?}) == true",
+                    );
+                }
+            }
+            // Kind-domain exhaustivity on the multi-populated arm — at
+            // most 1 kind is the sole missing kind. On `ALL.len() ==
+            // 3` the count is exactly 1 (the third kind); on
+            // `ALL.len() >= 4` the count is 0.
+            let multi_count = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+                .filter(|k| parent.lacks_only(*k))
+                .count();
+            let expected_multi_count = usize::from(all_len == 3);
+            assert_eq!(
+                multi_count, expected_multi_count,
+                "two_slot({a:?}, {b:?}): exactly {expected_multi_count} kinds must satisfy lacks_only on ALL.len() == {all_len}, got {multi_count}",
             );
         }
     }
@@ -11022,6 +11520,207 @@ mod tests {
             crate::export::ArtifactSource::default,
         );
         assert_has_only_matches_unique_populated_kind::<crate::export::VectorChannel, _, _, _>(
+            single_slot_vector_channel_probe,
+            two_slot_vector_channel_probe,
+            crate::export::VectorChannel::default,
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // `assert_lacks_only_matches_unique_missing_kind` — the closed-set-
+    // complement mirror of `assert_has_only_matches_unique_populated_kind`
+    // on the MISSING axis. Pin the composition-law truth table
+    // (`lacks_only(kind) == (unique_missing_kind() == Some(kind))`,
+    // cardinality-refinement under complement, kind-scoped implication
+    // under complement, kind-domain exhaustivity ≤ 1) directly on the
+    // sibling-shaped `LocalParent` scaffold + on every one of the four
+    // production `.variant()` parents — a regression on either the fused
+    // walk's negated presence probe, the argument-scoped short-circuit,
+    // or the exhaustivity partition fails here before any per-parent
+    // consumer surfaces the drift.
+    // -------------------------------------------------------------------
+
+    /// The `assert_lacks_only_matches_unique_missing_kind` primitive
+    /// accepts the [`LocalParent`] scaffold coherently — the closed-set-
+    /// complement mirror of the populated-axis kind-scoped strict-
+    /// refinement predicate reads `true` iff the probed kind names the
+    /// SOLE missing slot. On `LocalParent`'s `ALL.len() == 3` closed
+    /// set: the empty baseline has 3 missing (so `lacks_only(k) ==
+    /// false` for every `k`), every single-slot arm has 2 missing (so
+    /// `lacks_only(k) == false` for every `k`), and every off-diagonal
+    /// two-slot arm has 1 missing — the third kind, where `lacks_only`
+    /// returns `true` for that one probe and `false` for the two
+    /// populated probes. The four composition laws (widened
+    /// uniqueness, cardinality-refinement under complement, kind-
+    /// scoped implication under complement, kind-domain exhaustivity)
+    /// hold on every arm.
+    #[test]
+    fn assert_lacks_only_matches_unique_missing_kind_accepts_coherent_local_impl() {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        assert_lacks_only_matches_unique_missing_kind::<LocalParent, _, _, _>(
+            single_slot,
+            two_slot,
+            LocalParent::default,
+        );
+    }
+
+    /// The primitive rejects a `two_slot` factory that yields a
+    /// saturated parent (all three slots populated, zero missing) —
+    /// the factory-precondition truth table on the two-slot arm reads
+    /// `expected == (k != a && k != b)` for the third kind on
+    /// `ALL.len() == 3`, but the saturated factory has zero missing so
+    /// `lacks_only(third) == false` where `expected == true`. Caught
+    /// by the hard-coded arm expectation BEFORE any composition law
+    /// reconciles two internally-drifted trait bodies.
+    #[test]
+    #[should_panic(expected = "must equal true on ALL.len() == 3")]
+    fn assert_lacks_only_matches_unique_missing_kind_rejects_saturated_two_slot_factory() {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn saturated_two_slot(_: LocalKind, _: LocalKind) -> LocalParent {
+            // Always yields a saturated parent — zero missing.
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            }
+        }
+        assert_lacks_only_matches_unique_missing_kind::<LocalParent, _, _, _>(
+            single_slot,
+            saturated_two_slot,
+            LocalParent::default,
+        );
+    }
+
+    /// The primitive rejects a `empty_parent` factory that yields a
+    /// saturated parent — the empty-baseline exhaustivity assertion
+    /// `empty_parent().is_empty() == true` fails on the saturated
+    /// baseline, catching a factory that mis-represents the empty arm.
+    #[test]
+    #[should_panic(expected = "must satisfy is_empty() == true")]
+    fn assert_lacks_only_matches_unique_missing_kind_rejects_saturated_empty_baseline() {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        fn saturated_baseline() -> LocalParent {
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            }
+        }
+        assert_lacks_only_matches_unique_missing_kind::<LocalParent, _, _, _>(
+            single_slot,
+            two_slot,
+            saturated_baseline,
+        );
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the kind-scoped strict-refinement
+    /// Boolean primitive on the MISSING axis coherently — on the
+    /// three `ALL.len() == 3` sites (`EncapsulationKind`,
+    /// `ArtifactSource`, `VectorChannel`) every off-diagonal
+    /// `two_slot_X(a, b)` produces `lacks_only(third) == true` for
+    /// exactly the third kind and `lacks_only(k) == false` for the
+    /// two populated kinds; on the `ALL.len() == 6` site (`Intent`)
+    /// every off-diagonal two-slot arm has 4 missing so `lacks_only(k)
+    /// == false` for every `k`. Every single-slot arm on every site
+    /// has `ALL.len() - 1 >= 2` missing, so `lacks_only(k) == false`
+    /// for every `k`. The `X::default()` empty baseline on every site
+    /// has `ALL.len() >= 3` missing, so `lacks_only(k) == false` for
+    /// every `k`. The composition-law shape binds every regime
+    /// through the same substrate site. The kind-domain exhaustivity
+    /// law (`count k where lacks_only(k) ≤ 1` per parent, with
+    /// equality iff exactly one slot is missing) is pinned inside the
+    /// testkit on every arm.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_lacks_only_testkit_primitive() {
+        assert_lacks_only_matches_unique_missing_kind::<crate::intent::Intent, _, _, _>(
+            single_slot_intent_probe,
+            two_slot_intent_probe,
+            crate::intent::Intent::default,
+        );
+        assert_lacks_only_matches_unique_missing_kind::<
+            crate::encapsulates::EncapsulationKind,
+            _,
+            _,
+            _,
+        >(
+            single_slot_encapsulation_kind_probe,
+            two_slot_encapsulation_kind_probe,
+            crate::encapsulates::EncapsulationKind::default,
+        );
+        assert_lacks_only_matches_unique_missing_kind::<crate::export::ArtifactSource, _, _, _>(
+            single_slot_artifact_source_probe,
+            two_slot_artifact_source_probe,
+            crate::export::ArtifactSource::default,
+        );
+        assert_lacks_only_matches_unique_missing_kind::<crate::export::VectorChannel, _, _, _>(
             single_slot_vector_channel_probe,
             two_slot_vector_channel_probe,
             crate::export::VectorChannel::default,

@@ -330,6 +330,33 @@ macro_rules! declare_tagged_union_impls {
             pub fn populated_kinds(&self) -> ::std::vec::Vec<$kind> {
                 <Self as $crate::tagged_union::TaggedUnion>::populated_kinds(self)
             }
+
+            /// Scalar cardinality peer of [`Self::populated_kinds`] —
+            /// the number of populated slots on this tagged union.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::populated_kind_count`],
+            /// whose default body is
+            /// `<Kind as ClosedSet>::ALL.iter().copied().filter(|k|
+            /// self.has(*k)).count()`. Every consumer that needs the
+            /// cardinality of the populated-slot set as a scalar
+            /// (a `populated-kind-count-<n>` require-tag classifier
+            /// prefix; a fast-path branch on the Ambiguous-arm side
+            /// that discriminates "well-formed" from "malformed with
+            /// N slots"; a coherence check that verifies "every
+            /// well-formed parent has exactly one populated slot")
+            /// reads `parent.populated_kind_count()` through the
+            /// inherent surface, byte-for-byte symmetrical with
+            /// `parent.has(kind)` / `parent.find(kind)` /
+            /// `parent.populated_kinds()`. The composition law
+            /// `parent.populated_kind_count() == parent.populated_kinds().len()`
+            /// is pinned as a first-class typed invariant by the
+            /// trait's own default body and swept substrate-wide by
+            /// [`crate::tagged_union::assert_populated_kind_count_matches_populated_kinds`].
+            pub fn populated_kind_count(&self) -> usize {
+                <Self as $crate::tagged_union::TaggedUnion>::populated_kind_count(self)
+            }
         }
 
         impl $crate::tagged_union::VariantSelector<$parent> for $kind {
@@ -796,6 +823,112 @@ pub trait TaggedUnion: Sized {
             .filter(|k| self.has(*k))
             .collect()
     }
+
+    /// Scalar cardinality refinement on the closed-set-inversion axis —
+    /// the number of [`Self::Kind`] discriminators whose corresponding
+    /// slot on `self` is populated.
+    ///
+    /// Default body:
+    /// `<Self::Kind as ClosedSet>::ALL.iter().copied().filter(|k| self.has(*k)).count()`
+    /// — a closed-set walk that composes against [`Self::has`] per
+    /// variant WITHOUT materializing an intermediate `Vec`. A tagged-
+    /// union parent that satisfies the exactly-one-slot contract
+    /// returns `0` (empty — matches [`Self::variant`]'s `Empty` arm),
+    /// `1` (well-formed — matches the `Ok` arm), or `≥ 2` (malformed
+    /// — matches the `Ambiguous` arm) exactly aligned with
+    /// [`Self::populated_kinds`]`().len()` but without paying for the
+    /// heap allocation and dealloc a caller only needing the scalar
+    /// cardinality otherwise pays.
+    ///
+    /// # Sibling to [`Self::populated_kinds`]
+    ///
+    /// Scalar projection of the closed-set-inversion widened primitive
+    /// — where `populated_kinds` returns the SET (a `Vec<Self::Kind>`
+    /// in canonical `ClosedSet::ALL` order), `populated_kind_count`
+    /// collapses that set to its cardinality. The composition law
+    /// `populated_kind_count() == populated_kinds().len()` binds the
+    /// scalar projection to the widened primitive at the trait's
+    /// default body — a regression that overrode
+    /// `populated_kind_count` to skip a kind, double-count a slot, or
+    /// drift the walk from `ClosedSet::ALL` surfaces at the substrate
+    /// testkit
+    /// [`assert_populated_kind_count_matches_populated_kinds`].
+    ///
+    /// # Peer to [`crate::boundary::ConditionSliceExt::count_kind`]
+    ///
+    /// Not a direct peer — `count_kind(k)` on the slice-level axis
+    /// fixes a `ConditionKind` and returns the per-kind cardinality
+    /// (how many `Condition`s in the slice carry `k`);
+    /// `populated_kind_count` on the tagged-union parent-level axis
+    /// INVERTS by fixing the parent and returning the cardinality of
+    /// the populated-kind SET (how many distinct slots on the parent
+    /// are populated). The distinct peer to `count_kind` on the
+    /// tagged-union axis would be a hypothetical `populated_slots(k)
+    /// -> usize` — but since every tagged-union slot is `Option<T>`
+    /// (populated or not, cardinality ∈ {0, 1}), that peer reduces
+    /// to `has(k) as usize` and doesn't earn its own name. The
+    /// canonical scalar peer on the tagged-union axis is this
+    /// closed-set-inversion cardinality.
+    ///
+    /// # Sibling of [`Self::has`] / [`Self::find`] / [`Self::populated_kinds`]
+    ///
+    /// Fourth refinement on the tagged-union presence-probe algebra,
+    /// scalar-valued on the closed-set-inversion axis: `has` collapses
+    /// per-kind presence to a `bool`, `find` widens per-kind to
+    /// `Option<Variant>`, `populated_kinds` inverts to the SET of
+    /// populated kinds, and `populated_kind_count` scalar-projects
+    /// that set to its cardinality. Every downstream consumer picks
+    /// the coarsest refinement that answers its question — a
+    /// `populated-kind-count-<n>` require-tag classifier prefix
+    /// (called out in [`Self::populated_kinds`]'s doc-comment as a
+    /// hypothetical compounding-future consumer) now reaches
+    /// `parent.populated_kind_count()` at ONE substrate site rather
+    /// than paying for `parent.populated_kinds().len()` (with its
+    /// intermediate heap allocation) or the per-kind
+    /// `<Kind::ALL>.iter().filter(|k| parent.has(*k)).count()` closure
+    /// body at the callsite.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A `populated-kind-count-<n>` require-tag classifier prefix
+    ///   family that publishes the populated-set cardinality as a
+    ///   scalar (the exact use case named in
+    ///   [`Self::populated_kinds`]'s doc-comment) reaches this ONE
+    ///   primitive without allocating.
+    /// - A fast-path branch on `Ambiguous`-arm callers that need to
+    ///   distinguish "well-formed" from "malformed with N slots" reads
+    ///   `parent.populated_kind_count() > 1` at ONE call site rather
+    ///   than reaching for the Vec-materializing widened primitive.
+    /// - Any coherence check that verifies "every well-formed process
+    ///   parent has exactly one populated slot" now reads
+    ///   `parent.populated_kind_count() == 1` at ONE site rather than
+    ///   restating `parent.populated_kinds().len() == 1` with its
+    ///   allocation cost, or the semantically-equivalent (but
+    ///   parent-arm-projected) `parent.variant().is_ok()`.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The scalar cardinality lives at ONE substrate site as a
+    ///   typed projection of [`Self::populated_kinds`] onto its
+    ///   `.len()`, and the default body composes against
+    ///   [`Self::has`] over the closed set `<Self::Kind as
+    ///   ClosedSet>::ALL` byte-identically to `populated_kinds`
+    ///   without the intermediate `Vec`. Every downstream aggregate
+    ///   consumer binds through the SAME shape rather than paying
+    ///   for the allocation to reach the cardinality.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically (the closed-set walk picks up the new entry)
+    ///   and every downstream consumer sees the wider cardinality
+    ///   without further per-caller edit.
+    fn populated_kind_count(&self) -> usize {
+        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| self.has(*k))
+            .count()
+    }
 }
 
 /// Generic diagnostic-stability testkit — pins that [`TaggedUnion::KIND_LIST`]
@@ -1164,6 +1297,90 @@ where
                 "TaggedUnion::populated_kinds() must yield ClosedSet::ALL-ordered pair on two_slot({a:?}, {b:?}) — got {kinds:?}, expected {canonical:?}",
             );
         }
+    }
+}
+
+/// Generic scalar-cardinality testkit — pins that
+/// [`TaggedUnion::populated_kind_count`] agrees with
+/// [`TaggedUnion::populated_kinds`]`.len()` across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-slot
+/// arrangement AND that on the populated diagonal
+/// `single_slot(k).populated_kind_count()` equals `1` exactly (aligned
+/// with the single-slot arm's `populated_kinds()` returning
+/// `vec![k]`).
+///
+/// Parent-axis substrate primitive for the scalar-cardinality
+/// refinement of the tagged-union closed-set-inversion axis — the
+/// scalar projection of [`assert_populated_kinds_matches_has`]'s
+/// widened primitive. Together they close the two-refinement
+/// composition contract that binds
+/// [`TaggedUnion::populated_kind_count`] against
+/// [`TaggedUnion::populated_kinds`]:
+///
+/// 1. **`count ↔ kinds.len()`**: `populated_kind_count() ==
+///    populated_kinds().len()` — a regression that overrode
+///    `populated_kind_count` to skip a kind (returning `0` on a
+///    populated parent), double-count a slot (returning `2` on a
+///    single-slot parent), or drift the walk from `ClosedSet::ALL`
+///    surfaces at the substrate boundary here.
+/// 2. **Single-slot diagonal**: `single_slot(k).populated_kind_count()
+///    == 1` — pins the well-formed arm's expected cardinality
+///    against the empty (`0`) and Ambiguous (`≥ 2`) arms, at ONE
+///    `assert_eq!` per addressed kind.
+///
+/// Substrate primitive for future per-parent
+/// `X_populated_kind_count_matches_populated_kinds_len` tests that
+/// would otherwise each restate the same nested-`for k in K::ALL {
+/// … }` sweep + composition-law equality + single-slot cardinality
+/// pin — every one of the four production `.variant()` parents on
+/// `ProcessSpec` binds through this ONE primitive with a per-site
+/// `single_slot` factory. A fifth sibling picks up the scalar-
+/// cardinality check through ONE call site — no re-authored
+/// `for k in K::ALL { … }` sweep at the test surface, no re-authored
+/// `assert_eq!` pair.
+///
+/// The `single_slot` closure stays per-site — reused verbatim from
+/// the sibling primitives ([`assert_variant_round_trip`],
+/// [`assert_find_agrees_with_has`],
+/// [`assert_populated_kinds_matches_has`],
+/// [`assert_single_slot_key_matches_label`]) — the closure IS the
+/// "populate slot k" ground truth for the parent's field structure.
+///
+/// The [`crate::lifetime::Lifetime`] site is DELIBERATELY excluded
+/// through the `T: TaggedUnion` bound — `Lifetime`'s `variant()`
+/// returns `Ok(Permanent)` on empty rather than an `Empty` typed
+/// error, so its projection shape diverges from the four
+/// Empty-projecting parents. Same reasoning as
+/// [`assert_variant_round_trip`]'s /
+/// [`assert_find_agrees_with_has`]'s /
+/// [`assert_populated_kinds_matches_has`]'s exclusions.
+#[track_caller]
+pub fn assert_populated_kind_count_matches_populated_kinds<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let count = parent.populated_kind_count();
+        let kinds_len = parent.populated_kinds().len();
+        // Composition law: scalar cardinality projection agrees with
+        // the widened primitive's `Vec::len()`.
+        assert_eq!(
+            count, kinds_len,
+            "TaggedUnion::populated_kind_count() drifted from populated_kinds().len() — populated={populated:?}",
+        );
+        // Single-slot diagonal — a well-formed parent from single_slot
+        // populates exactly the addressed slot, so the scalar cardinality
+        // is 1.
+        assert_eq!(
+            count, 1,
+            "TaggedUnion::populated_kind_count() on single_slot({populated:?}) must equal 1 exactly (well-formed arm cardinality)",
+        );
     }
 }
 
@@ -3877,6 +4094,239 @@ mod tests {
         );
         assert_populated_kinds_across_pairs::<crate::export::VectorChannel, _>(
             two_slot_vector_channel_probe,
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // `TaggedUnion::populated_kind_count` — scalar cardinality refinement
+    // on the closed-set-inversion axis. Pin the three arms (empty parent
+    // → 0, single-slot → 1, multi-populated → N) directly on the sibling-
+    // shaped `LocalParent` scaffold and the composition law
+    // `populated_kind_count() == populated_kinds().len()` at the substrate
+    // testkit `assert_populated_kind_count_matches_populated_kinds`. Peer
+    // of the widened primitive `populated_kinds` (see the block above);
+    // the scalar projection collapses the widened Vec to its length
+    // without allocating.
+    // -------------------------------------------------------------------
+
+    /// EMPTY parent — the default body's `ALL.filter(has).count()`
+    /// sweep yields `0` when no slot is populated. Pins the zero-
+    /// cardinality arm: a regression that mis-composed the
+    /// `ALL.iter()` bridge (short-circuiting past the empty case),
+    /// returned a non-zero sentinel on empty input, or leaked stale
+    /// closed-set entries as false-positive members fails HERE at the
+    /// substrate boundary.
+    #[test]
+    fn tagged_union_default_populated_kind_count_returns_zero_on_empty_parent() {
+        let empty = LocalParent::default();
+        assert_eq!(
+            <LocalParent as TaggedUnion>::populated_kind_count(&empty),
+            0,
+            "populated_kind_count() must return 0 when no slot is populated",
+        );
+    }
+
+    /// SINGLE-SLOT parent — the default body sweeps `ClosedSet::ALL`
+    /// with `has(k)` and counts the singleton `1` for each single-
+    /// populated arrangement. Pins the length-1 arm's cardinality at
+    /// ONE `assert_eq!` per kind — a regression that projected the
+    /// wrong Kind, drifted the walk from `has` to a divergent
+    /// projection, or paired two kinds together on a single-slot input
+    /// fails HERE per addressed kind. Sweeps every `LocalKind::ALL`
+    /// entry so no per-variant specialization can silently drop the
+    /// check.
+    #[test]
+    fn tagged_union_default_populated_kind_count_returns_one_per_single_slot_variant() {
+        for populated in <LocalKind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let parent = match populated {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            };
+            assert_eq!(
+                <LocalParent as TaggedUnion>::populated_kind_count(&parent),
+                1,
+                "single-slot parent must return 1 on populated_kind_count for {populated:?}",
+            );
+        }
+    }
+
+    /// MULTI-POPULATED parent — the default body yields `2` for a two-
+    /// slot arrangement, `3` for a fully-saturated three-slot parent.
+    /// Pins the non-short-circuiting arm — a regression that inlined
+    /// the resolver's short-circuit body into `populated_kind_count`
+    /// (silently narrowing two populated to `1`) fails HERE at the
+    /// equality assert.
+    #[test]
+    fn tagged_union_default_populated_kind_count_walks_full_closed_set_on_multi_populated_parent() {
+        let two = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: None,
+        };
+        assert_eq!(
+            <LocalParent as TaggedUnion>::populated_kind_count(&two),
+            2,
+            "two-populated parent must return 2 on populated_kind_count",
+        );
+        let saturated = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: Some(3),
+        };
+        assert_eq!(
+            <LocalParent as TaggedUnion>::populated_kind_count(&saturated),
+            3,
+            "saturated parent must return LocalKind::ALL.len() on populated_kind_count",
+        );
+    }
+
+    /// Composition law `populated_kind_count() == populated_kinds().len()`
+    /// binds the scalar cardinality projection to the widened primitive
+    /// across every `ClosedSet::ALL × {empty, single_slot, two_slot,
+    /// saturated}` combination. Pins the byte-identity of the two
+    /// projections on the empty / single / multi / saturated arms — a
+    /// regression that overrode `populated_kind_count` with an
+    /// off-by-one walk, a `find(k).is_none()`-inverted body (returning
+    /// the ABSENT count), or a divergent short-circuit fails HERE at
+    /// the equality assert.
+    #[test]
+    fn tagged_union_default_populated_kind_count_matches_populated_kinds_len() {
+        let arrangements: [LocalParent; 4] = [
+            LocalParent::default(),
+            LocalParent {
+                alpha: Some(1),
+                ..Default::default()
+            },
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: None,
+            },
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            },
+        ];
+        for (idx, parent) in arrangements.iter().enumerate() {
+            assert_eq!(
+                <LocalParent as TaggedUnion>::populated_kind_count(parent),
+                <LocalParent as TaggedUnion>::populated_kinds(parent).len(),
+                "populated_kind_count() must equal populated_kinds().len() for arrangement idx {idx}",
+            );
+        }
+    }
+
+    /// `assert_populated_kind_count_matches_populated_kinds` testkit
+    /// accepts the coherent local scaffold — sweeping every populated
+    /// kind through the two sub-assertions (composition law
+    /// `count == kinds.len()` + single-slot diagonal `count == 1`). A
+    /// regression on either composition law fails at the substrate
+    /// primitive's `#[track_caller]` boundary here rather than at four
+    /// per-parent production sites downstream.
+    #[test]
+    fn assert_populated_kind_count_matches_populated_kinds_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_populated_kind_count_matches_populated_kinds::<LocalParent, _>(make_local);
+    }
+
+    /// A factory that yields an all-empty parent (so
+    /// `populated_kind_count()` returns `0`) MUST fail-loudly at the
+    /// caller's site through the primitive's single-slot diagonal arm
+    /// — the `0` cardinality does not satisfy `count == 1` on the
+    /// swept `populated` kind. Pin the diagonal-arm failure mode so a
+    /// regression that silently succeeded on an all-empty factory
+    /// (e.g. the primitive was refactored to skip the diagonal assert
+    /// on `count == 0`) is caught here.
+    #[test]
+    #[should_panic(expected = "must equal 1 exactly (well-formed arm cardinality)")]
+    fn assert_populated_kind_count_matches_populated_kinds_rejects_empty_factory() {
+        fn empty_factory(_: LocalKind) -> LocalParent {
+            LocalParent::default()
+        }
+        assert_populated_kind_count_matches_populated_kinds::<LocalParent, _>(empty_factory);
+    }
+
+    /// A factory that yields a two-slot parent (so
+    /// `populated_kind_count()` returns `2` on a supposedly single-slot
+    /// factory) MUST fail-loudly at the caller's site through the
+    /// primitive's single-slot diagonal arm — the `2` cardinality does
+    /// not satisfy `count == 1`. Pin the diagonal-arm cardinality
+    /// failure mode so a regression that silently succeeded on a
+    /// broken factory (populating both the addressed slot AND an extra
+    /// one) is caught here.
+    #[test]
+    #[should_panic(expected = "must equal 1 exactly (well-formed arm cardinality)")]
+    fn assert_populated_kind_count_matches_populated_kinds_rejects_two_slot_factory() {
+        fn always_pair(k: LocalKind) -> LocalParent {
+            let mut p = LocalParent {
+                gamma: Some(99),
+                ..Default::default()
+            };
+            match k {
+                LocalKind::Alpha => p.alpha = Some(11),
+                LocalKind::Beta => p.beta = Some(22),
+                LocalKind::Gamma => p.gamma = Some(33),
+            }
+            p
+        }
+        assert_populated_kind_count_matches_populated_kinds::<LocalParent, _>(always_pair);
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the scalar-cardinality primitive
+    /// `assert_populated_kind_count_matches_populated_kinds` coherently
+    /// — every per-site `single_slot_X(k)` factory produces a parent
+    /// whose `populated_kind_count()` equals `1` AND whose composition
+    /// law `count == populated_kinds().len()` holds. Sweep every
+    /// production implementor at ONE substrate boundary so a regression
+    /// that drifts a production site's `single_slot_X` factory OR the
+    /// default `populated_kind_count` body (a specialization that
+    /// short-circuited, drifted the walk order, or double-counted a
+    /// slot) fails BOTH at any future per-crate test site AND at this
+    /// substrate-wide sweep.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_populated_kind_count_testkit_primitive() {
+        assert_populated_kind_count_matches_populated_kinds::<crate::intent::Intent, _>(
+            single_slot_intent_probe,
+        );
+        assert_populated_kind_count_matches_populated_kinds::<
+            crate::encapsulates::EncapsulationKind,
+            _,
+        >(single_slot_encapsulation_kind_probe);
+        assert_populated_kind_count_matches_populated_kinds::<crate::export::ArtifactSource, _>(
+            single_slot_artifact_source_probe,
+        );
+        assert_populated_kind_count_matches_populated_kinds::<crate::export::VectorChannel, _>(
+            single_slot_vector_channel_probe,
         );
     }
 

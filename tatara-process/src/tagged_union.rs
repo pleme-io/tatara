@@ -855,6 +855,101 @@ macro_rules! declare_tagged_union_impls {
                 <Self as $crate::tagged_union::TaggedUnion>::has_multiple_missing_kinds(self)
             }
 
+            /// Boolean cardinality "≤ 1" peer of
+            /// [`Self::has_multiple_populated_kinds`] — `true` iff AT
+            /// MOST ONE slot on this tagged union is populated (i.e.
+            /// zero or one populated slot).
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::has_at_most_one_populated_kind`],
+            /// whose default body is the definitional Boolean negation
+            /// of [`Self::has_multiple_populated_kinds`] — reuses the
+            /// SAME two-step-short-circuit closed-set walk without
+            /// re-authoring the fused loop; the short-circuit fires on
+            /// the SECOND populated slot, and the negation flips the
+            /// return in-place without a second walk over the closed
+            /// set. Strictly cheaper than the widened union composition
+            /// `self.is_empty() || self.has_unique_populated_kind()`
+            /// (which walks the closed set twice) on every arm.
+            ///
+            /// # Sibling to the Boolean cardinality "≥ 2" primitive
+            ///
+            /// Boolean-negation peer under `!(≥ 2) == (≤ 1)` — where
+            /// [`Self::has_multiple_populated_kinds`] names the
+            /// AMBIGUOUS arm of the resolver contract (the arm
+            /// [`Self::variant`] returns `Err(Error::ambiguous)` on),
+            /// `has_at_most_one_populated_kind` names its complement —
+            /// the RESOLVEABLE-OR-EMPTY arm (the two arms of the
+            /// resolver contract that DON'T return `Err(Error::ambiguous)`).
+            /// The typed predicate for "this parent is not ambiguous"
+            /// without inverting a `!parent.has_multiple_populated_kinds()`
+            /// at every callsite.
+            ///
+            /// # Composition laws
+            ///
+            /// - `has_at_most_one_populated_kind() == !has_multiple_populated_kinds()`
+            ///   — the definitional Boolean negation, at the trait
+            ///   default body's SAME fused short-circuit walk.
+            /// - `has_at_most_one_populated_kind() == (populated_kind_count() <= 1)`
+            ///   — the scalar cardinality composition.
+            /// - `has_at_most_one_populated_kind() == is_empty() || has_unique_populated_kind()`
+            ///   — the union of the zero-arm and the one-arm of the
+            ///   {0, 1, ≥ 2} cardinality trichotomy.
+            ///
+            /// All three composition laws are pinned as first-class
+            /// typed invariants by the trait's own default body and
+            /// swept substrate-wide by
+            /// [`crate::tagged_union::assert_has_at_most_one_populated_kind_matches_populated_kind_count`].
+            pub fn has_at_most_one_populated_kind(&self) -> bool {
+                <Self as $crate::tagged_union::TaggedUnion>::has_at_most_one_populated_kind(self)
+            }
+
+            /// Boolean cardinality "≤ 1" peer of
+            /// [`Self::has_multiple_missing_kinds`] — `true` iff AT
+            /// MOST ONE slot on this tagged union is missing (i.e.
+            /// zero or one missing slot).
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::has_at_most_one_missing_kind`],
+            /// whose default body is the definitional Boolean negation
+            /// of [`Self::has_multiple_missing_kinds`] — reuses the
+            /// SAME two-step-short-circuit closed-set walk under a
+            /// negated [`Self::has`] predicate without re-authoring the
+            /// fused loop. Strictly cheaper than the widened union
+            /// composition
+            /// `self.is_saturated() || self.has_unique_missing_kind()`
+            /// (two closed-set walks) on every arm.
+            ///
+            /// # Sibling to the Boolean cardinality "≥ 2" primitive
+            ///
+            /// Boolean-negation peer under `!(≥ 2) == (≤ 1)` —
+            /// byte-for-byte symmetrical with
+            /// `parent.has_at_most_one_populated_kind()` under the
+            /// (populated, missing) complement axis. Names the arm
+            /// where the parent is SATURATED-OR-NEAR-SATURATED (zero
+            /// or exactly one missing slot).
+            ///
+            /// # Composition laws
+            ///
+            /// - `has_at_most_one_missing_kind() == !has_multiple_missing_kinds()`
+            ///   — the definitional Boolean negation.
+            /// - `has_at_most_one_missing_kind() == (missing_kind_count() <= 1)`
+            ///   — the scalar complement-cardinality composition.
+            /// - `has_at_most_one_missing_kind() == is_saturated() || has_unique_missing_kind()`
+            ///   — the union of the zero-missing-arm and the
+            ///   one-missing-arm of the {0, 1, ≥ 2} cardinality
+            ///   trichotomy on the missing axis.
+            ///
+            /// All three composition laws are pinned as first-class
+            /// typed invariants by the trait's own default body and
+            /// swept substrate-wide by
+            /// [`crate::tagged_union::assert_has_at_most_one_missing_kind_matches_missing_kind_count`].
+            pub fn has_at_most_one_missing_kind(&self) -> bool {
+                <Self as $crate::tagged_union::TaggedUnion>::has_at_most_one_missing_kind(self)
+            }
+
             /// Boolean parent-state middle-arm projection — `true` iff
             /// this tagged union has AT LEAST ONE populated slot AND AT
             /// LEAST ONE missing slot, i.e. it is neither
@@ -3099,6 +3194,201 @@ pub trait TaggedUnion: Sized {
             .copied()
             .filter(|k| !self.has(*k));
         iter.next().is_some() && iter.next().is_some()
+    }
+
+    /// Boolean cardinality "≤ 1" peer of
+    /// [`Self::has_multiple_populated_kinds`] — `true` iff AT MOST ONE
+    /// slot on this tagged union is populated (i.e. zero or one
+    /// populated slot).
+    ///
+    /// Default body: the definitional Boolean negation
+    /// `!self.has_multiple_populated_kinds()` — one bit-flip over the
+    /// SAME two-step-short-circuit closed-set walk that
+    /// [`Self::has_multiple_populated_kinds`] already runs, without
+    /// re-authoring the fused loop and WITHOUT a second walk over the
+    /// closed set. Strictly cheaper than either widened composition
+    /// `self.is_empty() || self.has_unique_populated_kind()` (which
+    /// walks the closed set TWICE — once under `all-missing`, once
+    /// under `exactly-one`) or `self.populated_kind_count() <= 1`
+    /// (which walks the closed set fully counting hits) on every arm.
+    ///
+    /// # Sibling to the Boolean cardinality "≥ 2" primitive
+    ///
+    /// Boolean-negation peer under `!(≥ 2) == (≤ 1)` — where
+    /// [`Self::has_multiple_populated_kinds`] names the AMBIGUOUS arm
+    /// of the resolver contract (the arm [`Self::variant`] returns
+    /// `Err(Error::ambiguous)` on), `has_at_most_one_populated_kind`
+    /// names its complement — the RESOLVEABLE-OR-EMPTY arm (the two
+    /// arms of the resolver contract that DON'T return
+    /// `Err(Error::ambiguous)`, i.e. `Ok(Variant)` OR
+    /// `Err(Error::empty)`). The typed predicate for "this parent is
+    /// not ambiguous" without inverting a
+    /// `!parent.has_multiple_populated_kinds()` at every callsite.
+    ///
+    /// # Composition laws
+    ///
+    /// - `has_at_most_one_populated_kind() == !has_multiple_populated_kinds()`
+    ///   — the definitional Boolean negation, at the trait default
+    ///   body's SAME fused short-circuit walk.
+    /// - `has_at_most_one_populated_kind() == (populated_kind_count() <= 1)`
+    ///   — the scalar cardinality composition.
+    /// - `has_at_most_one_populated_kind() == is_empty() || has_unique_populated_kind()`
+    ///   — the union of the zero-arm and the one-arm of the
+    ///   {0, 1, ≥ 2} cardinality trichotomy.
+    ///
+    /// All three laws hold on every arm and every closed-set kind —
+    /// pinned as first-class typed invariants by the trait's own
+    /// default body and swept substrate-wide by
+    /// [`assert_has_at_most_one_populated_kind_matches_populated_kind_count`].
+    ///
+    /// # Truth table on the exactly-one-slot tagged-union contract
+    ///
+    /// For a tagged union with `<Self::Kind as ClosedSet>::ALL` of
+    /// cardinality `N ≥ 2`:
+    ///
+    /// - Empty parent (0 populated, N missing): `true` (0 ≤ 1).
+    /// - Well-formed parent (1 populated, N-1 missing): `true` (1 ≤ 1)
+    ///   — the SOLE `Ok` arm of [`Self::variant`] lies inside the
+    ///   at-most-one region.
+    /// - K-populated parent for `K ≥ 2`: `false` (K > 1).
+    /// - Saturated parent (N populated, 0 missing on any `N ≥ 2`):
+    ///   `false` (N ≥ 2 > 1).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A fast-path branch on the resolver-clean arm that
+    ///   discriminates "not ambiguous" (0 or 1 populated) from
+    ///   "ambiguous" (≥ 2 populated) reads
+    ///   `parent.has_at_most_one_populated_kind()` at ONE substrate
+    ///   site — one two-step short-circuit walk with a bit-flip,
+    ///   strictly cheaper than the widened union of the zero-arm and
+    ///   one-arm.
+    /// - An operator-facing "at most one populated variant" diagnostic
+    ///   (the guard for downstream code that assumes non-ambiguous
+    ///   dispatch) reads this primitive at ONE substrate site.
+    /// - A `has-at-most-one-populated-kind` require-tag classifier arm
+    ///   reaches this primitive at ONE call site, closing the
+    ///   {0, 1, ≥ 2, ≤ 1} cardinality-Boolean grid alongside its
+    ///   sibling `has-multiple-populated-kinds` under the Boolean
+    ///   negation axis.
+    ///
+    /// A new [`Self::Kind`] variant added to
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) reaches
+    /// this primitive mechanically through the delegated
+    /// [`Self::has_multiple_populated_kinds`] — the fused walk picks
+    /// up the new slot as an additional short-circuit candidate at
+    /// every downstream callsite without further per-caller edit.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The "≤ 1" Boolean projection lives at ONE substrate site as
+    ///   a definitional negation of the "≥ 2" projection; the two
+    ///   forms `!has_multiple_populated_kinds()`,
+    ///   `populated_kind_count() <= 1`, and
+    ///   `is_empty() || has_unique_populated_kind()` compose through
+    ///   the SAME two-step-short-circuit walk shape, byte-for-byte
+    ///   identical on every arm.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically through the delegated
+    ///   [`Self::has_multiple_populated_kinds`].
+    fn has_at_most_one_populated_kind(&self) -> bool {
+        !self.has_multiple_populated_kinds()
+    }
+
+    /// Boolean cardinality "≤ 1" peer of
+    /// [`Self::has_multiple_missing_kinds`] — `true` iff AT MOST ONE
+    /// slot on this tagged union is missing (i.e. zero or one missing
+    /// slot).
+    ///
+    /// Default body: the definitional Boolean negation
+    /// `!self.has_multiple_missing_kinds()` — one bit-flip over the
+    /// SAME two-step-short-circuit closed-set walk under a NEGATED
+    /// [`Self::has`] predicate that [`Self::has_multiple_missing_kinds`]
+    /// already runs, without re-authoring the fused loop and WITHOUT a
+    /// second walk over the closed set. Strictly cheaper than either
+    /// widened composition
+    /// `self.is_saturated() || self.has_unique_missing_kind()` (which
+    /// walks the closed set TWICE — once under `all-populated`, once
+    /// under `exactly-one-missing`) or `self.missing_kind_count() <= 1`
+    /// (which walks the closed set fully counting missing hits) on
+    /// every arm.
+    ///
+    /// # Sibling to the Boolean cardinality "≥ 2" primitive
+    ///
+    /// Boolean-negation peer under `!(≥ 2) == (≤ 1)` — byte-for-byte
+    /// symmetrical with [`Self::has_at_most_one_populated_kind`]
+    /// under the (populated, missing) complement axis. Names the arm
+    /// where the parent is SATURATED-OR-NEAR-SATURATED (zero or
+    /// exactly one missing slot).
+    ///
+    /// # Composition laws
+    ///
+    /// - `has_at_most_one_missing_kind() == !has_multiple_missing_kinds()`
+    ///   — the definitional Boolean negation.
+    /// - `has_at_most_one_missing_kind() == (missing_kind_count() <= 1)`
+    ///   — the scalar complement-cardinality composition.
+    /// - `has_at_most_one_missing_kind() == is_saturated() || has_unique_missing_kind()`
+    ///   — the union of the zero-missing-arm and the one-missing-arm
+    ///   of the {0, 1, ≥ 2} cardinality trichotomy on the missing
+    ///   axis.
+    ///
+    /// All three laws hold on every arm and every closed-set kind —
+    /// pinned as first-class typed invariants by the trait's own
+    /// default body and swept substrate-wide by
+    /// [`assert_has_at_most_one_missing_kind_matches_missing_kind_count`].
+    ///
+    /// # Truth table on the exactly-one-slot tagged-union contract
+    ///
+    /// For a tagged union with `<Self::Kind as ClosedSet>::ALL` of
+    /// cardinality `N`:
+    ///
+    /// - Empty parent (0 populated, N missing): `true` iff `N ≤ 1`
+    ///   (every production union in the workspace has `N ≥ 2`, so on
+    ///   every production union the empty arm returns `false`).
+    /// - Well-formed parent (1 populated, N-1 missing): `true` iff
+    ///   `N - 1 ≤ 1`, i.e. `N ≤ 2` (on `N == 2` the well-formed arm
+    ///   has exactly one missing slot; on `N ≥ 3` it has ≥ 2).
+    /// - Near-saturated parent (N-1 populated, 1 missing): `true` (1 ≤ 1).
+    /// - K-missing parent for `K ≥ 2`: `false`.
+    /// - Saturated parent (N populated, 0 missing): `true` (0 ≤ 1).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A fast-path branch on the near-saturated / saturated arms
+    ///   that discriminates "at most one dependency still open" from
+    ///   "≥ 2 dependencies still open" reads
+    ///   `parent.has_at_most_one_missing_kind()` at ONE substrate
+    ///   site — one two-step short-circuit walk with a bit-flip,
+    ///   strictly cheaper than the widened union of the zero-arm and
+    ///   one-arm.
+    /// - An operator-facing "at most one dependency still unfulfilled"
+    ///   diagnostic on an aggregate boundary progress-guard reads
+    ///   this primitive at ONE substrate site.
+    /// - A `has-at-most-one-missing-kind` require-tag classifier arm
+    ///   reaches this primitive at ONE call site, closing the
+    ///   {0, 1, ≥ 2, ≤ 1} cardinality-Boolean grid on the missing
+    ///   axis alongside its sibling `has-multiple-missing-kinds`
+    ///   under the Boolean negation axis.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The "≤ 1" Boolean projection on the missing axis lives at
+    ///   ONE substrate site as a definitional negation of the "≥ 2"
+    ///   projection; the three composition forms
+    ///   (`!has_multiple_missing_kinds()`,
+    ///   `missing_kind_count() <= 1`, and
+    ///   `is_saturated() || has_unique_missing_kind()`) compose
+    ///   through the SAME two-step-short-circuit walk shape,
+    ///   byte-for-byte identical on every arm.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically through the delegated
+    ///   [`Self::has_multiple_missing_kinds`].
+    fn has_at_most_one_missing_kind(&self) -> bool {
+        !self.has_multiple_missing_kinds()
     }
 
     /// Boolean parent-state middle-arm projection — `true` iff this
@@ -5692,6 +5982,339 @@ pub fn assert_has_multiple_missing_kinds_matches_missing_kind_count<T, F, G, H>(
                     + usize::from(has_multiple),
                 1,
                 "two_slot({a:?}, {b:?}) must satisfy EXACTLY ONE of is_saturated / has_unique_missing_kind / has_multiple_missing_kinds",
+            );
+        }
+    }
+}
+
+/// Generic ≤1-populated-cardinality Boolean testkit — pins that
+/// [`TaggedUnion::has_at_most_one_populated_kind`] agrees with all
+/// THREE of its composition laws across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-slot
+/// arrangement, every off-diagonal two-slot pair, AND the empty-parent
+/// baseline.
+///
+/// Boolean-negation peer of
+/// [`assert_has_multiple_populated_kinds_matches_populated_kind_count`]
+/// under `!(≥ 2) == (≤ 1)` — closes the `{≥ 2, ≤ 1}` Boolean-negation
+/// pair on the populated cardinality axis. The three composition laws
+/// swept per arm:
+///
+/// 1. **Definitional Boolean-negation law**:
+///    `has_at_most_one_populated_kind() == !has_multiple_populated_kinds()`
+///    — the trait's default body binds the two forms as one bit-flip
+///    over the SAME two-step-short-circuit closed-set walk.
+/// 2. **Scalar cardinality composition law**:
+///    `has_at_most_one_populated_kind() == (populated_kind_count() <= 1)`
+///    — the Boolean projection agrees with the scalar count's `<= 1`
+///    inequality.
+/// 3. **Trichotomy union composition law**:
+///    `has_at_most_one_populated_kind() == is_empty() || has_unique_populated_kind()`
+///    — the union of the zero-arm and the one-arm of the
+///    {0, 1, ≥ 2} cardinality trichotomy.
+///
+/// The three arm expectations:
+///
+/// - **Empty-parent baseline**: `has_at_most_one_populated_kind() ==
+///   true` (0 ≤ 1).
+/// - **Single-slot diagonal**: `has_at_most_one_populated_kind() ==
+///   true` (1 ≤ 1) — the SOLE `Ok` arm of [`TaggedUnion::variant`]
+///   lies inside the at-most-one region.
+/// - **Two-slot sweep**: `has_at_most_one_populated_kind() == false`
+///   (2 > 1) — the AMBIGUOUS arm sits outside the at-most-one region.
+///
+/// A fifth sibling tagged-union parent picks up the ≤1-populated-
+/// cardinality Boolean check through ONE `impl TaggedUnion for X`
+/// block plus ONE per-site `single_slot_X` factory plus ONE per-site
+/// `two_slot_X` factory plus ONE per-site `empty_X` factory plus ONE
+/// call site — no re-authored per-site sweep.
+///
+/// Same [`crate::lifetime::Lifetime`] exclusion as the sibling
+/// primitives — `Lifetime` doesn't impl [`TaggedUnion`].
+///
+/// # Theory grounding
+///
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+///   three composition laws bind the ≤1-populated Boolean projection
+///   to the widened `!has_multiple_populated_kinds`, the scalar
+///   `populated_kind_count <= 1`, and the union of zero-arm ∪ one-arm
+///   at ONE substrate site each — swept across every production
+///   tagged union at the testkit's per-arm sweep, not per-parent.
+/// - THEORY.md §VI.1 — generation over composition. A new
+///   [`Self::Kind`] variant added to `ALL` reaches the primitive
+///   mechanically through the delegated
+///   [`TaggedUnion::has_multiple_populated_kinds`].
+#[track_caller]
+pub fn assert_has_at_most_one_populated_kind_matches_populated_kind_count<T, F, G, H>(
+    single_slot: F,
+    two_slot: G,
+    empty_parent: H,
+) where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+    G: Fn(T::Kind, T::Kind) -> T,
+    H: Fn() -> T,
+{
+    // Empty-parent baseline — zero populated slots, so
+    // `has_at_most_one_populated_kind()` returns `true` (0 <= 1).
+    let empty = empty_parent();
+    assert!(
+        empty.has_at_most_one_populated_kind(),
+        "TaggedUnion::has_at_most_one_populated_kind() on empty_parent() must equal true",
+    );
+    // Definitional Boolean-negation composition law on the empty arm.
+    assert_eq!(
+        empty.has_at_most_one_populated_kind(),
+        !empty.has_multiple_populated_kinds(),
+        "empty_parent().has_at_most_one_populated_kind() drifted from !has_multiple_populated_kinds()",
+    );
+    // Scalar cardinality composition law on the empty arm.
+    assert_eq!(
+        empty.has_at_most_one_populated_kind(),
+        empty.populated_kind_count() <= 1,
+        "empty_parent().has_at_most_one_populated_kind() drifted from (populated_kind_count() <= 1)",
+    );
+    // Trichotomy union composition law on the empty arm.
+    assert_eq!(
+        empty.has_at_most_one_populated_kind(),
+        empty.is_empty() || empty.has_unique_populated_kind(),
+        "empty_parent().has_at_most_one_populated_kind() drifted from (is_empty() || has_unique_populated_kind())",
+    );
+
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let has_at_most_one = parent.has_at_most_one_populated_kind();
+        // Single-slot diagonal — one populated (1 <= 1).
+        assert!(
+            has_at_most_one,
+            "TaggedUnion::has_at_most_one_populated_kind() on single_slot({populated:?}) must equal true",
+        );
+        // Definitional Boolean-negation composition law.
+        assert_eq!(
+            has_at_most_one,
+            !parent.has_multiple_populated_kinds(),
+            "TaggedUnion::has_at_most_one_populated_kind() drifted from !has_multiple_populated_kinds() — populated={populated:?}",
+        );
+        // Scalar cardinality composition law.
+        assert_eq!(
+            has_at_most_one,
+            parent.populated_kind_count() <= 1,
+            "TaggedUnion::has_at_most_one_populated_kind() drifted from (populated_kind_count() <= 1) — populated={populated:?}",
+        );
+        // Trichotomy union composition law.
+        assert_eq!(
+            has_at_most_one,
+            parent.is_empty() || parent.has_unique_populated_kind(),
+            "TaggedUnion::has_at_most_one_populated_kind() drifted from (is_empty() || has_unique_populated_kind()) — populated={populated:?}",
+        );
+    }
+
+    // Two-slot sweep — every off-diagonal pair has 2 populated (> 1).
+    for a in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        for b in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            if a == b {
+                continue;
+            }
+            let parent = two_slot(a, b);
+            let has_at_most_one = parent.has_at_most_one_populated_kind();
+            assert!(
+                !has_at_most_one,
+                "TaggedUnion::has_at_most_one_populated_kind() on two_slot({a:?}, {b:?}) must equal false",
+            );
+            // Definitional Boolean-negation composition law.
+            assert_eq!(
+                has_at_most_one,
+                !parent.has_multiple_populated_kinds(),
+                "TaggedUnion::has_at_most_one_populated_kind() drifted from !has_multiple_populated_kinds() — pair=({a:?}, {b:?})",
+            );
+            // Scalar cardinality composition law.
+            assert_eq!(
+                has_at_most_one,
+                parent.populated_kind_count() <= 1,
+                "TaggedUnion::has_at_most_one_populated_kind() drifted from (populated_kind_count() <= 1) — pair=({a:?}, {b:?})",
+            );
+            // Trichotomy union composition law.
+            assert_eq!(
+                has_at_most_one,
+                parent.is_empty() || parent.has_unique_populated_kind(),
+                "TaggedUnion::has_at_most_one_populated_kind() drifted from (is_empty() || has_unique_populated_kind()) — pair=({a:?}, {b:?})",
+            );
+        }
+    }
+}
+
+/// Generic ≤1-missing-cardinality Boolean testkit — pins that
+/// [`TaggedUnion::has_at_most_one_missing_kind`] agrees with all THREE
+/// of its composition laws across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-slot
+/// arrangement, every off-diagonal two-slot pair, AND the empty-parent
+/// baseline.
+///
+/// Byte-for-byte peer of
+/// [`assert_has_at_most_one_populated_kind_matches_populated_kind_count`]
+/// under the (populated, missing) complement axis, and Boolean-negation
+/// peer of
+/// [`assert_has_multiple_missing_kinds_matches_missing_kind_count`]
+/// under `!(≥ 2) == (≤ 1)` — closes the `{≥ 2, ≤ 1}` Boolean-negation
+/// pair on the missing cardinality axis. Same three composition laws:
+///
+/// 1. **Definitional Boolean-negation law**:
+///    `has_at_most_one_missing_kind() == !has_multiple_missing_kinds()`.
+/// 2. **Scalar complement-cardinality composition law**:
+///    `has_at_most_one_missing_kind() == (missing_kind_count() <= 1)`.
+/// 3. **Trichotomy union composition law**:
+///    `has_at_most_one_missing_kind() == is_saturated() || has_unique_missing_kind()`.
+///
+/// The three arm expectations depend on `ALL.len()`:
+///
+/// - **Empty-parent baseline** (on `ALL.len() ≥ 2`):
+///   `has_at_most_one_missing_kind() == false` (ALL.len() missing
+///   slots, so ≥ 2).
+/// - **Single-slot diagonal**: `has_at_most_one_missing_kind() == true`
+///   iff `ALL.len() - 1 <= 1`, i.e. `ALL.len() <= 2`. Every production
+///   tagged union in this workspace has `ALL.len() ≥ 3`, so the
+///   single-slot diagonal returns `false` on every production arm.
+///   (Kept general for future 2-variant tagged unions.)
+/// - **Two-slot sweep**: `has_at_most_one_missing_kind() == true` iff
+///   `ALL.len() - 2 <= 1`, i.e. `ALL.len() <= 3`. On production unions
+///   with `ALL.len() == 3` (e.g. two-arm plus one — none currently),
+///   two_slot returns `true`; on `ALL.len() >= 4` it returns `false`.
+///
+/// A fifth sibling tagged-union parent picks up the ≤1-missing-
+/// cardinality Boolean check through ONE `impl TaggedUnion for X`
+/// block plus ONE per-site `single_slot_X` factory plus ONE per-site
+/// `two_slot_X` factory plus ONE per-site `empty_X` factory plus ONE
+/// call site.
+///
+/// # Theory grounding
+///
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+/// - THEORY.md §VI.1 — generation over composition.
+#[track_caller]
+pub fn assert_has_at_most_one_missing_kind_matches_missing_kind_count<T, F, G, H>(
+    single_slot: F,
+    two_slot: G,
+    empty_parent: H,
+) where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+    G: Fn(T::Kind, T::Kind) -> T,
+    H: Fn() -> T,
+{
+    let all_len = <T::Kind as tatara_closed_set::ClosedSet>::ALL.len();
+    // Empty-parent baseline — ALL.len() missing slots, so
+    // `has_at_most_one_missing_kind()` returns `true` iff ALL.len() <= 1.
+    let empty = empty_parent();
+    let empty_expected = all_len <= 1;
+    assert_eq!(
+        empty.has_at_most_one_missing_kind(),
+        empty_expected,
+        "TaggedUnion::has_at_most_one_missing_kind() on empty_parent() must equal {empty_expected} (ALL.len() == {all_len})",
+    );
+    // Definitional Boolean-negation composition law on the empty arm.
+    assert_eq!(
+        empty.has_at_most_one_missing_kind(),
+        !empty.has_multiple_missing_kinds(),
+        "empty_parent().has_at_most_one_missing_kind() drifted from !has_multiple_missing_kinds()",
+    );
+    // Scalar complement-cardinality composition law on the empty arm.
+    assert_eq!(
+        empty.has_at_most_one_missing_kind(),
+        empty.missing_kind_count() <= 1,
+        "empty_parent().has_at_most_one_missing_kind() drifted from (missing_kind_count() <= 1)",
+    );
+    // Trichotomy union composition law on the empty arm.
+    assert_eq!(
+        empty.has_at_most_one_missing_kind(),
+        empty.is_saturated() || empty.has_unique_missing_kind(),
+        "empty_parent().has_at_most_one_missing_kind() drifted from (is_saturated() || has_unique_missing_kind())",
+    );
+
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let has_at_most_one = parent.has_at_most_one_missing_kind();
+        // Single-slot diagonal — well-formed parent has ALL.len() - 1
+        // missing. `<= 1` iff `ALL.len() <= 2`.
+        let expected_diagonal = all_len <= 2;
+        assert_eq!(
+            has_at_most_one,
+            expected_diagonal,
+            "TaggedUnion::has_at_most_one_missing_kind() on single_slot({populated:?}) must equal {expected_diagonal} (ALL.len() == {all_len} → missing == {})",
+            all_len - 1,
+        );
+        // Definitional Boolean-negation composition law.
+        assert_eq!(
+            has_at_most_one,
+            !parent.has_multiple_missing_kinds(),
+            "TaggedUnion::has_at_most_one_missing_kind() drifted from !has_multiple_missing_kinds() — populated={populated:?}",
+        );
+        // Scalar complement-cardinality composition law.
+        assert_eq!(
+            has_at_most_one,
+            parent.missing_kind_count() <= 1,
+            "TaggedUnion::has_at_most_one_missing_kind() drifted from (missing_kind_count() <= 1) — populated={populated:?}",
+        );
+        // Trichotomy union composition law.
+        assert_eq!(
+            has_at_most_one,
+            parent.is_saturated() || parent.has_unique_missing_kind(),
+            "TaggedUnion::has_at_most_one_missing_kind() drifted from (is_saturated() || has_unique_missing_kind()) — populated={populated:?}",
+        );
+    }
+
+    // Two-slot sweep — every off-diagonal pair has ALL.len() - 2
+    // missing. `<= 1` iff `ALL.len() <= 3`.
+    for a in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        for b in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            if a == b {
+                continue;
+            }
+            let parent = two_slot(a, b);
+            let has_at_most_one = parent.has_at_most_one_missing_kind();
+            let expected_two_slot = all_len <= 3;
+            assert_eq!(
+                has_at_most_one,
+                expected_two_slot,
+                "TaggedUnion::has_at_most_one_missing_kind() on two_slot({a:?}, {b:?}) must equal {expected_two_slot} (ALL.len() == {all_len} → missing == {})",
+                all_len - 2,
+            );
+            // Definitional Boolean-negation composition law.
+            assert_eq!(
+                has_at_most_one,
+                !parent.has_multiple_missing_kinds(),
+                "TaggedUnion::has_at_most_one_missing_kind() drifted from !has_multiple_missing_kinds() — pair=({a:?}, {b:?})",
+            );
+            // Scalar complement-cardinality composition law.
+            assert_eq!(
+                has_at_most_one,
+                parent.missing_kind_count() <= 1,
+                "TaggedUnion::has_at_most_one_missing_kind() drifted from (missing_kind_count() <= 1) — pair=({a:?}, {b:?})",
+            );
+            // Trichotomy union composition law.
+            assert_eq!(
+                has_at_most_one,
+                parent.is_saturated() || parent.has_unique_missing_kind(),
+                "TaggedUnion::has_at_most_one_missing_kind() drifted from (is_saturated() || has_unique_missing_kind()) — pair=({a:?}, {b:?})",
             );
         }
     }
@@ -12394,6 +13017,310 @@ mod tests {
             crate::export::ArtifactSource::default,
         );
         assert_has_multiple_missing_kinds_matches_missing_kind_count::<
+            crate::export::VectorChannel,
+            _,
+            _,
+            _,
+        >(
+            single_slot_vector_channel_probe,
+            two_slot_vector_channel_probe,
+            crate::export::VectorChannel::default,
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // `assert_has_at_most_one_(populated|missing)_kind_matches_(populated|
+    // missing)_kind_count` — the ≤1-cardinality Boolean testkit
+    // primitives. Boolean-negation peer of the ≥2 testkits above;
+    // pin acceptance on the coherent LocalParent scaffold + a
+    // production sweep binding all four `.variant()` sites through
+    // the three composition laws (definitional Boolean-negation,
+    // scalar cardinality, and trichotomy union).
+    // -------------------------------------------------------------------
+
+    /// The `assert_has_at_most_one_populated_kind_matches_populated_kind_count`
+    /// primitive accepts the [`LocalParent`] scaffold coherently — the
+    /// coherent-impl side reads `true` on the empty baseline (0 ≤ 1)
+    /// and every single-slot arrangement (1 ≤ 1), and `false` on every
+    /// off-diagonal two-slot arrangement (2 > 1). All three composition
+    /// laws hold on every arm.
+    #[test]
+    fn assert_has_at_most_one_populated_kind_matches_populated_kind_count_accepts_coherent_local_impl(
+    ) {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        assert_has_at_most_one_populated_kind_matches_populated_kind_count::<LocalParent, _, _, _>(
+            single_slot,
+            two_slot,
+            LocalParent::default,
+        );
+    }
+
+    /// The primitive rejects a `two_slot` factory that yields a
+    /// well-formed single-populated parent — the two-slot sweep expects
+    /// `has_at_most_one_populated_kind() == false` (2 > 1), but a
+    /// single-slot yields `true` (1 ≤ 1).
+    #[test]
+    #[should_panic(expected = "TaggedUnion::has_at_most_one_populated_kind() on two_slot(")]
+    fn assert_has_at_most_one_populated_kind_matches_populated_kind_count_rejects_single_slot_two_slot_factory(
+    ) {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn single_slot_two_slot(a: LocalKind, _b: LocalKind) -> LocalParent {
+            match a {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_has_at_most_one_populated_kind_matches_populated_kind_count::<LocalParent, _, _, _>(
+            single_slot,
+            single_slot_two_slot,
+            LocalParent::default,
+        );
+    }
+
+    /// The `assert_has_at_most_one_missing_kind_matches_missing_kind_count`
+    /// primitive accepts the [`LocalParent`] scaffold coherently. On
+    /// `ALL.len() == 3` the missing counts are: empty=3, single_slot=2,
+    /// two_slot=1, saturated=0. So `has_at_most_one_missing_kind()`
+    /// reads `false` on empty (3 > 1), `false` on single_slot (2 > 1),
+    /// `true` on two_slot (1 ≤ 1). All three composition laws hold on
+    /// every arm.
+    #[test]
+    fn assert_has_at_most_one_missing_kind_matches_missing_kind_count_accepts_coherent_local_impl()
+    {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        assert_has_at_most_one_missing_kind_matches_missing_kind_count::<LocalParent, _, _, _>(
+            single_slot,
+            two_slot,
+            LocalParent::default,
+        );
+    }
+
+    /// The primitive rejects a saturated `empty_parent` factory — on
+    /// `ALL.len() == 3` the baseline expects `has_at_most_one_missing_kind()
+    /// == false` (all 3 missing on the genuine empty arm), but a
+    /// saturated factory yields 0 missing → `true`.
+    #[test]
+    #[should_panic(
+        expected = "TaggedUnion::has_at_most_one_missing_kind() on empty_parent() must equal false"
+    )]
+    fn assert_has_at_most_one_missing_kind_matches_missing_kind_count_rejects_saturated_empty_baseline(
+    ) {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        fn saturated_baseline() -> LocalParent {
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            }
+        }
+        assert_has_at_most_one_missing_kind_matches_missing_kind_count::<LocalParent, _, _, _>(
+            single_slot,
+            two_slot,
+            saturated_baseline,
+        );
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the ≤1-populated-cardinality Boolean
+    /// primitive coherently — every per-site `single_slot_X(k)` factory
+    /// produces `has_at_most_one_populated_kind() == true` (1 ≤ 1),
+    /// every `two_slot_X(a, b)` produces `== false` (2 > 1), and
+    /// `X::default().has_at_most_one_populated_kind() == true` on the
+    /// empty-parent baseline (0 ≤ 1). All three composition laws
+    /// (definitional negation, scalar cardinality, trichotomy union)
+    /// are pinned inside the testkit on every arm.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_has_at_most_one_populated_kind_testkit_primitive(
+    ) {
+        assert_has_at_most_one_populated_kind_matches_populated_kind_count::<
+            crate::intent::Intent,
+            _,
+            _,
+            _,
+        >(
+            single_slot_intent_probe,
+            two_slot_intent_probe,
+            crate::intent::Intent::default,
+        );
+        assert_has_at_most_one_populated_kind_matches_populated_kind_count::<
+            crate::encapsulates::EncapsulationKind,
+            _,
+            _,
+            _,
+        >(
+            single_slot_encapsulation_kind_probe,
+            two_slot_encapsulation_kind_probe,
+            crate::encapsulates::EncapsulationKind::default,
+        );
+        assert_has_at_most_one_populated_kind_matches_populated_kind_count::<
+            crate::export::ArtifactSource,
+            _,
+            _,
+            _,
+        >(
+            single_slot_artifact_source_probe,
+            two_slot_artifact_source_probe,
+            crate::export::ArtifactSource::default,
+        );
+        assert_has_at_most_one_populated_kind_matches_populated_kind_count::<
+            crate::export::VectorChannel,
+            _,
+            _,
+            _,
+        >(
+            single_slot_vector_channel_probe,
+            two_slot_vector_channel_probe,
+            crate::export::VectorChannel::default,
+        );
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the ≤1-missing-cardinality Boolean
+    /// primitive coherently. On `Intent` (`ALL.len() == 6`),
+    /// `EncapsulationKind` (`>= 3`), `ArtifactSource` (`>= 3`),
+    /// `VectorChannel` (`>= 3`), the single-slot diagonal returns
+    /// `false` (`ALL.len() - 1 >= 2`), the two-slot sweep returns
+    /// `false` on any `ALL.len() >= 4` (Intent) and `true` on
+    /// `ALL.len() == 3` (the smaller unions have `1 <= 1` missing on
+    /// the two-slot arm), and the empty baseline returns `false`
+    /// (`ALL.len() >= 2`).
+    #[test]
+    fn every_production_tagged_union_binds_through_the_has_at_most_one_missing_kind_testkit_primitive(
+    ) {
+        assert_has_at_most_one_missing_kind_matches_missing_kind_count::<
+            crate::intent::Intent,
+            _,
+            _,
+            _,
+        >(
+            single_slot_intent_probe,
+            two_slot_intent_probe,
+            crate::intent::Intent::default,
+        );
+        assert_has_at_most_one_missing_kind_matches_missing_kind_count::<
+            crate::encapsulates::EncapsulationKind,
+            _,
+            _,
+            _,
+        >(
+            single_slot_encapsulation_kind_probe,
+            two_slot_encapsulation_kind_probe,
+            crate::encapsulates::EncapsulationKind::default,
+        );
+        assert_has_at_most_one_missing_kind_matches_missing_kind_count::<
+            crate::export::ArtifactSource,
+            _,
+            _,
+            _,
+        >(
+            single_slot_artifact_source_probe,
+            two_slot_artifact_source_probe,
+            crate::export::ArtifactSource::default,
+        );
+        assert_has_at_most_one_missing_kind_matches_missing_kind_count::<
             crate::export::VectorChannel,
             _,
             _,

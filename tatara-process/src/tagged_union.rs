@@ -357,6 +357,60 @@ macro_rules! declare_tagged_union_impls {
             pub fn populated_kind_count(&self) -> usize {
                 <Self as $crate::tagged_union::TaggedUnion>::populated_kind_count(self)
             }
+
+            /// Closed-set-COMPLEMENT peer of [`Self::populated_kinds`]
+            /// — returns the canonical-ordered `Vec` of EMPTY
+            /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL)
+            /// discriminators.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::missing_kinds`],
+            /// whose default body is
+            /// `<Kind as ClosedSet>::ALL.iter().copied().filter(|k|
+            /// !self.has(*k)).collect()`. Every consumer that needs to
+            /// enumerate which slots on a tagged-union parent are
+            /// ABSENT (an operator-facing "still missing [Nix, Container]"
+            /// diagnostic on the partially-populated arm; a coherence
+            /// check verifying "every process boundary carries every
+            /// intent slot"; a `missing-<kind>` require-tag classifier
+            /// arm) reads `parent.missing_kinds()` through the
+            /// inherent surface, byte-for-byte symmetrical with
+            /// `parent.populated_kinds()`. The partition law
+            /// `parent.populated_kinds() ∪ parent.missing_kinds() ==
+            /// ClosedSet::ALL` (with the two sets disjoint) is pinned
+            /// as a first-class typed invariant by the trait's own
+            /// default body and swept substrate-wide by
+            /// [`crate::tagged_union::assert_missing_kinds_matches_has`].
+            pub fn missing_kinds(&self) -> ::std::vec::Vec<$kind> {
+                <Self as $crate::tagged_union::TaggedUnion>::missing_kinds(self)
+            }
+
+            /// Scalar cardinality peer of [`Self::missing_kinds`] —
+            /// the number of EMPTY slots on this tagged union.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::missing_kind_count`],
+            /// whose default body is
+            /// `<Kind as ClosedSet>::ALL.iter().copied().filter(|k|
+            /// !self.has(*k)).count()`. Every consumer that needs the
+            /// cardinality of the missing-slot set as a scalar (a
+            /// `missing-kind-count-<n>` require-tag classifier prefix;
+            /// a fast-path branch that discriminates "well-formed"
+            /// from "N missing slots"; a coherence check that verifies
+            /// "every well-formed parent has exactly ALL.len() - 1
+            /// missing slots") reads `parent.missing_kind_count()`
+            /// through the inherent surface, byte-for-byte symmetrical
+            /// with `parent.populated_kind_count()`. The scalar
+            /// partition law `parent.populated_kind_count() +
+            /// parent.missing_kind_count() == <Kind as ClosedSet>::ALL.len()`
+            /// is pinned by the trait's own default body and swept
+            /// substrate-wide by
+            /// [`crate::tagged_union::assert_missing_kind_count_matches_missing_kinds`].
+            pub fn missing_kind_count(&self) -> usize {
+                <Self as $crate::tagged_union::TaggedUnion>::missing_kind_count(self)
+            }
         }
 
         impl $crate::tagged_union::VariantSelector<$parent> for $kind {
@@ -929,6 +983,199 @@ pub trait TaggedUnion: Sized {
             .filter(|k| self.has(*k))
             .count()
     }
+
+    /// Closed-set-COMPLEMENT refinement — enumerate the set of
+    /// [`Self::Kind`] discriminators whose corresponding slot on
+    /// `self` is EMPTY, in canonical
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) order.
+    ///
+    /// Default body:
+    /// `<Kind as ClosedSet>::ALL.iter().copied().filter(|k| !self.has(*k)).collect()`.
+    /// A tagged-union parent that satisfies the exactly-one-slot
+    /// contract returns a `Vec` of length `ALL.len()` (empty parent —
+    /// every slot is missing, aligns with [`Self::variant`]'s `Empty`
+    /// arm) or `ALL.len() - 1` (well-formed — every slot BUT the
+    /// populated one is missing, aligns with the `Ok` arm); a
+    /// malformed parent with N populated slots returns a `Vec` of
+    /// length `ALL.len() - N` in canonical `ALL` order (aligns with
+    /// the `Ambiguous` arm and NAMES which slots are absent,
+    /// complementing [`Self::populated_kinds`] which NAMES which are
+    /// populated).
+    ///
+    /// # Sibling to [`Self::populated_kinds`]
+    ///
+    /// Closed-set-complement peer of the closed-set-inversion widened
+    /// primitive — where `populated_kinds` returns the SET of
+    /// populated kinds, `missing_kinds` returns its COMPLEMENT within
+    /// `ClosedSet::ALL`. The two primitives PARTITION the closed set:
+    /// `populated_kinds() ∪ missing_kinds() == ClosedSet::ALL` and the
+    /// two sets are disjoint. The composition law
+    /// `missing_kinds().contains(&k) == !has(k)` for every
+    /// `k ∈ Kind::ALL` binds the two axes structurally through the
+    /// default body — a regression that overrode `missing_kinds` to
+    /// skip a kind, return duplicates, or drift the walk order
+    /// surfaces at the substrate testkit
+    /// [`assert_missing_kinds_matches_has`].
+    ///
+    /// # Peer to [`crate::boundary::ConditionSliceExt::missing_kinds`]
+    ///
+    /// Same shape, same axis, second instance in the workspace-wide
+    /// closed-set-complement refinement algebra:
+    /// [`ConditionSliceExt::missing_kinds`] returns
+    /// `Vec<ConditionKind>` on the slice-level presence-probe axis
+    /// (fixes the slice, varies over `ConditionKind::ALL` under a
+    /// negated predicate); `missing_kinds` here returns
+    /// `Vec<Self::Kind>` on the tagged-union parent-level presence-
+    /// probe axis (fixes the parent, varies over `<Self::Kind as
+    /// ClosedSet>::ALL` under a negated predicate). Both refine their
+    /// `has(k) / has_kind(k)` bool peer through the same
+    /// `ALL.filter(!has).collect()` composition law — the parent-axis
+    /// complement of the widened `populated_kinds` primitive.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing "which slots are still absent" diagnostic
+    ///   on the malformed / partially-populated arm reads
+    ///   `parent.missing_kinds()` at ONE substrate site rather than
+    ///   paying for a negated `<Kind::ALL>.iter().filter(|k|
+    ///   !parent.has(*k)).collect()` closure body at the callsite —
+    ///   or the strictly-worse
+    ///   `<Kind::ALL>.iter().filter(|k| !parent.populated_kinds().contains(k)).collect()`
+    ///   double-loop.
+    /// - A future require-tag classifier arm that publishes the
+    ///   missing-set membership at fleet audit time (`missing-<kind>`
+    ///   as the negated peer of a hypothetical `populated-<kind>`) reads
+    ///   `parent.missing_kinds().contains(&k)` at ONE call site.
+    /// - A hypothetical `missing-kind-count-<n>` require-tag
+    ///   classifier prefix family that publishes the missing-set
+    ///   cardinality as a scalar reads [`Self::missing_kind_count`]
+    ///   (the scalar-cardinality peer of this widened primitive)
+    ///   without allocating.
+    ///
+    /// A new [`Self::Kind`] variant added to
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) reaches
+    /// this primitive mechanically (the closed-set walk picks up the
+    /// new entry on the missing side WITHOUT further per-caller edit
+    /// — any parent that doesn't yet populate the new slot sees it
+    /// listed as missing at every downstream callsite).
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The closed-set complement lives at ONE substrate site as a
+    ///   typed projection of [`Self::has`] over the closed set
+    ///   `<Self::Kind as ClosedSet>::ALL` under negation. Every
+    ///   downstream gap-analysis consumer binds through the SAME shape
+    ///   rather than restating the negated `ALL`-filter closure body.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically and every downstream consumer sees the wider
+    ///   complement without further per-caller edit.
+    fn missing_kinds(&self) -> ::std::vec::Vec<Self::Kind> {
+        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| !self.has(*k))
+            .collect()
+    }
+
+    /// Scalar cardinality refinement on the closed-set-complement axis —
+    /// the number of [`Self::Kind`] discriminators whose corresponding
+    /// slot on `self` is EMPTY.
+    ///
+    /// Default body:
+    /// `<Self::Kind as ClosedSet>::ALL.iter().copied().filter(|k| !self.has(*k)).count()`
+    /// — a closed-set walk that composes against [`Self::has`] per
+    /// variant under a NEGATED point-probe, WITHOUT materializing an
+    /// intermediate `Vec`. A tagged-union parent that satisfies the
+    /// exactly-one-slot contract returns `ALL.len()` (empty — every
+    /// slot missing, matches [`Self::variant`]'s `Empty` arm),
+    /// `ALL.len() - 1` (well-formed — matches the `Ok` arm), or
+    /// `ALL.len() - N` for N-populated (malformed — matches the
+    /// `Ambiguous` arm), exactly aligned with [`Self::missing_kinds`]
+    /// `().len()` but without paying for the heap allocation a caller
+    /// only needing the scalar cardinality otherwise pays.
+    ///
+    /// # Sibling to [`Self::missing_kinds`] / [`Self::populated_kind_count`]
+    ///
+    /// Scalar projection of the closed-set-complement widened primitive
+    /// — where `missing_kinds` returns the SET (a `Vec<Self::Kind>` in
+    /// canonical `ClosedSet::ALL` order), `missing_kind_count`
+    /// collapses that set to its cardinality. The composition law
+    /// `missing_kind_count() == missing_kinds().len()` binds the
+    /// scalar projection to the widened primitive at the trait's
+    /// default body — a regression that overrode `missing_kind_count`
+    /// to skip a kind, double-count a slot, or drift the walk from
+    /// `ClosedSet::ALL` surfaces at the substrate testkit
+    /// [`assert_missing_kind_count_matches_missing_kinds`].
+    ///
+    /// Byte-for-byte peer of [`Self::populated_kind_count`] one axis
+    /// over (under a negated `has` predicate): where
+    /// `populated_kind_count` scalar-projects the closed-set-INVERSION
+    /// widened primitive `populated_kinds`, this method scalar-projects
+    /// the closed-set-COMPLEMENT widened primitive `missing_kinds`.
+    /// The two scalar projections PARTITION the closed-set cardinality:
+    /// `populated_kind_count() + missing_kind_count() ==
+    /// <Self::Kind as ClosedSet>::ALL.len()` — the scalar consequence
+    /// of the `(populated_kinds, missing_kinds)` partition law that
+    /// [`assert_missing_kinds_matches_has`] pins at the widened-
+    /// primitive layer.
+    ///
+    /// # Peer to [`crate::boundary::ConditionSliceExt::missing_kind_count`]
+    ///
+    /// Same shape at the peer axis one struct layer down: fixing the
+    /// slice-side carrier and inverting the presence probe over the
+    /// closed set under a negated predicate. The two primitives close
+    /// the "closed-set-complement scalar cardinality" refinement at
+    /// two adjacent typescape sites — one per closed-set-addressed
+    /// slice-level refinement, one per closed-set-addressed
+    /// tagged-union parent-level refinement (this primitive).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A `missing-kind-count-<n>` require-tag classifier prefix
+    ///   family that publishes the missing-set cardinality as a scalar
+    ///   (the exact use case named in [`Self::missing_kinds`]'s
+    ///   doc-comment as a hypothetical compounding-future consumer)
+    ///   reaches this ONE primitive without allocating.
+    /// - A fast-path branch on `Ambiguous`-arm callers that need to
+    ///   distinguish "one missing slot" (well-formed exactly-one) from
+    ///   "N missing slots" (malformed with populated_kind_count > 1)
+    ///   reads `parent.missing_kind_count() == ALL.len() - 1` at ONE
+    ///   call site rather than reaching for the Vec-materializing
+    ///   widened primitive.
+    /// - Any coherence check that verifies "every well-formed process
+    ///   parent has exactly `ALL.len() - 1` missing slots" now reads
+    ///   `parent.missing_kind_count() == <Kind as ClosedSet>::ALL.len() - 1`
+    ///   at ONE site rather than restating
+    ///   `parent.missing_kinds().len() == ALL.len() - 1` with its
+    ///   allocation cost, or the semantically-equivalent (but
+    ///   parent-arm-projected) `parent.variant().is_ok()`.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The scalar cardinality lives at ONE substrate site as a typed
+    ///   projection of [`Self::missing_kinds`] onto its `.len()`, and
+    ///   the default body composes against [`Self::has`] over the
+    ///   closed set `<Self::Kind as ClosedSet>::ALL` under negation
+    ///   byte-identically to `missing_kinds` without the intermediate
+    ///   `Vec`. Every downstream aggregate consumer binds through the
+    ///   SAME shape rather than paying for the allocation to reach the
+    ///   cardinality.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically (the closed-set walk picks up the new entry on
+    ///   the missing side WITHOUT further per-caller edit — any parent
+    ///   that doesn't yet populate the new slot sees the cardinality
+    ///   rise by one at every downstream callsite).
+    fn missing_kind_count(&self) -> usize {
+        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| !self.has(*k))
+            .count()
+    }
 }
 
 /// Generic diagnostic-stability testkit — pins that [`TaggedUnion::KIND_LIST`]
@@ -1380,6 +1627,234 @@ where
         assert_eq!(
             count, 1,
             "TaggedUnion::populated_kind_count() on single_slot({populated:?}) must equal 1 exactly (well-formed arm cardinality)",
+        );
+    }
+}
+
+/// Generic closed-set-COMPLEMENT testkit — pins that
+/// [`TaggedUnion::missing_kinds`] composes over
+/// [`TaggedUnion::has`] under NEGATION across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) entry on
+/// the single-slot side, that the returned `Vec` is the canonical
+/// [`ClosedSet::ALL`]-ordered filter of `!has(k)`, that on the
+/// populated diagonal `single_slot(k).missing_kinds()` equals
+/// `ALL \ {k}` exactly (length `ALL.len() - 1`, canonical ordered,
+/// `k` absent), AND that the partition law
+/// `populated_kinds() ∪ missing_kinds() == ClosedSet::ALL` (with
+/// the two sets disjoint) holds byte-identically.
+///
+/// Parent-axis substrate primitive for the tagged-union closed-set-
+/// complement refinement — the peer of
+/// [`crate::boundary::assert_slice_refinement_composition_laws`]'s
+/// `missing_kinds` sub-arm on the slice-level presence-probe axis,
+/// lifted here to the tagged-union parent-level presence-probe axis
+/// (same shape, same composition operator under negation, second
+/// instance in the workspace-wide closed-set-complement refinement
+/// algebra).
+///
+/// The FOUR sub-assertions swept per populated slot:
+///
+/// 1. Per-kind membership under negation:
+///    `parent.missing_kinds().contains(&k) == !parent.has(k)` for
+///    every `k ∈ ClosedSet::ALL` — a regression that overrode
+///    `missing_kinds` to skip a kind, drift the walk order from
+///    canonical `ALL`, or return a superset containing populated
+///    kinds surfaces at the specific kind's per-pair assertion.
+/// 2. Canonical `ALL`-filter equality under negation:
+///    `parent.missing_kinds() == ALL.iter().copied().filter(|k|
+///    !parent.has(*k)).collect()` — a regression that returned
+///    duplicates or drifted the walk order surfaces at the
+///    post-loop equality assert.
+/// 3. Single-slot diagonal: `single_slot(k).missing_kinds()`
+///    equals `ALL` with `k` removed — length exactly `ALL.len() - 1`,
+///    canonical order preserved. Pins the well-formed arm's
+///    complement cardinality.
+/// 4. Partition law: `populated_kinds() ∪ missing_kinds() ==
+///    ClosedSet::ALL` byte-identically (concatenated then re-sorted
+///    into canonical `ALL` order) AND the two sets are disjoint
+///    (no kind appears in both). A regression on either side of the
+///    partition (a kind that appears in NEITHER, or in BOTH) fails
+///    HERE at the partition assert — the compound-lift's most-
+///    load-bearing invariant.
+///
+/// Substrate primitive for future per-parent
+/// `X_missing_kinds_matches_has` tests that would otherwise each
+/// restate the same nested-`for populated in K::ALL { for probed
+/// in K::ALL { … } }` sweep + canonical-order equality + single-
+/// slot diagonal pin + partition-law composition — every one of
+/// the four production `.variant()` parents on `ProcessSpec` binds
+/// through this ONE primitive with a per-site `single_slot`
+/// factory. A fifth sibling picks up the closed-set-complement
+/// check through ONE call site — no re-authored `for k in K::ALL
+/// { … }` sweep at the test surface, no re-authored `assert_eq!`
+/// quad.
+///
+/// The `single_slot` closure stays per-site — reused verbatim from
+/// the sibling primitives ([`assert_variant_round_trip`],
+/// [`assert_find_agrees_with_has`],
+/// [`assert_populated_kinds_matches_has`],
+/// [`assert_populated_kind_count_matches_populated_kinds`],
+/// [`assert_single_slot_key_matches_label`]).
+///
+/// The [`crate::lifetime::Lifetime`] site is DELIBERATELY excluded
+/// through the `T: TaggedUnion` bound — same reasoning as the
+/// sibling primitives.
+#[track_caller]
+pub fn assert_missing_kinds_matches_has<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let missing = parent.missing_kinds();
+        let populated_kinds = parent.populated_kinds();
+        // Per-kind membership composition law under negation, AND the
+        // XOR partition arm: every k ∈ ALL appears in exactly one of
+        // (populated_kinds, missing_kinds).
+        for probed in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            assert_eq!(
+                missing.contains(&probed),
+                !parent.has(probed),
+                "TaggedUnion::missing_kinds().contains({probed:?}) drifted from !has({probed:?}) — populated={populated:?}",
+            );
+            // XOR partition law: k ∈ populated_kinds ⊕ k ∈ missing_kinds
+            // — every closed-set entry lives on EXACTLY ONE side of the
+            // partition (populated OR missing, never both, never neither).
+            let in_populated = populated_kinds.contains(&probed);
+            let in_missing = missing.contains(&probed);
+            assert!(
+                in_populated ^ in_missing,
+                "partition law violated — {probed:?} appears in {} of (populated_kinds, missing_kinds), not exactly one (populated={populated:?})",
+                (in_populated as u8) + (in_missing as u8),
+            );
+        }
+        // Canonical ALL-filter equality under negation — pins dedup,
+        // walk order, and membership consistency at ONE assert.
+        let canonical: Vec<T::Kind> = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| !parent.has(*k))
+            .collect();
+        assert_eq!(
+            missing, canonical,
+            "TaggedUnion::missing_kinds() must yield ClosedSet::ALL-ordered subsequence where !has is true (no duplicates, canonical order) — populated={populated:?}",
+        );
+        // Single-slot diagonal — a well-formed parent from single_slot
+        // populates exactly the addressed slot, so the missing set is
+        // `ALL \ {populated}` in canonical order (length ALL.len() - 1,
+        // `populated` absent).
+        let expected_missing: Vec<T::Kind> = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| *k != populated)
+            .collect();
+        assert_eq!(
+            missing, expected_missing,
+            "TaggedUnion::missing_kinds() on single_slot({populated:?}) must return ClosedSet::ALL with {populated:?} removed",
+        );
+    }
+}
+
+/// Generic scalar-cardinality testkit for the closed-set-complement
+/// axis — pins that [`TaggedUnion::missing_kind_count`] agrees with
+/// [`TaggedUnion::missing_kinds`]`.len()` across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-slot
+/// arrangement AND that on the populated diagonal
+/// `single_slot(k).missing_kind_count()` equals `ALL.len() - 1`
+/// exactly (aligned with the single-slot arm's `missing_kinds()`
+/// returning `ALL \ {k}`) AND that the scalar partition law
+/// `populated_kind_count() + missing_kind_count() == ALL.len()`
+/// holds byte-identically.
+///
+/// Parent-axis substrate primitive for the scalar-cardinality
+/// refinement of the tagged-union closed-set-complement axis — the
+/// scalar projection of [`assert_missing_kinds_matches_has`]'s
+/// widened primitive. Together they close the three-refinement
+/// composition contract that binds
+/// [`TaggedUnion::missing_kind_count`] against
+/// [`TaggedUnion::missing_kinds`] and against
+/// [`TaggedUnion::populated_kind_count`]:
+///
+/// 1. **`count ↔ kinds.len()`**: `missing_kind_count() ==
+///    missing_kinds().len()` — a regression that overrode
+///    `missing_kind_count` to skip a kind (returning the populated
+///    count instead), double-count a slot, or drift the walk from
+///    `ClosedSet::ALL` surfaces at the substrate boundary here.
+/// 2. **Single-slot diagonal**: `single_slot(k).missing_kind_count()
+///    == ALL.len() - 1` — pins the well-formed arm's complement
+///    cardinality against the empty (`ALL.len()`) and Ambiguous
+///    (`< ALL.len() - 1`) arms.
+/// 3. **Scalar partition law**: `populated_kind_count() +
+///    missing_kind_count() == ALL.len()` — the scalar consequence
+///    of the `(populated_kinds, missing_kinds)` partition law that
+///    [`assert_missing_kinds_matches_has`] pins at the widened-
+///    primitive layer. A regression on either scalar side (an
+///    off-by-one on missing, a drift on populated) fails HERE at
+///    the sum assertion.
+///
+/// Substrate primitive for future per-parent
+/// `X_missing_kind_count_matches_missing_kinds_len` tests that
+/// would otherwise each restate the same nested-`for k in K::ALL {
+/// … }` sweep + composition-law equality + single-slot cardinality
+/// pin + scalar partition — every one of the four production
+/// `.variant()` parents on `ProcessSpec` binds through this ONE
+/// primitive with a per-site `single_slot` factory. A fifth sibling
+/// picks up the scalar-cardinality check through ONE call site.
+///
+/// The `single_slot` closure stays per-site — reused verbatim from
+/// the sibling primitives ([`assert_variant_round_trip`],
+/// [`assert_find_agrees_with_has`],
+/// [`assert_populated_kinds_matches_has`],
+/// [`assert_populated_kind_count_matches_populated_kinds`],
+/// [`assert_missing_kinds_matches_has`],
+/// [`assert_single_slot_key_matches_label`]).
+///
+/// The [`crate::lifetime::Lifetime`] site is DELIBERATELY excluded
+/// through the `T: TaggedUnion` bound — same reasoning as the
+/// sibling primitives.
+#[track_caller]
+pub fn assert_missing_kind_count_matches_missing_kinds<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    let all_len = <T::Kind as tatara_closed_set::ClosedSet>::ALL.len();
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let count = parent.missing_kind_count();
+        let missing_len = parent.missing_kinds().len();
+        // Composition law: scalar cardinality projection agrees with
+        // the widened primitive's `Vec::len()`.
+        assert_eq!(
+            count, missing_len,
+            "TaggedUnion::missing_kind_count() drifted from missing_kinds().len() — populated={populated:?}",
+        );
+        // Single-slot diagonal — a well-formed parent from single_slot
+        // populates exactly the addressed slot, so the missing count is
+        // ALL.len() - 1.
+        assert_eq!(
+            count,
+            all_len - 1,
+            "TaggedUnion::missing_kind_count() on single_slot({populated:?}) must equal ALL.len() - 1 exactly (well-formed arm complement cardinality)",
+        );
+        // Scalar partition law: populated_kind_count + missing_kind_count == ALL.len().
+        let populated_count = parent.populated_kind_count();
+        assert_eq!(
+            populated_count + count,
+            all_len,
+            "scalar partition law violated — populated_kind_count + missing_kind_count must equal ClosedSet::ALL.len() (populated={populated:?})",
         );
     }
 }
@@ -4326,6 +4801,387 @@ mod tests {
             single_slot_artifact_source_probe,
         );
         assert_populated_kind_count_matches_populated_kinds::<crate::export::VectorChannel, _>(
+            single_slot_vector_channel_probe,
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // `TaggedUnion::missing_kinds` default method + the
+    // closed-set-COMPLEMENT refinement's per-parent semantics — pin the
+    // three arms (empty parent → full closed set, single-slot → ALL \
+    // {k} in canonical order, saturated → empty vec) directly on the
+    // sibling-shaped `LocalParent` scaffold. Peer of the boundary-side
+    // `ConditionSliceExt::missing_kinds` primitive's three-arm pin on
+    // the slice-level presence-probe axis; closed-set-COMPLEMENT peer
+    // of the parent-level `populated_kinds` primitive above.
+    // -------------------------------------------------------------------
+
+    /// EMPTY parent — the default body's `ALL.filter(!has).collect()`
+    /// sweep yields the FULL `ClosedSet::ALL` vec when no slot is
+    /// populated (every kind is missing). Pins the full-cardinality
+    /// arm: a regression that mis-composed the `ALL.iter()` bridge
+    /// (short-circuiting past the empty case), inverted the negation
+    /// (returning `populated_kinds`), or dropped closed-set entries as
+    /// false-negative absences fails HERE at the substrate boundary.
+    #[test]
+    fn tagged_union_default_missing_kinds_returns_full_closed_set_on_empty_parent() {
+        let empty = LocalParent::default();
+        assert_eq!(
+            <LocalParent as TaggedUnion>::missing_kinds(&empty),
+            <LocalKind as tatara_closed_set::ClosedSet>::ALL.to_vec(),
+            "missing_kinds() must return ClosedSet::ALL when no slot is populated",
+        );
+    }
+
+    /// SINGLE-SLOT parent — the default body sweeps `ClosedSet::ALL`
+    /// with `!has(k)` and collects `ALL \ {populated}` for each
+    /// single-populated arrangement. Pins the length-(ALL.len()-1)
+    /// arm's cardinality AND ordering (canonical `ClosedSet::ALL`
+    /// order, `populated` absent) at ONE `assert_eq!` per kind — a
+    /// regression that inverted the negation (returning `vec![populated]`
+    /// instead of `ALL \ {populated}`) fails HERE per addressed kind.
+    #[test]
+    fn tagged_union_default_missing_kinds_returns_complement_per_variant() {
+        for populated in <LocalKind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let parent = match populated {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            };
+            let expected: Vec<LocalKind> = <LocalKind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+                .filter(|k| *k != populated)
+                .collect();
+            assert_eq!(
+                <LocalParent as TaggedUnion>::missing_kinds(&parent),
+                expected,
+                "single-slot parent must return ClosedSet::ALL \\ {{{populated:?}}} on missing_kinds",
+            );
+        }
+    }
+
+    /// SATURATED parent — every slot populated returns an empty vec on
+    /// `missing_kinds`. Pins the zero-cardinality arm on the complement
+    /// side (mirror of `populated_kinds` returning `ALL.to_vec()` on
+    /// the saturated arm).
+    #[test]
+    fn tagged_union_default_missing_kinds_returns_empty_vec_on_saturated_parent() {
+        let saturated = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: Some(3),
+        };
+        assert!(
+            <LocalParent as TaggedUnion>::missing_kinds(&saturated).is_empty(),
+            "saturated parent must return empty Vec on missing_kinds",
+        );
+    }
+
+    /// Partition law binding `populated_kinds` and `missing_kinds` on
+    /// every `LocalParent` arrangement: every `k ∈ ClosedSet::ALL`
+    /// lives on EXACTLY ONE side of the partition (populated OR
+    /// missing, never both, never neither). Pins the compound-lift's
+    /// most-load-bearing invariant at ONE `assert!` per (arrangement,
+    /// kind) pair — a regression that returned overlapping or
+    /// disjoint-but-incomplete sets fails HERE at the XOR arm.
+    #[test]
+    fn tagged_union_default_populated_kinds_and_missing_kinds_partition_the_closed_set() {
+        let arrangements: [LocalParent; 4] = [
+            LocalParent::default(),
+            LocalParent {
+                alpha: Some(1),
+                ..Default::default()
+            },
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: None,
+            },
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            },
+        ];
+        for (idx, parent) in arrangements.iter().enumerate() {
+            let populated = <LocalParent as TaggedUnion>::populated_kinds(parent);
+            let missing = <LocalParent as TaggedUnion>::missing_kinds(parent);
+            for &k in <LocalKind as tatara_closed_set::ClosedSet>::ALL.iter() {
+                let in_populated = populated.contains(&k);
+                let in_missing = missing.contains(&k);
+                assert!(
+                    in_populated ^ in_missing,
+                    "arrangement idx {idx} — {k:?} must live on exactly one side of (populated, missing), got in_populated={in_populated} in_missing={in_missing}",
+                );
+            }
+        }
+    }
+
+    /// `assert_missing_kinds_matches_has` testkit accepts the coherent
+    /// local scaffold — sweeping every populated slot through the
+    /// per-kind negation + canonical `ALL`-filter + single-slot
+    /// diagonal + XOR partition arms. A regression on any of the four
+    /// composition laws fails at the substrate primitive's
+    /// `#[track_caller]` boundary here rather than at four per-parent
+    /// production sites downstream.
+    #[test]
+    fn assert_missing_kinds_matches_has_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_missing_kinds_matches_has::<LocalParent, _>(make_local);
+    }
+
+    /// A factory that yields an all-empty parent MUST fail-loudly at
+    /// the caller's site through the primitive's single-slot diagonal
+    /// arm — the full `ALL` vec (every kind missing) does not equal
+    /// `ALL \ {populated}` (which excludes `populated`). Pin the
+    /// diagonal-arm failure mode so a regression that silently
+    /// succeeded on an all-empty factory is caught here.
+    #[test]
+    #[should_panic(expected = "must return ClosedSet::ALL with Alpha removed")]
+    fn assert_missing_kinds_matches_has_rejects_factory_that_populates_no_slots() {
+        fn empty_factory(_: LocalKind) -> LocalParent {
+            LocalParent::default()
+        }
+        assert_missing_kinds_matches_has::<LocalParent, _>(empty_factory);
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the single-slot closed-set-complement
+    /// primitive `assert_missing_kinds_matches_has` coherently — every
+    /// per-site `single_slot_X(k)` factory produces a parent whose
+    /// `missing_kinds()` equals `ALL \ {k}` and whose per-kind
+    /// negation composition law `missing_kinds().contains(&k) == !has(k)`
+    /// holds for every `k ∈ ClosedSet::ALL`, AND the XOR partition law
+    /// with `populated_kinds` binds byte-identically at every closed-
+    /// set entry. Sweep every production implementor at ONE substrate
+    /// boundary so a regression that drifts a production site's
+    /// `single_slot_X` factory OR the default `missing_kinds` body (a
+    /// specialization that inverted the negation, short-circuited, or
+    /// drifted the walk order) fails BOTH at any future per-crate test
+    /// site AND at this substrate-wide sweep.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_missing_kinds_testkit_primitive() {
+        assert_missing_kinds_matches_has::<crate::intent::Intent, _>(single_slot_intent_probe);
+        assert_missing_kinds_matches_has::<crate::encapsulates::EncapsulationKind, _>(
+            single_slot_encapsulation_kind_probe,
+        );
+        assert_missing_kinds_matches_has::<crate::export::ArtifactSource, _>(
+            single_slot_artifact_source_probe,
+        );
+        assert_missing_kinds_matches_has::<crate::export::VectorChannel, _>(
+            single_slot_vector_channel_probe,
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // `TaggedUnion::missing_kind_count` — scalar cardinality refinement
+    // on the closed-set-COMPLEMENT axis. Pin the three arms (empty parent
+    // → ALL.len(), single-slot → ALL.len() - 1, saturated → 0) directly
+    // on the sibling-shaped `LocalParent` scaffold and the composition
+    // law `missing_kind_count() == missing_kinds().len()` + the scalar
+    // partition law `populated_kind_count + missing_kind_count ==
+    // ALL.len()` at the substrate testkit
+    // `assert_missing_kind_count_matches_missing_kinds`.
+    // -------------------------------------------------------------------
+
+    /// EMPTY parent — the default body's `ALL.filter(!has).count()`
+    /// sweep yields `ALL.len()` when no slot is populated. Pins the
+    /// full-cardinality complement arm.
+    #[test]
+    fn tagged_union_default_missing_kind_count_returns_all_len_on_empty_parent() {
+        let empty = LocalParent::default();
+        assert_eq!(
+            <LocalParent as TaggedUnion>::missing_kind_count(&empty),
+            <LocalKind as tatara_closed_set::ClosedSet>::ALL.len(),
+            "missing_kind_count() must return ALL.len() when no slot is populated",
+        );
+    }
+
+    /// SINGLE-SLOT parent — the default body sweeps `ClosedSet::ALL`
+    /// with `!has(k)` and counts `ALL.len() - 1` for each single-
+    /// populated arrangement. Pins the well-formed arm's complement
+    /// cardinality per addressed kind.
+    #[test]
+    fn tagged_union_default_missing_kind_count_returns_all_len_minus_one_per_single_slot_variant() {
+        let expected = <LocalKind as tatara_closed_set::ClosedSet>::ALL.len() - 1;
+        for populated in <LocalKind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let parent = match populated {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            };
+            assert_eq!(
+                <LocalParent as TaggedUnion>::missing_kind_count(&parent),
+                expected,
+                "single-slot parent must return ALL.len() - 1 on missing_kind_count for {populated:?}",
+            );
+        }
+    }
+
+    /// SATURATED parent — every slot populated returns `0` on
+    /// `missing_kind_count`. Pins the zero-cardinality complement arm
+    /// (mirror of `populated_kind_count` returning `ALL.len()` on the
+    /// saturated arm).
+    #[test]
+    fn tagged_union_default_missing_kind_count_returns_zero_on_saturated_parent() {
+        let saturated = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: Some(3),
+        };
+        assert_eq!(
+            <LocalParent as TaggedUnion>::missing_kind_count(&saturated),
+            0,
+            "saturated parent must return 0 on missing_kind_count",
+        );
+    }
+
+    /// Composition law `missing_kind_count() == missing_kinds().len()`
+    /// binds the scalar cardinality projection to the widened primitive
+    /// across every `ClosedSet::ALL × {empty, single_slot, two_slot,
+    /// saturated}` combination. AND the scalar partition law
+    /// `populated_kind_count() + missing_kind_count() == ALL.len()`
+    /// binds the two axes byte-identically. Pins BOTH invariants at
+    /// ONE test.
+    #[test]
+    fn tagged_union_default_missing_kind_count_matches_missing_kinds_len_and_partitions() {
+        let all_len = <LocalKind as tatara_closed_set::ClosedSet>::ALL.len();
+        let arrangements: [LocalParent; 4] = [
+            LocalParent::default(),
+            LocalParent {
+                alpha: Some(1),
+                ..Default::default()
+            },
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: None,
+            },
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            },
+        ];
+        for (idx, parent) in arrangements.iter().enumerate() {
+            let count = <LocalParent as TaggedUnion>::missing_kind_count(parent);
+            let missing_len = <LocalParent as TaggedUnion>::missing_kinds(parent).len();
+            assert_eq!(
+                count, missing_len,
+                "missing_kind_count() must equal missing_kinds().len() for arrangement idx {idx}",
+            );
+            let populated_count = <LocalParent as TaggedUnion>::populated_kind_count(parent);
+            assert_eq!(
+                populated_count + count,
+                all_len,
+                "scalar partition law violated at arrangement idx {idx} — populated_kind_count + missing_kind_count must equal ALL.len()",
+            );
+        }
+    }
+
+    /// `assert_missing_kind_count_matches_missing_kinds` testkit
+    /// accepts the coherent local scaffold — sweeping every populated
+    /// kind through the three sub-assertions (composition law
+    /// `count == missing_kinds.len()` + single-slot diagonal `count ==
+    /// ALL.len() - 1` + scalar partition law
+    /// `populated_kind_count + missing_kind_count == ALL.len()`). A
+    /// regression on any of the three fails at the substrate
+    /// primitive's `#[track_caller]` boundary.
+    #[test]
+    fn assert_missing_kind_count_matches_missing_kinds_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_missing_kind_count_matches_missing_kinds::<LocalParent, _>(make_local);
+    }
+
+    /// A factory that yields an all-empty parent (so
+    /// `missing_kind_count()` returns `ALL.len()`) MUST fail-loudly at
+    /// the caller's site through the primitive's single-slot diagonal
+    /// arm — the `ALL.len()` cardinality does not equal `ALL.len() - 1`.
+    #[test]
+    #[should_panic(expected = "must equal ALL.len() - 1 exactly")]
+    fn assert_missing_kind_count_matches_missing_kinds_rejects_empty_factory() {
+        fn empty_factory(_: LocalKind) -> LocalParent {
+            LocalParent::default()
+        }
+        assert_missing_kind_count_matches_missing_kinds::<LocalParent, _>(empty_factory);
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the scalar-cardinality complement
+    /// primitive `assert_missing_kind_count_matches_missing_kinds`
+    /// coherently — every per-site `single_slot_X(k)` factory produces
+    /// a parent whose `missing_kind_count()` equals `ALL.len() - 1`
+    /// AND whose composition law `count == missing_kinds().len()` AND
+    /// scalar partition law `populated_kind_count + missing_kind_count
+    /// == ALL.len()` all hold. Sweep every production implementor at
+    /// ONE substrate boundary.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_missing_kind_count_testkit_primitive() {
+        assert_missing_kind_count_matches_missing_kinds::<crate::intent::Intent, _>(
+            single_slot_intent_probe,
+        );
+        assert_missing_kind_count_matches_missing_kinds::<crate::encapsulates::EncapsulationKind, _>(
+            single_slot_encapsulation_kind_probe,
+        );
+        assert_missing_kind_count_matches_missing_kinds::<crate::export::ArtifactSource, _>(
+            single_slot_artifact_source_probe,
+        );
+        assert_missing_kind_count_matches_missing_kinds::<crate::export::VectorChannel, _>(
             single_slot_vector_channel_probe,
         );
     }

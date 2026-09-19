@@ -281,6 +281,31 @@ macro_rules! declare_tagged_union_impls {
                 <Self as $crate::tagged_union::TaggedUnion>::has(self, kind)
             }
 
+            /// Closed-set-complement peer of [`Self::has`] — `true` iff
+            /// the given `kind` is MISSING (its slot on this tagged
+            /// union is empty).
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::lacks`], whose
+            /// default body is `!self.has(kind)`. Every consumer whose
+            /// semantic reading is "the missing set contains this
+            /// kind" — a "still missing: <kind>" diagnostic, a
+            /// `lacks-<kind>` require-tag classifier arm, a
+            /// dependency-satisfaction check — reads
+            /// `parent.lacks(kind)` through the inherent surface
+            /// rather than negating `parent.has(kind)` at the call
+            /// site. The definitional complement law
+            /// `parent.lacks(kind) == !parent.has(kind)` and the
+            /// kind-scoped implication
+            /// `parent.lacks_only(kind) → parent.lacks(kind)` are
+            /// pinned as first-class typed invariants by the trait's
+            /// own default body and swept substrate-wide by
+            /// [`crate::tagged_union::assert_lacks_matches_has_complement`].
+            pub fn lacks(&self, kind: $kind) -> bool {
+                <Self as $crate::tagged_union::TaggedUnion>::lacks(self, kind)
+            }
+
             /// Widened peer of [`Self::has`] — returns the borrowed
             /// variant view addressed by `kind`, or `None` when the
             /// matching slot is empty.
@@ -1255,6 +1280,115 @@ pub trait TaggedUnion: Sized {
     /// picks up the presence probe with zero re-authored body.
     fn has(&self, kind: Self::Kind) -> bool {
         self.find(kind).is_some()
+    }
+
+    /// Closed-set-complement peer of [`Self::has`] — `true` iff the
+    /// given `kind` is MISSING (its slot on this tagged union is
+    /// empty). The definitional dual of the presence probe on the
+    /// MISSING axis.
+    ///
+    /// Default body: `!self.has(kind)`. One bit-flip; the primitive
+    /// value here is naming — every consumer that reads "the missing
+    /// set contains `kind`" or "the parent lacks this dependency"
+    /// gets a first-class typed predicate whose call-site text reads
+    /// correctly on the missing axis, without inverting the reader's
+    /// parse of `!parent.has(...)` at every site.
+    ///
+    /// # Sibling to [`Self::has`]
+    ///
+    /// Closed-set-complement peer on the (populated, missing)
+    /// duality: `has(kind)` names parents whose POPULATED set
+    /// contains `kind`; `lacks(kind)` names parents whose MISSING
+    /// set contains `kind`. The definitional complement law
+    /// `lacks(kind) == !has(kind)` holds on every arm and every kind
+    /// — pinned as a first-class typed invariant by the trait's own
+    /// default body and swept substrate-wide by
+    /// [`assert_lacks_matches_has_complement`].
+    ///
+    /// # Sibling to [`Self::lacks_only`]
+    ///
+    /// Kind-scoped strict-refinement peer on the MISSING axis:
+    /// `lacks(kind)` is the SUBSET predicate (`kind` missing, maybe
+    /// others too); `lacks_only(kind)` is the EQUAL predicate
+    /// (`kind` missing AND ONLY `kind`). The implication
+    /// `lacks_only(kind) → lacks(kind)` binds the pair on the
+    /// strict-refinement axis — byte-for-byte missing-axis peer of
+    /// the populated-axis `has_only(kind) → has(kind)` implication.
+    /// Together with `has(kind)`, `has_only(kind)`, and
+    /// `lacks_only(kind)` the four predicates close the 2×2
+    /// (populated, missing) × (subset, equal) grid on the
+    /// kind-scoped tagged-union axis.
+    ///
+    /// # Truth table on the exactly-one-slot tagged-union contract
+    ///
+    /// For a tagged union with `<Self::Kind as ClosedSet>::ALL` of
+    /// cardinality `N ≥ 2` and a fixed argument `kind`:
+    ///
+    /// - Empty parent (0 populated, N missing): `true` — every kind
+    ///   is missing, so any `kind` satisfies the predicate.
+    /// - Well-formed parent with `kind` populated (1 populated ==
+    ///   kind): `false` — the populated slot addresses `kind`, so
+    ///   `kind` is not missing.
+    /// - Well-formed parent with OTHER kind populated (1 populated
+    ///   != kind): `true` — the sole populated slot is not `kind`,
+    ///   so `kind` is missing.
+    /// - Saturated parent (N populated, 0 missing): `false` — every
+    ///   kind is populated, so `kind` is not missing.
+    ///
+    /// # Kind-domain cardinality
+    ///
+    /// `<Self::Kind as ClosedSet>::ALL.iter().filter(|k| parent.lacks(*k)).count()
+    /// == parent.missing_kind_count()` — the count of kinds
+    /// satisfying `lacks` on any arm is exactly the parent's
+    /// missing-slot count. Closed-set-complement peer of the
+    /// populated-axis law `count k where has(k) ==
+    /// populated_kind_count()`. Binds the kind-scoped SUBSET
+    /// primitive on the missing axis to the arg-less cardinality
+    /// scalar at ONE substrate site.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - Any consumer whose semantic reading is "the missing set
+    ///   contains this kind" — a "still missing: <kind>" diagnostic,
+    ///   a `lacks-<kind>` require-tag classifier arm, a
+    ///   dependency-satisfaction check — reads `parent.lacks(kind)`
+    ///   through the inherent surface rather than negating
+    ///   `parent.has(kind)` at the call site. The primitive costs
+    ///   one bit-flip past [`Self::has`]; the reader-facing win is
+    ///   that `!parent.has(k)` no longer needs to be re-parsed as
+    ///   "the missing set contains k" at every missing-axis call
+    ///   site.
+    /// - The kind-scoped implication
+    ///   `lacks_only(kind) → lacks(kind)` becomes a first-class
+    ///   typed law binding [`Self::lacks_only`] to `lacks` on the
+    ///   strict-refinement axis — byte-for-byte missing-axis peer
+    ///   of `has_only(kind) → has(kind)`.
+    ///
+    /// A new [`Self::Kind`] variant added to
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) reaches
+    /// this primitive mechanically through the delegated
+    /// [`Self::has`] — the closed-set walk extended by
+    /// [`Self::has`]'s default body composition picks up the new
+    /// slot at every downstream callsite without further per-caller
+    /// edit.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The closed-set-complement projection lives at ONE substrate
+    ///   site as a definitional negation of [`Self::has`]. The
+    ///   complement law `lacks(kind) == !has(kind)` and the
+    ///   kind-scoped implication `lacks_only(kind) → lacks(kind)`
+    ///   are pinned across every production tagged union at compile
+    ///   time via the trait's default body composition, not
+    ///   per-parent.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this
+    ///   primitive mechanically through the delegated [`Self::has`]
+    ///   — every downstream consumer sees the widened kind set
+    ///   without further per-caller edit.
+    fn lacks(&self, kind: Self::Kind) -> bool {
+        !self.has(kind)
     }
 
     /// Closed-set-inversion refinement — enumerate the set of
@@ -5799,6 +5933,296 @@ pub fn assert_lacks_only_matches_unique_missing_kind<T, F, G, H>(
             assert_eq!(
                 multi_count, expected_multi_count,
                 "two_slot({a:?}, {b:?}): exactly {expected_multi_count} kinds must satisfy lacks_only on ALL.len() == {all_len}, got {multi_count}",
+            );
+        }
+    }
+}
+
+/// Generic closed-set-complement testkit on the kind-scoped SUBSET
+/// axis — pins that [`TaggedUnion::lacks`] agrees with the negated
+/// [`TaggedUnion::has`], the missing-set membership projection
+/// [`TaggedUnion::missing_kinds`], the kind-scoped strict-refinement
+/// peer [`TaggedUnion::lacks_only`], AND the missing-axis cardinality
+/// scalar [`TaggedUnion::missing_kind_count`] across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-slot
+/// arrangement, every off-diagonal two-slot pair, AND the empty-
+/// parent baseline.
+///
+/// Closed-set-complement mirror of [`TaggedUnion::has`] under the
+/// (populated, missing) duality — where `has(kind)` is the populated-
+/// axis SUBSET primitive, `lacks(kind)` is the missing-axis SUBSET
+/// primitive. Together with [`TaggedUnion::has_only`] (populated-axis
+/// EQUAL) and [`TaggedUnion::lacks_only`] (missing-axis EQUAL) they
+/// close the 2×2 kind-scoped (populated, missing) × (subset, equal)
+/// grid. The five sub-assertions swept per arrangement + the empty-
+/// parent baseline:
+///
+/// 1. **Definitional complement law**: `lacks(kind) == !has(kind)`
+///    on every arm — the trait's default body composition is a
+///    single bit-flip past [`TaggedUnion::has`], and no override
+///    may drift the two primitives apart.
+/// 2. **Missing-set membership composition law**:
+///    `lacks(kind) == missing_kinds().contains(&kind)` on every
+///    arm — closed-set-complement peer of the populated-axis law
+///    `has(kind) == populated_kinds().contains(&kind)` swept by
+///    [`assert_populated_kinds_matches_has`].
+/// 3. **Kind-scoped implication law**: `lacks_only(kind) →
+///    lacks(kind)` on every arm — if `kind` is the SOLE missing
+///    slot then `kind` is missing. Byte-for-byte missing-axis peer
+///    of the `has_only(kind) → has(kind)` implication that binds
+///    [`TaggedUnion::has_only`] to [`TaggedUnion::has`] on the
+///    strict-refinement axis.
+/// 4. **Cardinality-partition law**: `<T::Kind as ClosedSet>::ALL
+///    .iter().filter(|k| parent.lacks(*k)).count() ==
+///    parent.missing_kind_count()` on every arm — the count of
+///    kinds satisfying `lacks` equals the parent's missing-slot
+///    count. Closed-set-complement peer of the populated-axis law
+///    `count k where has(k) == populated_kind_count()`.
+/// 5. **Factory-precondition truth table** whose expected shape is
+///    derived from the abstract factory contract (`empty_parent()`
+///    missing set is all of `ALL`, size `all_len`;
+///    `single_slot(populated)` missing set is `ALL - {populated}`,
+///    size `all_len - 1`; `two_slot(a, b)` missing set is `ALL -
+///    {a, b}`, size `all_len - 2`) — hard-codes the arm expectation
+///    across every `ALL.len()` regime so a factory drift that
+///    yields a saturated / drifted parent surfaces BEFORE any
+///    composition law reconciles two internally-drifted trait
+///    bodies.
+///
+/// A fifth sibling tagged-union parent picks up the closed-set-
+/// complement check on the kind-scoped SUBSET axis through ONE
+/// `impl TaggedUnion for X` block plus ONE per-site `single_slot_X`
+/// factory plus ONE per-site `two_slot_X` factory plus ONE per-site
+/// `empty_X` factory plus ONE call site — no re-authored `lacks`
+/// sweep at the test surface.
+///
+/// Same [`crate::lifetime::Lifetime`] exclusion as the sibling
+/// primitives — the `T: TaggedUnion` bound doesn't reach it.
+///
+/// # Theory grounding
+///
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+///   The kind-scoped closed-set-complement projection lives at ONE
+///   substrate site as a definitional negation of
+///   [`TaggedUnion::has`]. The five composition laws (definitional
+///   complement, missing-set membership, kind-scoped implication
+///   from `lacks_only`, cardinality partition against
+///   `missing_kind_count`, factory-precondition truth table) live at
+///   ONE substrate site inside the testkit's per-arm sweep — pinned
+///   across every production tagged union at compile time via the
+///   trait's default body composition, not per-parent.
+/// - THEORY.md §VI.1 — generation over composition. A new
+///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+///   mechanically through the delegated [`Self::has`] — the five
+///   laws hold on the widened kind set without further per-caller
+///   edit.
+#[track_caller]
+pub fn assert_lacks_matches_has_complement<T, F, G, H>(single_slot: F, two_slot: G, empty_parent: H)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+    G: Fn(T::Kind, T::Kind) -> T,
+    H: Fn() -> T,
+{
+    let all_len = <T::Kind as tatara_closed_set::ClosedSet>::ALL.len();
+
+    // Empty-parent baseline — every `lacks(k)` returns `true`
+    // (empty parent has every slot missing). The factory-
+    // precondition truth-table pin catches an `empty_parent` that
+    // drifts from empty (a single-slot or saturated factory
+    // masquerading as empty) BEFORE any composition law reconciles
+    // two internally-drifted trait bodies.
+    let empty = empty_parent();
+    assert!(
+        empty.is_empty(),
+        "TaggedUnion::lacks() testkit: empty_parent() must satisfy is_empty() == true",
+    );
+    let empty_missing_count = empty.missing_kind_count();
+    for k in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let via_lacks = empty.lacks(k);
+        // Factory-precondition truth table on the empty arm: the
+        // missing set is all of `ALL`, so `lacks(k) == true` for
+        // every `k`.
+        assert!(
+            via_lacks,
+            "empty_parent().lacks({k:?}) must equal true (empty parent has every slot missing)",
+        );
+        // Definitional complement law on the empty arm.
+        assert_eq!(
+            via_lacks,
+            !empty.has(k),
+            "empty_parent().lacks({k:?}) drifted from !has({k:?})",
+        );
+        // Missing-set membership composition law on the empty arm.
+        assert_eq!(
+            via_lacks,
+            empty.missing_kinds().contains(&k),
+            "empty_parent().lacks({k:?}) drifted from missing_kinds().contains(&{k:?})",
+        );
+        // Kind-scoped implication law on the empty arm — lacks_only
+        // implies lacks. On any `ALL.len() >= 2` closed set the
+        // empty parent has ≥ 2 missing so lacks_only(k) == false on
+        // every k, and the implication is vacuously true; on the
+        // degenerate `ALL.len() == 1` regime lacks_only(k) == true
+        // on the sole k, and the implication holds because lacks(k)
+        // == true too.
+        if empty.lacks_only(k) {
+            assert!(
+                via_lacks,
+                "empty_parent().lacks_only({k:?}) == true but lacks({k:?}) == false",
+            );
+        }
+    }
+    // Cardinality-partition law on the empty arm — every kind
+    // satisfies lacks, so the count equals missing_kind_count()
+    // which equals ALL.len().
+    let empty_count = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+        .filter(|k| empty.lacks(*k))
+        .count();
+    assert_eq!(
+        empty_count, empty_missing_count,
+        "empty_parent(): count of kinds satisfying lacks ({empty_count}) drifted from missing_kind_count() ({empty_missing_count})",
+    );
+    assert_eq!(
+        empty_count, all_len,
+        "empty_parent(): count of kinds satisfying lacks must equal ALL.len() ({all_len}), got {empty_count}",
+    );
+
+    // Single-slot sweep — the composition-law shape across
+    // `ClosedSet::ALL × ALL`, plus a factory-precondition truth-
+    // table pin whose expected shape is derived from the abstract
+    // factory contract (`single_slot(populated)` populates exactly
+    // `populated` → the missing set is `ALL - {populated}`, so
+    // `lacks(probed) == true` iff `probed != populated`).
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let parent_missing_count = parent.missing_kind_count();
+        for probed in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let via_lacks = parent.lacks(probed);
+            // Factory-precondition truth table on the well-formed
+            // single-slot arm.
+            let expected_single = probed != populated;
+            assert_eq!(
+                via_lacks, expected_single,
+                "single_slot({populated:?}).lacks({probed:?}) must equal {expected_single}",
+            );
+            // Definitional complement law.
+            assert_eq!(
+                via_lacks,
+                !parent.has(probed),
+                "single_slot({populated:?}).lacks({probed:?}) drifted from !has({probed:?})",
+            );
+            // Missing-set membership composition law.
+            assert_eq!(
+                via_lacks,
+                parent.missing_kinds().contains(&probed),
+                "single_slot({populated:?}).lacks({probed:?}) drifted from missing_kinds().contains(&{probed:?})",
+            );
+            // Kind-scoped implication law — lacks_only implies
+            // lacks.
+            if parent.lacks_only(probed) {
+                assert!(
+                    via_lacks,
+                    "single_slot({populated:?}).lacks_only({probed:?}) == true but lacks({probed:?}) == false",
+                );
+            }
+        }
+        // Cardinality-partition law on the well-formed arm — the
+        // count of kinds satisfying lacks equals
+        // missing_kind_count() which equals ALL.len() - 1.
+        let well_formed_count = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| parent.lacks(*k))
+            .count();
+        assert_eq!(
+            well_formed_count, parent_missing_count,
+            "single_slot({populated:?}): count of kinds satisfying lacks ({well_formed_count}) drifted from missing_kind_count() ({parent_missing_count})",
+        );
+        let expected_single_missing = all_len - 1;
+        assert_eq!(
+            well_formed_count, expected_single_missing,
+            "single_slot({populated:?}): count of kinds satisfying lacks must equal ALL.len() - 1 ({expected_single_missing}), got {well_formed_count}",
+        );
+    }
+
+    // Two-slot sweep — every off-diagonal pair populates two slots,
+    // so the missing set is `ALL - {a, b}`, size `all_len - 2`, and
+    // `lacks(k) == true` iff `k != a && k != b`. On `ALL.len() == 2`
+    // `all_len - 2 == 0` (the two-slot arm saturates), so `lacks(k)
+    // == false` on every k; the composition-law shape binds every
+    // regime.
+    for a in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        for b in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            if a == b {
+                continue;
+            }
+            let parent = two_slot(a, b);
+            let parent_missing_count = parent.missing_kind_count();
+            for k in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+            {
+                let via_lacks = parent.lacks(k);
+                // Factory-precondition truth table on the two-slot
+                // arm.
+                let expected_two = k != a && k != b;
+                assert_eq!(
+                    via_lacks, expected_two,
+                    "two_slot({a:?}, {b:?}).lacks({k:?}) must equal {expected_two}",
+                );
+                // Definitional complement law.
+                assert_eq!(
+                    via_lacks,
+                    !parent.has(k),
+                    "two_slot({a:?}, {b:?}).lacks({k:?}) drifted from !has({k:?})",
+                );
+                // Missing-set membership composition law.
+                assert_eq!(
+                    via_lacks,
+                    parent.missing_kinds().contains(&k),
+                    "two_slot({a:?}, {b:?}).lacks({k:?}) drifted from missing_kinds().contains(&{k:?})",
+                );
+                // Kind-scoped implication law.
+                if parent.lacks_only(k) {
+                    assert!(
+                        via_lacks,
+                        "two_slot({a:?}, {b:?}).lacks_only({k:?}) == true but lacks({k:?}) == false",
+                    );
+                }
+            }
+            // Cardinality-partition law on the two-slot arm.
+            let multi_count = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+                .filter(|k| parent.lacks(*k))
+                .count();
+            assert_eq!(
+                multi_count, parent_missing_count,
+                "two_slot({a:?}, {b:?}): count of kinds satisfying lacks ({multi_count}) drifted from missing_kind_count() ({parent_missing_count})",
+            );
+            let expected_two_missing = all_len - 2;
+            assert_eq!(
+                multi_count, expected_two_missing,
+                "two_slot({a:?}, {b:?}): count of kinds satisfying lacks must equal ALL.len() - 2 ({expected_two_missing}), got {multi_count}",
             );
         }
     }
@@ -11721,6 +12145,190 @@ mod tests {
             crate::export::ArtifactSource::default,
         );
         assert_lacks_only_matches_unique_missing_kind::<crate::export::VectorChannel, _, _, _>(
+            single_slot_vector_channel_probe,
+            two_slot_vector_channel_probe,
+            crate::export::VectorChannel::default,
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // `assert_lacks_matches_has_complement` — the missing-axis SUBSET
+    // primitive testkit. Pin the composition-law truth table
+    // (definitional complement, missing-set membership, kind-scoped
+    // implication from lacks_only, cardinality partition against
+    // missing_kind_count, factory-precondition arm expectation) directly
+    // on the sibling-shaped `LocalParent` scaffold + on every one of the
+    // four production `.variant()` parents — a regression on either the
+    // definitional negation, the missing-set membership projection, or
+    // the cardinality partition fails here before any per-parent
+    // consumer surfaces the drift.
+    // -------------------------------------------------------------------
+
+    /// The `assert_lacks_matches_has_complement` primitive accepts the
+    /// [`LocalParent`] scaffold coherently — the closed-set-complement
+    /// peer of the kind-scoped SUBSET populated-axis predicate reads
+    /// `true` iff the probed kind is missing. On `LocalParent`'s
+    /// `ALL.len() == 3` closed set: the empty baseline has 3 missing
+    /// (so `lacks(k) == true` for every `k`), every single-slot arm
+    /// has 2 missing (so `lacks(k) == true` for every `k != populated`
+    /// and `false` for `k == populated`), and every off-diagonal
+    /// two-slot arm has 1 missing (so `lacks(k) == true` for the third
+    /// kind and `false` for the two populated kinds). The five
+    /// composition laws (definitional complement, missing-set
+    /// membership, kind-scoped implication from lacks_only,
+    /// cardinality partition against missing_kind_count, factory-
+    /// precondition arm expectation) hold on every arm.
+    #[test]
+    fn assert_lacks_matches_has_complement_accepts_coherent_local_impl() {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        assert_lacks_matches_has_complement::<LocalParent, _, _, _>(
+            single_slot,
+            two_slot,
+            LocalParent::default,
+        );
+    }
+
+    /// The primitive rejects a `single_slot` factory that yields a
+    /// saturated parent (all three slots populated, zero missing) —
+    /// the factory-precondition truth table on the well-formed
+    /// single-slot arm reads `expected == (probed != populated)`, but
+    /// the saturated factory has zero missing so `lacks(probed) ==
+    /// false` for EVERY probe, mismatching the `true` expectation
+    /// on every off-diagonal probe. Caught by the hard-coded arm
+    /// expectation BEFORE the definitional complement law reconciles
+    /// two internally-drifted trait bodies.
+    #[test]
+    #[should_panic(expected = "must equal true")]
+    fn assert_lacks_matches_has_complement_rejects_saturated_single_slot_factory() {
+        fn saturated_single_slot(_: LocalKind) -> LocalParent {
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        assert_lacks_matches_has_complement::<LocalParent, _, _, _>(
+            saturated_single_slot,
+            two_slot,
+            LocalParent::default,
+        );
+    }
+
+    /// The primitive rejects an `empty_parent` factory that yields a
+    /// saturated parent — the empty-baseline exhaustivity assertion
+    /// `empty_parent().is_empty() == true` fails on the saturated
+    /// baseline, catching a factory that mis-represents the empty arm
+    /// BEFORE any composition law reconciles two internally-drifted
+    /// trait bodies.
+    #[test]
+    #[should_panic(expected = "must satisfy is_empty() == true")]
+    fn assert_lacks_matches_has_complement_rejects_saturated_empty_baseline() {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        fn saturated_baseline() -> LocalParent {
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            }
+        }
+        assert_lacks_matches_has_complement::<LocalParent, _, _, _>(
+            single_slot,
+            two_slot,
+            saturated_baseline,
+        );
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the closed-set-complement peer of
+    /// `has` on the kind-scoped SUBSET axis coherently — every
+    /// `single_slot_X(k)` factory produces `lacks(k) == false` on the
+    /// diagonal and `lacks(other) == true` off-diagonal, every
+    /// `two_slot_X(a, b)` produces `lacks(k) == true` iff `k != a && k
+    /// != b`, and `X::default().lacks(k) == true` on the empty
+    /// baseline for every `k`. The cardinality-partition law (`count k
+    /// where lacks(k) == missing_kind_count()` per parent) is pinned
+    /// inside the testkit on every arm.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_lacks_testkit_primitive() {
+        assert_lacks_matches_has_complement::<crate::intent::Intent, _, _, _>(
+            single_slot_intent_probe,
+            two_slot_intent_probe,
+            crate::intent::Intent::default,
+        );
+        assert_lacks_matches_has_complement::<crate::encapsulates::EncapsulationKind, _, _, _>(
+            single_slot_encapsulation_kind_probe,
+            two_slot_encapsulation_kind_probe,
+            crate::encapsulates::EncapsulationKind::default,
+        );
+        assert_lacks_matches_has_complement::<crate::export::ArtifactSource, _, _, _>(
+            single_slot_artifact_source_probe,
+            two_slot_artifact_source_probe,
+            crate::export::ArtifactSource::default,
+        );
+        assert_lacks_matches_has_complement::<crate::export::VectorChannel, _, _, _>(
             single_slot_vector_channel_probe,
             two_slot_vector_channel_probe,
             crate::export::VectorChannel::default,

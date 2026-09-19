@@ -1086,6 +1086,194 @@ impl Boundary {
     pub fn first_missing_postcondition_kind(&self) -> Option<ConditionKind> {
         self.postconditions.first_missing_kind()
     }
+
+    /// Latest [`ConditionKind::ALL`] entry present in
+    /// `preconditions ∪ postconditions`, or `None` when neither side
+    /// populates any variant — the union arm of the (precondition,
+    /// postcondition, condition-union) last-distinct-kind triad on
+    /// [`Boundary`].
+    ///
+    /// # Composed body
+    ///
+    /// `ConditionKind::ALL.iter().rev().copied().find(|k|
+    /// self.has_condition_kind(*k))` — a REVERSED closed-set walk
+    /// composed against the two-slice union primitive
+    /// [`Self::has_condition_kind`] that SHORT-CIRCUITS at the latest
+    /// match. Byte-identical to the trait-level
+    /// [`ConditionSliceExt::last_distinct_kind`] but reaching through
+    /// the boundary's two-slice union rather than a single slice.
+    /// Equivalent to `self.distinct_condition_kinds().last().copied()`
+    /// without materializing the intermediate `Vec<ConditionKind>`.
+    ///
+    /// # Sibling to [`Self::first_distinct_condition_kind`]
+    ///
+    /// Time-reversed peer of the earliest-element scalar projection
+    /// under the SAME two-slice union predicate. Together with
+    /// `first_distinct_condition_kind` and the two `_missing_*` peers
+    /// the four scalar-endpoint projections close the "endpoint of
+    /// closed-set-inversion/complement widened primitive" refinement
+    /// axis on the boundary-union surface.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that surfaces "boundary ends with
+    /// ClosedLoopAuth" reads `spec.boundary.last_distinct_condition_kind()
+    /// == Some(ConditionKind::ClosedLoopAuth)` at ONE call site rather
+    /// than paying for `spec.boundary.distinct_condition_kinds().last()
+    /// == Some(&…)` with its intermediate heap allocation. A future
+    /// require-tag classifier arm that publishes the latest distinct
+    /// kind as a scalar (`condition-kinds-last-distinct-<kind>`) reaches
+    /// this ONE primitive without allocating.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs (the latest-element projection composes the
+    /// SAME reversed closed-set walk on both this boundary surface and
+    /// the slice-level substrate primitive under short-circuit
+    /// semantics). THEORY.md §VI.1 — generation over composition (a
+    /// new [`ConditionKind`] variant added to `ALL` reaches this
+    /// primitive mechanically through the reversed closed-set walk).
+    #[must_use]
+    pub fn last_distinct_condition_kind(&self) -> Option<ConditionKind> {
+        ConditionKind::ALL
+            .iter()
+            .rev()
+            .copied()
+            .find(|k| self.has_condition_kind(*k))
+    }
+
+    /// Latest [`ConditionKind::ALL`] entry present in
+    /// [`Self::preconditions`], or `None` when preconditions carry no
+    /// matching kind — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) last-distinct-kind triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::last_distinct_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::last_distinct_postcondition_kind`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice REVERSED short-circuit walk fails at that primitive's
+    /// tests rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn last_distinct_precondition_kind(&self) -> Option<ConditionKind> {
+        self.preconditions.last_distinct_kind()
+    }
+
+    /// Latest [`ConditionKind::ALL`] entry present in
+    /// [`Self::postconditions`], or `None` when postconditions carry
+    /// no matching kind — the postcondition-side arm of the
+    /// (precondition, postcondition, condition-union) last-distinct-
+    /// kind triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::last_distinct_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::last_distinct_precondition_kind`]. See that
+    /// method for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via
+    /// [`crate::ephemeral::EphemeralSpec::last_distinct_postcondition_kind`].
+    #[must_use]
+    pub fn last_distinct_postcondition_kind(&self) -> Option<ConditionKind> {
+        self.postconditions.last_distinct_kind()
+    }
+
+    /// Latest [`ConditionKind::ALL`] entry ABSENT from
+    /// `preconditions ∪ postconditions`, or `None` when the union
+    /// carries every variant — the union arm of the (precondition,
+    /// postcondition, condition-union) last-missing-kind triad on
+    /// [`Boundary`].
+    ///
+    /// # Composed body
+    ///
+    /// `ConditionKind::ALL.iter().rev().copied().find(|k|
+    /// !self.has_condition_kind(*k))` — a REVERSED closed-set walk
+    /// composed against the two-slice union primitive
+    /// [`Self::has_condition_kind`] under a NEGATED predicate that
+    /// SHORT-CIRCUITS at the latest empty slot. Byte-identical to the
+    /// trait-level [`ConditionSliceExt::last_missing_kind`] but
+    /// reaching through the boundary's two-slice union rather than a
+    /// single slice. Equivalent to
+    /// `self.missing_condition_kinds().last().copied()` without
+    /// materializing the intermediate `Vec<ConditionKind>`.
+    ///
+    /// # Sibling to [`Self::first_missing_condition_kind`]
+    ///
+    /// Time-reversed peer of the earliest-element scalar projection
+    /// under the SAME negated two-slice union predicate. Fourth
+    /// scalar projection on the closed-set-complement axis on the
+    /// boundary-union surface (first, count, missing_kinds already
+    /// shipped; this method closes the endpoint pair on the
+    /// complement side).
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check that surfaces "boundary is latest-
+    /// missing PromQL" reads
+    /// `spec.boundary.last_missing_condition_kind() ==
+    /// Some(ConditionKind::PromQL)` at ONE call site rather than
+    /// paying for `spec.boundary.missing_condition_kinds().last()`
+    /// with its intermediate heap allocation. An operator-facing
+    /// "last still-unfilled closed-loop kind" audit reaches this ONE
+    /// substrate site rather than restating the negated reversed
+    /// closed-set walk at every consumer.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the complement-latest-element projection
+    /// composes the SAME reversed closed-set walk on both this
+    /// boundary surface and the slice-level substrate primitive
+    /// under short-circuit semantics with a negated predicate).
+    /// THEORY.md §VI.1 (generation over composition — a new
+    /// [`ConditionKind`] variant added to `ALL` reaches this
+    /// primitive mechanically through the reversed closed-set walk).
+    #[must_use]
+    pub fn last_missing_condition_kind(&self) -> Option<ConditionKind> {
+        ConditionKind::ALL
+            .iter()
+            .rev()
+            .copied()
+            .find(|k| !self.has_condition_kind(*k))
+    }
+
+    /// Latest [`ConditionKind::ALL`] entry ABSENT from
+    /// [`Self::preconditions`], or `None` when preconditions carry
+    /// every variant — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) last-missing-kind triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::last_missing_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::last_missing_postcondition_kind`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice negated REVERSED short-circuit walk fails at that
+    /// primitive's tests rather than as silent drift at either
+    /// struct-level arm.
+    #[must_use]
+    pub fn last_missing_precondition_kind(&self) -> Option<ConditionKind> {
+        self.preconditions.last_missing_kind()
+    }
+
+    /// Latest [`ConditionKind::ALL`] entry ABSENT from
+    /// [`Self::postconditions`], or `None` when postconditions carry
+    /// every variant — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) last-missing-kind triad on
+    /// [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::last_missing_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::last_missing_precondition_kind`]. See that
+    /// method for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via
+    /// [`crate::ephemeral::EphemeralSpec::last_missing_postcondition_kind`].
+    #[must_use]
+    pub fn last_missing_postcondition_kind(&self) -> Option<ConditionKind> {
+        self.postconditions.last_missing_kind()
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -1797,6 +1985,191 @@ pub trait ConditionSliceExt {
             .copied()
             .find(|k| !self.has_kind(*k))
     }
+
+    /// Short-circuiting `Option<ConditionKind>` peer of
+    /// [`Self::distinct_kinds`] — the LAST [`ConditionKind`] variant
+    /// present in this slice, in canonical [`ConditionKind::ALL`]
+    /// order, or `None` when the slice carries no variant. Default
+    /// body: `ConditionKind::ALL.iter().rev().copied().find(|k|
+    /// self.has_kind(*k))` — a REVERSED closed-set walk composed
+    /// against [`Self::has_kind`] per variant that SHORT-CIRCUITS at
+    /// the latest hit.
+    ///
+    /// # Sibling to [`Self::distinct_kinds`] /
+    /// [`Self::distinct_kind_count`] / [`Self::first_distinct_kind`]
+    ///
+    /// Fourth refinement on the closed-set-inversion axis and second
+    /// scalar `Option<ConditionKind>` projection: `distinct_kinds`
+    /// returns the SET, `distinct_kind_count` scalar-projects the
+    /// cardinality, `first_distinct_kind` scalar-projects the SET
+    /// onto its earliest element, and `last_distinct_kind` scalar-
+    /// projects the SET onto its latest element. The composition law
+    /// `last_distinct_kind() == distinct_kinds().last().copied()`
+    /// binds the latest-element projection to the widened primitive
+    /// at the trait's default body — pinned substrate-wide by
+    /// [`assert_slice_refinement_composition_laws`] as its
+    /// latest-element-inversion arm. Both scalar projections agree on
+    /// emptiness: `last_distinct_kind().is_none() ==
+    /// first_distinct_kind().is_none() == distinct_kinds().is_empty()`.
+    ///
+    /// # Peer to [`Self::first_distinct_kind`]
+    ///
+    /// Time-reversed peer under the SAME `has_kind` predicate: where
+    /// `first_distinct_kind` walks [`ConditionKind::ALL`] forward and
+    /// SHORT-CIRCUITS at the earliest hit, this primitive walks the
+    /// SAME closed set in reverse and SHORT-CIRCUITS at the latest
+    /// hit. The two primitives close the "endpoint scalar-projection
+    /// of the closed-set-inversion widened primitive" refinement pair
+    /// at one substrate site — one per endpoint. On a slice with
+    /// exactly one distinct kind both projections agree; on a slice
+    /// with distinct-kind-count ≥ 2 they yield distinct results
+    /// (the earliest and latest elements of the closed-set-inversion
+    /// respectively).
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `None` (no kind present, no hit on any
+    /// walk direction). A slice populating exactly `k` returns
+    /// `Some(k)` (single hit; earliest = latest). A saturated slice
+    /// carrying every variant returns `Some(ConditionKind::ALL.last()
+    /// .unwrap())` (the last ALL entry hits at the earliest walk step
+    /// of the reversed walk).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A `last-distinct-<kind>` require-tag classifier arm reads
+    ///   the latest-populated kind through this ONE substrate
+    ///   primitive with no allocation, byte-for-byte symmetrical with
+    ///   the earliest-hit `slice.first_distinct_kind()` peer.
+    /// - A future coherence check that surfaces "boundary ends with
+    ///   ClosedLoopAuth" reads
+    ///   `spec.boundary.postconditions.last_distinct_kind() ==
+    ///   Some(ConditionKind::ClosedLoopAuth)` at ONE call site rather
+    ///   than paying for `spec.boundary.postconditions
+    ///   .distinct_kinds().last() == Some(&…)` with its intermediate
+    ///   heap allocation.
+    /// - Combined with [`Self::first_distinct_kind`], operator
+    ///   diagnostics that render a "populated-kind range" summary
+    ///   (`first..=last` on the closed-set-inversion projection) read
+    ///   the two endpoints through TWO substrate primitives at
+    ///   symmetric shapes without allocating.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The latest-element projection lives at ONE substrate site as
+    ///   a typed projection of [`Self::has_kind`] over the closed set
+    ///   [`ConditionKind::ALL`] under REVERSED short-circuit walk
+    ///   semantics; byte-for-byte peer of the earliest-element
+    ///   projection under FORWARD walk semantics.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically (the reversed closed-set walk picks
+    ///   up the new entry at the appropriate position) — every
+    ///   downstream consumer sees the wider latest-hit projection
+    ///   without further per-caller edit.
+    fn last_distinct_kind(&self) -> Option<ConditionKind> {
+        ConditionKind::ALL
+            .iter()
+            .rev()
+            .copied()
+            .find(|k| self.has_kind(*k))
+    }
+
+    /// Short-circuiting `Option<ConditionKind>` peer of
+    /// [`Self::missing_kinds`] — the LAST [`ConditionKind`] variant
+    /// ABSENT from this slice, in canonical [`ConditionKind::ALL`]
+    /// order, or `None` when the slice carries every variant. Default
+    /// body: `ConditionKind::ALL.iter().rev().copied().find(|k|
+    /// !self.has_kind(*k))` — a REVERSED closed-set walk composed
+    /// against [`Self::has_kind`] per variant under NEGATION with
+    /// SHORT-CIRCUIT at the latest empty slot.
+    ///
+    /// # Sibling to [`Self::missing_kinds`] /
+    /// [`Self::missing_kind_count`] / [`Self::first_missing_kind`]
+    ///
+    /// Fourth refinement on the closed-set-complement axis and second
+    /// scalar `Option<ConditionKind>` projection: `missing_kinds`
+    /// returns the SET, `missing_kind_count` scalar-projects the
+    /// cardinality, `first_missing_kind` scalar-projects the SET onto
+    /// its earliest element, and `last_missing_kind` scalar-projects
+    /// the SET onto its latest element. The composition law
+    /// `last_missing_kind() == missing_kinds().last().copied()` binds
+    /// the latest-element projection to the widened primitive at the
+    /// trait's default body — pinned substrate-wide by
+    /// [`assert_slice_refinement_composition_laws`] as its
+    /// latest-element-complement arm. Both scalar projections agree
+    /// on saturation: `last_missing_kind().is_none() ==
+    /// first_missing_kind().is_none() == missing_kinds().is_empty()`.
+    ///
+    /// # Peer to [`Self::first_missing_kind`]
+    ///
+    /// Time-reversed peer under the SAME negated `has_kind` predicate:
+    /// where `first_missing_kind` walks [`ConditionKind::ALL`] forward
+    /// under negation and SHORT-CIRCUITS at the earliest empty slot,
+    /// this primitive walks the SAME closed set in reverse and SHORT-
+    /// CIRCUITS at the latest empty slot. The two primitives close
+    /// the "endpoint scalar-projection of the closed-set-complement
+    /// widened primitive" refinement pair at one substrate site.
+    ///
+    /// # Peer to [`Self::last_distinct_kind`]
+    ///
+    /// Closed-set-complement peer of the closed-set-inversion latest-
+    /// element primitive under a NEGATED `has_kind` predicate. Along
+    /// with [`Self::first_distinct_kind`] and [`Self::first_missing_kind`]
+    /// the four scalar-endpoint projections partition the endpoint
+    /// axis into (present, absent) × (earliest, latest) — every
+    /// endpoint-addressable coherence check reads ONE of the four at
+    /// ONE call site, never the full `Vec<ConditionKind>` walk.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `Some(ConditionKind::ALL.last().unwrap())`
+    /// (every kind missing, latest hit is the last ALL entry). A slice
+    /// populating exactly `k` returns `Some(ALL.last().unwrap())` if
+    /// `k != ALL.last().unwrap()`, else `Some(ALL[ALL.len() - 2])` (the
+    /// latest non-`k` entry). A saturated slice carrying every variant
+    /// returns `None`.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing "last still-unfilled kind" diagnostic on a
+    ///   partially-populated boundary reads
+    ///   `boundary.postconditions.last_missing_kind()` at ONE substrate
+    ///   site — a strictly-more-informative projection than
+    ///   `!has_kind(ClosedLoopAuth)` at a per-kind callsite for a
+    ///   fleet-wide "which processes are latest-missing a specific
+    ///   closed-loop kind" audit.
+    /// - A `last-missing-<kind>` require-tag classifier arm reads this
+    ///   primitive with no allocation, byte-for-byte symmetrical with
+    ///   the earliest-hit `slice.first_missing_kind()` peer.
+    /// - Combined with [`Self::first_missing_kind`], a coherence check
+    ///   that renders a "missing-kind range" summary reads the two
+    ///   endpoints through TWO substrate primitives at symmetric
+    ///   shapes without allocating through `missing_kinds()`.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The complement-latest-element projection lives at ONE
+    ///   substrate site as a typed projection of [`Self::has_kind`]
+    ///   over the closed set [`ConditionKind::ALL`] under negation
+    ///   with REVERSED short-circuit walk semantics; byte-for-byte
+    ///   peer of the complement-earliest-element projection under
+    ///   FORWARD walk semantics.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically (the reversed closed-set walk picks
+    ///   up the new entry on the missing side at the appropriate
+    ///   position) — every downstream consumer sees the wider
+    ///   complement's latest hit without further per-caller edit.
+    fn last_missing_kind(&self) -> Option<ConditionKind> {
+        ConditionKind::ALL
+            .iter()
+            .rev()
+            .copied()
+            .find(|k| !self.has_kind(*k))
+    }
 }
 
 /// Iterator yielded by [`ConditionSliceExt::iter_kind`] — the widened
@@ -2133,6 +2506,45 @@ where
         slice.first_missing_kind(),
         missing.first().copied(),
         "first_missing_kind() drifted from missing_kinds().first().copied()",
+    );
+
+    // last_distinct_kind ↔ distinct_kinds.last().copied() — the
+    // latest-element scalar projection of the closed-set-inversion
+    // widened primitive. Time-reversed peer of `first_distinct_kind
+    // ↔ distinct_kinds.first().copied()` under the SAME `has_kind`
+    // predicate but with the closed-set walk reversed: where the
+    // earliest-element peer picks the smallest ALL index that hits,
+    // this arm picks the LARGEST. A regression that overrode
+    // `last_distinct_kind` to skip a kind, drift the walk direction
+    // (returning `first_distinct_kind`), forget the short-circuit
+    // (returning `distinct_kinds().rev().next()` allocation), or
+    // diverge from the widened primitive's canonical ordering
+    // surfaces HERE at the substrate boundary, not as silent drift
+    // at every downstream `last-distinct-<kind>` require-tag
+    // classifier callsite.
+    assert_eq!(
+        slice.last_distinct_kind(),
+        distinct.last().copied(),
+        "last_distinct_kind() drifted from distinct_kinds().last().copied()",
+    );
+
+    // last_missing_kind ↔ missing_kinds.last().copied() — the
+    // latest-element scalar projection of the closed-set-complement
+    // widened primitive. Byte-for-byte peer of `last_distinct_kind`
+    // one axis over under a NEGATED predicate: where
+    // `last_distinct_kind` scalar-projects the closed-set-INVERSION
+    // widened primitive onto its LATEST element, this arm scalar-
+    // projects the closed-set-COMPLEMENT widened primitive onto its
+    // LATEST element. A regression that overrode `last_missing_kind`
+    // to drop the negation (returning `last_distinct_kind`), reverse
+    // the walk direction (returning `first_missing_kind`), skip a
+    // kind, or forget the short-circuit surfaces HERE at the
+    // substrate boundary, not as silent drift at every downstream
+    // `last-missing-<kind>` require-tag classifier callsite.
+    assert_eq!(
+        slice.last_missing_kind(),
+        missing.last().copied(),
+        "last_missing_kind() drifted from missing_kinds().last().copied()",
     );
 }
 
@@ -4579,6 +4991,147 @@ mod tests {
         );
     }
 
+    // ── ConditionSliceExt::last_distinct_kind — latest-element pins ────
+    //
+    // Short-circuiting Option<ConditionKind> peer of the closed-set-
+    // inversion widened primitive `distinct_kinds` on the LATEST-hit
+    // side: `last_distinct_kind()` returns the latest present kind in
+    // canonical ConditionKind::ALL order via a REVERSED walk with no
+    // intermediate Vec<ConditionKind> allocation. The composition law
+    // `last_distinct_kind() == distinct_kinds().last().copied()` is
+    // pinned as the latest-element-inversion arm of
+    // `assert_slice_refinement_composition_laws`.
+
+    /// EMPTY-SLICE pin — an empty slice returns `None` on
+    /// `last_distinct_kind`, byte-for-byte with
+    /// `distinct_kinds().last().copied()` (both scalar endpoints agree
+    /// on emptiness).
+    #[test]
+    fn condition_slice_last_distinct_kind_returns_none_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        assert_eq!(
+            empty.last_distinct_kind(),
+            None,
+            "empty slice must return None on last_distinct_kind",
+        );
+        assert_eq!(
+            empty.last_distinct_kind(),
+            empty.distinct_kinds().last().copied(),
+            "empty last_distinct_kind must equal distinct_kinds().last().copied()",
+        );
+    }
+
+    /// PER-VARIANT pin — a slice with EXACTLY ONE `Condition` carrying
+    /// the addressed kind returns `Some(that_kind)` on
+    /// `last_distinct_kind` (single hit; earliest = latest endpoint).
+    #[test]
+    fn condition_slice_last_distinct_kind_returns_populated_variant() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            assert_eq!(
+                slice.last_distinct_kind(),
+                Some(populated),
+                "single-populated slice must return Some({populated:?}) on last_distinct_kind",
+            );
+            assert_eq!(
+                slice.last_distinct_kind(),
+                slice.distinct_kinds().last().copied(),
+                "single-populated last_distinct_kind must equal distinct_kinds().last().copied() for {populated:?}",
+            );
+            // On single-populated slice both endpoint projections agree.
+            assert_eq!(
+                slice.last_distinct_kind(),
+                slice.first_distinct_kind(),
+                "single-populated last_distinct_kind must equal first_distinct_kind for {populated:?} (single hit ⇒ earliest = latest)",
+            );
+        }
+    }
+
+    /// FULL-COVERAGE pin — a slice that carries every [`ConditionKind`]
+    /// variant returns `Some(*ConditionKind::ALL.last().unwrap())` on
+    /// `last_distinct_kind` (the last ALL entry hits at the earliest
+    /// walk step of the REVERSED walk).
+    #[test]
+    fn condition_slice_last_distinct_kind_returns_last_all_on_saturated_slice() {
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        let last_all = ConditionKind::ALL.last().copied();
+        assert_eq!(
+            saturated.as_slice().last_distinct_kind(),
+            last_all,
+            "saturated slice must return Some(*ConditionKind::ALL.last().unwrap()) on last_distinct_kind",
+        );
+        assert_eq!(
+            saturated.as_slice().last_distinct_kind(),
+            saturated.as_slice().distinct_kinds().last().copied(),
+            "saturated last_distinct_kind must equal distinct_kinds().last().copied()",
+        );
+    }
+
+    // ── ConditionSliceExt::last_missing_kind — latest-element pins ─────
+
+    /// EMPTY-SLICE pin — an empty slice returns
+    /// `Some(*ConditionKind::ALL.last().unwrap())` on `last_missing_kind`
+    /// (every kind missing, latest hit is the last ALL entry). Dual of
+    /// the empty-slice arm on `last_distinct_kind` which returns `None`.
+    #[test]
+    fn condition_slice_last_missing_kind_returns_last_all_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        let last_all = ConditionKind::ALL.last().copied();
+        assert_eq!(
+            empty.last_missing_kind(),
+            last_all,
+            "empty slice must return Some(*ConditionKind::ALL.last().unwrap()) on last_missing_kind",
+        );
+        assert_eq!(
+            empty.last_missing_kind(),
+            empty.missing_kinds().last().copied(),
+            "empty last_missing_kind must equal missing_kinds().last().copied()",
+        );
+    }
+
+    /// PER-VARIANT pin — a slice populating exactly `k` returns
+    /// `Some(*ALL.last().unwrap())` if `k != ALL.last().unwrap()`, else
+    /// `Some(ALL[ALL.len() - 2])` (the latest ALL entry != `k`).
+    #[test]
+    fn condition_slice_last_missing_kind_returns_latest_absent_variant() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            let expected = ConditionKind::ALL
+                .into_iter()
+                .rev()
+                .find(|k| *k != populated);
+            assert_eq!(
+                slice.last_missing_kind(),
+                expected,
+                "single-populated slice must return latest ALL entry != {populated:?} on last_missing_kind",
+            );
+            assert_eq!(
+                slice.last_missing_kind(),
+                slice.missing_kinds().last().copied(),
+                "single-populated last_missing_kind must equal missing_kinds().last().copied() for {populated:?}",
+            );
+        }
+    }
+
+    /// FULL-COVERAGE pin — a slice that carries every [`ConditionKind`]
+    /// variant returns `None` on `last_missing_kind` (no kind missing).
+    #[test]
+    fn condition_slice_last_missing_kind_returns_none_on_saturated_slice() {
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert_eq!(
+            saturated.as_slice().last_missing_kind(),
+            None,
+            "saturated slice must return None on last_missing_kind",
+        );
+        assert_eq!(
+            saturated.as_slice().last_missing_kind(),
+            saturated.as_slice().missing_kinds().last().copied(),
+            "saturated last_missing_kind must equal missing_kinds().last().copied()",
+        );
+    }
+
     // ── Boundary distinct-set triad — substrate-delegation pins ────────
     //
     // The (precondition, postcondition, condition-union) distinct-set
@@ -5035,6 +5588,171 @@ mod tests {
                     b.missing_condition_kinds().first().copied(),
                     "Boundary::first_missing_condition_kind must equal \
                      missing_condition_kinds().first().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary last-distinct-kind triad)
+    /// — the three `last_distinct_*_kind` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::last_distinct_kind`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via `ConditionKind::ALL.iter().rev().copied()
+    /// .find(|k| has_condition_kind(*k))`. Sweep
+    /// `ConditionKind::ALL × ConditionKind::ALL` so a regression that
+    /// (a) forgot to reverse the walk (returning `first_distinct_*_kind`),
+    /// (b) inlined a divergent closed-set walk at either half-slice
+    /// arm, or (c) narrowed the union to an intersection surfaces
+    /// HERE. Also pins the composition law `last_distinct_*_kind() ==
+    /// distinct_*_kinds().last().copied()` at each arm.
+    #[test]
+    fn last_distinct_condition_kind_triad_delegates_to_slice_last_distinct_kind() {
+        // Empty boundary — every arm returns None.
+        let b = Boundary::default();
+        assert_eq!(
+            b.last_distinct_precondition_kind(),
+            None,
+            "empty boundary must return None on last_distinct_precondition_kind",
+        );
+        assert_eq!(
+            b.last_distinct_postcondition_kind(),
+            None,
+            "empty boundary must return None on last_distinct_postcondition_kind",
+        );
+        assert_eq!(
+            b.last_distinct_condition_kind(),
+            None,
+            "empty boundary must return None on last_distinct_condition_kind",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                assert_eq!(
+                    b.last_distinct_precondition_kind(),
+                    b.preconditions.last_distinct_kind(),
+                    "Boundary::last_distinct_precondition_kind must delegate verbatim to \
+                     preconditions.last_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.last_distinct_precondition_kind(),
+                    b.distinct_precondition_kinds().last().copied(),
+                    "Boundary::last_distinct_precondition_kind must equal \
+                     distinct_precondition_kinds().last().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.last_distinct_postcondition_kind(),
+                    b.postconditions.last_distinct_kind(),
+                    "Boundary::last_distinct_postcondition_kind must delegate verbatim to \
+                     postconditions.last_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.last_distinct_postcondition_kind(),
+                    b.distinct_postcondition_kinds().last().copied(),
+                    "Boundary::last_distinct_postcondition_kind must equal \
+                     distinct_postcondition_kinds().last().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let expected_union = ConditionKind::ALL
+                    .into_iter()
+                    .rev()
+                    .find(|k| pre_kind == *k || post_kind == *k);
+                assert_eq!(
+                    b.last_distinct_condition_kind(),
+                    expected_union,
+                    "Boundary::last_distinct_condition_kind must equal latest ALL entry \
+                     populated by either half-slice for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.last_distinct_condition_kind(),
+                    b.distinct_condition_kinds().last().copied(),
+                    "Boundary::last_distinct_condition_kind must equal \
+                     distinct_condition_kinds().last().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary last-missing-kind triad) —
+    /// the three `last_missing_*_kind` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::last_missing_kind`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via `ConditionKind::ALL.iter().rev().copied()
+    /// .find(|k| !has_condition_kind(*k))`. Sweep
+    /// `ConditionKind::ALL × ConditionKind::ALL` so a regression that
+    /// dropped the negation or forgot the reversed short-circuit walk
+    /// surfaces HERE. Also pins the composition law `last_missing_*_kind()
+    /// == missing_*_kinds().last().copied()` at each arm.
+    #[test]
+    fn last_missing_condition_kind_triad_delegates_to_slice_last_missing_kind() {
+        // Empty boundary — every arm returns Some(*ConditionKind::ALL.last().unwrap()).
+        let b = Boundary::default();
+        let last = ConditionKind::ALL.last().copied();
+        assert_eq!(
+            b.last_missing_precondition_kind(),
+            last,
+            "empty boundary must return Some(*ConditionKind::ALL.last().unwrap()) on last_missing_precondition_kind",
+        );
+        assert_eq!(
+            b.last_missing_postcondition_kind(),
+            last,
+            "empty boundary must return Some(*ConditionKind::ALL.last().unwrap()) on last_missing_postcondition_kind",
+        );
+        assert_eq!(
+            b.last_missing_condition_kind(),
+            last,
+            "empty boundary must return Some(*ConditionKind::ALL.last().unwrap()) on last_missing_condition_kind",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                assert_eq!(
+                    b.last_missing_precondition_kind(),
+                    b.preconditions.last_missing_kind(),
+                    "Boundary::last_missing_precondition_kind must delegate verbatim to \
+                     preconditions.last_missing_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.last_missing_precondition_kind(),
+                    b.missing_precondition_kinds().last().copied(),
+                    "Boundary::last_missing_precondition_kind must equal \
+                     missing_precondition_kinds().last().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.last_missing_postcondition_kind(),
+                    b.postconditions.last_missing_kind(),
+                    "Boundary::last_missing_postcondition_kind must delegate verbatim to \
+                     postconditions.last_missing_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.last_missing_postcondition_kind(),
+                    b.missing_postcondition_kinds().last().copied(),
+                    "Boundary::last_missing_postcondition_kind must equal \
+                     missing_postcondition_kinds().last().copied() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let expected_union = ConditionKind::ALL
+                    .into_iter()
+                    .rev()
+                    .find(|k| pre_kind != *k && post_kind != *k);
+                assert_eq!(
+                    b.last_missing_condition_kind(),
+                    expected_union,
+                    "Boundary::last_missing_condition_kind must equal latest ALL entry \
+                     NOT populated by either half-slice for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.last_missing_condition_kind(),
+                    b.missing_condition_kinds().last().copied(),
+                    "Boundary::last_missing_condition_kind must equal \
+                     missing_condition_kinds().last().copied() for pre={pre_kind:?} post={post_kind:?}",
                 );
             }
         }

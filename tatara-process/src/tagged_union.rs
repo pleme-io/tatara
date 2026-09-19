@@ -801,6 +801,42 @@ macro_rules! declare_tagged_union_impls {
             pub fn is_partially_populated(&self) -> bool {
                 <Self as $crate::tagged_union::TaggedUnion>::is_partially_populated(self)
             }
+
+            /// Kind-scoped strict refinement of [`Self::has`] — `true`
+            /// iff the given `kind` is populated AND no OTHER slot on
+            /// this tagged union is populated. The "exactly this one
+            /// variant" predicate.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::has_only`], whose
+            /// default body is a FUSED short-circuit closed-set walk
+            /// that returns `false` at the EARLIEST populated slot
+            /// whose kind is NOT `kind`, and returns `true` iff the
+            /// sweep completes with `kind` seen as the sole populated
+            /// slot. Byte-for-byte cheaper than either widened
+            /// composition `self.unique_populated_kind() ==
+            /// Some(kind)` (which walks until the SECOND populated
+            /// slot) or `self.has(kind) &&
+            /// self.has_unique_populated_kind()` (which walks the
+            /// closed set twice) on every arm where the parent
+            /// carries a populated slot that isn't `kind`.
+            ///
+            /// # Sibling to [`Self::has`]
+            ///
+            /// Kind-scoped strict-refinement peer: `has(kind)` is the
+            /// SUBSET predicate; `has_only(kind)` is the EQUAL
+            /// predicate. The implication
+            /// `has_only(kind) → has(kind)` binds the pair on the
+            /// strict-refinement axis. The composition law
+            /// `parent.has_only(kind) ==
+            /// (parent.unique_populated_kind() == Some(kind))` is
+            /// pinned as a first-class typed invariant by the trait's
+            /// own default body and swept substrate-wide by
+            /// [`crate::tagged_union::assert_has_only_matches_unique_populated_kind`].
+            pub fn has_only(&self, kind: $kind) -> bool {
+                <Self as $crate::tagged_union::TaggedUnion>::has_only(self, kind)
+            }
         }
 
         impl $crate::tagged_union::VariantSelector<$parent> for $kind {
@@ -2747,6 +2783,128 @@ pub trait TaggedUnion: Sized {
             }
         }
         false
+    }
+
+    /// Kind-scoped strict refinement of [`Self::has`] — `true` iff the
+    /// given `kind` is populated AND no OTHER slot on this tagged union
+    /// is populated. The "exactly this one variant" predicate.
+    ///
+    /// Default body: a FUSED short-circuit closed-set walk under
+    /// [`Self::has`] that returns `false` at the EARLIEST populated
+    /// slot whose kind is NOT `kind`, and returns `true` iff the sweep
+    /// completes with `kind` seen as the sole populated slot. Byte-for-
+    /// byte cheaper than either widened composition
+    /// `self.unique_populated_kind() == Some(kind)` (which walks until
+    /// the SECOND populated slot before comparing) or
+    /// `self.has(kind) && self.has_unique_populated_kind()` (two
+    /// closed-set walks) on every arm where the parent carries a
+    /// populated slot that isn't `kind`.
+    ///
+    /// # Sibling to [`Self::has`]
+    ///
+    /// Kind-scoped strict-refinement peer: `has(kind)` is the SUBSET
+    /// predicate (`kind` populated, maybe others too); `has_only(kind)`
+    /// is the EQUAL predicate (`kind` populated AND ONLY `kind`). The
+    /// implication `has_only(kind) → has(kind)` binds the pair on the
+    /// strict-refinement axis; the reverse implication holds only on
+    /// well-formed parents (`has_unique_populated_kind() == true`).
+    ///
+    /// # Peer to [`Self::unique_populated_kind`]
+    ///
+    /// Same axis, argument-scoped projection: where
+    /// `unique_populated_kind()` returns `Some(k)` iff exactly one slot
+    /// is populated AND names which one, `has_only(kind)` returns
+    /// `true` iff exactly one slot is populated AND that slot is the
+    /// passed `kind`. The composition law
+    /// `has_only(kind) == (unique_populated_kind() == Some(kind))`
+    /// binds the two primitives at the trait's default body — swept
+    /// substrate-wide by
+    /// [`assert_has_only_matches_unique_populated_kind`].
+    ///
+    /// # Truth table on the exactly-one-slot tagged-union contract
+    ///
+    /// For a tagged union with `<Self::Kind as ClosedSet>::ALL` of
+    /// cardinality `N ≥ 2` and a fixed argument `kind`:
+    ///
+    /// - Empty parent (0 populated, N missing): `false` — no populated
+    ///   slot, so `kind` isn't the sole populated kind.
+    /// - Well-formed parent with `kind` populated (1 populated ==
+    ///   kind): `true` — the SOLE arm where `has_only(kind)` returns
+    ///   `true`. Aligns with [`Self::variant`]'s `Ok(Variant)` arm
+    ///   where the resolver names the same kind.
+    /// - Well-formed parent with other kind populated (1 populated !=
+    ///   kind): `false` — the populated slot addresses a different
+    ///   kind.
+    /// - K-populated parent for `K ≥ 2`: `false` — multiple populated
+    ///   slots, so no single kind is the "only" one.
+    /// - Saturated parent (N populated, 0 missing on any `N ≥ 2`):
+    ///   `false`.
+    ///
+    /// # Kind-domain exhaustivity
+    ///
+    /// A parent satisfies `has_only(k)` for AT MOST one `k`, since two
+    /// distinct kinds cannot both be the sole populated slot. On the
+    /// well-formed arm the count is exactly 1 (the addressed kind); on
+    /// every non-well-formed arm the count is 0. This kind-domain
+    /// exhaustivity law binds the argument-scoped projection to the
+    /// arg-less uniqueness predicate at ONE substrate site.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A dispatch table that runs a per-kind branch only when the
+    ///   parent is unambiguously that kind reads `parent.has_only(k)`
+    ///   at ONE substrate site with ONE fused short-circuit walk —
+    ///   strictly cheaper than either widened composition.
+    /// - An `is-only-<kind>` require-tag classifier arm reaches this
+    ///   primitive at ONE call site — the kind-scoped peer of the
+    ///   arg-less `has_unique_populated_kind` classifier.
+    /// - A coherence check verifying "every parent from a
+    ///   `single_slot_X(k)` factory is unambiguously kind `k`" reads
+    ///   `parent.has_only(k)` at ONE site — the strongest structural
+    ///   pin on the well-formed diagonal.
+    /// - An operator-facing "unambiguously kind=<k>" diagnostic on the
+    ///   resolver's Ok arm reads `parent.has_only(k)` after
+    ///   `first_populated_kind` names the resolved kind — one walk, no
+    ///   allocation, no `Option<Kind>` construction.
+    ///
+    /// A new [`Self::Kind`] variant added to
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) reaches
+    /// this primitive mechanically — the fused walk picks up the new
+    /// slot as an additional short-circuit candidate at every
+    /// downstream callsite without further per-caller edit.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The kind-scoped strict-refinement projection lives at ONE
+    ///   substrate site as a fused short-circuit walk over
+    ///   `<Self::Kind as ClosedSet>::ALL` under [`Self::has`] with
+    ///   early exit on the first populated slot whose kind is not
+    ///   `kind` — byte-for-byte cheaper than the widened composition
+    ///   `unique_populated_kind() == Some(kind)`, semantically
+    ///   identical on every arm.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+    ///   mechanically through the fused walk.
+    fn has_only(&self, kind: Self::Kind) -> bool
+    where
+        Self::Kind: PartialEq,
+    {
+        let mut saw_kind = false;
+        for k in <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            if !self.has(k) {
+                continue;
+            }
+            if k == kind {
+                saw_kind = true;
+            } else {
+                return false;
+            }
+        }
+        saw_kind
     }
 }
 
@@ -4898,6 +5056,251 @@ pub fn assert_is_partially_populated_matches_cardinality<T, F, G, H>(
                     + usize::from(parent.is_saturated()),
                 1,
                 "two_slot({a:?}, {b:?}) must satisfy EXACTLY ONE of is_empty / is_partially_populated / is_saturated",
+            );
+        }
+    }
+}
+
+/// Generic kind-scoped strict-refinement testkit — pins that
+/// [`TaggedUnion::has_only`] agrees with the widened composition
+/// `unique_populated_kind() == Some(kind)` across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) `× ALL`
+/// single-slot (populated, probed) pair, every off-diagonal two-slot
+/// pair `× ALL`, AND the empty-parent baseline `× ALL`.
+///
+/// Kind-scoped-strict-refinement-axis substrate primitive for the
+/// argument-taking uniqueness peer of [`TaggedUnion::has`] — the
+/// EQUAL predicate to `has`'s SUBSET predicate. FIVE composition laws
+/// per arm are pinned per (populated / pair / empty × probed) sub-
+/// assertion:
+///
+/// 1. **Widened uniqueness composition law**:
+///    `has_only(kind) == (unique_populated_kind() == Some(kind))` —
+///    the canonical composition that the trait's default body's fused
+///    walk collapses into ONE short-circuit closed-set traversal.
+///    Pinned so a regression that overrides `has_only` to skip the
+///    sweep, drop the "no other populated" check, or return the wrong
+///    Boolean fails here at the widened uniqueness composition.
+/// 2. **Cardinality-refinement composition law**:
+///    `has_only(kind) == (has(kind) && has_unique_populated_kind())`
+///    — the paired-endpoint composition binding the strict refinement
+///    to the arg-less uniqueness predicate. Pinned so a regression
+///    that drops the "exactly one populated" check (returning `true`
+///    on a multi-populated parent whose SET of populated kinds
+///    contains `kind`) is caught here.
+/// 3. **Kind-scoped implication law**:
+///    `has_only(kind) → has(kind)` — every arm where `has_only`
+///    returns `true` must satisfy `has(kind) == true` (the SUBSET
+///    predicate must accept every parent the EQUAL predicate
+///    accepts). Pinned so a regression that returns `true` on an
+///    empty parent or a parent that populates a DIFFERENT kind is
+///    caught here.
+/// 4. **Kind-domain exhaustivity law**:
+///    `<Kind as ClosedSet>::ALL.iter().filter(|k|
+///    parent.has_only(*k)).count() ≤ 1` on every arm — a parent
+///    satisfies `has_only(k)` for AT MOST one `k`, since two distinct
+///    kinds cannot both be the sole populated slot. On the well-
+///    formed arm the count is exactly 1 (the addressed kind); on the
+///    empty AND multi-populated arms the count is 0. This kind-domain
+///    exhaustivity law binds the argument-scoped projection to the
+///    arg-less uniqueness predicate at ONE substrate site.
+/// 5. **Well-formed diagonal law**:
+///    `single_slot(k).has_only(k) == true` on every `k ∈
+///    ClosedSet::ALL` — the single-slot factory constructs a well-
+///    formed parent, so every `has_only(k)` on the diagonal is
+///    `true`. Pinned so a regression that returns `false` on the
+///    well-formed arm (e.g. a typo `!self.has(k)` in the trait
+///    default) is caught here.
+///
+/// The three arm expectations:
+///
+/// - **Empty-parent baseline** (swept `× ALL` outside the per-slot
+///   loop): `empty_parent().has_only(k) == false` for every `k` — no
+///   populated slot, so no kind is the sole populated kind.
+/// - **Single-slot sweep** (swept on `ClosedSet::ALL × ALL`):
+///   `single_slot(populated).has_only(kind) == (populated == kind)`
+///   — the well-formed truth table.
+/// - **Two-slot sweep** (swept on the off-diagonal `× ALL`):
+///   `two_slot(a, b).has_only(k) == false` for every `k` — multi-
+///   populated parents satisfy `has_only(k)` for NO kind.
+///
+/// A fifth sibling tagged-union parent picks up the kind-scoped-
+/// strict-refinement check through ONE `impl TaggedUnion for X`
+/// block plus ONE per-site `single_slot_X` factory plus ONE per-site
+/// `two_slot_X` factory plus ONE per-site `empty_X` factory plus ONE
+/// call site — no re-authored `has_only` sweep at the test surface.
+///
+/// Same [`crate::lifetime::Lifetime`] exclusion as the sibling
+/// primitives — the `T: TaggedUnion` bound doesn't reach it.
+///
+/// # Theory grounding
+///
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+///   kind-scoped strict-refinement projection binds through the SAME
+///   shape the arg-less uniqueness peer binds through (a closed-set
+///   walk under `Self::has`), differing only in the argument-scoped
+///   short-circuit gate (first populated slot mismatched → `false`).
+///   The kind-domain exhaustivity law
+///   `count k where has_only(k) ≤ 1` lives at ONE substrate site
+///   inside the testkit's per-arm sweep — pinned across every
+///   production tagged union at compile time via the trait's default
+///   body composition, not per-parent.
+/// - THEORY.md §VI.1 — generation over composition. A new
+///   [`Self::Kind`] variant added to `ALL` reaches this primitive
+///   mechanically through the fused walk at the trait's default body.
+#[track_caller]
+pub fn assert_has_only_matches_unique_populated_kind<T, F, G, H>(
+    single_slot: F,
+    two_slot: G,
+    empty_parent: H,
+) where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+    G: Fn(T::Kind, T::Kind) -> T,
+    H: Fn() -> T,
+{
+    // Empty-parent baseline — every `has_only(k)` returns `false`
+    // because no slot is populated.
+    let empty = empty_parent();
+    assert!(
+        empty.is_empty(),
+        "TaggedUnion::has_only() testkit: empty_parent() must satisfy is_empty() == true",
+    );
+    for k in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let via_has_only = empty.has_only(k);
+        assert!(
+            !via_has_only,
+            "empty_parent().has_only({k:?}) must equal false",
+        );
+        // Widened uniqueness composition law on the empty arm.
+        assert_eq!(
+            via_has_only,
+            empty.unique_populated_kind() == Some(k),
+            "empty_parent().has_only({k:?}) drifted from (unique_populated_kind() == Some({k:?}))",
+        );
+        // Cardinality-refinement composition law on the empty arm.
+        assert_eq!(
+            via_has_only,
+            empty.has(k) && empty.has_unique_populated_kind(),
+            "empty_parent().has_only({k:?}) drifted from (has({k:?}) && has_unique_populated_kind())",
+        );
+    }
+    // Kind-domain exhaustivity on the empty arm — no kind is the sole
+    // populated kind, so the count is 0.
+    let empty_count = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+        .filter(|k| empty.has_only(*k))
+        .count();
+    assert_eq!(
+        empty_count, 0,
+        "empty_parent(): exactly 0 kinds must satisfy has_only, got {empty_count}",
+    );
+
+    // Single-slot sweep — the well-formed truth table across
+    // `ClosedSet::ALL × ALL`.
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        for probed in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let expected = probed == populated;
+            let via_has_only = parent.has_only(probed);
+            // Truth table on the well-formed diagonal — `true` iff the
+            // probed kind equals the populated kind.
+            assert_eq!(
+                via_has_only, expected,
+                "single_slot({populated:?}).has_only({probed:?}) must equal {expected}",
+            );
+            // Widened uniqueness composition law.
+            assert_eq!(
+                via_has_only,
+                parent.unique_populated_kind() == Some(probed),
+                "single_slot({populated:?}).has_only({probed:?}) drifted from (unique_populated_kind() == Some({probed:?}))",
+            );
+            // Cardinality-refinement composition law.
+            assert_eq!(
+                via_has_only,
+                parent.has(probed) && parent.has_unique_populated_kind(),
+                "single_slot({populated:?}).has_only({probed:?}) drifted from (has({probed:?}) && has_unique_populated_kind())",
+            );
+            // Kind-scoped implication law — has_only implies has.
+            if via_has_only {
+                assert!(
+                    parent.has(probed),
+                    "single_slot({populated:?}).has_only({probed:?}) == true but has({probed:?}) == false",
+                );
+            }
+        }
+        // Kind-domain exhaustivity on the well-formed arm — exactly 1
+        // kind (the populated one) satisfies has_only.
+        let well_formed_count = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| parent.has_only(*k))
+            .count();
+        assert_eq!(
+            well_formed_count, 1,
+            "single_slot({populated:?}): exactly 1 kind must satisfy has_only, got {well_formed_count}",
+        );
+    }
+
+    // Two-slot sweep — every off-diagonal pair populates two slots, so
+    // has_only(k) == false for every k, and no kind satisfies has_only
+    // on the multi-populated arm.
+    for a in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        for b in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            if a == b {
+                continue;
+            }
+            let parent = two_slot(a, b);
+            for k in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+            {
+                let via_has_only = parent.has_only(k);
+                assert!(
+                    !via_has_only,
+                    "two_slot({a:?}, {b:?}).has_only({k:?}) must equal false",
+                );
+                // Widened uniqueness composition law on the multi-
+                // populated arm.
+                assert_eq!(
+                    via_has_only,
+                    parent.unique_populated_kind() == Some(k),
+                    "two_slot({a:?}, {b:?}).has_only({k:?}) drifted from (unique_populated_kind() == Some({k:?}))",
+                );
+                // Cardinality-refinement composition law.
+                assert_eq!(
+                    via_has_only,
+                    parent.has(k) && parent.has_unique_populated_kind(),
+                    "two_slot({a:?}, {b:?}).has_only({k:?}) drifted from (has({k:?}) && has_unique_populated_kind())",
+                );
+            }
+            // Kind-domain exhaustivity on the multi-populated arm — no
+            // kind is the sole populated kind.
+            let multi_count = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+                .filter(|k| parent.has_only(*k))
+                .count();
+            assert_eq!(
+                multi_count, 0,
+                "two_slot({a:?}, {b:?}): exactly 0 kinds must satisfy has_only, got {multi_count}",
             );
         }
     }
@@ -10453,6 +10856,172 @@ mod tests {
             crate::export::ArtifactSource::default,
         );
         assert_is_partially_populated_matches_cardinality::<crate::export::VectorChannel, _, _, _>(
+            single_slot_vector_channel_probe,
+            two_slot_vector_channel_probe,
+            crate::export::VectorChannel::default,
+        );
+    }
+
+    /// The `assert_has_only_matches_unique_populated_kind` primitive
+    /// accepts the [`LocalParent`] scaffold coherently — the kind-scoped
+    /// strict-refinement predicate reads `true` iff the probed kind
+    /// equals the populated kind on every single-slot arrangement (the
+    /// diagonal), `false` on every off-diagonal pair regardless of
+    /// probed kind, and `false` on the empty baseline for every kind.
+    /// The five composition laws (widened uniqueness, cardinality-
+    /// refinement, kind-scoped implication, kind-domain exhaustivity,
+    /// well-formed diagonal) hold on every arm.
+    #[test]
+    fn assert_has_only_matches_unique_populated_kind_accepts_coherent_local_impl() {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        assert_has_only_matches_unique_populated_kind::<LocalParent, _, _, _>(
+            single_slot,
+            two_slot,
+            LocalParent::default,
+        );
+    }
+
+    /// The primitive rejects a `single_slot` factory that populates
+    /// the WRONG kind (always `Beta` regardless of what kind is asked
+    /// for) — the well-formed diagonal law
+    /// `single_slot(k).has_only(k) == true` fails on
+    /// `k ∈ {Alpha, Gamma}` where the factory populated `Beta` instead.
+    #[test]
+    #[should_panic(expected = "must equal true")]
+    fn assert_has_only_matches_unique_populated_kind_rejects_wrong_slot_factory() {
+        fn always_beta(_: LocalKind) -> LocalParent {
+            LocalParent {
+                beta: Some(2),
+                ..Default::default()
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        assert_has_only_matches_unique_populated_kind::<LocalParent, _, _, _>(
+            always_beta,
+            two_slot,
+            LocalParent::default,
+        );
+    }
+
+    /// The primitive rejects an `empty_parent` factory that yields a
+    /// saturated parent — the empty-baseline exhaustivity assertion
+    /// `empty_parent().is_empty() == true` fails on the saturated
+    /// baseline, catching a factory that mis-represents the empty arm.
+    #[test]
+    #[should_panic(expected = "must satisfy is_empty() == true")]
+    fn assert_has_only_matches_unique_populated_kind_rejects_saturated_empty_baseline() {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(1),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(2),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(3),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(1),
+                    LocalKind::Beta => p.beta = Some(2),
+                    LocalKind::Gamma => p.gamma = Some(3),
+                }
+            }
+            p
+        }
+        fn saturated_baseline() -> LocalParent {
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            }
+        }
+        assert_has_only_matches_unique_populated_kind::<LocalParent, _, _, _>(
+            single_slot,
+            two_slot,
+            saturated_baseline,
+        );
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the kind-scoped strict-refinement
+    /// Boolean primitive coherently — every per-site `single_slot_X(k)`
+    /// factory produces `has_only(k) == true` (well-formed truth table
+    /// on the diagonal), every off-diagonal probe returns `false`
+    /// (well-formed truth table off the diagonal), every
+    /// `two_slot_X(a, b)` produces `has_only(k) == false` for every
+    /// `k` (multi-populated arm), and `X::default().has_only(k) ==
+    /// false` on the empty baseline for every `k`. The kind-domain
+    /// exhaustivity law (`count k where has_only(k) ≤ 1` per parent,
+    /// with equality iff well-formed) is pinned inside the testkit on
+    /// every arm.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_has_only_testkit_primitive() {
+        assert_has_only_matches_unique_populated_kind::<crate::intent::Intent, _, _, _>(
+            single_slot_intent_probe,
+            two_slot_intent_probe,
+            crate::intent::Intent::default,
+        );
+        assert_has_only_matches_unique_populated_kind::<
+            crate::encapsulates::EncapsulationKind,
+            _,
+            _,
+            _,
+        >(
+            single_slot_encapsulation_kind_probe,
+            two_slot_encapsulation_kind_probe,
+            crate::encapsulates::EncapsulationKind::default,
+        );
+        assert_has_only_matches_unique_populated_kind::<crate::export::ArtifactSource, _, _, _>(
+            single_slot_artifact_source_probe,
+            two_slot_artifact_source_probe,
+            crate::export::ArtifactSource::default,
+        );
+        assert_has_only_matches_unique_populated_kind::<crate::export::VectorChannel, _, _, _>(
             single_slot_vector_channel_probe,
             two_slot_vector_channel_probe,
             crate::export::VectorChannel::default,

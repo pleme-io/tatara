@@ -1872,6 +1872,132 @@ impl Boundary {
         self.postconditions.has_multiple_distinct_kinds()
     }
 
+    /// `true` iff `preconditions ∪ postconditions` carries AT MOST ONE
+    /// [`ConditionKind::ALL`] variant — the union arm of the
+    /// (precondition, postcondition, condition-union) cardinality
+    /// "≤ 1" triad on [`Boundary`] closing the "at most one kind
+    /// covered" arm on the union of the two condition slots on the
+    /// closed-set-inversion axis. The Boolean cardinality "≤ 1"
+    /// negation peer of [`Self::has_multiple_distinct_condition_kind`]
+    /// (≥ 2 many-arm) under the definitional negation
+    /// `!has_multiple_distinct_condition_kind`, and the trichotomy-
+    /// union peer of `!has_any_distinct_condition_kind` (=0 empty-
+    /// endpoint) OR [`Self::has_unique_distinct_condition_kind`] (=1
+    /// mid-endpoint) — the arrangement space where the boundary is
+    /// EMPTY-OR-SINGLETON on the union (zero or exactly one kind
+    /// present across the union of the two slices).
+    ///
+    /// Composed body: `!self.has_multiple_distinct_condition_kind()` —
+    /// a definitional negation of the many-arm union primitive. Short-
+    /// circuits transitively through
+    /// [`Self::has_multiple_distinct_condition_kind`]'s two-step
+    /// short-circuit walk over [`ConditionKind::ALL`] under
+    /// [`Self::has_condition_kind`] — returns `true` as soon as the
+    /// many-arm walk stops with fewer than two distinct hits, WITHOUT
+    /// materializing [`Self::distinct_condition_kinds`]'s `Vec` and
+    /// WITHOUT walking every slot to build
+    /// [`Self::distinct_condition_kind_count`]'s scalar. Byte-for-byte
+    /// peer of [`ConditionSliceExt::has_at_most_one_distinct_kind`]
+    /// one slice-layer down, lifted to compose against
+    /// [`Self::has_condition_kind`]'s pre-OR-post union rather than
+    /// against a single slice's `has_kind`. A regression at the union
+    /// primitive fails at the slice-level substrate tests + the union
+    /// composition-law tests rather than as silent drift here.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::has_at_most_one_distinct_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self) -> bool`, byte-identical
+    /// definitional-negation body composed against the ephemeral
+    /// surface's own many-arm union primitive. Both methods compose
+    /// against the SAME slice-level substrate primitive
+    /// [`ConditionSliceExt::has_at_most_one_distinct_kind`] via the
+    /// two-slice union — a regression at the per-slice "≤ 1" negation
+    /// fails at that primitive's tests rather than as silent drift at
+    /// either struct-level empty-or-singleton caller.
+    ///
+    /// # Peer to [`Self::has_at_most_one_missing_condition_kind`]
+    ///
+    /// Axis-parity mirror of the closed-set-complement "≤ 1" negation
+    /// peer on the union struct layer — where
+    /// `has_at_most_one_missing_condition_kind` tests "at most one
+    /// kind MISSING across the union" (near-saturation-or-saturated),
+    /// this primitive tests "at most one kind PRESENT across the
+    /// union" (empty-or-singleton). Both compose the same
+    /// definitional negation shape (`!has_multiple_*_condition_kind()`)
+    /// at the union struct layer — the two primitives close the "≤ 1"
+    /// arm on both the closed-set-complement and closed-set-inversion
+    /// axes at the union struct layer under the SAME shape.
+    ///
+    /// # Compounding
+    ///
+    /// A future operator-facing "at most one dependency currently
+    /// covered" coverage-analysis diagnostic reads
+    /// `boundary.has_at_most_one_distinct_condition_kind()` at ONE
+    /// call site rather than restating
+    /// `boundary.distinct_condition_kind_count() <= 1` (which walks
+    /// every slot to count) or
+    /// `boundary.distinct_condition_kinds().len() <= 1` (which
+    /// allocates the Vec). A `has-at-most-one-distinct-condition-kind`
+    /// require-tag classifier arm reaches this primitive at ONE
+    /// substrate call — byte-for-byte peer of the tagged-union
+    /// `has-at-most-one-populated-kind` classifier one struct-layer
+    /// up, closing the {0, 1, ≥ 2, ≤ 1} cardinality-Boolean grid on
+    /// the distinct axis at the Boundary struct layer alongside its
+    /// sibling `has-multiple-distinct-condition-kind` under the
+    /// Boolean negation axis.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the cardinality "≤ 1" projection on the
+    /// distinct axis composes the SAME definitional negation of the
+    /// many-arm two-step short-circuit walk on both this boundary
+    /// surface and the ephemeral surface). THEORY.md §VI.1 (generation
+    /// over composition — a new [`ConditionKind`] variant reaches both
+    /// surfaces' cardinality "≤ 1" triads mechanically through the
+    /// delegated union primitive).
+    #[must_use]
+    pub fn has_at_most_one_distinct_condition_kind(&self) -> bool {
+        !self.has_multiple_distinct_condition_kind()
+    }
+
+    /// `true` iff [`Self::preconditions`] carries AT MOST ONE
+    /// [`ConditionKind::ALL`] variant — the precondition-side arm of
+    /// the (precondition, postcondition, condition-union) cardinality
+    /// "≤ 1" triad on [`Boundary`] on the closed-set-inversion axis.
+    /// Thin typed delegate to
+    /// [`ConditionSliceExt::has_at_most_one_distinct_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::has_at_most_one_distinct_postcondition_kind`]
+    /// on the (precondition, postcondition) partition of the boundary's
+    /// two condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice "≤ 1" negation of the many-arm walk fails at that
+    /// primitive's tests rather than as silent drift at either
+    /// struct-level arm.
+    #[must_use]
+    pub fn has_at_most_one_distinct_precondition_kind(&self) -> bool {
+        self.preconditions.has_at_most_one_distinct_kind()
+    }
+
+    /// `true` iff [`Self::postconditions`] carries AT MOST ONE
+    /// [`ConditionKind::ALL`] variant — the postcondition-side arm of
+    /// the (precondition, postcondition, condition-union) cardinality
+    /// "≤ 1" triad on [`Boundary`] on the closed-set-inversion axis.
+    /// Thin typed delegate to
+    /// [`ConditionSliceExt::has_at_most_one_distinct_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::has_at_most_one_distinct_precondition_kind`].
+    /// See that method for the full rationale — the two methods share
+    /// ONE lift motivation, ONE fail-before-pass-after composition-
+    /// law pin, and ONE two-surface parity contract with the
+    /// ephemeral sugar type via
+    /// [`crate::ephemeral::EphemeralSpec::has_at_most_one_distinct_postcondition_kind`].
+    #[must_use]
+    pub fn has_at_most_one_distinct_postcondition_kind(&self) -> bool {
+        self.postconditions.has_at_most_one_distinct_kind()
+    }
+
     /// `true` iff `preconditions ∪ postconditions` is MISSING EXACTLY
     /// ONE [`ConditionKind::ALL`] variant — the union arm of the
     /// (precondition, postcondition, condition-union) cardinality-mid-
@@ -3928,6 +4054,138 @@ pub trait ConditionSliceExt {
         it.next().is_some() && it.next().is_some()
     }
 
+    /// Boolean cardinality "≤ 1" negation peer of
+    /// [`Self::has_multiple_distinct_kinds`] on the closed-set-inversion
+    /// axis — `true` iff AT MOST ONE [`ConditionKind::ALL`] variant
+    /// appears at least once in this slice (equivalently,
+    /// [`Self::distinct_kind_count`] `<= 1` and
+    /// [`Self::distinct_kinds`]`.len() <= 1`). Closes the {0, 1, ≥2, ≤1}
+    /// Boolean-negation grid on the distinct axis at the slice level
+    /// alongside its sibling `has_multiple_distinct_kinds` (≥ 2 many-
+    /// arm) under the definitional negation `!(≥ 2) == (≤ 1)`, and
+    /// alongside `!has_any_distinct_kind` (=0 empty-endpoint) OR
+    /// `has_unique_distinct_kind` (=1 mid-endpoint) as the trichotomy-
+    /// union arm. Names the arrangement space where the slice is
+    /// EMPTY-OR-SINGLETON (zero or exactly one distinct kind).
+    ///
+    /// Default body: `!self.has_multiple_distinct_kinds()` — a
+    /// definitional Boolean negation of the many-arm primitive. Short-
+    /// circuits transitively through
+    /// [`Self::has_multiple_distinct_kinds`]'s two-step short-circuit
+    /// walk over [`Self::iter_distinct_kinds`]: returns `true` as soon
+    /// as the many-arm walk stops with fewer than two distinct hits,
+    /// WITHOUT materializing [`Self::distinct_kinds`]'s `Vec` and
+    /// WITHOUT walking every slot to build
+    /// [`Self::distinct_kind_count`]'s scalar. Byte-for-byte peer of
+    /// [`crate::tagged_union::TaggedUnion::has_at_most_one_populated_kind`]
+    /// under the (populated, missing) inversion axis one struct-layer
+    /// up, both composed as the same definitional negation of their
+    /// respective many-arm primitives.
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::has_at_most_one_populated_kind`]
+    ///
+    /// Slice-level peer of the tagged-union parent-level cardinality
+    /// "≤ 1" predicate one struct-layer up: where
+    /// [`crate::tagged_union::TaggedUnion::has_at_most_one_populated_kind`]
+    /// answers "does the tagged-union parent have AT MOST ONE occupied
+    /// slot?", `has_at_most_one_distinct_kind` answers "do AT MOST ONE
+    /// kind appear in AT LEAST ONE condition of the slice?". Both
+    /// compose as the definitional Boolean negation of their many-arm
+    /// primitive (`!has_multiple_populated_kinds()` /
+    /// `!has_multiple_distinct_kinds()`) at two adjacent typescape
+    /// sites — the two primitives close the "≤ 1" arm on the closed-
+    /// set-inversion axis at both struct layers under the SAME shape.
+    ///
+    /// # Peer to [`Self::has_at_most_one_missing_kind`]
+    ///
+    /// Axis-parity mirror of the closed-set-complement "≤ 1" negation
+    /// peer at the slice level — where `has_at_most_one_missing_kind`
+    /// tests "at most one kind MISSING" (near-saturation-or-saturated),
+    /// `has_at_most_one_distinct_kind` tests "at most one kind
+    /// PRESENT" (empty-or-singleton). Both compose the same
+    /// definitional negation shape (`!has_multiple_*_kinds()`) at the
+    /// slice-level trait's default body — the two primitives close the
+    /// "≤ 1" arm on both the closed-set-complement and closed-set-
+    /// inversion axes at the SAME struct layer under the SAME shape.
+    ///
+    /// # Sibling to the Boolean distinct-cardinality tetrachotomy
+    ///
+    /// Fourth arm of the `{0, ≥1, 1, ≥2, ≤1}` Boolean-cardinality
+    /// closure on the distinct axis at the slice level, closing the
+    /// Boolean-negation grid alongside `!has_any_distinct_kind` (=0
+    /// zero-arm reached via [`Self::has_any_distinct_kind`]),
+    /// [`Self::has_unique_distinct_kind`] (=1 mid-endpoint),
+    /// [`Self::has_any_distinct_kind`] (≥1 halfspace), and
+    /// [`Self::has_multiple_distinct_kinds`] (≥2 many-arm). The
+    /// {≤1, ≥2} pair sit on the Boolean-negation axis:
+    /// `has_at_most_one_distinct_kind == !has_multiple_distinct_kinds`
+    /// on every arm. The {0, 1} union arm sits on the trichotomy-union
+    /// axis: `has_at_most_one_distinct_kind == !has_any_distinct_kind
+    /// || has_unique_distinct_kind` on every arm. Both composition laws
+    /// bind the "≤ 1" Boolean projection to the sibling primitives at
+    /// the trait's default body — swept substrate-wide by
+    /// [`assert_slice_refinement_composition_laws`] as its distinct-
+    /// axis "≤ 1" arm.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `true` (0 distinct, `≤ 1`) — the dual of
+    /// the empty-slice arm on [`Self::has_at_most_one_missing_kind`]
+    /// which returns `false` on `N ≥ 2` closed sets (empty means every
+    /// kind missing, `N ≥ 2` missing, not `≤ 1`). A slice carrying a
+    /// single [`ConditionKind`] (with any multiplicity) returns `true`
+    /// (1 distinct, `≤ 1`) — the singleton arm on the distinct axis.
+    /// A slice carrying `K ≥ 2` distinct kinds returns `false`. A
+    /// saturated slice returns `false` on any `N ≥ 2` closed set
+    /// (every kind present, `N ≥ 2` distinct, not `≤ 1`) — the union of
+    /// the two "≤ 1" arms (`=0` and `=1`) is exactly the arrangement
+    /// space where the primitive returns `true`.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing "at most one dependency currently covered"
+    ///   fast-path discriminator on the empty / singleton-coverage arms
+    ///   reads `boundary.postconditions.has_at_most_one_distinct_kind()`
+    ///   at ONE call site — one bit-flip on the many-arm's two-step
+    ///   short-circuit walk, no allocation, no scalar comparison
+    ///   against `<= 1`, byte-for-byte peer of the tagged-union
+    ///   `has-at-most-one-populated-kind` classifier one struct-layer
+    ///   up under the SAME `!has_multiple_populated_kinds` definitional
+    ///   negation shape.
+    /// - A `has-at-most-one-distinct-kind` require-tag classifier arm
+    ///   reaches this primitive with no allocation, closing the
+    ///   {0, 1, ≥ 2, ≤ 1} cardinality-Boolean grid on the distinct axis
+    ///   at the slice level alongside its sibling
+    ///   `has-multiple-distinct-kinds` under the Boolean negation axis
+    ///   and the missing-axis peer `has-at-most-one-missing-kind` under
+    ///   the closed-set-inversion axis.
+    /// - A future under-coverage diagnostic that says "at most one
+    ///   ConditionKind covered by this Boundary" reads
+    ///   `has_at_most_one_distinct_kind()` at ONE call site without
+    ///   allocating [`Self::distinct_kinds`]'s `Vec`.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The cardinality "≤ 1" projection on the distinct axis lives
+    ///   at ONE substrate site as the definitional Boolean negation
+    ///   of [`Self::has_multiple_distinct_kinds`]; the three composition
+    ///   forms (`!has_multiple_distinct_kinds()`,
+    ///   `distinct_kind_count() <= 1`, and `!has_any_distinct_kind() ||
+    ///   has_unique_distinct_kind()`) compose through the SAME two-
+    ///   step-short-circuit walk shape one negation up, byte-for-byte
+    ///   identical on every arm.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically through the delegated
+    ///   [`Self::has_multiple_distinct_kinds`] — a slice previously at
+    ///   the singleton arm (returned `true` here) that also picks up
+    ///   the new variant now has TWO distinct kinds and flips to
+    ///   `false`.
+    fn has_at_most_one_distinct_kind(&self) -> bool {
+        !self.has_multiple_distinct_kinds()
+    }
+
     /// Boolean at-least-one halfspace peer of [`Self::is_kind_saturated`]
     /// on the closed-set-complement axis — `true` iff AT LEAST ONE
     /// [`ConditionKind::ALL`] variant appears zero times in this slice
@@ -5312,6 +5570,65 @@ where
         slice.has_multiple_distinct_kinds(),
         distinct.len() >= 2,
         "has_multiple_distinct_kinds() drifted from (distinct_kinds().len() >= 2)",
+    );
+
+    // has_at_most_one_distinct_kind ↔ !has_multiple_distinct_kinds —
+    // the Boolean cardinality "≤ 1" negation projection of the many-
+    // arm primitive on the closed-set-inversion axis. Peer of
+    // `has_multiple_distinct_kinds ↔ (distinct_kind_count >= 2)` (≥ 2
+    // many-arm) under the definitional Boolean negation
+    // `!(≥ 2) == (≤ 1)`. Together with `!has_any_distinct_kind` (=0
+    // empty-endpoint reached via `has_any_distinct_kind`) and
+    // `has_unique_distinct_kind` (=1 mid-endpoint), the "≤ 1"
+    // primitive collapses to the trichotomy-union
+    // `!has_any_distinct_kind() || has_unique_distinct_kind()` — a
+    // regression that overrode `has_at_most_one_distinct_kind` to drop
+    // the definitional negation (returning `has_multiple_distinct_kinds`
+    // itself), swap the wrong side, or drift the walk from the
+    // many-arm primitive surfaces HERE at the substrate boundary, not
+    // as silent drift at every downstream
+    // `has-at-most-one-distinct-kind` require-tag classifier or
+    // empty-or-singleton coverage-analysis diagnostic callsite. Byte-
+    // for-byte peer of
+    // `crate::tagged_union::TaggedUnion::has_at_most_one_populated_kind`
+    // one struct-layer up under the SAME `!has_multiple_populated_kinds`
+    // definitional negation shape. Axis-parity mirror of the closed-
+    // set-complement "≤ 1" negation peer
+    // `has_at_most_one_missing_kind ↔ !has_multiple_missing_kinds` at
+    // the same slice-level trait. Also pins the widened composition
+    // laws
+    // `has_at_most_one_distinct_kind() == (distinct_kind_count() <= 1)`
+    // and `has_at_most_one_distinct_kind() == (distinct_kinds().len() <= 1)`
+    // at every slice — binds the "≤ 1" Boolean projection to the
+    // widened + scalar closed-set-inversion primitives without paying
+    // for the Vec allocation on the ≤ 1-distinct arms (where the
+    // negated short-circuit fires immediately after the many-arm walk
+    // stops) or the full-slot walk on the scalar counter. Also pins
+    // the trichotomy-union composition law
+    // `has_at_most_one_distinct_kind() == !has_any_distinct_kind() ||
+    // has_unique_distinct_kind()` at every slice — surfaces any
+    // implementor that drifted the trichotomy union operator from
+    // `||` to `&&` or that broke one of the two arm primitives while
+    // leaving the "≤ 1" negation of the many-arm intact.
+    assert_eq!(
+        slice.has_at_most_one_distinct_kind(),
+        !slice.has_multiple_distinct_kinds(),
+        "has_at_most_one_distinct_kind() drifted from !has_multiple_distinct_kinds()",
+    );
+    assert_eq!(
+        slice.has_at_most_one_distinct_kind(),
+        slice.distinct_kind_count() <= 1,
+        "has_at_most_one_distinct_kind() drifted from (distinct_kind_count() <= 1)",
+    );
+    assert_eq!(
+        slice.has_at_most_one_distinct_kind(),
+        distinct.len() <= 1,
+        "has_at_most_one_distinct_kind() drifted from (distinct_kinds().len() <= 1)",
+    );
+    assert_eq!(
+        slice.has_at_most_one_distinct_kind(),
+        !slice.has_any_distinct_kind() || slice.has_unique_distinct_kind(),
+        "has_at_most_one_distinct_kind() drifted from (!has_any_distinct_kind() || has_unique_distinct_kind())",
     );
 
     // has_unique_missing_kind ↔ (missing_kind_count == 1) — the
@@ -8533,6 +8850,180 @@ mod tests {
         }
     }
 
+    // ── ConditionSliceExt::has_at_most_one_distinct_kind — "≤ 1" pins ─
+    //
+    // Boolean cardinality "≤ 1" negation peer of
+    // `has_multiple_distinct_kinds` on the closed-set-inversion axis:
+    // `has_at_most_one_distinct_kind()` returns `true` iff AT MOST ONE
+    // `ConditionKind::ALL` variant appears at least once in the slice,
+    // byte-for-byte with `!has_multiple_distinct_kinds()` via the
+    // definitional negation in the trait's default body. The
+    // composition laws
+    // `has_at_most_one_distinct_kind() == !has_multiple_distinct_kinds()`,
+    // `has_at_most_one_distinct_kind() == (distinct_kind_count() <= 1)`,
+    // `has_at_most_one_distinct_kind() == (distinct_kinds().len() <= 1)`,
+    // and `has_at_most_one_distinct_kind() == !has_any_distinct_kind() ||
+    // has_unique_distinct_kind()` are pinned as the distinct-axis
+    // "≤ 1" arm of `assert_slice_refinement_composition_laws`. Byte-
+    // for-byte peer of
+    // `crate::tagged_union::TaggedUnion::has_at_most_one_populated_kind`
+    // one struct-layer up under the SAME `!has_multiple_populated_kinds`
+    // definitional negation shape. Axis-parity mirror of the closed-
+    // set-complement "≤ 1" negation peer
+    // `has_at_most_one_missing_kind ↔ !has_multiple_missing_kinds` at
+    // the same slice-level trait.
+
+    /// EMPTY-SLICE pin — an empty slice returns `true` on
+    /// `has_at_most_one_distinct_kind` (0 distinct, `≤ 1`). Dual of
+    /// the empty-slice arm on `has_at_most_one_missing_kind` which
+    /// returns `false` on `N ≥ 2` closed sets (empty means every kind
+    /// missing, `N ≥ 2` missing, not `≤ 1`). Also pins the composition
+    /// law `has_at_most_one_distinct_kind() == (distinct_kind_count() <= 1)`
+    /// at zero-distinct.
+    #[test]
+    fn condition_slice_has_at_most_one_distinct_kind_returns_true_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        assert!(
+            empty.has_at_most_one_distinct_kind(),
+            "empty slice must return true on has_at_most_one_distinct_kind (0 distinct, ≤ 1)",
+        );
+        assert_eq!(
+            empty.has_at_most_one_distinct_kind(),
+            empty.distinct_kind_count() <= 1,
+            "empty has_at_most_one_distinct_kind must equal (distinct_kind_count() <= 1)",
+        );
+    }
+
+    /// SINGLE-KIND pin — a slice populating exactly one variant
+    /// returns `true` on `has_at_most_one_distinct_kind` (1 distinct,
+    /// `≤ 1`). The singleton arm on the distinct-axis "≤ 1" primitive
+    /// — the definitional boundary between the =1 mid-endpoint and the
+    /// ≥ 2 many-arm on the distinct axis, where the "≤ 1" negation
+    /// still fires. Also pins the widened composition law
+    /// `has_at_most_one_distinct_kind() == (distinct_kinds().len() <= 1)`
+    /// and the trichotomy-union arm
+    /// `has_at_most_one_distinct_kind() == !has_any_distinct_kind() ||
+    /// has_unique_distinct_kind()`.
+    #[test]
+    fn condition_slice_has_at_most_one_distinct_kind_returns_true_on_single_kind_slice() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            assert!(
+                slice.has_at_most_one_distinct_kind(),
+                "single-populated slice with {populated:?} must return true on has_at_most_one_distinct_kind (1 distinct, ≤ 1)",
+            );
+            assert_eq!(
+                slice.has_at_most_one_distinct_kind(),
+                !slice.has_multiple_distinct_kinds(),
+                "single-populated has_at_most_one_distinct_kind must equal !has_multiple_distinct_kinds() for {populated:?}",
+            );
+            assert_eq!(
+                slice.has_at_most_one_distinct_kind(),
+                slice.distinct_kind_count() <= 1,
+                "single-populated has_at_most_one_distinct_kind must equal (distinct_kind_count() <= 1) for {populated:?}",
+            );
+            assert_eq!(
+                slice.has_at_most_one_distinct_kind(),
+                slice.distinct_kinds().len() <= 1,
+                "single-populated has_at_most_one_distinct_kind must equal (distinct_kinds().len() <= 1) for {populated:?}",
+            );
+            assert_eq!(
+                slice.has_at_most_one_distinct_kind(),
+                !slice.has_any_distinct_kind() || slice.has_unique_distinct_kind(),
+                "single-populated has_at_most_one_distinct_kind must equal (!has_any_distinct_kind() || has_unique_distinct_kind()) for {populated:?}",
+            );
+        }
+    }
+
+    /// SATURATED pin — a slice carrying every [`ConditionKind`]
+    /// variant returns `false` on `has_at_most_one_distinct_kind` on
+    /// any `N ≥ 2` closed set (`N` distinct, not `≤ 1`). Dual of the
+    /// SATURATED arm on `has_at_most_one_missing_kind` which returns
+    /// `true` on `N ≥ 2` (0 missing, `≤ 1`).
+    #[test]
+    fn condition_slice_has_at_most_one_distinct_kind_returns_false_on_saturated_slice() {
+        assert!(
+            ConditionKind::ALL.len() >= 2,
+            "test assumes ConditionKind::ALL has ≥ 2 variants",
+        );
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert!(
+            !saturated.as_slice().has_at_most_one_distinct_kind(),
+            "saturated slice must return false on has_at_most_one_distinct_kind ({} distinct, not ≤ 1)",
+            ConditionKind::ALL.len(),
+        );
+        assert_eq!(
+            saturated.as_slice().has_at_most_one_distinct_kind(),
+            saturated.as_slice().distinct_kind_count() <= 1,
+            "saturated has_at_most_one_distinct_kind must equal (distinct_kind_count() <= 1)",
+        );
+        assert_eq!(
+            saturated.as_slice().has_at_most_one_distinct_kind(),
+            !saturated.as_slice().has_any_distinct_kind()
+                || saturated.as_slice().has_unique_distinct_kind(),
+            "saturated has_at_most_one_distinct_kind must equal (!has_any_distinct_kind() || has_unique_distinct_kind())",
+        );
+    }
+
+    /// TWO-POPULATED pin — a slice carrying exactly two distinct
+    /// [`ConditionKind`] variants returns `false` on
+    /// `has_at_most_one_distinct_kind` (2 distinct, not `≤ 1`). Pins
+    /// the SECOND-slot boundary of the negation of the ≥ 2 arm — a
+    /// regression that dropped the second-slot short-circuit on the
+    /// many-arm primitive (returning `false` on any partial-populated
+    /// arrangement, which negates to `true` here) would still pass
+    /// here; complemented by the SATURATED pin which distinguishes the
+    /// N-distinct arm from the 2-distinct arm. Only meaningful on
+    /// `N ≥ 2` closed sets.
+    #[test]
+    fn condition_slice_has_at_most_one_distinct_kind_returns_false_on_two_populated_slice() {
+        assert!(
+            ConditionKind::ALL.len() >= 2,
+            "test assumes ConditionKind::ALL has ≥ 2 variants",
+        );
+        for i in 0..ConditionKind::ALL.len() {
+            for j in (i + 1)..ConditionKind::ALL.len() {
+                let two_populated: Vec<Condition> = vec![
+                    condition_with(ConditionKind::ALL[i]),
+                    condition_with(ConditionKind::ALL[j]),
+                ];
+                let slice = two_populated.as_slice();
+                assert!(
+                    !slice.has_at_most_one_distinct_kind(),
+                    "two-populated slice (kinds at index {i} and {j}) must return false on has_at_most_one_distinct_kind (2 distinct, not ≤ 1)",
+                );
+                assert_eq!(
+                    slice.has_at_most_one_distinct_kind(),
+                    slice.distinct_kind_count() <= 1,
+                    "two-populated has_at_most_one_distinct_kind must equal (distinct_kind_count() <= 1) for kinds=({i}, {j})",
+                );
+            }
+        }
+    }
+
+    /// MULTIPLICITY pin — a slice carrying the SAME [`ConditionKind`]
+    /// multiple times still returns `true` on
+    /// `has_at_most_one_distinct_kind` (multiplicity is irrelevant to
+    /// the "≤ 1" projection on the closed-set-inversion axis — one
+    /// distinct kind regardless of repetition count, `≤ 1`).
+    #[test]
+    fn condition_slice_has_at_most_one_distinct_kind_ignores_multiplicity() {
+        for k in ConditionKind::ALL {
+            let doubled: Vec<Condition> = vec![condition_with(k), condition_with(k)];
+            assert!(
+                doubled.as_slice().has_at_most_one_distinct_kind(),
+                "slice carrying {k:?} twice must return true on has_at_most_one_distinct_kind (still 1 distinct, ≤ 1)",
+            );
+            let tripled: Vec<Condition> =
+                vec![condition_with(k), condition_with(k), condition_with(k)];
+            assert!(
+                tripled.as_slice().has_at_most_one_distinct_kind(),
+                "slice carrying {k:?} three times must return true on has_at_most_one_distinct_kind (still 1 distinct, ≤ 1)",
+            );
+        }
+    }
+
     // ── ConditionSliceExt::has_any_missing_kind — at-least-one halfspace pins ──
     //
     // Boolean at-least-one halfspace peer of `is_kind_saturated`:
@@ -11177,6 +11668,133 @@ mod tests {
         assert!(
             b.has_multiple_distinct_condition_kind(),
             "saturated boundary must return true on has_multiple_distinct_condition_kind",
+        );
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary cardinality "≤ 1" triad on
+    /// the closed-set-inversion axis) — the three
+    /// `has_at_most_one_distinct_*_condition_kind` methods on
+    /// [`Boundary`] delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::has_at_most_one_distinct_kind`] over the
+    /// two `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via a definitional negation of the many-arm
+    /// two-step-short-circuit walk over [`ConditionKind::ALL`] under
+    /// [`Boundary::has_condition_kind`]. Sweeps the empty boundary
+    /// (every arm returns `true` — 0 distinct, `≤ 1`), a single-
+    /// populated-per-side arrangement (every per-slice arm returns
+    /// `true` — 1 distinct per slice, `≤ 1`; the union returns `true`
+    /// iff the two kinds COINCIDE, otherwise the union has 2 distinct
+    /// and drops to `false`), and the saturated boundary (every arm
+    /// returns `false` on `N ≥ 2` — N distinct, not `≤ 1`). Also pins
+    /// the composition law `has_at_most_one_distinct_*_condition_kind()
+    /// == !has_multiple_distinct_*_condition_kind()` and the widened
+    /// composition law
+    /// `has_at_most_one_distinct_*_condition_kind() ==
+    /// (distinct_*_condition_kind_count() <= 1)` at each arm — a
+    /// regression that dropped the definitional negation, drifted the
+    /// underlying `has_kind` predicate, or swapped the wrong side of
+    /// the negation surfaces HERE.
+    #[test]
+    fn has_at_most_one_distinct_condition_kind_triad_delegates_to_slice_has_at_most_one_distinct_kind(
+    ) {
+        // Empty boundary — every arm returns true (0 distinct, ≤ 1).
+        let b = Boundary::default();
+        assert!(
+            b.has_at_most_one_distinct_precondition_kind(),
+            "empty boundary must return true on has_at_most_one_distinct_precondition_kind",
+        );
+        assert!(
+            b.has_at_most_one_distinct_postcondition_kind(),
+            "empty boundary must return true on has_at_most_one_distinct_postcondition_kind",
+        );
+        assert!(
+            b.has_at_most_one_distinct_condition_kind(),
+            "empty boundary must return true on has_at_most_one_distinct_condition_kind",
+        );
+        assert_eq!(
+            b.has_at_most_one_distinct_condition_kind(),
+            b.distinct_condition_kind_count() <= 1,
+            "empty has_at_most_one_distinct_condition_kind must equal (distinct_condition_kind_count() <= 1)",
+        );
+
+        // Single-populated per side — sweep ALL × ALL on N ≥ 2 closed
+        // sets. Every per-slice arm returns true (1 distinct per
+        // slice, ≤ 1); the union returns true iff the two kinds
+        // COINCIDE (union has 1 distinct kind), otherwise the union
+        // has 2 distinct kinds and drops to false.
+        assert!(
+            ConditionKind::ALL.len() >= 2,
+            "test assumes ConditionKind::ALL has ≥ 2 variants",
+        );
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+                assert_eq!(
+                    b.has_at_most_one_distinct_precondition_kind(),
+                    b.preconditions.has_at_most_one_distinct_kind(),
+                    "Boundary::has_at_most_one_distinct_precondition_kind must delegate verbatim to \
+                     preconditions.has_at_most_one_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.has_at_most_one_distinct_postcondition_kind(),
+                    b.postconditions.has_at_most_one_distinct_kind(),
+                    "Boundary::has_at_most_one_distinct_postcondition_kind must delegate verbatim to \
+                     postconditions.has_at_most_one_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert!(
+                    b.has_at_most_one_distinct_precondition_kind(),
+                    "single-populated preconditions must return true on has_at_most_one_distinct_precondition_kind for pre={pre_kind:?}",
+                );
+                assert!(
+                    b.has_at_most_one_distinct_postcondition_kind(),
+                    "single-populated postconditions must return true on has_at_most_one_distinct_postcondition_kind for post={post_kind:?}",
+                );
+                let covered_count = ConditionKind::ALL
+                    .into_iter()
+                    .filter(|k| *k == pre_kind || *k == post_kind)
+                    .count();
+                let expected_union = covered_count <= 1;
+                assert_eq!(
+                    b.has_at_most_one_distinct_condition_kind(),
+                    expected_union,
+                    "Boundary::has_at_most_one_distinct_condition_kind must equal \
+                     (covered-ALL-count <= 1) for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.has_at_most_one_distinct_condition_kind(),
+                    !b.has_multiple_distinct_condition_kind(),
+                    "Boundary::has_at_most_one_distinct_condition_kind must equal \
+                     !has_multiple_distinct_condition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.has_at_most_one_distinct_condition_kind(),
+                    b.distinct_condition_kind_count() <= 1,
+                    "Boundary::has_at_most_one_distinct_condition_kind must equal \
+                     (distinct_condition_kind_count() <= 1) for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+
+        // Saturated boundary — every arm returns false on N ≥ 2 (N
+        // distinct, not ≤ 1).
+        let mut b = Boundary::default();
+        for k in ConditionKind::ALL {
+            b.preconditions.push(condition_with(k));
+            b.postconditions.push(condition_with(k));
+        }
+        assert!(
+            !b.has_at_most_one_distinct_precondition_kind(),
+            "saturated boundary must return false on has_at_most_one_distinct_precondition_kind",
+        );
+        assert!(
+            !b.has_at_most_one_distinct_postcondition_kind(),
+            "saturated boundary must return false on has_at_most_one_distinct_postcondition_kind",
+        );
+        assert!(
+            !b.has_at_most_one_distinct_condition_kind(),
+            "saturated boundary must return false on has_at_most_one_distinct_condition_kind",
         );
     }
 

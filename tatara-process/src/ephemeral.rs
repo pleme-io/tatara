@@ -1982,6 +1982,131 @@ impl EphemeralSpec {
         self.postconditions.has_only_kind(kind)
     }
 
+    /// `true` iff `preconditions ∪ postconditions` carries NO
+    /// [`crate::boundary::Condition`] with the given [`ConditionKind`]
+    /// AND carries at least one [`crate::boundary::Condition`] for
+    /// every OTHER [`ConditionKind`] — the union arm of the
+    /// (precondition, postcondition, condition-union) kind-scoped
+    /// strict-refinement-on-missing triad on [`EphemeralSpec`], byte-
+    /// for-byte peer of the point-domain
+    /// [`crate::boundary::Boundary::lacks_only_condition_kind`] under
+    /// the same fused-closed-set-walk body on the missing axis.
+    ///
+    /// # Composed body
+    ///
+    /// A FUSED short-circuit closed-set walk over
+    /// [`ConditionKind::ALL`] under [`Self::has_condition_kind`] that
+    /// skips every populated kind, returns `false` at the EARLIEST
+    /// kind whose absence spans both slices' missing sets and is NOT
+    /// `kind`, and returns `true` iff the sweep completes with `kind`
+    /// seen as the sole missing kind. Strictly cheaper than the
+    /// widened composition
+    /// `self.missing_condition_kinds() == vec![kind]` (which allocates
+    /// the missing-kind Vec before the equality test) or the
+    /// (pre AND post) AND-of-strict-refinement
+    /// `self.preconditions.lacks_only_kind(kind)
+    ///     && self.postconditions.lacks_only_kind(kind)` (which is TOO
+    /// STRICT — a single-slice-populated arrangement whose empty side
+    /// returns `false` fails this AND but IS well-formed on the
+    /// union).
+    ///
+    /// # Peer on the point-domain surface — [`crate::boundary::Boundary::lacks_only_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self, ConditionKind) -> bool`,
+    /// byte-identical fused-closed-set-walk body under complement, on
+    /// the point-domain surface whose pre/post condition vectors live
+    /// inside a [`crate::boundary::Boundary`] slot. Both methods
+    /// compose against the SAME slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::lacks_only_kind`] via
+    /// the two-slice union composed through
+    /// [`Self::has_condition_kind`] — a regression at the per-slice
+    /// fused walk under complement fails at that primitive's tests
+    /// rather than as silent drift at either struct-level kind-scoped-
+    /// strict-refinement-on-missing caller.
+    ///
+    /// # Compounding
+    ///
+    /// A future coherence check verifying "every partially-attested
+    /// ephemeral closed-loop probe is missing ONLY the
+    /// `ClosedLoopAuth` postcondition" reads
+    /// `spec.lacks_only_condition_kind(ConditionKind::ClosedLoopAuth)`
+    /// at ONE call site rather than restating either widened
+    /// composition. A `lacks-only-<kind>` require-tag classifier arm
+    /// on the ephemeral surface reaches this primitive at ONE
+    /// substrate call — byte-for-byte peer of the tagged-union
+    /// `lacks-only-<kind>` classifier one struct-layer up under the
+    /// SAME fused short-circuit walk shape.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the kind-scoped strict-refinement projection
+    /// on the missing axis composes the SAME fused short-circuit
+    /// closed-set walk under [`Self::has_condition_kind`] on both this
+    /// ephemeral surface and the point-domain
+    /// [`crate::boundary::Boundary`] surface). THEORY.md §VI.1
+    /// (generation over composition — a future [`ConditionKind`]
+    /// variant reaches both surfaces' kind-scoped-strict-refinement-
+    /// on-missing triads mechanically through the delegated union
+    /// primitive).
+    #[must_use]
+    pub fn lacks_only_condition_kind(&self, kind: ConditionKind) -> bool {
+        let mut saw_kind = false;
+        for k in ConditionKind::ALL {
+            if self.has_condition_kind(k) {
+                continue;
+            }
+            if k == kind {
+                saw_kind = true;
+            } else {
+                return false;
+            }
+        }
+        saw_kind
+    }
+
+    /// `true` iff [`Self::preconditions`] carries NO
+    /// [`crate::boundary::Condition`] with the given [`ConditionKind`]
+    /// AND carries at least one [`crate::boundary::Condition`] for
+    /// every OTHER [`ConditionKind`] — the precondition-side arm of
+    /// the (precondition, postcondition, condition-union) kind-scoped-
+    /// strict-refinement-on-missing triad on [`EphemeralSpec`]. Thin
+    /// typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::lacks_only_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::lacks_only_precondition_kind`] on
+    /// the point-domain surface — both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice fused walk under complement fails at that primitive's
+    /// tests rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn lacks_only_precondition_kind(&self, kind: ConditionKind) -> bool {
+        self.preconditions.lacks_only_kind(kind)
+    }
+
+    /// `true` iff [`Self::postconditions`] carries NO
+    /// [`crate::boundary::Condition`] with the given [`ConditionKind`]
+    /// AND carries at least one [`crate::boundary::Condition`] for
+    /// every OTHER [`ConditionKind`] — the postcondition-side arm of
+    /// the (precondition, postcondition, condition-union) kind-scoped-
+    /// strict-refinement-on-missing triad on [`EphemeralSpec`]. Thin
+    /// typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::lacks_only_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::lacks_only_postcondition_kind`] on
+    /// the point-domain surface. See [`Self::lacks_only_precondition_kind`]
+    /// for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin,
+    /// and ONE two-surface parity contract with the point-domain
+    /// [`crate::boundary::Boundary`] kind-scoped-strict-refinement-
+    /// on-missing peer methods.
+    #[must_use]
+    pub fn lacks_only_postcondition_kind(&self, kind: ConditionKind) -> bool {
+        self.postconditions.lacks_only_kind(kind)
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -12448,6 +12573,155 @@ mod tests {
             assert!(
                 !spec.has_only_condition_kind(kind),
                 "saturated ephemeral must return false on has_only_condition_kind for {kind:?}",
+            );
+        }
+    }
+
+    /// TRIAD delegation pin — the (precondition, postcondition,
+    /// condition-union) kind-scoped strict-refinement-on-missing triad
+    /// on [`EphemeralSpec`] agrees byte-for-byte with the slice-level
+    /// substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::lacks_only_kind`] on every
+    /// authored arrangement, AND agrees bit-for-bit with the lowered
+    /// [`ProcessSpec::boundary`]'s triad via the [`From`] bridge.
+    ///
+    /// Sweeps [`ConditionKind::ALL`] × [`ConditionKind::ALL`] over
+    /// single-populated-per-side arrangements + near-saturation-per-
+    /// side arrangements + single-side-only near-saturation
+    /// arrangements. The union arm is probed against the DERIVED
+    /// oracle `spec.missing_condition_kinds() == vec![probe]`, and
+    /// the per-slice arms delegate to the slice substrate primitive
+    /// verbatim. Two-surface parity ensures a regression at the
+    /// `From<EphemeralSpec>` bridge (a re-ordered condition Vec, a
+    /// dropped ClosedLoopAuth default) surfaces HERE at the union arm.
+    #[test]
+    fn lacks_only_condition_kind_triad_delegates_to_slice_lacks_only_kind() {
+        // Empty ephemeral spec — every kind is missing on N ≥ 2, so
+        // no kind is "only" missing on any arm.
+        let spec = empty_ephemeral();
+        let lowered: ProcessSpec = spec.clone().into();
+        for kind in ConditionKind::ALL {
+            assert_eq!(
+                spec.lacks_only_precondition_kind(kind),
+                spec.preconditions.lacks_only_kind(kind),
+                "empty ephemeral lacks_only_precondition_kind must delegate to preconditions.lacks_only_kind for {kind:?}",
+            );
+            assert_eq!(
+                spec.lacks_only_postcondition_kind(kind),
+                spec.postconditions.lacks_only_kind(kind),
+                "empty ephemeral lacks_only_postcondition_kind must delegate to postconditions.lacks_only_kind for {kind:?}",
+            );
+            assert_eq!(
+                spec.lacks_only_condition_kind(kind),
+                lowered.boundary.lacks_only_condition_kind(kind),
+                "two-surface empty lacks_only_condition_kind parity drift for {kind:?}",
+            );
+        }
+
+        // Near-saturation per side — build an ephemeral spec whose both
+        // sides carry every kind except one; sweep every omitted kind
+        // and probe every ConditionKind on the (pre, post, union) triad.
+        for omitted in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            for k in ConditionKind::ALL {
+                if k != omitted {
+                    spec.preconditions.push(cond(k));
+                    spec.postconditions.push(cond(k));
+                }
+            }
+            let lowered: ProcessSpec = spec.clone().into();
+            for probe in ConditionKind::ALL {
+                let expected = probe == omitted;
+                assert_eq!(
+                    spec.lacks_only_precondition_kind(probe),
+                    expected,
+                    "near-saturation ephemeral omitted={omitted:?} must return {expected} on lacks_only_precondition_kind({probe:?})",
+                );
+                assert_eq!(
+                    spec.lacks_only_postcondition_kind(probe),
+                    expected,
+                    "near-saturation ephemeral omitted={omitted:?} must return {expected} on lacks_only_postcondition_kind({probe:?})",
+                );
+                assert_eq!(
+                    spec.lacks_only_condition_kind(probe),
+                    expected,
+                    "near-saturation ephemeral omitted={omitted:?} must return {expected} on lacks_only_condition_kind({probe:?})",
+                );
+                assert_eq!(
+                    spec.lacks_only_condition_kind(probe),
+                    spec.missing_condition_kinds() == vec![probe],
+                    "near-saturation ephemeral omitted={omitted:?} must agree with missing_condition_kinds() == vec![{probe:?}]",
+                );
+
+                // Two-surface parity via lowered ProcessSpec.
+                assert_eq!(
+                    spec.lacks_only_precondition_kind(probe),
+                    lowered.boundary.lacks_only_precondition_kind(probe),
+                    "two-surface lacks_only_precondition_kind parity drift for omitted={omitted:?} probe={probe:?}",
+                );
+                assert_eq!(
+                    spec.lacks_only_postcondition_kind(probe),
+                    lowered.boundary.lacks_only_postcondition_kind(probe),
+                    "two-surface lacks_only_postcondition_kind parity drift for omitted={omitted:?} probe={probe:?}",
+                );
+                assert_eq!(
+                    spec.lacks_only_condition_kind(probe),
+                    lowered.boundary.lacks_only_condition_kind(probe),
+                    "two-surface lacks_only_condition_kind parity drift for omitted={omitted:?} probe={probe:?}",
+                );
+            }
+        }
+
+        // Single-side-only near-saturation — the populated side covers
+        // every kind except one; the OTHER side is empty. The union
+        // still has missing set `{omitted}` (the populated side's hole
+        // wins), so the union arm returns `true` for `omitted` and
+        // `false` for every other kind, DESPITE the empty side's
+        // `lacks_only_kind` returning `false` on every kind for N ≥ 2.
+        // Pins that the union arm reaches the union primitive, not the
+        // (pre AND post) AND-composition.
+        for omitted in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            for k in ConditionKind::ALL {
+                if k != omitted {
+                    spec.preconditions.push(cond(k));
+                }
+            }
+            let lowered: ProcessSpec = spec.clone().into();
+            for probe in ConditionKind::ALL {
+                let expected = probe == omitted;
+                assert_eq!(
+                    spec.lacks_only_condition_kind(probe),
+                    expected,
+                    "pre-only near-saturation ephemeral omitted={omitted:?} must return {expected} on lacks_only_condition_kind({probe:?})",
+                );
+                assert_eq!(
+                    spec.lacks_only_condition_kind(probe),
+                    lowered.boundary.lacks_only_condition_kind(probe),
+                    "two-surface pre-only near-saturation lacks_only_condition_kind parity drift for omitted={omitted:?} probe={probe:?}",
+                );
+            }
+        }
+
+        // Saturated ephemeral — every kind populated, no kind missing,
+        // every arm returns false on every kind.
+        let mut spec = empty_ephemeral();
+        for k in ConditionKind::ALL {
+            spec.preconditions.push(cond(k));
+            spec.postconditions.push(cond(k));
+        }
+        for kind in ConditionKind::ALL {
+            assert!(
+                !spec.lacks_only_precondition_kind(kind),
+                "saturated ephemeral must return false on lacks_only_precondition_kind for {kind:?}",
+            );
+            assert!(
+                !spec.lacks_only_postcondition_kind(kind),
+                "saturated ephemeral must return false on lacks_only_postcondition_kind for {kind:?}",
+            );
+            assert!(
+                !spec.lacks_only_condition_kind(kind),
+                "saturated ephemeral must return false on lacks_only_condition_kind for {kind:?}",
             );
         }
     }

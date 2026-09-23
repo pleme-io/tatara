@@ -3292,6 +3292,66 @@ impl EphemeralSpec {
         self.postconditions.last_of_kind(kind)
     }
 
+    /// Returns every [`crate::boundary::Condition`] with the given
+    /// [`ConditionKind`] in `preconditions ∪ postconditions`, in walk
+    /// order (precondition-slot matches first, postcondition-slot
+    /// matches next), as a `Vec<&Condition>` — the union arm of the
+    /// (precondition, postcondition, condition-union) materialized
+    /// `Vec`-witnessing peer of [`Self::iter_condition_kind`] on the
+    /// per-kind axis at the ephemeral surface. Composed body:
+    /// `self.iter_condition_kind(kind).collect()` — one walk over
+    /// the pre-then-post chain that materializes the whole match
+    /// stream into a nameable owning collection. Byte-for-byte peer
+    /// of [`crate::boundary::Boundary::all_of_condition_kind`] on
+    /// the point-domain surface — both compose against the SAME
+    /// slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::all_of_kind`] via the
+    /// two-slice chain.
+    #[must_use]
+    pub fn all_of_condition_kind(&self, kind: ConditionKind) -> Vec<&crate::boundary::Condition> {
+        self.iter_condition_kind(kind).collect()
+    }
+
+    /// Returns every [`crate::boundary::Condition`] with the given
+    /// [`ConditionKind`] in [`Self::preconditions`], in slice order,
+    /// as a `Vec<&Condition>` — the precondition-side arm of the
+    /// (precondition, postcondition, condition-union) materialized
+    /// `Vec`-witnessing peer triad on [`EphemeralSpec`]. Thin typed
+    /// delegate to [`crate::boundary::ConditionSliceExt::all_of_kind`]
+    /// over [`Self::preconditions`]. Peer of
+    /// [`crate::boundary::Boundary::all_of_precondition_kind`] on the
+    /// point-domain surface — both compose against the SAME slice-
+    /// level substrate primitive.
+    #[must_use]
+    pub fn all_of_precondition_kind(
+        &self,
+        kind: ConditionKind,
+    ) -> Vec<&crate::boundary::Condition> {
+        self.preconditions.all_of_kind(kind)
+    }
+
+    /// Returns every [`crate::boundary::Condition`] with the given
+    /// [`ConditionKind`] in [`Self::postconditions`], in slice order,
+    /// as a `Vec<&Condition>` — the postcondition-side arm of the
+    /// (precondition, postcondition, condition-union) materialized
+    /// `Vec`-witnessing peer triad on [`EphemeralSpec`]. Thin typed
+    /// delegate to [`crate::boundary::ConditionSliceExt::all_of_kind`]
+    /// over [`Self::postconditions`]. Peer of
+    /// [`crate::boundary::Boundary::all_of_postcondition_kind`] on
+    /// the point-domain surface. See [`Self::all_of_precondition_kind`]
+    /// for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin,
+    /// and ONE two-surface parity contract with the point-domain
+    /// [`crate::boundary::Boundary`] per-kind materialized-witness
+    /// peer methods.
+    #[must_use]
+    pub fn all_of_postcondition_kind(
+        &self,
+        kind: ConditionKind,
+    ) -> Vec<&crate::boundary::Condition> {
+        self.postconditions.all_of_kind(kind)
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -15784,6 +15844,213 @@ mod tests {
             assert!(
                 std::ptr::eq(last_union.unwrap(), &spec.postconditions[1]),
                 "doubled-post last_condition_kind({doubled:?}) must point at slot[1]",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::all_of_(pre|post|)condition_kind triad ─────
+    //
+    // Two-surface parity contract with `Boundary::all_of_condition_kind`
+    // on the per-kind materialized `Vec<&Condition>`-witnessing arm.
+    // Both surfaces compose against the SAME slice-level substrate
+    // primitive `ConditionSliceExt::all_of_kind` via delegation on
+    // each side and via `iter_condition_kind(k).collect()` on the
+    // union chain. Closes the (iter, Vec, scalar) triad on the
+    // per-kind axis at the ephemeral surface.
+
+    /// Ephemeral triad delegation + two-surface parity pin for
+    /// `all_of_(pre|post|)condition_kind`. Sweeps every kind on every
+    /// reachable `(pre_kind, post_kind, query)` arrangement of a
+    /// single-condition-per-side spec, asserts each per-slice arm
+    /// delegates verbatim to the slice-level primitive, asserts the
+    /// union arm equals the chained `iter_condition_kind(k).collect()`
+    /// walk (pre-then-post order), and asserts the ephemeral-side arm
+    /// agrees with the lowered [`Boundary`] arm on the projected kind
+    /// sequence. Vec composition laws pinned: `.len() == count`,
+    /// `.is_empty() == !has`, `.first() == find`, `.last() == last_of`.
+    #[test]
+    fn all_of_condition_kind_triad_delegates_to_slice_all_of_kind() {
+        use crate::boundary::ConditionSliceExt as _;
+
+        // Empty ephemeral — every arm returns an empty vec on every kind.
+        let spec = empty_ephemeral();
+        for kind in ConditionKind::ALL {
+            assert!(
+                spec.all_of_precondition_kind(kind).is_empty(),
+                "empty ephemeral all_of_precondition_kind({kind:?}) must be empty",
+            );
+            assert!(
+                spec.all_of_postcondition_kind(kind).is_empty(),
+                "empty ephemeral all_of_postcondition_kind({kind:?}) must be empty",
+            );
+            assert!(
+                spec.all_of_condition_kind(kind).is_empty(),
+                "empty ephemeral all_of_condition_kind({kind:?}) must be empty",
+            );
+        }
+
+        // Single-populated-per-side sweep with two-surface parity.
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+
+                let lowered: ProcessSpec = spec.clone().into();
+                let boundary = &lowered.boundary;
+
+                for query in ConditionKind::ALL {
+                    // Per-side delegation pins — pointer identity of
+                    // every &Condition entry.
+                    let via_arm_pre: Vec<*const Condition> = spec
+                        .all_of_precondition_kind(query)
+                        .into_iter()
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    let via_slice_pre: Vec<*const Condition> = spec
+                        .preconditions
+                        .all_of_kind(query)
+                        .into_iter()
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    assert_eq!(
+                        via_arm_pre, via_slice_pre,
+                        "EphemeralSpec::all_of_precondition_kind must delegate verbatim to \
+                         preconditions.all_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+                    let via_arm_post: Vec<*const Condition> = spec
+                        .all_of_postcondition_kind(query)
+                        .into_iter()
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    let via_slice_post: Vec<*const Condition> = spec
+                        .postconditions
+                        .all_of_kind(query)
+                        .into_iter()
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    assert_eq!(
+                        via_arm_post, via_slice_post,
+                        "EphemeralSpec::all_of_postcondition_kind must delegate verbatim to \
+                         postconditions.all_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+
+                    // Union-arm composition-law pins.
+                    let union = spec.all_of_condition_kind(query);
+                    assert_eq!(
+                        union.len(),
+                        spec.count_condition_kind(query),
+                        "all_of_condition_kind({query:?}).len() drifted from count for \
+                         pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        union.is_empty(),
+                        !spec.has_condition_kind(query),
+                        "all_of_condition_kind({query:?}).is_empty() drifted from \
+                         !has for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        union.first().copied().map(|c| c as *const Condition),
+                        spec.find_condition_kind(query)
+                            .map(|c| c as *const Condition),
+                        "all_of_condition_kind({query:?}).first() drifted from find for \
+                         pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        union.last().copied().map(|c| c as *const Condition),
+                        spec.last_condition_kind(query)
+                            .map(|c| c as *const Condition),
+                        "all_of_condition_kind({query:?}).last() drifted from last for \
+                         pre={pre_kind:?} post={post_kind:?}",
+                    );
+
+                    // Iter/Vec parity on the ephemeral surface.
+                    let via_iter: Vec<*const Condition> = spec
+                        .iter_condition_kind(query)
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    let via_all: Vec<*const Condition> = spec
+                        .all_of_condition_kind(query)
+                        .into_iter()
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    assert_eq!(
+                        via_iter, via_all,
+                        "EphemeralSpec::all_of_condition_kind({query:?}) must match \
+                         iter_condition_kind(k).collect() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+
+                    // Two-surface parity — the lowered Boundary's
+                    // triad yields the SAME kind sequence on every arm.
+                    let ephemeral_pre_kinds: Vec<_> = spec
+                        .all_of_precondition_kind(query)
+                        .into_iter()
+                        .map(|c| c.kind)
+                        .collect();
+                    let boundary_pre_kinds: Vec<_> = boundary
+                        .all_of_precondition_kind(query)
+                        .into_iter()
+                        .map(|c| c.kind)
+                        .collect();
+                    assert_eq!(
+                        ephemeral_pre_kinds, boundary_pre_kinds,
+                        "ephemeral all_of_precondition_kind({query:?}) kinds drifted from \
+                         lowered Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    let ephemeral_post_kinds: Vec<_> = spec
+                        .all_of_postcondition_kind(query)
+                        .into_iter()
+                        .map(|c| c.kind)
+                        .collect();
+                    let boundary_post_kinds: Vec<_> = boundary
+                        .all_of_postcondition_kind(query)
+                        .into_iter()
+                        .map(|c| c.kind)
+                        .collect();
+                    assert_eq!(
+                        ephemeral_post_kinds, boundary_post_kinds,
+                        "ephemeral all_of_postcondition_kind({query:?}) kinds drifted from \
+                         lowered Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    let ephemeral_union_kinds: Vec<_> = spec
+                        .all_of_condition_kind(query)
+                        .into_iter()
+                        .map(|c| c.kind)
+                        .collect();
+                    let boundary_union_kinds: Vec<_> = boundary
+                        .all_of_condition_kind(query)
+                        .into_iter()
+                        .map(|c| c.kind)
+                        .collect();
+                    assert_eq!(
+                        ephemeral_union_kinds, boundary_union_kinds,
+                        "ephemeral all_of_condition_kind({query:?}) kinds drifted from \
+                         lowered Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+            }
+        }
+
+        // Doubled-post sweep — union yields BOTH post slots in walk order.
+        for doubled in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            spec.postconditions.push(cond(doubled));
+            spec.postconditions.push(cond(doubled));
+            let all_post = spec.all_of_postcondition_kind(doubled);
+            let all_union = spec.all_of_condition_kind(doubled);
+            assert_eq!(all_post.len(), 2);
+            assert_eq!(all_union.len(), 2);
+            assert!(
+                std::ptr::eq(all_post[0], &spec.postconditions[0])
+                    && std::ptr::eq(all_post[1], &spec.postconditions[1]),
+                "doubled-post all_of_postcondition_kind({doubled:?}) must walk in slice order",
+            );
+            assert!(
+                std::ptr::eq(all_union[0], &spec.postconditions[0])
+                    && std::ptr::eq(all_union[1], &spec.postconditions[1]),
+                "doubled-post all_of_condition_kind({doubled:?}) must walk in slice order",
             );
         }
     }

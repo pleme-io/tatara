@@ -3583,6 +3583,96 @@ impl Boundary {
     pub fn last_postcondition_kind(&self, kind: ConditionKind) -> Option<&Condition> {
         self.postconditions.last_of_kind(kind)
     }
+
+    /// Returns every [`Condition`] with the given [`ConditionKind`] in
+    /// `preconditions ∪ postconditions`, in walk order
+    /// (precondition-slot matches first, postcondition-slot matches
+    /// next), as a `Vec<&Condition>` — the union arm of the
+    /// (precondition, postcondition, condition-union) materialized
+    /// `Vec`-witnessing peer of [`Self::iter_condition_kind`] on the
+    /// per-kind axis at the boundary level. Composed body:
+    /// `self.iter_condition_kind(kind).collect()` — one walk over
+    /// the pre-then-post chain that materializes the whole match
+    /// stream into a nameable owning collection.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::all_of_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self, ConditionKind) ->
+    /// Vec<&Condition>`, byte-identical
+    /// `iter_condition_kind(k).collect()` body composed against the
+    /// ephemeral surface's own chained per-kind iterator. Both methods
+    /// compose against the SAME slice-level substrate primitive
+    /// [`ConditionSliceExt::all_of_kind`] via the two-slice chain — a
+    /// regression at the per-slice materialized walk fails at that
+    /// primitive's tests rather than as silent drift at either
+    /// struct-level `all-of-<kind>` caller.
+    ///
+    /// Composition laws:
+    /// - `all_of_condition_kind(k).len() == count_condition_kind(k)`
+    /// - `all_of_condition_kind(k).is_empty() == !has_condition_kind(k)`
+    /// - `all_of_condition_kind(k).first().copied() ==
+    ///    find_condition_kind(k)`
+    /// - `all_of_condition_kind(k).last().copied() ==
+    ///    last_condition_kind(k)`
+    ///
+    /// # Compounding
+    ///
+    /// A future audit that renders "every `ClosedLoopAuth` condition
+    /// (both slots) as an operator-visible enumeration" reads
+    /// `boundary.all_of_condition_kind(ClosedLoopAuth)` at ONE call
+    /// site rather than paying the
+    /// `boundary.iter_condition_kind(k).collect::<Vec<_>>()` two-line
+    /// boilerplate. Together with [`Self::iter_condition_kind`] and
+    /// [`Self::count_condition_kind`], this closes the (iter, Vec,
+    /// scalar) triad on the per-kind `&Condition`-witness axis at
+    /// the boundary level.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the materialized `Vec<&Condition>` witness
+    /// composes the SAME `iter_kind(k).collect()` shape over the
+    /// two-slice chain on both this boundary surface and the
+    /// ephemeral surface).
+    #[must_use]
+    pub fn all_of_condition_kind(&self, kind: ConditionKind) -> Vec<&Condition> {
+        self.iter_condition_kind(kind).collect()
+    }
+
+    /// Returns every [`Condition`] with the given [`ConditionKind`]
+    /// in [`Self::preconditions`], in slice order, as a
+    /// `Vec<&Condition>` — the precondition-side arm of the
+    /// (precondition, postcondition, condition-union) materialized
+    /// `Vec`-witnessing peer triad on [`Boundary`]. Thin typed
+    /// delegate to [`ConditionSliceExt::all_of_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::all_of_postcondition_kind`] on the
+    /// (precondition, postcondition) partition of the boundary's
+    /// two condition-vector slots; both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice materialized walk fails at that primitive's tests
+    /// rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn all_of_precondition_kind(&self, kind: ConditionKind) -> Vec<&Condition> {
+        self.preconditions.all_of_kind(kind)
+    }
+
+    /// Returns every [`Condition`] with the given [`ConditionKind`]
+    /// in [`Self::postconditions`], in slice order, as a
+    /// `Vec<&Condition>` — the postcondition-side arm of the
+    /// (precondition, postcondition, condition-union) materialized
+    /// `Vec`-witnessing peer triad on [`Boundary`]. Thin typed
+    /// delegate to [`ConditionSliceExt::all_of_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::all_of_precondition_kind`]. See that method
+    /// for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin,
+    /// and ONE two-surface parity contract with the ephemeral sugar
+    /// type via [`crate::ephemeral::EphemeralSpec::all_of_postcondition_kind`].
+    #[must_use]
+    pub fn all_of_postcondition_kind(&self, kind: ConditionKind) -> Vec<&Condition> {
+        self.postconditions.all_of_kind(kind)
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -6835,6 +6925,93 @@ pub trait ConditionSliceExt {
     ///   with no per-caller edit.
     fn last_of_kind(&self, kind: ConditionKind) -> Option<&Condition> {
         self.iter_kind(kind).last()
+    }
+
+    /// Returns every [`Condition`] in this slice that carries the given
+    /// [`ConditionKind`], in slice order, as a `Vec<&Condition>` — the
+    /// materialized `Vec`-witnessing peer of [`Self::iter_kind`] on the
+    /// per-kind axis at the slice level. Default body:
+    /// `self.iter_kind(kind).collect()` — a thin projection of the
+    /// widened primitive [`Self::iter_kind`] onto its collected form.
+    ///
+    /// # Sibling to [`Self::iter_kind`] / [`Self::find_kind`] / [`Self::last_of_kind`] / [`Self::unique_of_kind`]
+    ///
+    /// FIFTH refinement on the per-kind axis: `iter_kind` yields the
+    /// widened stream (unnameable, lifetime-bound), `find_kind` /
+    /// `last_of_kind` / `unique_of_kind` collapse it to the first /
+    /// last / singleton [`Option<&Condition>`] witness, and
+    /// `all_of_kind` materializes the full stream into a nameable
+    /// `Vec<&Condition>`. The composition laws
+    /// `all_of_kind(k) == iter_kind(k).collect::<Vec<_>>()`,
+    /// `all_of_kind(k).first().copied() == find_kind(k)`,
+    /// `all_of_kind(k).last().copied() == last_of_kind(k)`,
+    /// `all_of_kind(k).len() == count_kind(k)`, and
+    /// `all_of_kind(k).is_empty() == !has_kind(k)`
+    /// share ONE walk semantics by construction; a regression that
+    /// drifted the materialized witness stream from any of its
+    /// projections becomes structurally impossible past the trait
+    /// boundary.
+    ///
+    /// # Why the [`Vec`] peer earns its keep
+    ///
+    /// [`Self::iter_kind`] returns [`KindMatches<'_>`], a lifetime-bound
+    /// concrete iterator that cannot cross a `struct` field boundary
+    /// without an owning collection. A caller that needs to STORE the
+    /// per-kind matches (a fleet-wide audit dump that accumulates
+    /// matches across many boundaries into ONE report struct, a
+    /// diagnostic that renders both the count AND the enumeration in
+    /// ONE render pass without re-walking the slice, a coherence
+    /// check that folds the matches through [`Iterator::rev`] before
+    /// re-iterating) reaches through this refinement rather than
+    /// paying the two-line `let v: Vec<&Condition> = slice.iter_kind(k)
+    /// .collect();` boilerplate at every callsite. The nameable
+    /// `Vec<&Condition>` also crosses `impl Trait` return boundaries
+    /// (a `fn matches_for_kind(&self, kind: ConditionKind) ->
+    /// Vec<&Condition>` API surface reads self-documenting) that
+    /// `impl Iterator<Item = &Condition>` obscures.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns an empty vec on every kind. A slice
+    /// carrying `kind` at multiple positions returns a `Vec<&Condition>`
+    /// whose entries appear in slice order (the composition law
+    /// `find_kind(k) == all_of_kind(k).first().copied()` binds the
+    /// earliest match to the vec's head). Byte-for-byte equivalent
+    /// to `self.iter().filter(|c| c.kind == kind).collect()`.
+    ///
+    /// # Compounding
+    ///
+    /// A future audit that renders "every `ClosedLoopAuth`
+    /// postcondition's `issuer` param on ONE side" reads
+    /// `slice.all_of_kind(ClosedLoopAuth)` at ONE call site — one
+    /// materialization, no `iter_kind(k).collect::<Vec<_>>()` boilerplate,
+    /// one nameable Vec for the render loop. A fleet-wide diagnostic
+    /// that emits both the count AND the enumeration reads
+    /// `all_of_kind(k)` once and folds through `.len()` +
+    /// `.iter().map(|c| &c.params)` — the two projections share ONE
+    /// walk. Together with [`Self::iter_kind`], this closes the
+    /// (iter, Vec) composition law on the per-kind
+    /// `&Condition`-witness axis at the slice level, mirroring the
+    /// (iter, Vec) composition law already established at the
+    /// distinct-kind axis ([`Self::iter_distinct_kinds`] ↔
+    /// [`Self::distinct_kinds`]) and the missing-kind axis
+    /// ([`Self::iter_missing_kinds`] ↔ [`Self::missing_kinds`]).
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The materialized `Vec<&Condition>` witness lives at ONE
+    ///   substrate site as `iter_kind(k).collect()`; the composition
+    ///   laws bind the vec to its iterator, first-match, last-match,
+    ///   cardinality, and Boolean siblings at the trait's default
+    ///   body.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant reaches this primitive mechanically
+    ///   through the delegated [`Self::iter_kind`] — every downstream
+    ///   `all-of-<kind>` Vec-witness callsite sees the wider closed
+    ///   set with no per-caller edit.
+    fn all_of_kind(&self, kind: ConditionKind) -> Vec<&Condition> {
+        self.iter_kind(kind).collect()
     }
 }
 
@@ -17319,6 +17496,293 @@ mod tests {
             assert!(
                 std::ptr::eq(last_union.unwrap(), &b.postconditions[1]),
                 "doubled-post last_condition_kind({doubled:?}) must point at slot[1]",
+            );
+        }
+    }
+
+    /// Empty-slice pin sweeping [`ConditionKind::ALL`] — every kind
+    /// returns an empty vec on `all_of_kind`. The Vec-composition
+    /// laws `all_of_kind(k).is_empty() == !has_kind(k)` and
+    /// `all_of_kind(k).len() == count_kind(k)` hold trivially (both
+    /// project through zero).
+    #[test]
+    fn condition_slice_all_of_kind_returns_empty_on_empty_slice_for_every_kind() {
+        let slice: &[Condition] = &[];
+        for kind in ConditionKind::ALL {
+            let v = slice.all_of_kind(kind);
+            assert!(
+                v.is_empty(),
+                "empty slice must return empty vec for all_of_kind({kind:?})",
+            );
+            // Composition-law pins on the trivial arm.
+            assert_eq!(
+                v.is_empty(),
+                !slice.has_kind(kind),
+                "empty slice all_of_kind({kind:?}).is_empty() must equal !has_kind",
+            );
+            assert_eq!(
+                v.len(),
+                slice.count_kind(kind),
+                "empty slice all_of_kind({kind:?}).len() must equal count_kind",
+            );
+        }
+    }
+
+    /// SINGLETON + DOUBLED sweep — pins pointer identity (all_of_kind
+    /// holds byte-identical `&Condition` refs to the slice's own
+    /// slots) and the FOUR (iter, first, last, count) composition
+    /// laws that bind the materialized Vec witness to its siblings.
+    #[test]
+    fn condition_slice_all_of_kind_materializes_iter_kind_and_pins_composition_laws() {
+        // Singleton sweep — one condition per kind, in isolation.
+        for populated in ConditionKind::ALL {
+            let slice: [Condition; 1] = [condition_with(populated)];
+            for query in ConditionKind::ALL {
+                let v = slice.all_of_kind(query);
+                if query == populated {
+                    assert_eq!(
+                        v.len(),
+                        1,
+                        "singleton all_of_kind({query:?}).len() must equal 1"
+                    );
+                    assert!(
+                        std::ptr::eq(v[0], &slice[0]),
+                        "all_of_kind({query:?}) singleton must point at the matched slot",
+                    );
+                } else {
+                    assert!(
+                        v.is_empty(),
+                        "all_of_kind({query:?}) must be empty on singleton-{populated:?} \
+                         for non-matching query",
+                    );
+                }
+                // Composition laws — Vec projections vs sibling primitives.
+                assert_eq!(
+                    v.len(),
+                    slice.count_kind(query),
+                    "all_of_kind({query:?}).len() drifted from count_kind",
+                );
+                assert_eq!(
+                    v.is_empty(),
+                    !slice.has_kind(query),
+                    "all_of_kind({query:?}).is_empty() drifted from !has_kind",
+                );
+                assert_eq!(
+                    v.first().copied().map(|c| c as *const Condition),
+                    slice.find_kind(query).map(|c| c as *const Condition),
+                    "all_of_kind({query:?}).first() drifted from find_kind",
+                );
+                assert_eq!(
+                    v.last().copied().map(|c| c as *const Condition),
+                    slice.last_of_kind(query).map(|c| c as *const Condition),
+                    "all_of_kind({query:?}).last() drifted from last_of_kind",
+                );
+            }
+        }
+
+        // Doubled-kind sweep — Vec carries BOTH slots in walk order.
+        for doubled in ConditionKind::ALL {
+            let slice: [Condition; 2] = [condition_with(doubled), condition_with(doubled)];
+            let v = slice.all_of_kind(doubled);
+            assert_eq!(
+                v.len(),
+                2,
+                "doubled all_of_kind({doubled:?}).len() must equal 2"
+            );
+            assert!(
+                std::ptr::eq(v[0], &slice[0]),
+                "all_of_kind({doubled:?}) slot[0] must point at slice[0] (EARLIER slot)",
+            );
+            assert!(
+                std::ptr::eq(v[1], &slice[1]),
+                "all_of_kind({doubled:?}) slot[1] must point at slice[1] (LATER slot)",
+            );
+            // Iter/Vec composition law: byte-identical to iter_kind(k).collect().
+            let via_iter: Vec<*const Condition> = slice
+                .iter_kind(doubled)
+                .map(|c| c as *const Condition)
+                .collect();
+            let via_all: Vec<*const Condition> = slice
+                .all_of_kind(doubled)
+                .into_iter()
+                .map(|c| c as *const Condition)
+                .collect();
+            assert_eq!(
+                via_iter, via_all,
+                "all_of_kind({doubled:?}) must be byte-identical to iter_kind(k).collect()",
+            );
+        }
+
+        // Mixed sweep — Vec carries only the matching slots (order preserved).
+        for a in ConditionKind::ALL {
+            for b in ConditionKind::ALL {
+                if a == b {
+                    continue;
+                }
+                let slice: [Condition; 3] =
+                    [condition_with(a), condition_with(b), condition_with(a)];
+                let va = slice.all_of_kind(a);
+                assert_eq!(va.len(), 2, "mixed all_of_kind(a={a:?}).len() must equal 2");
+                assert!(
+                    std::ptr::eq(va[0], &slice[0]),
+                    "mixed all_of_kind(a={a:?}) slot[0] must point at slice[0]",
+                );
+                assert!(
+                    std::ptr::eq(va[1], &slice[2]),
+                    "mixed all_of_kind(a={a:?}) slot[1] must point at slice[2]",
+                );
+                let vb = slice.all_of_kind(b);
+                assert_eq!(vb.len(), 1, "mixed all_of_kind(b={b:?}).len() must equal 1");
+                assert!(
+                    std::ptr::eq(vb[0], &slice[1]),
+                    "mixed all_of_kind(b={b:?}) singleton must point at slice[1]",
+                );
+            }
+        }
+    }
+
+    /// Boundary triad — sweeps every `(pre_kind, post_kind, query)`
+    /// arrangement of a single-condition-per-side spec, asserts each
+    /// per-slice arm delegates verbatim to
+    /// [`ConditionSliceExt::all_of_kind`], and pins the union arm
+    /// against the chained `iter_condition_kind(k).collect()` walk.
+    /// Composition laws pinned:
+    /// `all_of_condition_kind(k).len() == count_condition_kind(k)`,
+    /// `all_of_condition_kind(k).is_empty() == !has_condition_kind(k)`,
+    /// `all_of_condition_kind(k).first() == find_condition_kind(k)`,
+    /// `all_of_condition_kind(k).last() == last_condition_kind(k)`.
+    #[test]
+    fn all_of_condition_kind_triad_delegates_to_slice_all_of_kind() {
+        // Empty boundary — every arm returns an empty vec on every kind.
+        let b = Boundary::default();
+        for kind in ConditionKind::ALL {
+            assert!(
+                b.all_of_precondition_kind(kind).is_empty(),
+                "empty boundary all_of_precondition_kind({kind:?}) must be empty",
+            );
+            assert!(
+                b.all_of_postcondition_kind(kind).is_empty(),
+                "empty boundary all_of_postcondition_kind({kind:?}) must be empty",
+            );
+            assert!(
+                b.all_of_condition_kind(kind).is_empty(),
+                "empty boundary all_of_condition_kind({kind:?}) must be empty",
+            );
+        }
+
+        // Single-populated-per-side sweep. Per-slice arms match slice
+        // primitive on pointer identity. Union arm follows the
+        // pre-then-post walk order.
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                for query in ConditionKind::ALL {
+                    // Delegation pins — per-slice arms match slice
+                    // primitive on identity of every &Condition entry.
+                    let via_arm_pre: Vec<*const Condition> = b
+                        .all_of_precondition_kind(query)
+                        .into_iter()
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    let via_slice_pre: Vec<*const Condition> = b
+                        .preconditions
+                        .all_of_kind(query)
+                        .into_iter()
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    assert_eq!(
+                        via_arm_pre, via_slice_pre,
+                        "Boundary::all_of_precondition_kind must delegate verbatim to \
+                         preconditions.all_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+                    let via_arm_post: Vec<*const Condition> = b
+                        .all_of_postcondition_kind(query)
+                        .into_iter()
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    let via_slice_post: Vec<*const Condition> = b
+                        .postconditions
+                        .all_of_kind(query)
+                        .into_iter()
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    assert_eq!(
+                        via_arm_post, via_slice_post,
+                        "Boundary::all_of_postcondition_kind must delegate verbatim to \
+                         postconditions.all_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+
+                    // Union-arm composition-law pins.
+                    let union = b.all_of_condition_kind(query);
+                    assert_eq!(
+                        union.len(),
+                        b.count_condition_kind(query),
+                        "all_of_condition_kind({query:?}).len() drifted from count for \
+                         pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        union.is_empty(),
+                        !b.has_condition_kind(query),
+                        "all_of_condition_kind({query:?}).is_empty() drifted from \
+                         !has for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        union.first().copied().map(|c| c as *const Condition),
+                        b.find_condition_kind(query).map(|c| c as *const Condition),
+                        "all_of_condition_kind({query:?}).first() drifted from find for \
+                         pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        union.last().copied().map(|c| c as *const Condition),
+                        b.last_condition_kind(query).map(|c| c as *const Condition),
+                        "all_of_condition_kind({query:?}).last() drifted from last for \
+                         pre={pre_kind:?} post={post_kind:?}",
+                    );
+
+                    // Iter/Vec parity: union arm is byte-identical to
+                    // iter_condition_kind(k).collect().
+                    let via_iter: Vec<*const Condition> = b
+                        .iter_condition_kind(query)
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    let via_all: Vec<*const Condition> = b
+                        .all_of_condition_kind(query)
+                        .into_iter()
+                        .map(|c| c as *const Condition)
+                        .collect();
+                    assert_eq!(
+                        via_iter, via_all,
+                        "Boundary::all_of_condition_kind({query:?}) must match \
+                         iter_condition_kind(k).collect() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+            }
+        }
+
+        // Doubled-post sweep — union yields BOTH post slots in walk
+        // order, and per-slice arm mirrors the same identity.
+        for doubled in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            b.postconditions.push(condition_with(doubled));
+            b.postconditions.push(condition_with(doubled));
+            let all_post = b.all_of_postcondition_kind(doubled);
+            let all_union = b.all_of_condition_kind(doubled);
+            assert_eq!(all_post.len(), 2);
+            assert_eq!(all_union.len(), 2);
+            assert!(
+                std::ptr::eq(all_post[0], &b.postconditions[0])
+                    && std::ptr::eq(all_post[1], &b.postconditions[1]),
+                "doubled-post all_of_postcondition_kind({doubled:?}) must walk in slice order",
+            );
+            assert!(
+                std::ptr::eq(all_union[0], &b.postconditions[0])
+                    && std::ptr::eq(all_union[1], &b.postconditions[1]),
+                "doubled-post all_of_condition_kind({doubled:?}) must walk in slice order",
             );
         }
     }

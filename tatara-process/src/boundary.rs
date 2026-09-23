@@ -2122,6 +2122,110 @@ impl Boundary {
         self.postconditions.is_kind_empty()
     }
 
+    /// `true` iff `preconditions ∪ postconditions` carries AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant AND is MISSING AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant — the union arm of the
+    /// (precondition, postcondition, condition-union) parent-state
+    /// middle-arm triad on [`Boundary`] closing the trichotomy
+    /// (empty, partially covered, saturated) on the union axis
+    /// alongside [`Self::is_condition_kind_empty`] (=0 zero-endpoint on
+    /// the distinct axis) and [`Self::is_condition_kind_saturated`]
+    /// (=0 zero-endpoint on the missing axis).
+    ///
+    /// # Composed body
+    ///
+    /// `self.has_any_distinct_condition_kind() && self.has_any_missing_condition_kind()`
+    /// — the paired at-least-one-halfspace composition. Short-circuits
+    /// transitively through the two at-least-one halfspace union
+    /// primitives, each of which walks
+    /// `ConditionKind::ALL.iter().any(has_condition_kind)` under a
+    /// polarity — WITHOUT materializing
+    /// [`Self::distinct_condition_kinds`] or
+    /// [`Self::missing_condition_kinds`]'s `Vec`s and WITHOUT walking
+    /// every slot to build the paired scalar counters. Byte-for-byte
+    /// cheaper than the widened negation-of-both-endpoints composition
+    /// `!self.is_condition_kind_empty() && !self.is_condition_kind_saturated()`
+    /// on every partially-covered arm because each halfspace short-
+    /// circuits at the first present / missing hit rather than paying
+    /// two separate `ALL`-length walks.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::is_condition_kind_partially_covered`]
+    ///
+    /// Byte-identical signature `(&Self) -> bool`, byte-identical
+    /// paired-halfspace body, on the sugar-surface type whose pre/post
+    /// condition vectors live directly on the struct. Both methods
+    /// compose against the SAME slice-level substrate primitive
+    /// [`ConditionSliceExt::is_kind_partially_covered`] via the
+    /// two-slice union composed through
+    /// [`Self::has_condition_kind`] — a regression at the per-slice
+    /// fused short-circuit walk fails at that primitive's tests rather
+    /// than as silent drift at either struct-level middle-arm caller.
+    ///
+    /// # Compounding
+    ///
+    /// A boundary-progress "some kinds covered, some pending"
+    /// diagnostic on a Boundary reads
+    /// `boundary.is_condition_kind_partially_covered()` at ONE call
+    /// site rather than composing
+    /// `!boundary.is_condition_kind_empty() && !boundary.is_condition_kind_saturated()`
+    /// (two closed-set walks) or
+    /// `boundary.distinct_condition_kind_count() > 0 && boundary.missing_condition_kind_count() > 0`
+    /// (two counter walks with no short-circuit). An `is-condition-
+    /// kind-partially-covered` require-tag classifier arm reaches this
+    /// primitive at ONE substrate call — byte-for-byte peer of the
+    /// tagged-union `is-partially-populated` classifier one struct-
+    /// layer up under the SAME parent-state middle-arm shape.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the parent-state middle-arm projection
+    /// composes the SAME paired-halfspace body on both this boundary
+    /// surface and the ephemeral surface). THEORY.md §VI.1 (generation
+    /// over composition — a new [`ConditionKind`] variant reaches both
+    /// surfaces' parent-state middle-arm triads mechanically through
+    /// the delegated union primitive).
+    #[must_use]
+    pub fn is_condition_kind_partially_covered(&self) -> bool {
+        self.has_any_distinct_condition_kind() && self.has_any_missing_condition_kind()
+    }
+
+    /// `true` iff [`Self::preconditions`] carries AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant AND is MISSING AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant — the precondition-side arm of
+    /// the (precondition, postcondition, condition-union) parent-state
+    /// middle-arm triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::is_kind_partially_covered`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::is_postcondition_kind_partially_covered`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-slice
+    /// fused short-circuit walk fails at that primitive's tests rather
+    /// than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn is_precondition_kind_partially_covered(&self) -> bool {
+        self.preconditions.is_kind_partially_covered()
+    }
+
+    /// `true` iff [`Self::postconditions`] carries AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant AND is MISSING AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant — the postcondition-side arm of
+    /// the (precondition, postcondition, condition-union) parent-state
+    /// middle-arm triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::is_kind_partially_covered`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::is_precondition_kind_partially_covered`]. See
+    /// that method for the full rationale — the two methods share ONE
+    /// lift motivation, ONE fail-before-pass-after composition-law pin,
+    /// and ONE two-surface parity contract with the ephemeral sugar
+    /// type via
+    /// [`crate::ephemeral::EphemeralSpec::is_postcondition_kind_partially_covered`].
+    #[must_use]
+    pub fn is_postcondition_kind_partially_covered(&self) -> bool {
+        self.postconditions.is_kind_partially_covered()
+    }
+
     /// `true` iff `preconditions ∪ postconditions` is MISSING EXACTLY
     /// ONE [`ConditionKind::ALL`] variant — the union arm of the
     /// (precondition, postcondition, condition-union) cardinality-mid-
@@ -4007,6 +4111,151 @@ pub trait ConditionSliceExt {
         self.iter_distinct_kinds().next().is_none()
     }
 
+    /// Boolean cardinality parent-state middle-arm peer of
+    /// [`Self::is_kind_empty`] and [`Self::is_kind_saturated`] on the
+    /// closed-set-partition axis — `true` iff AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant appears at least once in this slice
+    /// AND AT LEAST ONE [`ConditionKind::ALL`] variant is absent from every
+    /// condition (equivalently, `0 < distinct_kind_count < ConditionKind::ALL.len()`
+    /// and `0 < missing_kind_count < ConditionKind::ALL.len()`).
+    ///
+    /// Default body: a FUSED short-circuit closed-set walk over
+    /// [`ConditionKind::ALL`] that flips a two-bit `(has_present,
+    /// has_missing)` witness on each kind under [`Self::has_kind`] and
+    /// returns `true` at the FIRST kind whose flip closes both bits,
+    /// WITHOUT materializing [`Self::distinct_kinds`] or
+    /// [`Self::missing_kinds`], WITHOUT walking every slot to build
+    /// [`Self::distinct_kind_count`] or [`Self::missing_kind_count`],
+    /// and WITHOUT allocating a two-Vec negation-of-both-endpoints
+    /// composition at the callsite. Byte-for-byte cheaper than the
+    /// widened negation composition
+    /// `!self.is_kind_empty() && !self.is_kind_saturated()` (which pays
+    /// two separate `ALL`-length short-circuit walks on saturated /
+    /// empty arms) on every arm where the FIRST and SECOND slot kinds
+    /// bracket the closed set on opposite bits — the fused walk exits
+    /// on the SECOND slot of `ConditionKind::ALL` whenever the two
+    /// pass-side bits close, cheaper than either widened primitive on
+    /// the mid-arm sweep.
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::is_partially_populated`]
+    ///
+    /// Slice-level peer of the tagged-union parent-level middle-arm
+    /// predicate one struct-layer up: where
+    /// [`crate::tagged_union::TaggedUnion::is_partially_populated`]
+    /// answers "is SOME slot on the tagged-union parent occupied AND
+    /// SOME slot missing?", `is_kind_partially_covered` answers "does
+    /// SOME kind appear in AT LEAST ONE condition of the slice AND SOME
+    /// kind APPEAR IN NONE?". Both compose against a FUSED
+    /// short-circuit closed-set walk under the SAME presence predicate
+    /// (`has(kind)` / `has_kind(kind)`) at two adjacent typescape sites
+    /// — the two primitives close the parent-state middle-arm on the
+    /// closed-set partition at both struct layers under the SAME shape.
+    /// The trichotomy partition law
+    /// `usize::from(is_kind_empty()) +
+    /// usize::from(is_kind_partially_covered()) +
+    /// usize::from(is_kind_saturated()) == 1` on any `N ≥ 1` closed
+    /// set is pinned as a first-class typed invariant by
+    /// [`assert_slice_refinement_composition_laws`] as its parent-state
+    /// trichotomy arm, byte-for-byte peer of
+    /// [`crate::tagged_union::assert_is_partially_populated_matches_cardinality`]
+    /// one struct-layer up.
+    ///
+    /// # Sibling to [`Self::is_kind_empty`] / [`Self::is_kind_saturated`]
+    ///
+    /// Third and final arm of the `(empty, partially covered, saturated)`
+    /// parent-state trichotomy on the closed-set-partition axis at the
+    /// slice level, closing the natural partition alongside
+    /// `is_kind_empty` (=0 zero-endpoint on the distinct axis) and
+    /// `is_kind_saturated` (=0 zero-endpoint on the missing axis).
+    /// Every slice satisfies EXACTLY ONE of the three Boolean
+    /// projections on any `N ≥ 1` closed set — the three primitives
+    /// partition the (distinct_kind_count, missing_kind_count) product
+    /// at (0, N), (open interval, open interval), and (N, 0)
+    /// respectively.
+    ///
+    /// # Composition laws
+    ///
+    /// - `is_kind_partially_covered() == !is_kind_empty() && !is_kind_saturated()`
+    ///   — the negation-of-both-endpoints composition, at the trait
+    ///   default body's SAME fused short-circuit walk.
+    /// - `is_kind_partially_covered() == has_any_distinct_kind() && has_any_missing_kind()`
+    ///   — the paired at-least-one-halfspace composition binding this
+    ///   Boolean projection to the at-least-one halfspace peers on both
+    ///   axes.
+    /// - `is_kind_partially_covered() == (distinct_kind_count() > 0 && missing_kind_count() > 0)`
+    ///   — the paired scalar-projection composition binding this
+    ///   Boolean projection to the widened + scalar peers on both axes.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `false` (0 distinct + N missing hits the
+    /// `is_kind_empty` arm, not the middle arm). A slice carrying a
+    /// strict subset of [`ConditionKind::ALL`] returns `true` on any
+    /// `N ≥ 2` closed set (some kind present, some absent). A saturated
+    /// slice returns `false` (N distinct + 0 missing hits the
+    /// `is_kind_saturated` arm, not the middle arm). Multiplicity is
+    /// irrelevant on both sides — the predicate collapses to
+    /// non-emptiness of both the distinct SET and the missing SET.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A boundary-progress "some kinds covered, some pending"
+    ///   diagnostic on a Boundary slice reads
+    ///   `boundary.postconditions.is_kind_partially_covered()` at ONE
+    ///   substrate site — the exact "in-flight coverage" arm — rather
+    ///   than composing
+    ///   `!boundary.postconditions.is_kind_empty() && !boundary.postconditions.is_kind_saturated()`
+    ///   (two closed-set walks) or
+    ///   `boundary.postconditions.distinct_kind_count() > 0 && boundary.postconditions.missing_kind_count() > 0`
+    ///   (two counter walks with no short-circuit).
+    /// - A fleet-wide "mixed coverage" fast-path that discriminates
+    ///   "partial" from "empty or saturated" reads this primitive with
+    ///   ONE fused short-circuit walk, strictly cheaper than either
+    ///   widened composition.
+    /// - An `is-kind-partially-covered` require-tag classifier arm
+    ///   reaches this primitive at ONE call site, byte-for-byte
+    ///   symmetrical with the sibling `is-kind-empty` /
+    ///   `is-kind-saturated` arms on the closed parent-state trichotomy.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The parent-state middle-arm projection on the closed-set
+    ///   partition lives at ONE substrate site as a FUSED short-circuit
+    ///   walk over `ConditionKind::ALL` under [`Self::has_kind`] with
+    ///   early exit on the first observed present/missing pair —
+    ///   byte-for-byte cheaper than the widened negation-of-both-
+    ///   endpoints composition, and semantically identical on every
+    ///   arm. The trichotomy partition law
+    ///   `is_kind_empty + is_kind_partially_covered + is_kind_saturated == 1`
+    ///   lives at ONE substrate site inside the composition-law
+    ///   testkit's per-arm sweep — pinned across every production
+    ///   slice at compile time via the trait's default body
+    ///   composition, not per-slice.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this primitive
+    ///   mechanically through the fused walk — the trichotomy holds
+    ///   on the widened kind set without further per-caller edit
+    ///   (a slice previously at the middle arm continues to satisfy
+    ///   it if it does not add the new variant; a previously-saturated
+    ///   slice that leaves the new variant missing becomes partially
+    ///   covered at every downstream callsite).
+    fn is_kind_partially_covered(&self) -> bool {
+        let mut has_present = false;
+        let mut has_missing = false;
+        for k in ConditionKind::ALL {
+            if self.has_kind(k) {
+                has_present = true;
+            } else {
+                has_missing = true;
+            }
+            if has_present && has_missing {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Boolean at-least-one halfspace peer of [`Self::has_any_missing_kind`]
     /// on the closed-set-inversion axis — `true` iff AT LEAST ONE
     /// [`ConditionKind::ALL`] variant appears at least once in this slice
@@ -5729,6 +5978,75 @@ where
         slice.is_kind_empty(),
         slice.first_distinct_kind().is_none(),
         "is_kind_empty() drifted from first_distinct_kind().is_none()",
+    );
+
+    // is_kind_partially_covered ↔ !is_kind_empty && !is_kind_saturated —
+    // the Boolean cardinality parent-state middle-arm projection on the
+    // closed-set partition. Third and final arm of the trichotomy
+    // (empty, partially covered, saturated) at the slice level,
+    // closing the natural partition alongside `is_kind_empty` (=0
+    // zero-endpoint on the distinct axis) and `is_kind_saturated`
+    // (=0 zero-endpoint on the missing axis). Together the three
+    // Booleans partition the (distinct_kind_count, missing_kind_count)
+    // product at (0, N), (open, open), and (N, 0) respectively — on
+    // any `N ≥ 1` closed set at most ONE returns `true`; the vacuous
+    // `N == 0` case is impossible here because `ConditionKind::ALL`
+    // carries ≥ 1 variant by construction. A regression that
+    // overrode `is_kind_partially_covered` to drop one bit of the
+    // fused walk (returning `has_any_distinct_kind` — TOO LOOSE,
+    // admits saturated slices as partial), forget the pair short-
+    // circuit (returning a scalar comparison
+    // `distinct_kind_count > 0 && distinct_kind_count < ALL.len()`
+    // that walks every slot), or swap the wrong side (returning
+    // `is_kind_empty || is_kind_saturated` — the negation of the
+    // middle-arm on any `N ≥ 1` closed set) surfaces HERE at the
+    // substrate boundary, not as silent drift at every downstream
+    // `is-kind-partially-covered` require-tag classifier or mixed-
+    // coverage diagnostic callsite. Byte-for-byte peer of
+    // `crate::tagged_union::TaggedUnion::is_partially_populated` one
+    // struct-layer up under the SAME fused short-circuit walk shape,
+    // and byte-for-byte peer of the trichotomy partition law
+    // `is_empty + is_partially_populated + is_saturated == 1`
+    // pinned one struct-layer up by
+    // `crate::tagged_union::assert_is_partially_populated_matches_cardinality`.
+    // Also pins the paired-halfspace composition
+    // `is_kind_partially_covered() == has_any_distinct_kind() &&
+    // has_any_missing_kind()` and the paired-scalar composition
+    // `is_kind_partially_covered() == (distinct_kind_count() > 0 &&
+    // missing_kind_count() > 0)` binding this Boolean projection to the
+    // at-least-one halfspace + scalar peers on BOTH axes.
+    assert_eq!(
+        slice.is_kind_partially_covered(),
+        !slice.is_kind_empty() && !slice.is_kind_saturated(),
+        "is_kind_partially_covered() drifted from (!is_kind_empty() && !is_kind_saturated())",
+    );
+    assert_eq!(
+        slice.is_kind_partially_covered(),
+        slice.has_any_distinct_kind() && slice.has_any_missing_kind(),
+        "is_kind_partially_covered() drifted from (has_any_distinct_kind() && has_any_missing_kind())",
+    );
+    assert_eq!(
+        slice.is_kind_partially_covered(),
+        slice.distinct_kind_count() > 0 && slice.missing_kind_count() > 0,
+        "is_kind_partially_covered() drifted from (distinct_kind_count() > 0 && missing_kind_count() > 0)",
+    );
+    // Trichotomy partition law — EXACTLY ONE of
+    // `is_kind_empty`, `is_kind_partially_covered`, `is_kind_saturated`
+    // returns `true` on any `N ≥ 1` closed set. Byte-for-byte peer of
+    // `is_empty + is_partially_populated + is_saturated == 1` one
+    // struct-layer up.
+    assert_eq!(
+        usize::from(slice.is_kind_empty())
+            + usize::from(slice.is_kind_partially_covered())
+            + usize::from(slice.is_kind_saturated()),
+        1,
+        "trichotomy partition law violated — is_kind_empty + is_kind_partially_covered + is_kind_saturated must equal 1 (got {} + {} + {} = {})",
+        usize::from(slice.is_kind_empty()),
+        usize::from(slice.is_kind_partially_covered()),
+        usize::from(slice.is_kind_saturated()),
+        usize::from(slice.is_kind_empty())
+            + usize::from(slice.is_kind_partially_covered())
+            + usize::from(slice.is_kind_saturated()),
     );
 
     // has_any_missing_kind ↔ !is_kind_saturated — the Boolean at-
@@ -9489,6 +9807,196 @@ mod tests {
         }
     }
 
+    // ── ConditionSliceExt::is_kind_partially_covered — middle-arm pins ──
+    //
+    // Boolean cardinality parent-state middle-arm peer of
+    // `is_kind_empty` (=0 zero-endpoint on the distinct axis) and
+    // `is_kind_saturated` (=0 zero-endpoint on the missing axis):
+    // `is_kind_partially_covered()` returns `true` iff AT LEAST ONE
+    // `ConditionKind::ALL` variant is PRESENT AND AT LEAST ONE is
+    // ABSENT, byte-for-byte with `!is_kind_empty() && !is_kind_saturated()`
+    // via the negation-of-both-endpoints composition — but composed
+    // through a FUSED short-circuit walk that can exit on the SECOND
+    // `ConditionKind::ALL` slot when the two bits close. The
+    // composition laws
+    // `is_kind_partially_covered() == !is_kind_empty() && !is_kind_saturated()`,
+    // `is_kind_partially_covered() == has_any_distinct_kind() && has_any_missing_kind()`,
+    // `is_kind_partially_covered() == (distinct_kind_count() > 0 && missing_kind_count() > 0)`,
+    // and the trichotomy partition law
+    // `is_kind_empty + is_kind_partially_covered + is_kind_saturated == 1`
+    // are pinned as the parent-state trichotomy arm of
+    // `assert_slice_refinement_composition_laws`. Byte-for-byte peer of
+    // `crate::tagged_union::TaggedUnion::is_partially_populated` one
+    // struct-layer up under the SAME fused short-circuit walk shape.
+
+    /// EMPTY-SLICE pin — an empty slice returns `false` on
+    /// `is_kind_partially_covered` (0 distinct + N missing hits the
+    /// `is_kind_empty` arm, not the middle arm). Dual of the empty-
+    /// slice arm on `is_kind_empty` which returns `true` — the two
+    /// primitives partition the zero-distinct endpoint.
+    #[test]
+    fn condition_slice_is_kind_partially_covered_returns_false_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        assert!(
+            !empty.is_kind_partially_covered(),
+            "empty slice must return false on is_kind_partially_covered (0 distinct hits is_kind_empty)",
+        );
+        assert_eq!(
+            empty.is_kind_partially_covered(),
+            !empty.is_kind_empty() && !empty.is_kind_saturated(),
+            "empty is_kind_partially_covered must equal (!is_kind_empty() && !is_kind_saturated())",
+        );
+        assert_eq!(
+            empty.is_kind_partially_covered(),
+            empty.has_any_distinct_kind() && empty.has_any_missing_kind(),
+            "empty is_kind_partially_covered must equal (has_any_distinct_kind() && has_any_missing_kind())",
+        );
+    }
+
+    /// SATURATED pin — a slice carrying every [`ConditionKind`] variant
+    /// returns `false` on `is_kind_partially_covered` on any `N ≥ 1`
+    /// closed set (N distinct + 0 missing hits the `is_kind_saturated`
+    /// arm, not the middle arm). Dual of the SATURATED arm on
+    /// `is_kind_saturated` which returns `true`.
+    #[test]
+    fn condition_slice_is_kind_partially_covered_returns_false_on_saturated_slice() {
+        assert!(
+            !ConditionKind::ALL.is_empty(),
+            "test assumes ConditionKind::ALL has ≥ 1 variants",
+        );
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert!(
+            !saturated.as_slice().is_kind_partially_covered(),
+            "saturated slice must return false on is_kind_partially_covered (0 missing hits is_kind_saturated)",
+        );
+        assert_eq!(
+            saturated.as_slice().is_kind_partially_covered(),
+            !saturated.as_slice().is_kind_empty() && !saturated.as_slice().is_kind_saturated(),
+            "saturated is_kind_partially_covered must equal (!is_kind_empty() && !is_kind_saturated())",
+        );
+    }
+
+    /// SINGLE-KIND pin — a slice populating exactly one variant on any
+    /// `N ≥ 2` closed set returns `true` on `is_kind_partially_covered`
+    /// (1 distinct + N-1 missing sits in the (open, open) product).
+    /// The SOLE arm where the middle predicate FIRST fires on a well-
+    /// formed slice one step away from empty.
+    #[test]
+    fn condition_slice_is_kind_partially_covered_returns_true_on_single_kind_slice() {
+        assert!(
+            ConditionKind::ALL.len() >= 2,
+            "test assumes ConditionKind::ALL has ≥ 2 variants",
+        );
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            assert!(
+                slice.is_kind_partially_covered(),
+                "single-populated slice with {populated:?} must return true on is_kind_partially_covered (1 distinct + N-1 missing)",
+            );
+            assert_eq!(
+                slice.is_kind_partially_covered(),
+                slice.has_any_distinct_kind() && slice.has_any_missing_kind(),
+                "single-populated is_kind_partially_covered must equal (has_any_distinct_kind() && has_any_missing_kind()) for {populated:?}",
+            );
+            assert_eq!(
+                slice.is_kind_partially_covered(),
+                slice.distinct_kind_count() > 0 && slice.missing_kind_count() > 0,
+                "single-populated is_kind_partially_covered must equal (distinct_kind_count() > 0 && missing_kind_count() > 0) for {populated:?}",
+            );
+        }
+    }
+
+    /// MULTIPLICITY pin — a slice carrying the SAME [`ConditionKind`]
+    /// multiple times still returns `true` on
+    /// `is_kind_partially_covered` on any `N ≥ 2` closed set
+    /// (multiplicity is irrelevant — one distinct kind + N-1 missing).
+    /// Complement of the empty-slice arm — the middle predicate collapses
+    /// to non-emptiness of both the distinct SET and the missing SET.
+    #[test]
+    fn condition_slice_is_kind_partially_covered_ignores_multiplicity() {
+        assert!(
+            ConditionKind::ALL.len() >= 2,
+            "test assumes ConditionKind::ALL has ≥ 2 variants",
+        );
+        for k in ConditionKind::ALL {
+            let doubled: Vec<Condition> = vec![condition_with(k), condition_with(k)];
+            assert!(
+                doubled.as_slice().is_kind_partially_covered(),
+                "slice carrying {k:?} twice must return true on is_kind_partially_covered (still 1 distinct + N-1 missing)",
+            );
+            let tripled: Vec<Condition> =
+                vec![condition_with(k), condition_with(k), condition_with(k)];
+            assert!(
+                tripled.as_slice().is_kind_partially_covered(),
+                "slice carrying {k:?} three times must return true on is_kind_partially_covered (still 1 distinct + N-1 missing)",
+            );
+        }
+    }
+
+    /// TRICHOTOMY PARTITION pin — EXACTLY ONE of `is_kind_empty`,
+    /// `is_kind_partially_covered`, and `is_kind_saturated` returns
+    /// `true` on any `N ≥ 1` closed set across every representative
+    /// arrangement (empty, single-populated, near-saturated,
+    /// saturated). Byte-for-byte peer of the tagged-union parent-state
+    /// trichotomy `is_empty + is_partially_populated + is_saturated == 1`
+    /// one struct-layer up. The most load-bearing composition law on
+    /// the closed-set partition — a regression that broke ONE arm
+    /// (leaving the other two intact) surfaces HERE at ONE substrate
+    /// test rather than as silent skew at the classifier callsite.
+    #[test]
+    fn condition_slice_partition_trichotomy_holds_on_every_arrangement() {
+        assert!(
+            ConditionKind::ALL.len() >= 2,
+            "test assumes ConditionKind::ALL has ≥ 2 variants",
+        );
+        // Empty arm.
+        let empty: &[Condition] = &[];
+        assert_eq!(
+            usize::from(empty.is_kind_empty())
+                + usize::from(empty.is_kind_partially_covered())
+                + usize::from(empty.is_kind_saturated()),
+            1,
+            "trichotomy partition violated on empty slice",
+        );
+        // Single-populated arm.
+        for k in ConditionKind::ALL {
+            let slice = [condition_with(k)];
+            assert_eq!(
+                usize::from(slice.is_kind_empty())
+                    + usize::from(slice.is_kind_partially_covered())
+                    + usize::from(slice.is_kind_saturated()),
+                1,
+                "trichotomy partition violated on single-populated slice with {k:?}",
+            );
+        }
+        // Saturated arm.
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert_eq!(
+            usize::from(saturated.as_slice().is_kind_empty())
+                + usize::from(saturated.as_slice().is_kind_partially_covered())
+                + usize::from(saturated.as_slice().is_kind_saturated()),
+            1,
+            "trichotomy partition violated on saturated slice",
+        );
+        // Near-saturated arm (every kind except one) — meaningful on N ≥ 2.
+        for omit in ConditionKind::ALL {
+            let near_sat: Vec<Condition> = ConditionKind::ALL
+                .into_iter()
+                .filter(|k| *k != omit)
+                .map(condition_with)
+                .collect();
+            assert_eq!(
+                usize::from(near_sat.as_slice().is_kind_empty())
+                    + usize::from(near_sat.as_slice().is_kind_partially_covered())
+                    + usize::from(near_sat.as_slice().is_kind_saturated()),
+                1,
+                "trichotomy partition violated on near-saturated slice omitting {omit:?}",
+            );
+        }
+    }
+
     // ── ConditionSliceExt::has_any_missing_kind — at-least-one halfspace pins ──
     //
     // Boolean at-least-one halfspace peer of `is_kind_saturated`:
@@ -12376,6 +12884,138 @@ mod tests {
         assert!(
             !b.is_condition_kind_empty(),
             "saturated boundary must return false on is_condition_kind_empty",
+        );
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary parent-state middle-arm
+    /// triad) — the three `is_*_condition_kind_partially_covered`
+    /// methods on [`Boundary`] delegate to the slice-level substrate
+    /// primitive [`ConditionSliceExt::is_kind_partially_covered`] over
+    /// the two `Vec<Condition>` slots (precondition + postcondition)
+    /// and compose the union via the paired-halfspace body
+    /// `has_any_distinct_condition_kind() && has_any_missing_condition_kind()`.
+    /// Sweeps the empty boundary (every arm returns `false` — 0
+    /// distinct hits the empty arm, not the middle arm), the saturated
+    /// boundary (every arm returns `false` on any `N ≥ 1` — 0 missing
+    /// hits the saturated arm, not the middle arm), and single-
+    /// populated-per-side arrangements on any `N ≥ 2` closed set
+    /// (every per-slice arm returns `true` when the slice carries a
+    /// single populated kind; the union returns `true` iff the two
+    /// kinds leave at least one uncovered). Also pins the trichotomy
+    /// partition law `is_condition_kind_empty +
+    /// is_condition_kind_partially_covered + is_condition_kind_saturated
+    /// == 1` at each arm — a regression that dropped one bit of the
+    /// paired-halfspace walk, drifted the underlying `has_condition_kind`
+    /// predicate, or swapped the wrong sides of the composition
+    /// surfaces HERE.
+    #[test]
+    fn is_condition_kind_partially_covered_triad_delegates_to_slice_is_kind_partially_covered() {
+        // Empty boundary — every arm returns false on any N ≥ 1
+        // closed set (0 distinct hits the empty arm).
+        assert!(
+            !ConditionKind::ALL.is_empty(),
+            "test assumes ConditionKind::ALL has ≥ 1 variants",
+        );
+        let b = Boundary::default();
+        assert!(
+            !b.is_precondition_kind_partially_covered(),
+            "empty boundary must return false on is_precondition_kind_partially_covered",
+        );
+        assert!(
+            !b.is_postcondition_kind_partially_covered(),
+            "empty boundary must return false on is_postcondition_kind_partially_covered",
+        );
+        assert!(
+            !b.is_condition_kind_partially_covered(),
+            "empty boundary must return false on is_condition_kind_partially_covered",
+        );
+        assert_eq!(
+            b.is_condition_kind_partially_covered(),
+            b.has_any_distinct_condition_kind() && b.has_any_missing_condition_kind(),
+            "empty is_condition_kind_partially_covered must equal (has_any_distinct_condition_kind() && has_any_missing_condition_kind())",
+        );
+
+        // Single-populated per side — every per-slice arm returns true
+        // on any N ≥ 2 closed set (1 distinct + N-1 missing sits in
+        // the (open, open) product); the union returns true iff the
+        // pre+post kinds leave at least one ALL variant uncovered.
+        if ConditionKind::ALL.len() >= 2 {
+            for pre_kind in ConditionKind::ALL {
+                for post_kind in ConditionKind::ALL {
+                    let mut b = Boundary::default();
+                    b.preconditions.push(condition_with(pre_kind));
+                    b.postconditions.push(condition_with(post_kind));
+                    assert_eq!(
+                        b.is_precondition_kind_partially_covered(),
+                        b.preconditions.is_kind_partially_covered(),
+                        "Boundary::is_precondition_kind_partially_covered must delegate verbatim to \
+                         preconditions.is_kind_partially_covered() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        b.is_postcondition_kind_partially_covered(),
+                        b.postconditions.is_kind_partially_covered(),
+                        "Boundary::is_postcondition_kind_partially_covered must delegate verbatim to \
+                         postconditions.is_kind_partially_covered() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert!(
+                        b.is_precondition_kind_partially_covered(),
+                        "single-populated preconditions must return true on is_precondition_kind_partially_covered for pre={pre_kind:?}",
+                    );
+                    assert!(
+                        b.is_postcondition_kind_partially_covered(),
+                        "single-populated postconditions must return true on is_postcondition_kind_partially_covered for post={post_kind:?}",
+                    );
+                    // Union arm — the two kinds cover {pre, post},
+                    // partial iff the union leaves ≥ 1 ALL variant
+                    // uncovered, which on N ≥ 2 is always true when
+                    // pre==post; and when pre!=post, the union is
+                    // partial iff |ALL| >= 3 (two covered leaves N-2
+                    // uncovered).
+                    let covered_count = if pre_kind == post_kind { 1 } else { 2 };
+                    let expected_union = ConditionKind::ALL.len() > covered_count;
+                    assert_eq!(
+                        b.is_condition_kind_partially_covered(),
+                        expected_union,
+                        "Boundary::is_condition_kind_partially_covered must equal \
+                         (ConditionKind::ALL.len() > covered-kinds-count) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    // Trichotomy partition on the union axis.
+                    assert_eq!(
+                        usize::from(b.is_condition_kind_empty())
+                            + usize::from(b.is_condition_kind_partially_covered())
+                            + usize::from(b.is_condition_kind_saturated()),
+                        1,
+                        "Boundary union trichotomy partition violated for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+            }
+        }
+
+        // Saturated boundary — every arm returns false on any N ≥ 1
+        // closed set (0 missing hits the saturated arm).
+        let mut b = Boundary::default();
+        for k in ConditionKind::ALL {
+            b.preconditions.push(condition_with(k));
+            b.postconditions.push(condition_with(k));
+        }
+        assert!(
+            !b.is_precondition_kind_partially_covered(),
+            "saturated boundary must return false on is_precondition_kind_partially_covered",
+        );
+        assert!(
+            !b.is_postcondition_kind_partially_covered(),
+            "saturated boundary must return false on is_postcondition_kind_partially_covered",
+        );
+        assert!(
+            !b.is_condition_kind_partially_covered(),
+            "saturated boundary must return false on is_condition_kind_partially_covered",
+        );
+        assert_eq!(
+            usize::from(b.is_condition_kind_empty())
+                + usize::from(b.is_condition_kind_partially_covered())
+                + usize::from(b.is_condition_kind_saturated()),
+            1,
+            "Boundary union trichotomy partition violated on saturated boundary",
         );
     }
 

@@ -2006,6 +2006,93 @@ impl EphemeralSpec {
         self.postconditions.is_kind_empty()
     }
 
+    /// `true` iff `preconditions ∪ postconditions` carries AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant AND is MISSING AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant — the peer of
+    /// [`crate::boundary::Boundary::is_condition_kind_partially_covered`]
+    /// on the [`EphemeralSpec`] sugar surface. Names the parent-state
+    /// middle-arm on the closed-set partition at the union struct
+    /// layer, closing the trichotomy (empty, partially covered,
+    /// saturated) alongside [`Self::is_condition_kind_empty`] and
+    /// [`Self::is_condition_kind_saturated`].
+    ///
+    /// # Composed body — byte-identical to
+    /// [`crate::boundary::Boundary::is_condition_kind_partially_covered`]
+    ///
+    /// `self.has_any_distinct_condition_kind() && self.has_any_missing_condition_kind()`
+    /// — the paired at-least-one-halfspace composition. Byte-identical
+    /// to the peer method on the point-domain
+    /// [`crate::boundary::Boundary`] surface — both compose against the
+    /// SAME slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::is_kind_partially_covered`]
+    /// via the two-slice union so a regression at the per-slice fused
+    /// short-circuit walk fails at that primitive's tests rather than
+    /// as silent drift at either struct-level middle-arm caller.
+    ///
+    /// # Sibling to [`Self::is_condition_kind_empty`] / [`Self::is_condition_kind_saturated`]
+    ///
+    /// Third and final arm of the parent-state trichotomy on the
+    /// closed-set partition at the ephemeral-union struct layer,
+    /// closing the natural partition alongside `is_condition_kind_empty`
+    /// (=0 zero-endpoint on the distinct axis) and
+    /// `is_condition_kind_saturated` (=0 zero-endpoint on the missing
+    /// axis). Every ephemeral spec satisfies EXACTLY ONE of the three
+    /// Boolean projections on any `N ≥ 1` closed set.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the parent-state middle-arm projection
+    /// composes the SAME paired-halfspace body on both this ephemeral
+    /// surface and the point-domain [`crate::boundary::Boundary`]
+    /// surface). THEORY.md §VI.1 (generation over composition — a new
+    /// [`ConditionKind`] variant reaches both surfaces' parent-state
+    /// middle-arm triads mechanically through the delegated union
+    /// primitive).
+    #[must_use]
+    pub fn is_condition_kind_partially_covered(&self) -> bool {
+        self.has_any_distinct_condition_kind() && self.has_any_missing_condition_kind()
+    }
+
+    /// `true` iff [`Self::preconditions`] carries AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant AND is MISSING AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant — the precondition-side arm of
+    /// the (precondition, postcondition, condition-union) parent-state
+    /// middle-arm triad on [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::is_kind_partially_covered`]
+    /// over [`Self::preconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::is_precondition_kind_partially_covered`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice fused short-circuit walk fails at that primitive's
+    /// tests rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn is_precondition_kind_partially_covered(&self) -> bool {
+        self.preconditions.is_kind_partially_covered()
+    }
+
+    /// `true` iff [`Self::postconditions`] carries AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant AND is MISSING AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant — the postcondition-side arm of
+    /// the (precondition, postcondition, condition-union) parent-state
+    /// middle-arm triad on [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::is_kind_partially_covered`]
+    /// over [`Self::postconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::is_postcondition_kind_partially_covered`]
+    /// on the point-domain surface. See
+    /// [`Self::is_precondition_kind_partially_covered`] for the full
+    /// rationale — the two methods share ONE lift motivation, ONE
+    /// fail-before-pass-after composition-law pin, and ONE two-surface
+    /// parity contract with the point-domain
+    /// [`crate::boundary::Boundary`] parent-state middle-arm peer
+    /// methods.
+    #[must_use]
+    pub fn is_postcondition_kind_partially_covered(&self) -> bool {
+        self.postconditions.is_kind_partially_covered()
+    }
+
     /// `true` iff `preconditions ∪ postconditions` is MISSING EXACTLY
     /// ONE [`ConditionKind::ALL`] variant — the union arm of the
     /// (precondition, postcondition, condition-union) cardinality-
@@ -13065,6 +13152,149 @@ mod tests {
         assert!(
             !spec.is_condition_kind_empty(),
             "saturated ephemeral must return false on is_condition_kind_empty",
+        );
+    }
+
+    /// SUBSTRATE-DELEGATION pin (EphemeralSpec parent-state middle-arm
+    /// triad) — the three `is_*_condition_kind_partially_covered`
+    /// methods on [`EphemeralSpec`] delegate to the slice-level
+    /// substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::is_kind_partially_covered`]
+    /// over the two `Vec<Condition>` slots (precondition +
+    /// postcondition) and compose the union via the paired-halfspace
+    /// body `has_any_distinct_condition_kind() && has_any_missing_condition_kind()`.
+    /// Two-surface parity pin against
+    /// [`crate::boundary::Boundary::is_condition_kind_partially_covered`]
+    /// on the point-domain [`ProcessSpec`] surface — the two
+    /// struct-level middle-arm callers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice fused short-circuit walk fails at that primitive's tests
+    /// rather than as silent drift at either sugar-surface arm.
+    #[test]
+    fn is_condition_kind_partially_covered_triad_delegates_to_slice_is_kind_partially_covered() {
+        // Empty ephemeral spec — every arm returns false on any N ≥ 1
+        // closed set (0 distinct hits the empty arm).
+        assert!(
+            !ConditionKind::ALL.is_empty(),
+            "test assumes ConditionKind::ALL has ≥ 1 variants",
+        );
+        let spec = empty_ephemeral();
+        assert!(
+            !spec.is_precondition_kind_partially_covered(),
+            "empty ephemeral must return false on is_precondition_kind_partially_covered",
+        );
+        assert!(
+            !spec.is_postcondition_kind_partially_covered(),
+            "empty ephemeral must return false on is_postcondition_kind_partially_covered",
+        );
+        assert!(
+            !spec.is_condition_kind_partially_covered(),
+            "empty ephemeral must return false on is_condition_kind_partially_covered",
+        );
+
+        // Two-surface parity: EphemeralSpec's three arms are byte-for-
+        // byte equal to the lowered ProcessSpec's Boundary arms.
+        let lowered: ProcessSpec = spec.clone().into();
+        assert_eq!(
+            spec.is_precondition_kind_partially_covered(),
+            lowered.boundary.is_precondition_kind_partially_covered(),
+            "empty ephemeral is_precondition_kind_partially_covered must equal lowered Boundary is_precondition_kind_partially_covered",
+        );
+        assert_eq!(
+            spec.is_postcondition_kind_partially_covered(),
+            lowered.boundary.is_postcondition_kind_partially_covered(),
+            "empty ephemeral is_postcondition_kind_partially_covered must equal lowered Boundary is_postcondition_kind_partially_covered",
+        );
+        assert_eq!(
+            spec.is_condition_kind_partially_covered(),
+            lowered.boundary.is_condition_kind_partially_covered(),
+            "empty ephemeral is_condition_kind_partially_covered must equal lowered Boundary is_condition_kind_partially_covered",
+        );
+
+        // Single-populated per side — every per-slice arm returns
+        // true on any N ≥ 2 closed set; union true iff coverage
+        // leaves ≥ 1 ALL variant uncovered.
+        if ConditionKind::ALL.len() >= 2 {
+            for pre_kind in ConditionKind::ALL {
+                for post_kind in ConditionKind::ALL {
+                    let mut spec = empty_ephemeral();
+                    spec.preconditions.push(cond(pre_kind));
+                    spec.postconditions.push(cond(post_kind));
+                    assert_eq!(
+                        spec.is_precondition_kind_partially_covered(),
+                        spec.preconditions.is_kind_partially_covered(),
+                        "EphemeralSpec::is_precondition_kind_partially_covered must delegate verbatim to \
+                         preconditions.is_kind_partially_covered() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.is_postcondition_kind_partially_covered(),
+                        spec.postconditions.is_kind_partially_covered(),
+                        "EphemeralSpec::is_postcondition_kind_partially_covered must delegate verbatim to \
+                         postconditions.is_kind_partially_covered() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert!(
+                        spec.is_precondition_kind_partially_covered(),
+                        "single-populated preconditions must return true on is_precondition_kind_partially_covered for pre={pre_kind:?}",
+                    );
+                    assert!(
+                        spec.is_postcondition_kind_partially_covered(),
+                        "single-populated postconditions must return true on is_postcondition_kind_partially_covered for post={post_kind:?}",
+                    );
+                    let covered_count = if pre_kind == post_kind { 1 } else { 2 };
+                    let expected_union = ConditionKind::ALL.len() > covered_count;
+                    assert_eq!(
+                        spec.is_condition_kind_partially_covered(),
+                        expected_union,
+                        "EphemeralSpec::is_condition_kind_partially_covered must equal \
+                         (ConditionKind::ALL.len() > covered-kinds-count) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    // Two-surface parity with lowered Boundary.
+                    let lowered: ProcessSpec = spec.clone().into();
+                    assert_eq!(
+                        spec.is_precondition_kind_partially_covered(),
+                        lowered.boundary.is_precondition_kind_partially_covered(),
+                        "EphemeralSpec::is_precondition_kind_partially_covered must equal lowered Boundary::is_precondition_kind_partially_covered for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.is_postcondition_kind_partially_covered(),
+                        lowered.boundary.is_postcondition_kind_partially_covered(),
+                        "EphemeralSpec::is_postcondition_kind_partially_covered must equal lowered Boundary::is_postcondition_kind_partially_covered for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.is_condition_kind_partially_covered(),
+                        lowered.boundary.is_condition_kind_partially_covered(),
+                        "EphemeralSpec::is_condition_kind_partially_covered must equal lowered Boundary::is_condition_kind_partially_covered for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    // Trichotomy partition on the union axis.
+                    assert_eq!(
+                        usize::from(spec.is_condition_kind_empty())
+                            + usize::from(spec.is_condition_kind_partially_covered())
+                            + usize::from(spec.is_condition_kind_saturated()),
+                        1,
+                        "EphemeralSpec union trichotomy partition violated for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+            }
+        }
+
+        // Saturated ephemeral spec — every arm returns false on any
+        // N ≥ 1 closed set (0 missing hits the saturated arm).
+        let mut spec = empty_ephemeral();
+        for k in ConditionKind::ALL {
+            spec.preconditions.push(cond(k));
+            spec.postconditions.push(cond(k));
+        }
+        assert!(
+            !spec.is_precondition_kind_partially_covered(),
+            "saturated ephemeral must return false on is_precondition_kind_partially_covered",
+        );
+        assert!(
+            !spec.is_postcondition_kind_partially_covered(),
+            "saturated ephemeral must return false on is_postcondition_kind_partially_covered",
+        );
+        assert!(
+            !spec.is_condition_kind_partially_covered(),
+            "saturated ephemeral must return false on is_condition_kind_partially_covered",
         );
     }
 

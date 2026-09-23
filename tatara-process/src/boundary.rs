@@ -3280,6 +3280,109 @@ impl Boundary {
     pub fn has_unique_of_postcondition_kind(&self, kind: ConditionKind) -> bool {
         self.postconditions.has_unique_of_kind(kind)
     }
+
+    /// `true` iff `preconditions ∪ postconditions` carries AT MOST
+    /// ONE [`Condition`] with the given [`ConditionKind`] — the
+    /// union arm of the (precondition, postcondition, condition-
+    /// union) per-kind cardinality "≤ 1" negation triad on
+    /// [`Boundary`]. Closes the {= 0, = 1, ≥ 1, ≥ 2, ≤ 1} Boolean-
+    /// cardinality grid on the per-kind axis at the union level
+    /// alongside its sibling [`Self::has_multiple_of_condition_kind`]
+    /// (≥ 2 many-arm) under the definitional negation
+    /// `!(≥ 2) == (≤ 1)`. Composes a two-step-short-circuit walk over
+    /// the chained per-kind iterator [`Self::iter_condition_kind`]
+    /// via the definitional negation
+    /// `!self.has_multiple_of_condition_kind(kind)`.
+    ///
+    /// Composed body: `!self.has_multiple_of_condition_kind(kind)` —
+    /// a definitional Boolean negation of the union many-arm
+    /// primitive. Short-circuits transitively through
+    /// [`Self::has_multiple_of_condition_kind`]'s two-step short-
+    /// circuit walk over the chained per-kind iterator: returns
+    /// `true` as soon as the many-arm walk stops with fewer than
+    /// two matches, WITHOUT walking every slot to build
+    /// [`Self::count_condition_kind`]'s scalar. Byte-for-byte peer
+    /// of [`ConditionSliceExt::has_at_most_one_of_kind`] one slice-
+    /// layer down, lifted to compose against the two-slice chain
+    /// rather than a single slice's `iter_kind`.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::has_at_most_one_of_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self, ConditionKind) -> bool`,
+    /// byte-identical definitional-negation body composed against
+    /// the ephemeral surface's own chained per-kind iterator. Both
+    /// methods compose against the SAME slice-level substrate
+    /// primitive [`ConditionSliceExt::has_at_most_one_of_kind`] via
+    /// the two-slice chain — a regression at the per-slice negation
+    /// walk fails at that primitive's tests rather than as silent
+    /// drift at either struct-level `has-at-most-one-of-<kind>`
+    /// caller.
+    ///
+    /// # Compounding
+    ///
+    /// A future authoring-time linter that surfaces "boundary
+    /// condition slice union has no duplicates for kind K" reads
+    /// `boundary.has_at_most_one_of_condition_kind(K)` at ONE call
+    /// site rather than restating
+    /// `!boundary.has_multiple_of_condition_kind(K)` or
+    /// `boundary.count_condition_kind(K) <= 1` (which walks every
+    /// slot on both slices to count) at every callsite. A future
+    /// operator-facing "no-duplicate-of-kind" postcondition-well-
+    /// formedness check that allows either absence (0 matches) or a
+    /// single reference (1 match) but rejects duplicates reads this
+    /// primitive with a single call.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the per-kind cardinality-"≤ 1" projection
+    /// composes the SAME definitional negation shape over the two-
+    /// slice chain on both this boundary surface and the ephemeral
+    /// surface). THEORY.md §VI.1 (generation over composition — a
+    /// new [`ConditionKind`] variant reaches both surfaces' per-
+    /// kind-"≤ 1" triads mechanically through the delegated chained
+    /// iterator).
+    #[must_use]
+    pub fn has_at_most_one_of_condition_kind(&self, kind: ConditionKind) -> bool {
+        !self.has_multiple_of_condition_kind(kind)
+    }
+
+    /// `true` iff [`Self::preconditions`] carries AT MOST ONE
+    /// [`Condition`] with the given [`ConditionKind`] — the
+    /// precondition-side arm of the (precondition, postcondition,
+    /// condition-union) per-kind cardinality "≤ 1" negation triad
+    /// on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::has_at_most_one_of_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::has_at_most_one_of_postcondition_kind`] on
+    /// the (precondition, postcondition) partition of the
+    /// boundary's two condition-vector slots; both peers compose
+    /// against the SAME slice-level substrate primitive so a
+    /// regression at the per-slice definitional negation walk fails
+    /// at that primitive's tests rather than as silent drift at
+    /// either struct-level arm.
+    #[must_use]
+    pub fn has_at_most_one_of_precondition_kind(&self, kind: ConditionKind) -> bool {
+        self.preconditions.has_at_most_one_of_kind(kind)
+    }
+
+    /// `true` iff [`Self::postconditions`] carries AT MOST ONE
+    /// [`Condition`] with the given [`ConditionKind`] — the
+    /// postcondition-side arm of the (precondition, postcondition,
+    /// condition-union) per-kind cardinality "≤ 1" negation triad
+    /// on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::has_at_most_one_of_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::has_at_most_one_of_precondition_kind`]. See
+    /// that method for the full rationale — the two methods share
+    /// ONE lift motivation, ONE fail-before-pass-after composition-
+    /// law pin, and ONE two-surface parity contract with the
+    /// ephemeral sugar type via
+    /// [`crate::ephemeral::EphemeralSpec::has_at_most_one_of_postcondition_kind`].
+    #[must_use]
+    pub fn has_at_most_one_of_postcondition_kind(&self, kind: ConditionKind) -> bool {
+        self.postconditions.has_at_most_one_of_kind(kind)
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -6246,6 +6349,130 @@ pub trait ConditionSliceExt {
     fn has_unique_of_kind(&self, kind: ConditionKind) -> bool {
         let mut it = self.iter_kind(kind);
         it.next().is_some() && it.next().is_none()
+    }
+
+    /// Boolean cardinality "≤ 1" negation peer of
+    /// [`Self::has_multiple_of_kind`] on the per-kind count axis —
+    /// `true` iff AT MOST ONE [`Condition`] with the given `kind`
+    /// appears in this slice (equivalently, [`Self::count_kind`]
+    /// `(kind) <= 1` and [`Self::iter_kind`]`(kind).count() <= 1`).
+    /// Closes the {= 0, = 1, ≥ 1, ≥ 2, ≤ 1} Boolean-cardinality grid
+    /// on the per-kind axis at the slice level alongside its sibling
+    /// [`Self::has_multiple_of_kind`] (≥ 2 many-arm) under the
+    /// definitional negation `!(≥ 2) == (≤ 1)`, and alongside
+    /// `!has_kind` (= 0 zero-endpoint) OR [`Self::has_unique_of_kind`]
+    /// (= 1 mid-endpoint) as the trichotomy-union arm. Names the
+    /// per-kind arrangement space where the slice is
+    /// EMPTY-OR-SINGLETON for that kind (zero or exactly one match).
+    ///
+    /// Default body: `!self.has_multiple_of_kind(kind)` — a
+    /// definitional Boolean negation of the many-arm primitive.
+    /// Short-circuits transitively through
+    /// [`Self::has_multiple_of_kind`]'s two-step short-circuit walk
+    /// over [`Self::iter_kind`]: returns `true` as soon as the many-
+    /// arm walk stops with fewer than two matches, WITHOUT walking
+    /// every slot to build [`Self::count_kind`]'s scalar. Strictly
+    /// cheaper than [`Self::count_kind`]`(kind) <= 1` on every arm
+    /// with `≥ 2` matches (short-circuits at the second hit rather
+    /// than counting further). Byte-for-byte peer of
+    /// [`Self::has_at_most_one_distinct_kind`] and
+    /// [`Self::has_at_most_one_missing_kind`] under the (distinct,
+    /// missing, per-kind) parity: all three compose the SAME
+    /// definitional negation shape (`!has_multiple_*`) at the slice-
+    /// level trait's default body, differing only in the many-arm
+    /// primitive they negate.
+    ///
+    /// # Peer to [`Self::has_at_most_one_distinct_kind`] / [`Self::has_at_most_one_missing_kind`]
+    ///
+    /// Third axis of the slice-level "≤ 1" negation triad. The
+    /// distinct-axis peer negates the "≥ 2 distinct kinds present"
+    /// many-arm; the missing-axis peer negates the "≥ 2 kinds
+    /// missing" many-arm; this per-kind peer negates the "≥ 2
+    /// matches of a specific kind" many-arm. Together the three
+    /// close the "≤ 1" arm on every cardinality axis
+    /// (distinct-kind, missing-kind, per-kind count) at the SAME
+    /// slice-level trait under the SAME definitional negation shape.
+    ///
+    /// # Sibling to the per-kind Boolean cardinality tetrachotomy
+    ///
+    /// Fourth arm of the `{= 0, ≥ 1, = 1, ≥ 2, ≤ 1}` Boolean-
+    /// cardinality closure on the per-kind axis at the slice level,
+    /// closing the Boolean-negation grid alongside
+    /// [`Self::lacks_kind`] (= 0 zero-endpoint),
+    /// [`Self::has_unique_of_kind`] (= 1 mid-endpoint),
+    /// [`Self::has_kind`] (≥ 1 halfspace), and
+    /// [`Self::has_multiple_of_kind`] (≥ 2 many-arm). The {≤ 1, ≥ 2}
+    /// pair sit on the Boolean-negation axis:
+    /// `has_at_most_one_of_kind(k) == !has_multiple_of_kind(k)` on
+    /// every arm. The {0, 1} union arm sits on the trichotomy-union
+    /// axis: `has_at_most_one_of_kind(k) == lacks_kind(k) ||
+    /// has_unique_of_kind(k)` on every arm. Both composition laws
+    /// bind the per-kind "≤ 1" Boolean projection to the sibling
+    /// primitives at the trait's default body — swept substrate-wide
+    /// by [`assert_slice_refinement_composition_laws`] as its per-
+    /// kind "≤ 1" arm alongside the existing per-kind zero-endpoint,
+    /// mid-endpoint, halfspace, and many-arm pins.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `true` on every kind (0 matches, `≤ 1`).
+    /// A slice carrying `kind` exactly once (with any other kinds in
+    /// any multiplicity) returns `true` on THAT kind. A slice
+    /// carrying `kind` two or more times returns `false` on THAT
+    /// kind. Multiplicity of OTHER kinds is irrelevant — the
+    /// primitive projects the slice onto the per-kind count axis for
+    /// the queried kind alone. Together with `lacks_kind` and
+    /// `has_unique_of_kind`, the "≤ 1" arm equals their union:
+    /// `has_at_most_one_of_kind(k) ↔ lacks_kind(k) ∨
+    /// has_unique_of_kind(k)`.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A boundary-well-formedness coherence check that enforces
+    ///   "every Process's preconditions carry AT MOST ONE
+    ///   [`ConditionKind::ProcessPhase`] entry" (allowing zero, but
+    ///   rejecting duplicates) reads
+    ///   `boundary.preconditions.has_at_most_one_of_kind(ConditionKind::ProcessPhase)`
+    ///   at ONE call site — one bit-flip on the many-arm's two-step
+    ///   short-circuit walk, no allocation, no scalar comparison
+    ///   against `<= 1`. Byte-for-byte peer of the same coherence
+    ///   check phrased with `!slice.has_multiple_of_kind(k)` at the
+    ///   callsite, but reads the intent as "at most one" directly.
+    /// - A `has-at-most-one-of-<kind>` require-tag classifier arm
+    ///   reaches this primitive with no allocation, closing the
+    ///   {= 0, = 1, ≥ 1, ≥ 2, ≤ 1} cardinality-Boolean grid on the
+    ///   per-kind axis at the slice level alongside its sibling
+    ///   `has-multiple-of-<kind>` under the Boolean negation axis.
+    /// - A fleet-wide "no duplicate condition of kind detected"
+    ///   audit dump reads `ConditionKind::ALL.into_iter().filter(|k|
+    ///   slice.has_at_most_one_of_kind(*k))` at ONE call site
+    ///   without materializing the negation at every callsite.
+    /// - A future authoring-time linter that surfaces "operator's
+    ///   condition slice has no duplicates for any kind" reads
+    ///   `ConditionKind::ALL.into_iter().all(|k|
+    ///   slice.has_at_most_one_of_kind(k))` — the whole-slice "no
+    ///   kind is duplicated" projection composes through the SAME
+    ///   substrate primitive without restating the negation.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The per-kind cardinality "≤ 1" projection lives at ONE
+    ///   substrate site as the definitional Boolean negation of
+    ///   [`Self::has_multiple_of_kind`]; the three composition forms
+    ///   (`!has_multiple_of_kind(k)`, `count_kind(k) <= 1`, and
+    ///   `lacks_kind(k) || has_unique_of_kind(k)`) compose through
+    ///   the SAME two-step-short-circuit walk shape one negation up,
+    ///   byte-for-byte identical on every arm.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically through the delegated
+    ///   [`Self::has_multiple_of_kind`] — a slice previously at the
+    ///   empty or singleton arm (returned `true` here) that picks up
+    ///   a second condition of the new variant now has TWO matches
+    ///   and flips to `false`.
+    fn has_at_most_one_of_kind(&self, kind: ConditionKind) -> bool {
+        !self.has_multiple_of_kind(kind)
     }
 }
 
@@ -10553,6 +10780,154 @@ mod tests {
                     arms_true, 1,
                     "per-kind trichotomy for target={target:?} at mult={target_multiplicity} \
                      must have EXACTLY one arm true, got {arms_true}",
+                );
+            }
+        }
+    }
+
+    // ── ConditionSliceExt::has_at_most_one_of_kind — per-kind "≤ 1" pins ─
+    //
+    // Boolean cardinality "≤ 1" negation peer of `has_multiple_of_kind`
+    // (≥ 2) on the per-kind count axis: `has_at_most_one_of_kind(k)`
+    // returns `true` iff AT MOST ONE `Condition` value with kind `k`
+    // appears in the slice, byte-for-byte with
+    // `!has_multiple_of_kind(k)` via the definitional negation in the
+    // trait's default body. Closes the {= 0, = 1, ≥ 1, ≥ 2, ≤ 1}
+    // Boolean-cardinality grid on the per-kind axis. The composition
+    // laws
+    // `has_at_most_one_of_kind(k) == !has_multiple_of_kind(k)`,
+    // `has_at_most_one_of_kind(k) == (count_kind(k) <= 1)`,
+    // `has_at_most_one_of_kind(k) == (iter_kind(k).count() <= 1)`, and
+    // `has_at_most_one_of_kind(k) == lacks_kind(k) || has_unique_of_kind(k)`
+    // bind the per-kind "≤ 1" projection to the widened + scalar +
+    // trichotomy-union primitives. Axis-parity peer of the distinct-
+    // and missing-axis "≤ 1" negations
+    // (`has_at_most_one_distinct_kind ↔ !has_multiple_distinct_kinds`,
+    // `has_at_most_one_missing_kind ↔ !has_multiple_missing_kinds`)
+    // at the same slice-level trait under the SAME definitional
+    // negation shape.
+
+    /// EMPTY-SLICE pin — an empty slice returns `true` on
+    /// `has_at_most_one_of_kind` for EVERY kind (0 matches, `≤ 1`).
+    /// Also pins the composition law
+    /// `has_at_most_one_of_kind(k) == !has_multiple_of_kind(k)` at
+    /// zero-count for every kind and the trichotomy-union law
+    /// `has_at_most_one_of_kind(k) == lacks_kind(k) ||
+    /// has_unique_of_kind(k)` (=0 arm, `lacks_kind` fires).
+    #[test]
+    fn condition_slice_has_at_most_one_of_kind_returns_true_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        for k in ConditionKind::ALL {
+            assert!(
+                empty.has_at_most_one_of_kind(k),
+                "empty slice must return true on has_at_most_one_of_kind({k:?}) (0 matches, ≤ 1)",
+            );
+            assert_eq!(
+                empty.has_at_most_one_of_kind(k),
+                !empty.has_multiple_of_kind(k),
+                "empty has_at_most_one_of_kind({k:?}) must equal !has_multiple_of_kind({k:?})",
+            );
+            assert_eq!(
+                empty.has_at_most_one_of_kind(k),
+                empty.count_kind(k) <= 1,
+                "empty has_at_most_one_of_kind({k:?}) must equal (count_kind({k:?}) <= 1)",
+            );
+            assert_eq!(
+                empty.has_at_most_one_of_kind(k),
+                empty.lacks_kind(k) || empty.has_unique_of_kind(k),
+                "empty has_at_most_one_of_kind({k:?}) must equal \
+                 (lacks_kind({k:?}) || has_unique_of_kind({k:?}))",
+            );
+        }
+    }
+
+    /// COUNT-AXIS pin — sweeps a range of per-kind multiplicities
+    /// (0, 1, 2, 3) and asserts the primitive equals
+    /// `count_kind(k) <= 1` at each arm. Pins the transition from
+    /// the =1 (singleton) arm where the primitive returns `true` to
+    /// the =2 (duplicate) arm where it returns `false`, byte-for-byte
+    /// with the definitional negation of `has_multiple_of_kind` at
+    /// each multiplicity. Also pins per-kind independence: multiplicity
+    /// of OTHER kinds (each present exactly once) leaves the "≤ 1"
+    /// arm of every other kind at `true` regardless of `target`'s
+    /// multiplicity.
+    #[test]
+    fn condition_slice_has_at_most_one_of_kind_tracks_count_kind_le_one() {
+        for target in ConditionKind::ALL {
+            for target_multiplicity in [0usize, 1, 2, 3] {
+                // Build a slice with `target` repeated
+                // `target_multiplicity` times, plus one instance of
+                // every OTHER kind. `has_at_most_one_of_kind(target)`
+                // must depend only on `target_multiplicity`.
+                let mut slice: Vec<Condition> = Vec::new();
+                for _ in 0..target_multiplicity {
+                    slice.push(condition_with(target));
+                }
+                for other in ConditionKind::ALL {
+                    if other != target {
+                        slice.push(condition_with(other));
+                    }
+                }
+                let s = slice.as_slice();
+
+                assert_eq!(
+                    s.has_at_most_one_of_kind(target),
+                    target_multiplicity <= 1,
+                    "has_at_most_one_of_kind({target:?}) with multiplicity {target_multiplicity} \
+                     must equal ({target_multiplicity} <= 1)",
+                );
+                assert_eq!(
+                    s.has_at_most_one_of_kind(target),
+                    !s.has_multiple_of_kind(target),
+                    "has_at_most_one_of_kind({target:?}) drifted from !has_multiple_of_kind at \
+                     multiplicity {target_multiplicity}",
+                );
+                assert_eq!(
+                    s.has_at_most_one_of_kind(target),
+                    s.count_kind(target) <= 1,
+                    "has_at_most_one_of_kind({target:?}) drifted from (count_kind <= 1) at \
+                     multiplicity {target_multiplicity}",
+                );
+                assert_eq!(
+                    s.has_at_most_one_of_kind(target),
+                    s.iter_kind(target).count() <= 1,
+                    "has_at_most_one_of_kind({target:?}) drifted from (iter_kind.count() <= 1) \
+                     at multiplicity {target_multiplicity}",
+                );
+                // Trichotomy-union arm: {= 0} ∪ {= 1} == {≤ 1}.
+                assert_eq!(
+                    s.has_at_most_one_of_kind(target),
+                    s.lacks_kind(target) || s.has_unique_of_kind(target),
+                    "has_at_most_one_of_kind({target:?}) drifted from \
+                     (lacks_kind || has_unique_of_kind) at multiplicity {target_multiplicity}",
+                );
+
+                // OTHER kinds appear exactly once; their "≤ 1" arm
+                // stays `true` regardless of `target`'s multiplicity.
+                for other in ConditionKind::ALL {
+                    if other != target {
+                        assert!(
+                            s.has_at_most_one_of_kind(other),
+                            "other kind {other:?} present once must return true on \
+                             has_at_most_one_of_kind (target={target:?} mult={target_multiplicity})",
+                        );
+                    }
+                }
+
+                // Boolean tetrachotomy pin — for a given per-kind
+                // multiplicity, {has_at_most_one_of_kind,
+                // has_multiple_of_kind} PARTITION the count axis
+                // under the definitional negation (EXACTLY ONE fires
+                // on any `(s, target)` pair). Also verifies the
+                // relationship with the {= 0, = 1, ≥ 2} trichotomy:
+                // `has_at_most_one_of_kind` fires iff either
+                // `lacks_kind` or `has_unique_of_kind` fires.
+                let at_most_one = s.has_at_most_one_of_kind(target);
+                let multiple = s.has_multiple_of_kind(target);
+                assert_ne!(
+                    at_most_one, multiple,
+                    "per-kind {{≤1, ≥2}} Boolean-negation partition for target={target:?} at \
+                     mult={target_multiplicity} must fire EXACTLY one arm",
                 );
             }
         }
@@ -15828,6 +16203,176 @@ mod tests {
             assert!(
                 !b.has_unique_of_condition_kind(kind),
                 "saturated-singleton boundary must return false on union has_unique_of_condition_kind({kind:?}) (2 chain matches)",
+            );
+        }
+    }
+
+    // ── Boundary::has_at_most_one_of_(pre|post|)condition_kind triad ─
+    //
+    // Two-surface parity contract with
+    // `EphemeralSpec::has_at_most_one_of_condition_kind` on the "≤ 1"
+    // per-kind negation arm. Boundary composes against the slice-level
+    // substrate primitive `ConditionSliceExt::has_at_most_one_of_kind`
+    // via delegation on each side and via the definitional negation
+    // of `has_multiple_of_condition_kind` on the union chain. The
+    // union-level trichotomy-union arm equivalence
+    // `has_at_most_one_of_condition_kind(k) == lacks_condition_kind(k)
+    // || has_unique_of_condition_kind(k)` closes the {= 0, = 1, ≥ 1,
+    // ≥ 2, ≤ 1} Boolean-cardinality grid on the per-kind axis at the
+    // union level.
+
+    /// Boundary triad delegation + two-surface parity pin — sweeps
+    /// every kind on every reachable arrangement of a single
+    /// condition-per-side spec, asserts each per-slice arm delegates
+    /// verbatim to the slice-level primitive, and asserts the union
+    /// arm equals the {= 0, = 1} trichotomy-union `lacks ∨ has_unique`.
+    /// Also pins the definitional-negation composition law
+    /// `has_at_most_one_of_condition_kind(k) ==
+    /// !has_multiple_of_condition_kind(k)` and the tetrachotomy
+    /// partition (`{≤ 1, ≥ 2}` exactly one arm on every arrangement).
+    /// Regression at any of these predicates or at the underlying
+    /// slice-level primitive fails here.
+    #[test]
+    fn has_at_most_one_of_condition_kind_triad_delegates_to_slice_has_at_most_one_of_kind() {
+        // Empty boundary — every arm returns true on every kind
+        // (0 matches, `≤ 1`).
+        let b = Boundary::default();
+        for kind in ConditionKind::ALL {
+            assert!(
+                b.has_at_most_one_of_precondition_kind(kind),
+                "empty boundary must return true on has_at_most_one_of_precondition_kind({kind:?})",
+            );
+            assert!(
+                b.has_at_most_one_of_postcondition_kind(kind),
+                "empty boundary must return true on has_at_most_one_of_postcondition_kind({kind:?})",
+            );
+            assert!(
+                b.has_at_most_one_of_condition_kind(kind),
+                "empty boundary must return true on has_at_most_one_of_condition_kind({kind:?})",
+            );
+            assert_eq!(
+                b.has_at_most_one_of_condition_kind(kind),
+                b.count_condition_kind(kind) <= 1,
+                "empty has_at_most_one_of_condition_kind({kind:?}) must equal \
+                 (count_condition_kind <= 1)",
+            );
+        }
+
+        // Single-populated-per-side sweep — every per-side arm
+        // returns `true` for every query (each side has ≤ 1 match);
+        // union returns `true` iff at most one of `{pre, post}`
+        // equals `query` (chain sums to 0 or 1 on disjoint,
+        // 2 on shared).
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        b.has_at_most_one_of_precondition_kind(query),
+                        b.preconditions.has_at_most_one_of_kind(query),
+                        "Boundary::has_at_most_one_of_precondition_kind must delegate verbatim \
+                         to preconditions.has_at_most_one_of_kind for pre={pre_kind:?} \
+                         post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.has_at_most_one_of_postcondition_kind(query),
+                        b.postconditions.has_at_most_one_of_kind(query),
+                        "Boundary::has_at_most_one_of_postcondition_kind must delegate verbatim \
+                         to postconditions.has_at_most_one_of_kind for pre={pre_kind:?} \
+                         post={post_kind:?} query={query:?}",
+                    );
+
+                    // Per-side arms are always `true` — each side
+                    // holds at most one condition of any given kind
+                    // in this arrangement.
+                    assert!(
+                        b.has_at_most_one_of_precondition_kind(query),
+                        "single-per-side pre arm must return true for pre={pre_kind:?} \
+                         post={post_kind:?} query={query:?}",
+                    );
+                    assert!(
+                        b.has_at_most_one_of_postcondition_kind(query),
+                        "single-per-side post arm must return true for pre={pre_kind:?} \
+                         post={post_kind:?} query={query:?}",
+                    );
+
+                    // Union arm — chain multiplicity is (pre_hit +
+                    // post_hit); "≤ 1" fires iff the sum is 0 or 1,
+                    // i.e. `!(pre_hit && post_hit)`.
+                    let pre_hit = pre_kind == query;
+                    let post_hit = post_kind == query;
+                    let expected_union = !(pre_hit && post_hit);
+                    assert_eq!(
+                        b.has_at_most_one_of_condition_kind(query),
+                        expected_union,
+                        "Boundary::has_at_most_one_of_condition_kind({query:?}) must equal \
+                         !(pre_hit && post_hit) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+
+                    // Definitional negation of the many-arm peer.
+                    assert_eq!(
+                        b.has_at_most_one_of_condition_kind(query),
+                        !b.has_multiple_of_condition_kind(query),
+                        "Boundary::has_at_most_one_of_condition_kind({query:?}) drifted from \
+                         !has_multiple_of_condition_kind for pre={pre_kind:?} post={post_kind:?}",
+                    );
+
+                    // Trichotomy-union arm: {= 0} ∪ {= 1} == {≤ 1}.
+                    assert_eq!(
+                        b.has_at_most_one_of_condition_kind(query),
+                        b.lacks_condition_kind(query) || b.has_unique_of_condition_kind(query),
+                        "Boundary::has_at_most_one_of_condition_kind({query:?}) drifted from \
+                         (lacks || has_unique) trichotomy-union for pre={pre_kind:?} \
+                         post={post_kind:?}",
+                    );
+
+                    // Composition law with count.
+                    assert_eq!(
+                        b.has_at_most_one_of_condition_kind(query),
+                        b.count_condition_kind(query) <= 1,
+                        "Boundary::has_at_most_one_of_condition_kind({query:?}) drifted from \
+                         (count_condition_kind <= 1) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+
+                    // {≤ 1, ≥ 2} Boolean-negation partition at the
+                    // union level — EXACTLY ONE arm fires.
+                    let at_most_one = b.has_at_most_one_of_condition_kind(query);
+                    let multiple = b.has_multiple_of_condition_kind(query);
+                    assert_ne!(
+                        at_most_one, multiple,
+                        "union {{≤ 1, ≥ 2}} Boolean-negation partition for query={query:?} \
+                         (pre={pre_kind:?} post={post_kind:?}) must fire EXACTLY one arm",
+                    );
+                }
+            }
+        }
+
+        // Double-populated postcondition — post arm returns false
+        // on the doubled kind (≥ 2 matches, not ≤ 1), pre arm returns
+        // true (0 matches, ≤ 1), union returns false (2 chain
+        // matches, not ≤ 1).
+        for doubled in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            b.postconditions.push(condition_with(doubled));
+            b.postconditions.push(condition_with(doubled));
+
+            assert!(
+                b.has_at_most_one_of_precondition_kind(doubled),
+                "empty preconditions must return true on has_at_most_one_of_precondition_kind \
+                 for doubled={doubled:?}",
+            );
+            assert!(
+                !b.has_at_most_one_of_postcondition_kind(doubled),
+                "doubled postconditions must return false on has_at_most_one_of_postcondition_kind \
+                 for doubled={doubled:?}",
+            );
+            assert!(
+                !b.has_at_most_one_of_condition_kind(doubled),
+                "doubled postconditions must return false on union \
+                 has_at_most_one_of_condition_kind for doubled={doubled:?}",
             );
         }
     }

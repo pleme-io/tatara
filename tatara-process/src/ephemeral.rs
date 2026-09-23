@@ -3166,6 +3166,73 @@ impl EphemeralSpec {
         self.postconditions.has_at_most_one_of_kind(kind)
     }
 
+    /// Returns the unique [`crate::boundary::Condition`] with the
+    /// given [`ConditionKind`] in `preconditions ∪ postconditions`,
+    /// or [`None`] if zero or `≥ 2` such conditions exist — the
+    /// union arm of the (precondition, postcondition, condition-
+    /// union) `Option<&Condition>`-witnessing peer of the Boolean
+    /// [`Self::has_unique_of_condition_kind`] on the per-kind
+    /// cardinality "= 1" mid-endpoint at the ephemeral surface.
+    /// Composed body: a two-step short-circuit walk over the chained
+    /// per-kind iterator [`Self::iter_condition_kind`]. Byte-for-
+    /// byte peer of [`crate::boundary::Boundary::unique_of_condition_kind`]
+    /// on the point-domain surface — both compose against the SAME
+    /// slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::unique_of_kind`] via
+    /// the two-slice chain.
+    #[must_use]
+    pub fn unique_of_condition_kind(
+        &self,
+        kind: ConditionKind,
+    ) -> Option<&crate::boundary::Condition> {
+        let mut it = self.iter_condition_kind(kind);
+        let first = it.next()?;
+        match it.next() {
+            None => Some(first),
+            Some(_) => None,
+        }
+    }
+
+    /// Returns the unique [`crate::boundary::Condition`] with the
+    /// given [`ConditionKind`] in [`Self::preconditions`], or
+    /// [`None`] — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) `Option<&Condition>`-
+    /// witnessing peer triad on [`EphemeralSpec`]. Thin typed
+    /// delegate to [`crate::boundary::ConditionSliceExt::unique_of_kind`]
+    /// over [`Self::preconditions`]. Peer of
+    /// [`crate::boundary::Boundary::unique_of_precondition_kind`] on
+    /// the point-domain surface — both compose against the SAME
+    /// slice-level substrate primitive.
+    #[must_use]
+    pub fn unique_of_precondition_kind(
+        &self,
+        kind: ConditionKind,
+    ) -> Option<&crate::boundary::Condition> {
+        self.preconditions.unique_of_kind(kind)
+    }
+
+    /// Returns the unique [`crate::boundary::Condition`] with the
+    /// given [`ConditionKind`] in [`Self::postconditions`], or
+    /// [`None`] — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) `Option<&Condition>`-
+    /// witnessing peer triad on [`EphemeralSpec`]. Thin typed
+    /// delegate to [`crate::boundary::ConditionSliceExt::unique_of_kind`]
+    /// over [`Self::postconditions`]. Peer of
+    /// [`crate::boundary::Boundary::unique_of_postcondition_kind`]
+    /// on the point-domain surface. See
+    /// [`Self::unique_of_precondition_kind`] for the full rationale —
+    /// the two methods share ONE lift motivation, ONE fail-before-
+    /// pass-after composition-law pin, and ONE two-surface parity
+    /// contract with the point-domain
+    /// [`crate::boundary::Boundary`] per-kind witness peer methods.
+    #[must_use]
+    pub fn unique_of_postcondition_kind(
+        &self,
+        kind: ConditionKind,
+    ) -> Option<&crate::boundary::Condition> {
+        self.postconditions.unique_of_kind(kind)
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -15340,6 +15407,154 @@ mod tests {
             assert!(
                 !spec.has_at_most_one_of_condition_kind(kind),
                 "saturated-singleton ephemeral must return false on union has_at_most_one_of_condition_kind({kind:?}) (2 chain matches)",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::unique_of_(pre|post|)condition_kind triad ────
+    //
+    // Two-surface parity contract with
+    // `Boundary::unique_of_condition_kind` on the per-kind `= 1`
+    // `Option<&Condition>` witnessing arm. Both surfaces compose
+    // against the SAME slice-level substrate primitive
+    // `ConditionSliceExt::unique_of_kind` via delegation on each side
+    // and via a two-step short-circuit walk over
+    // `iter_condition_kind` on the union chain.
+
+    /// Ephemeral triad delegation + two-surface parity pin — sweeps
+    /// every kind on every reachable `(pre_kind, post_kind, query)`
+    /// arrangement of a single-condition-per-side spec, asserts each
+    /// per-slice arm delegates verbatim to the slice-level primitive,
+    /// asserts the union arm equals the chained two-step short-
+    /// circuit walk, and asserts the ephemeral-side arm agrees with
+    /// the lowered [`Boundary`] arm through the same slice-level
+    /// substrate primitive.
+    #[test]
+    fn unique_of_condition_kind_triad_delegates_to_slice_unique_of_kind() {
+        use crate::boundary::ConditionSliceExt as _;
+
+        // Empty ephemeral — every arm returns None on every kind.
+        let spec = empty_ephemeral();
+        for kind in ConditionKind::ALL {
+            assert!(
+                spec.unique_of_precondition_kind(kind).is_none(),
+                "empty ephemeral must return None on unique_of_precondition_kind({kind:?})",
+            );
+            assert!(
+                spec.unique_of_postcondition_kind(kind).is_none(),
+                "empty ephemeral must return None on unique_of_postcondition_kind({kind:?})",
+            );
+            assert!(
+                spec.unique_of_condition_kind(kind).is_none(),
+                "empty ephemeral must return None on unique_of_condition_kind({kind:?})",
+            );
+        }
+
+        // Single-populated-per-side sweep with two-surface parity.
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+
+                let lowered: ProcessSpec = spec.clone().into();
+                let boundary = &lowered.boundary;
+
+                for query in ConditionKind::ALL {
+                    // Per-side delegation pins.
+                    assert_eq!(
+                        spec.unique_of_precondition_kind(query)
+                            .map(|c| c as *const Condition),
+                        spec.preconditions
+                            .unique_of_kind(query)
+                            .map(|c| c as *const Condition),
+                        "EphemeralSpec::unique_of_precondition_kind must delegate verbatim to \
+                         preconditions.unique_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.unique_of_postcondition_kind(query)
+                            .map(|c| c as *const Condition),
+                        spec.postconditions
+                            .unique_of_kind(query)
+                            .map(|c| c as *const Condition),
+                        "EphemeralSpec::unique_of_postcondition_kind must delegate verbatim to \
+                         postconditions.unique_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+
+                    // Boolean-projection composition-law pin.
+                    assert_eq!(
+                        spec.unique_of_condition_kind(query).is_some(),
+                        spec.has_unique_of_condition_kind(query),
+                        "EphemeralSpec::unique_of_condition_kind({query:?}).is_some() drifted \
+                         from has_unique_of_condition_kind for pre={pre_kind:?} \
+                         post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.unique_of_condition_kind(query).map(|c| c.kind),
+                        if spec.has_unique_of_condition_kind(query) {
+                            Some(query)
+                        } else {
+                            None
+                        },
+                        "EphemeralSpec::unique_of_condition_kind({query:?}).map(kind) must yield \
+                         Some({query:?}) iff has_unique_of_condition_kind for pre={pre_kind:?} \
+                         post={post_kind:?}",
+                    );
+
+                    // Union arm shape — XOR of side-hits.
+                    let pre_hit = pre_kind == query;
+                    let post_hit = post_kind == query;
+                    assert_eq!(
+                        spec.unique_of_condition_kind(query).is_some(),
+                        pre_hit ^ post_hit,
+                        "EphemeralSpec::unique_of_condition_kind({query:?}).is_some() must equal \
+                         (pre_hit XOR post_hit) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+
+                    // Two-surface parity — the lowered Boundary's
+                    // triad yields the SAME Option<kind> shape on
+                    // every arm. Pointer identities differ (the
+                    // lowered Boundary carries cloned Conditions),
+                    // so parity holds at the kind projection.
+                    assert_eq!(
+                        spec.unique_of_precondition_kind(query).map(|c| c.kind),
+                        boundary.unique_of_precondition_kind(query).map(|c| c.kind),
+                        "ephemeral unique_of_precondition_kind({query:?}) kind drifted from \
+                         lowered Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.unique_of_postcondition_kind(query).map(|c| c.kind),
+                        boundary.unique_of_postcondition_kind(query).map(|c| c.kind),
+                        "ephemeral unique_of_postcondition_kind({query:?}) kind drifted from \
+                         lowered Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.unique_of_condition_kind(query).map(|c| c.kind),
+                        boundary.unique_of_condition_kind(query).map(|c| c.kind),
+                        "ephemeral unique_of_condition_kind({query:?}) kind drifted from \
+                         lowered Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+            }
+        }
+
+        // Doubled-post sweep — union collapses to None on the
+        // doubled kind (`≥ 2` chain matches).
+        for doubled in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            spec.postconditions.push(cond(doubled));
+            spec.postconditions.push(cond(doubled));
+            assert!(
+                spec.unique_of_postcondition_kind(doubled).is_none(),
+                "doubled postconditions must collapse unique_of_postcondition_kind({doubled:?}) \
+                 to None",
+            );
+            assert!(
+                spec.unique_of_condition_kind(doubled).is_none(),
+                "doubled postconditions must collapse union unique_of_condition_kind({doubled:?}) \
+                 to None",
             );
         }
     }

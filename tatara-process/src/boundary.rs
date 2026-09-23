@@ -3184,6 +3184,102 @@ impl Boundary {
     pub fn has_multiple_of_postcondition_kind(&self, kind: ConditionKind) -> bool {
         self.postconditions.has_multiple_of_kind(kind)
     }
+
+    /// `true` iff `preconditions ∪ postconditions` carries EXACTLY
+    /// ONE [`Condition`] with the given [`ConditionKind`] — the union
+    /// arm of the (precondition, postcondition, condition-union) per-
+    /// kind cardinality "= 1" mid-endpoint triad on [`Boundary`].
+    /// Composes a two-step-short-circuit walk over the chained per-
+    /// kind iterator [`Self::iter_condition_kind`], which itself
+    /// chains [`ConditionSliceExt::iter_kind`] over
+    /// [`Self::preconditions`] then [`Self::postconditions`].
+    ///
+    /// Composed body: pulls up to two hits off the chained per-kind
+    /// iterator; returns `true` iff the first is [`Some`] AND the
+    /// second is [`None`]. Byte-for-byte peer of
+    /// [`ConditionSliceExt::has_unique_of_kind`] one slice-layer
+    /// down, lifted to compose against the two-slice chain rather
+    /// than a single slice's `iter_kind`. Middle arm of the {= 0,
+    /// = 1, ≥ 2} per-kind cardinality Boolean trichotomy at the
+    /// union level: alongside [`Self::lacks_condition_kind`] (= 0)
+    /// and [`Self::has_multiple_of_condition_kind`] (≥ 2), the three
+    /// Booleans PARTITION the per-kind cardinality scalar's non-
+    /// negative-integer arms — EXACTLY ONE fires on any `(boundary,
+    /// kind)` pair.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::has_unique_of_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self, ConditionKind) -> bool`,
+    /// byte-identical two-step short-circuit body composed against
+    /// the ephemeral surface's own chained per-kind iterator. Both
+    /// methods compose against the SAME slice-level substrate
+    /// primitive [`ConditionSliceExt::has_unique_of_kind`] via the
+    /// two-slice chain — a regression at the per-slice mid-endpoint
+    /// walk fails at that primitive's tests rather than as silent
+    /// drift at either struct-level `has-unique-of-<kind>` caller.
+    ///
+    /// # Compounding
+    ///
+    /// A future operator-facing "singleton boundary condition
+    /// detected" audit reads
+    /// `boundary.has_unique_of_condition_kind(ConditionKind::ProcessPhase)`
+    /// at ONE call site rather than restating
+    /// `boundary.count_condition_kind(kind) == 1` (which walks every
+    /// slot on both slices to count) or the pre + post disjoint-arm
+    /// OR-composition with hand-authored short-circuit at every
+    /// classifier arm.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the per-kind cardinality-mid-endpoint
+    /// projection composes the SAME two-step short-circuit walk
+    /// over the two-slice chain on both this boundary surface and
+    /// the ephemeral surface). THEORY.md §VI.1 (generation over
+    /// composition — a new [`ConditionKind`] variant reaches both
+    /// surfaces' per-kind-mid-endpoint triads mechanically through
+    /// the delegated chained iterator).
+    #[must_use]
+    pub fn has_unique_of_condition_kind(&self, kind: ConditionKind) -> bool {
+        let mut it = self.iter_condition_kind(kind);
+        it.next().is_some() && it.next().is_none()
+    }
+
+    /// `true` iff [`Self::preconditions`] carries EXACTLY ONE
+    /// [`Condition`] with the given [`ConditionKind`] — the
+    /// precondition-side arm of the (precondition, postcondition,
+    /// condition-union) per-kind cardinality "= 1" mid-endpoint triad
+    /// on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::has_unique_of_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::has_unique_of_postcondition_kind`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice two-step short-circuit walk fails at that primitive's
+    /// tests rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn has_unique_of_precondition_kind(&self, kind: ConditionKind) -> bool {
+        self.preconditions.has_unique_of_kind(kind)
+    }
+
+    /// `true` iff [`Self::postconditions`] carries EXACTLY ONE
+    /// [`Condition`] with the given [`ConditionKind`] — the
+    /// postcondition-side arm of the (precondition, postcondition,
+    /// condition-union) per-kind cardinality "= 1" mid-endpoint triad
+    /// on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::has_unique_of_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::has_unique_of_precondition_kind`]. See that
+    /// method for the full rationale — the two methods share ONE
+    /// lift motivation, ONE fail-before-pass-after composition-law
+    /// pin, and ONE two-surface parity contract with the ephemeral
+    /// sugar type via
+    /// [`crate::ephemeral::EphemeralSpec::has_unique_of_postcondition_kind`].
+    #[must_use]
+    pub fn has_unique_of_postcondition_kind(&self, kind: ConditionKind) -> bool {
+        self.postconditions.has_unique_of_kind(kind)
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -6047,6 +6143,110 @@ pub trait ConditionSliceExt {
         let mut it = self.iter_kind(kind);
         it.next().is_some() && it.next().is_some()
     }
+
+    /// Boolean cardinality "= 1" middle-arm peer of [`Self::lacks_kind`]
+    /// (= 0) and [`Self::has_multiple_of_kind`] (≥ 2) on the per-kind
+    /// count axis — `true` iff EXACTLY ONE [`Condition`] with the given
+    /// `kind` appears in this slice (equivalently,
+    /// [`Self::count_kind`]`(kind) == 1` and
+    /// [`Self::iter_kind`]`(kind).count() == 1`). Closes the {= 0,
+    /// = 1, ≥ 2} per-kind cardinality Boolean trichotomy at the slice
+    /// level; every state maps to EXACTLY ONE of the three arms.
+    ///
+    /// Default body: a two-step-short-circuit walk over
+    /// [`Self::iter_kind`]`(kind)` — pulls up to two hits off the load-
+    /// bearing per-kind iterator; the primitive returns `true` iff the
+    /// first is [`Some`] AND the second is [`None`], WITHOUT walking
+    /// every slot to build [`Self::count_kind`]'s scalar. Short-
+    /// circuits at the second matching condition — strictly cheaper
+    /// than [`Self::count_kind`]`(kind) == 1` on every arm with `≥ 2`
+    /// matches (the primitive returns `false` on the second hit
+    /// without pulling further). Byte-for-byte peer of
+    /// [`Self::has_multiple_of_kind`] under the (= 1, ≥ 2) count-axis
+    /// duality: both compose the SAME two-step short-circuit walk
+    /// shape, differing only in the second-hit predicate
+    /// ([`Option::is_none`] here vs [`Option::is_some`] on the many-
+    /// arm peer).
+    ///
+    /// # Sibling to [`Self::lacks_kind`] / [`Self::has_kind`] /
+    /// [`Self::has_multiple_of_kind`] / [`Self::count_kind`]
+    ///
+    /// Middle arm on the per-kind count trichotomy alongside
+    /// [`Self::lacks_kind`] (= 0 zero-endpoint) and
+    /// [`Self::has_multiple_of_kind`] (≥ 2 many-arm) — the three
+    /// Booleans PARTITION the per-kind cardinality scalar's non-
+    /// negative-integer arms: EXACTLY ONE of the three returns `true`
+    /// on any given `(slice, kind)` pair. Peer of the tagged-union
+    /// parent-level [`crate::tagged_union::TaggedUnion::has_unique_populated_kind`]
+    /// on the whole-parent count axis one struct layer up (single
+    /// populated slot vs single condition of a given kind). The
+    /// composition laws
+    /// `has_unique_of_kind(k) == (count_kind(k) == 1)`,
+    /// `has_unique_of_kind(k) == (iter_kind(k).count() == 1)`, and
+    /// `has_unique_of_kind(k) == { iter_kind(k) two-step short-circuit }`
+    /// bind the per-kind mid-endpoint Boolean projection to the
+    /// scalar counter primitive at the trait's default body — swept
+    /// substrate-wide by [`assert_slice_refinement_composition_laws`]
+    /// as its per-kind mid-endpoint arm alongside the existing per-
+    /// kind many-arm pin.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `false` on every kind (0 matches, not
+    /// `= 1`). A slice carrying `kind` exactly once (with any other
+    /// kinds in any multiplicity) returns `true` on THAT kind. A
+    /// slice carrying `kind` two or more times returns `false` on
+    /// THAT kind. Multiplicity of OTHER kinds is irrelevant — the
+    /// primitive projects the slice onto the per-kind count axis for
+    /// the queried kind alone. Together with `lacks_kind` and
+    /// `has_multiple_of_kind`, the three arms cover every non-
+    /// negative multiplicity: `lacks_kind(k)` ↔ 0 matches,
+    /// `has_unique_of_kind(k)` ↔ 1 match, `has_multiple_of_kind(k)`
+    /// ↔ ≥ 2 matches.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A boundary-well-formedness coherence check that enforces
+    ///   "every Process's preconditions carry EXACTLY ONE
+    ///   [`ConditionKind::ProcessPhase`] entry" reads
+    ///   `boundary.preconditions.has_unique_of_kind(ConditionKind::ProcessPhase)`
+    ///   at ONE call site — one two-step short-circuit walk, no
+    ///   allocation, no scalar comparison against `== 1`.
+    /// - A `has-unique-of-<kind>` require-tag classifier arm reads
+    ///   this primitive with no allocation, byte-for-byte peer of
+    ///   `has-multiple-of-<kind>` under the SAME two-step short-
+    ///   circuit shape.
+    /// - A fleet-wide "exactly-one-of-kind detected" audit dump reads
+    ///   `ConditionKind::ALL.into_iter().filter(|k|
+    ///   slice.has_unique_of_kind(*k))` at ONE call site.
+    /// - A future authoring-time linter that surfaces "operator
+    ///   intended a singleton condition but ended up with 0 or ≥ 2
+    ///   entries" reaches the three-arm partition through
+    ///   `!slice.has_unique_of_kind(k)` for the negative arm and
+    ///   drills down to the specific missing/duplicate case through
+    ///   `slice.lacks_kind(k)` or `slice.has_multiple_of_kind(k)`
+    ///   without restating the walk.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The per-kind cardinality-mid-endpoint projection on the
+    ///   count axis lives at ONE substrate site as a typed two-step-
+    ///   short-circuit fold through the load-bearing [`Self::iter_kind`]
+    ///   iterator — byte-for-byte peer of `count_kind(kind)` composed
+    ///   against `== 1`, but with a second-match short-circuit that
+    ///   the scalar counter primitive does not offer.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically through the per-kind iterator — a
+    ///   slice previously containing no conditions of the new kind
+    ///   returns `false` on it here, and picks up `true` the moment
+    ///   an operator authors exactly ONE matching condition (and
+    ///   returns to `false` the moment a second one appears).
+    fn has_unique_of_kind(&self, kind: ConditionKind) -> bool {
+        let mut it = self.iter_kind(kind);
+        it.next().is_some() && it.next().is_none()
+    }
 }
 
 /// Iterator yielded by [`ConditionSliceExt::iter_kind`] — the widened
@@ -6258,6 +6458,62 @@ where
             slice.has_multiple_of_kind(kind),
             via_iter_multi_kind,
             "has_multiple_of_kind({kind:?}) drifted from iter_kind({kind:?}) two-step short-circuit",
+        );
+
+        // has_unique_of_kind ↔ (count_kind == 1) — the Boolean
+        // cardinality mid-endpoint projection on the per-kind count
+        // axis. Middle arm of the {=0, =1, ≥2} per-kind count
+        // trichotomy alongside `lacks_kind` (=0) and
+        // `has_multiple_of_kind` (≥2); the three Booleans partition
+        // every non-negative multiplicity — EXACTLY ONE fires on any
+        // given `(slice, kind)` pair. A regression that dropped the
+        // second-match short-circuit (returning any ≥ 1 arm as
+        // `true`), inverted the second-hit predicate (returning `true`
+        // on `≥ 2` matches), or conflated with `has_unique_populated_kind`
+        // (one struct layer up on the tagged-union parent axis)
+        // surfaces HERE at the substrate boundary, not as silent drift
+        // at every downstream `has-unique-of-<kind>` require-tag
+        // classifier or fleet-wide singleton-condition audit callsite.
+        // Byte-for-byte peer of `has_multiple_of_kind ↔ (count_kind
+        // >= 2)` above under the SAME two-step short-circuit walk
+        // shape via the per-kind iterator.
+        let via_iter_unique_kind = {
+            let mut it = slice.iter_kind(kind);
+            it.next().is_some() && it.next().is_none()
+        };
+        assert_eq!(
+            slice.has_unique_of_kind(kind),
+            count_result == 1,
+            "has_unique_of_kind({kind:?}) drifted from (count_kind({kind:?}) == 1)",
+        );
+        assert_eq!(
+            slice.has_unique_of_kind(kind),
+            iter_count == 1,
+            "has_unique_of_kind({kind:?}) drifted from (iter_kind({kind:?}).count() == 1)",
+        );
+        assert_eq!(
+            slice.has_unique_of_kind(kind),
+            via_iter_unique_kind,
+            "has_unique_of_kind({kind:?}) drifted from iter_kind({kind:?}) two-step short-circuit",
+        );
+        // Trichotomy partition pin — EXACTLY ONE of {lacks_kind,
+        // has_unique_of_kind, has_multiple_of_kind} fires on any
+        // (slice, kind) pair. A regression that broke exclusivity
+        // (two arms fire simultaneously on some kind) or coverage
+        // (no arm fires on some kind) surfaces HERE, not as silent
+        // drift at every downstream three-arm classifier callsite.
+        let arms_true = [
+            slice.lacks_kind(kind),
+            slice.has_unique_of_kind(kind),
+            slice.has_multiple_of_kind(kind),
+        ]
+        .into_iter()
+        .filter(|&b| b)
+        .count();
+        assert_eq!(
+            arms_true, 1,
+            "per-kind count trichotomy {{lacks_kind, has_unique_of_kind, has_multiple_of_kind}} \
+             must have EXACTLY one arm true for {kind:?}, got {arms_true}",
         );
     }
 
@@ -10171,6 +10427,133 @@ mod tests {
                         );
                     }
                 }
+            }
+        }
+    }
+
+    // ── ConditionSliceExt::has_unique_of_kind — per-kind "= 1" pins ─
+    //
+    // Boolean cardinality "= 1" mid-endpoint peer of `lacks_kind`
+    // (= 0) and `has_multiple_of_kind` (≥ 2) on the per-kind count
+    // axis: `has_unique_of_kind(k)` returns `true` iff EXACTLY ONE
+    // `Condition` value with kind `k` appears in the slice. Composes
+    // through a two-step short-circuit walk over `iter_kind(k)` —
+    // byte-for-byte peer of `has_multiple_of_kind` under the
+    // (= 1, ≥ 2) count-axis duality (both walk the same iterator,
+    // differing only in the second-hit predicate: `is_none` here vs
+    // `is_some` on the many-arm peer). Closes the {= 0, = 1, ≥ 2}
+    // per-kind cardinality Boolean trichotomy at the slice level:
+    // EXACTLY ONE of {lacks_kind, has_unique_of_kind,
+    // has_multiple_of_kind} fires on any `(slice, kind)` pair, pinned
+    // as the per-kind trichotomy partition arm of
+    // `assert_slice_refinement_composition_laws` alongside the per-
+    // kind mid-endpoint composition-law arms
+    // `has_unique_of_kind(k) == (count_kind(k) == 1)`,
+    // `has_unique_of_kind(k) == (iter_kind(k).count() == 1)`, and
+    // `has_unique_of_kind(k) == { iter_kind(k) two-step short-circuit }`.
+    // Detects singleton conditions of a specific kind — the substrate
+    // primitive that a future boundary-well-formedness coherence
+    // check (enforce a Process's preconditions carry EXACTLY ONE
+    // `ProcessPhase` entry) or `has-unique-of-<kind>` require-tag
+    // classifier arm reaches through with no allocation.
+
+    /// EMPTY-SLICE pin — an empty slice returns `false` on
+    /// `has_unique_of_kind` for EVERY kind (0 matches, not = 1).
+    /// Also pins the composition law
+    /// `has_unique_of_kind(k) == (count_kind(k) == 1)` at zero-count
+    /// for every kind.
+    #[test]
+    fn condition_slice_has_unique_of_kind_returns_false_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        for k in ConditionKind::ALL {
+            assert!(
+                !empty.has_unique_of_kind(k),
+                "empty slice must return false on has_unique_of_kind({k:?}) (0 matches, not = 1)",
+            );
+            assert_eq!(
+                empty.has_unique_of_kind(k),
+                empty.count_kind(k) == 1,
+                "empty has_unique_of_kind({k:?}) must equal (count_kind({k:?}) == 1)",
+            );
+        }
+    }
+
+    /// COUNT-AXIS pin — sweeps a range of per-kind multiplicities
+    /// (0, 1, 2, 3) and asserts the primitive equals
+    /// `count_kind(k) == 1` at each arm. Pins the transition from
+    /// the =0 (empty) arm where the primitive returns `false`
+    /// through the =1 (singleton) arm where it returns `true` back
+    /// to the =2 (duplicate) arm where it returns `false`. Also
+    /// pins per-kind independence: multiplicity of OTHER kinds
+    /// (each present exactly once) leaves the mid-endpoint of every
+    /// other kind at `true` regardless of `target`'s multiplicity.
+    #[test]
+    fn condition_slice_has_unique_of_kind_tracks_count_kind_eq_one() {
+        for target in ConditionKind::ALL {
+            for target_multiplicity in [0usize, 1, 2, 3] {
+                // Build a slice with `target` repeated
+                // `target_multiplicity` times, plus one instance of
+                // every OTHER kind. `has_unique_of_kind(target)`
+                // must depend only on `target_multiplicity`.
+                let mut slice: Vec<Condition> = Vec::new();
+                for _ in 0..target_multiplicity {
+                    slice.push(condition_with(target));
+                }
+                for other in ConditionKind::ALL {
+                    if other != target {
+                        slice.push(condition_with(other));
+                    }
+                }
+                let s = slice.as_slice();
+
+                assert_eq!(
+                    s.has_unique_of_kind(target),
+                    target_multiplicity == 1,
+                    "has_unique_of_kind({target:?}) with multiplicity {target_multiplicity} \
+                     must equal ({target_multiplicity} == 1)",
+                );
+                assert_eq!(
+                    s.has_unique_of_kind(target),
+                    s.count_kind(target) == 1,
+                    "has_unique_of_kind({target:?}) drifted from (count_kind == 1) at \
+                     multiplicity {target_multiplicity}",
+                );
+                assert_eq!(
+                    s.has_unique_of_kind(target),
+                    s.iter_kind(target).count() == 1,
+                    "has_unique_of_kind({target:?}) drifted from (iter_kind.count() == 1) \
+                     at multiplicity {target_multiplicity}",
+                );
+
+                // OTHER kinds appear exactly once; their mid-endpoint
+                // stays `true` regardless of `target`'s multiplicity.
+                for other in ConditionKind::ALL {
+                    if other != target {
+                        assert!(
+                            s.has_unique_of_kind(other),
+                            "other kind {other:?} present once must return true on \
+                             has_unique_of_kind (target={target:?} mult={target_multiplicity})",
+                        );
+                    }
+                }
+
+                // Per-kind cardinality Boolean trichotomy pin —
+                // EXACTLY ONE of {lacks_kind, has_unique_of_kind,
+                // has_multiple_of_kind} fires on `(s, target)`. The
+                // slice-level closure of the {=0, =1, ≥2} arms.
+                let arms_true = [
+                    s.lacks_kind(target),
+                    s.has_unique_of_kind(target),
+                    s.has_multiple_of_kind(target),
+                ]
+                .into_iter()
+                .filter(|&b| b)
+                .count();
+                assert_eq!(
+                    arms_true, 1,
+                    "per-kind trichotomy for target={target:?} at mult={target_multiplicity} \
+                     must have EXACTLY one arm true, got {arms_true}",
+                );
             }
         }
     }
@@ -15286,6 +15669,165 @@ mod tests {
             assert!(
                 b.has_multiple_of_condition_kind(kind),
                 "saturated-doubled boundary must return true on has_multiple_of_condition_kind({kind:?})",
+            );
+        }
+    }
+
+    /// Every arm of the (precondition, postcondition, condition-union)
+    /// per-kind cardinality "= 1" mid-endpoint triad on [`Boundary`]
+    /// delegates verbatim to the slice-level substrate primitive
+    /// [`ConditionSliceExt::has_unique_of_kind`]. Sweeps four
+    /// arrangements: (a) an empty boundary (every arm returns
+    /// `false` on every kind); (b) a single-populated-per-side sweep
+    /// where per-slice arms fire iff their kind equals `query`,
+    /// while the union arm fires iff EXACTLY ONE of `{pre, post}`
+    /// equals `query` (the other side either lacks the kind, giving
+    /// 1 chain match, or shares it, giving 2 chain matches — only
+    /// the disjoint-arm case yields `= 1`); (c) a double-populated
+    /// postcondition (post arm returns `false` on the doubled kind
+    /// as `≥ 2` matches, pre arm returns `false` on 0 matches,
+    /// union returns `false` on `≥ 2` chain matches); (d) the
+    /// saturated-singleton boundary (every kind appears exactly
+    /// once on every slice — per-slice arms return `true` on every
+    /// kind, union returns `false` on every kind as `= 2` chain
+    /// matches). Also pins the composition law
+    /// `has_unique_of_*_condition_kind(k) ==
+    ///  (count_*_condition_kind(k) == 1)` at each arm and the
+    /// trichotomy partition
+    /// {lacks, has_unique_of, has_multiple_of}_condition_kind
+    /// firing EXACTLY ONE arm at the union level.
+    #[test]
+    fn has_unique_of_condition_kind_triad_delegates_to_slice_has_unique_of_kind() {
+        // Empty boundary — every arm returns false on every kind.
+        let b = Boundary::default();
+        for kind in ConditionKind::ALL {
+            assert!(
+                !b.has_unique_of_precondition_kind(kind),
+                "empty boundary must return false on has_unique_of_precondition_kind({kind:?})",
+            );
+            assert!(
+                !b.has_unique_of_postcondition_kind(kind),
+                "empty boundary must return false on has_unique_of_postcondition_kind({kind:?})",
+            );
+            assert!(
+                !b.has_unique_of_condition_kind(kind),
+                "empty boundary must return false on has_unique_of_condition_kind({kind:?})",
+            );
+            assert_eq!(
+                b.has_unique_of_condition_kind(kind),
+                b.count_condition_kind(kind) == 1,
+                "empty has_unique_of_condition_kind({kind:?}) must equal \
+                 (count_condition_kind == 1)",
+            );
+        }
+
+        // Single-populated-per-side sweep — per-slice arm returns
+        // true iff its side's kind equals `query`. Union arm returns
+        // true iff EXACTLY ONE of `{pre, post}` equals `query`
+        // (chain sums to 1 on the disjoint-arm case, 2 on shared,
+        // 0 on unrelated).
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        b.has_unique_of_precondition_kind(query),
+                        b.preconditions.has_unique_of_kind(query),
+                        "Boundary::has_unique_of_precondition_kind must delegate verbatim to \
+                         preconditions.has_unique_of_kind for pre={pre_kind:?} \
+                         post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        b.has_unique_of_postcondition_kind(query),
+                        b.postconditions.has_unique_of_kind(query),
+                        "Boundary::has_unique_of_postcondition_kind must delegate verbatim to \
+                         postconditions.has_unique_of_kind for pre={pre_kind:?} \
+                         post={post_kind:?} query={query:?}",
+                    );
+
+                    let pre_hit = pre_kind == query;
+                    let post_hit = post_kind == query;
+                    let expected_union = pre_hit ^ post_hit;
+                    assert_eq!(
+                        b.has_unique_of_condition_kind(query),
+                        expected_union,
+                        "Boundary::has_unique_of_condition_kind({query:?}) must equal \
+                         (pre_hit XOR post_hit) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        b.has_unique_of_condition_kind(query),
+                        b.count_condition_kind(query) == 1,
+                        "Boundary::has_unique_of_condition_kind({query:?}) drifted from \
+                         (count_condition_kind == 1) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+
+                    // Trichotomy partition pin at the union level.
+                    let arms_true = [
+                        b.lacks_condition_kind(query),
+                        b.has_unique_of_condition_kind(query),
+                        b.has_multiple_of_condition_kind(query),
+                    ]
+                    .into_iter()
+                    .filter(|&x| x)
+                    .count();
+                    assert_eq!(
+                        arms_true, 1,
+                        "per-kind trichotomy at boundary union for query={query:?} \
+                         (pre={pre_kind:?} post={post_kind:?}) must fire EXACTLY one \
+                         arm, got {arms_true}",
+                    );
+                }
+            }
+        }
+
+        // Double-populated postcondition — post arm returns false
+        // on the doubled kind (≥ 2 matches), pre arm returns false
+        // (0 matches), union returns false (2 chain matches).
+        for doubled in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            b.postconditions.push(condition_with(doubled));
+            b.postconditions.push(condition_with(doubled));
+
+            assert!(
+                !b.has_unique_of_precondition_kind(doubled),
+                "empty preconditions must return false on has_unique_of_precondition_kind \
+                 for doubled={doubled:?}",
+            );
+            assert!(
+                !b.has_unique_of_postcondition_kind(doubled),
+                "doubled postconditions must return false on has_unique_of_postcondition_kind \
+                 for doubled={doubled:?}",
+            );
+            assert!(
+                !b.has_unique_of_condition_kind(doubled),
+                "doubled postconditions must return false on union has_unique_of_condition_kind \
+                 for doubled={doubled:?}",
+            );
+        }
+
+        // Saturated-singleton boundary — every kind appears exactly
+        // once on every slice. Per-slice arms return true on every
+        // kind; union returns false on every kind (= 2 chain matches).
+        let mut b = Boundary::default();
+        for k in ConditionKind::ALL {
+            b.preconditions.push(condition_with(k));
+            b.postconditions.push(condition_with(k));
+        }
+        for kind in ConditionKind::ALL {
+            assert!(
+                b.has_unique_of_precondition_kind(kind),
+                "saturated-singleton boundary must return true on has_unique_of_precondition_kind({kind:?})",
+            );
+            assert!(
+                b.has_unique_of_postcondition_kind(kind),
+                "saturated-singleton boundary must return true on has_unique_of_postcondition_kind({kind:?})",
+            );
+            assert!(
+                !b.has_unique_of_condition_kind(kind),
+                "saturated-singleton boundary must return false on union has_unique_of_condition_kind({kind:?}) (2 chain matches)",
             );
         }
     }

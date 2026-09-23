@@ -3020,6 +3020,77 @@ impl EphemeralSpec {
         self.postconditions.has_multiple_of_kind(kind)
     }
 
+    /// `true` iff `preconditions ∪ postconditions` carries EXACTLY
+    /// ONE [`crate::boundary::Condition`] with the given
+    /// [`ConditionKind`] — the union arm of the (precondition,
+    /// postcondition, condition-union) per-kind cardinality "= 1"
+    /// mid-endpoint triad on [`EphemeralSpec`]. Composes a two-step-
+    /// short-circuit walk over the chained per-kind iterator
+    /// [`Self::iter_condition_kind`], which itself chains
+    /// [`crate::boundary::ConditionSliceExt::iter_kind`] over
+    /// [`Self::preconditions`] then [`Self::postconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::has_unique_of_condition_kind`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::has_unique_of_kind`]
+    /// via the two-slice chain, so a regression at the per-slice
+    /// two-step short-circuit walk fails at that primitive's tests
+    /// rather than as silent drift at either struct-level arm.
+    /// Middle arm of the {= 0, = 1, ≥ 2} per-kind cardinality
+    /// Boolean trichotomy at the union level; alongside
+    /// [`Self::lacks_condition_kind`] (= 0) and
+    /// [`Self::has_multiple_of_condition_kind`] (≥ 2), the three
+    /// Booleans PARTITION every non-negative multiplicity.
+    #[must_use]
+    pub fn has_unique_of_condition_kind(&self, kind: ConditionKind) -> bool {
+        let mut it = self.iter_condition_kind(kind);
+        it.next().is_some() && it.next().is_none()
+    }
+
+    /// `true` iff [`Self::preconditions`] carries EXACTLY ONE
+    /// [`crate::boundary::Condition`] with the given [`ConditionKind`]
+    /// — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) per-kind cardinality "= 1"
+    /// mid-endpoint triad on [`EphemeralSpec`]. Thin typed delegate
+    /// to [`crate::boundary::ConditionSliceExt::has_unique_of_kind`]
+    /// over [`Self::preconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::has_unique_of_precondition_kind`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice two-step short-circuit walk fails at that
+    /// primitive's tests rather than as silent drift at either
+    /// struct-level arm.
+    #[must_use]
+    pub fn has_unique_of_precondition_kind(&self, kind: ConditionKind) -> bool {
+        self.preconditions.has_unique_of_kind(kind)
+    }
+
+    /// `true` iff [`Self::postconditions`] carries EXACTLY ONE
+    /// [`crate::boundary::Condition`] with the given [`ConditionKind`]
+    /// — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) per-kind cardinality "= 1"
+    /// mid-endpoint triad on [`EphemeralSpec`]. Thin typed delegate
+    /// to [`crate::boundary::ConditionSliceExt::has_unique_of_kind`]
+    /// over [`Self::postconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::has_unique_of_postcondition_kind`]
+    /// on the point-domain surface. See
+    /// [`Self::has_unique_of_precondition_kind`] for the full
+    /// rationale — the two methods share ONE lift motivation, ONE
+    /// fail-before-pass-after composition-law pin, and ONE two-
+    /// surface parity contract with the point-domain
+    /// [`crate::boundary::Boundary`] per-kind-mid-endpoint peer
+    /// methods.
+    #[must_use]
+    pub fn has_unique_of_postcondition_kind(&self, kind: ConditionKind) -> bool {
+        self.postconditions.has_unique_of_kind(kind)
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -14920,6 +14991,123 @@ mod tests {
             assert!(
                 spec.has_multiple_of_condition_kind(kind),
                 "saturated-doubled ephemeral must return true on has_multiple_of_condition_kind({kind:?})",
+            );
+        }
+    }
+
+    /// Every arm of the (precondition, postcondition, condition-union)
+    /// per-kind cardinality "= 1" mid-endpoint triad on
+    /// [`EphemeralSpec`] delegates verbatim to the slice-level
+    /// substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::has_unique_of_kind`].
+    /// Sweeps three arrangements: (a) an empty ephemeral (every arm
+    /// returns `false` on every kind); (b) a single-populated-per-
+    /// side sweep where per-slice arms fire iff their side's kind
+    /// equals `query`, and the union arm fires iff EXACTLY ONE of
+    /// `{pre, post}` equals `query` (chain sums to 1 on disjoint,
+    /// 2 on shared); (c) the saturated-singleton spec (every kind
+    /// appears exactly once on every slice — per-slice arms return
+    /// `true` on every kind, union returns `false` on every kind
+    /// as `= 2` chain matches). Also verifies TWO-SURFACE PARITY —
+    /// the ephemeral-side arm agrees with the lowered
+    /// [`crate::boundary::Boundary`] arm through the same slice-
+    /// level substrate primitive.
+    #[test]
+    fn has_unique_of_condition_kind_triad_delegates_to_slice_has_unique_of_kind() {
+        // Empty ephemeral — every arm returns false on every kind.
+        let spec = empty_ephemeral();
+        for kind in ConditionKind::ALL {
+            assert!(
+                !spec.has_unique_of_precondition_kind(kind),
+                "empty ephemeral must return false on has_unique_of_precondition_kind({kind:?})",
+            );
+            assert!(
+                !spec.has_unique_of_postcondition_kind(kind),
+                "empty ephemeral must return false on has_unique_of_postcondition_kind({kind:?})",
+            );
+            assert!(
+                !spec.has_unique_of_condition_kind(kind),
+                "empty ephemeral must return false on has_unique_of_condition_kind({kind:?})",
+            );
+        }
+
+        // Single-populated-per-side sweep — per-slice arm fires iff
+        // its side's kind equals `query`; union arm fires iff
+        // EXACTLY ONE of {pre, post} equals `query`. Also verifies
+        // two-surface parity with Boundary.
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+                let lowered: ProcessSpec = spec.clone().into();
+
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        spec.has_unique_of_precondition_kind(query),
+                        spec.preconditions.has_unique_of_kind(query),
+                        "EphemeralSpec::has_unique_of_precondition_kind must delegate \
+                         verbatim to preconditions.has_unique_of_kind for \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.has_unique_of_postcondition_kind(query),
+                        spec.postconditions.has_unique_of_kind(query),
+                        "EphemeralSpec::has_unique_of_postcondition_kind must delegate \
+                         verbatim to postconditions.has_unique_of_kind for \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+
+                    let expected_union = (pre_kind == query) ^ (post_kind == query);
+                    assert_eq!(
+                        spec.has_unique_of_condition_kind(query),
+                        expected_union,
+                        "EphemeralSpec::has_unique_of_condition_kind({query:?}) must equal \
+                         ((pre == query) XOR (post == query)) for \
+                         pre={pre_kind:?} post={post_kind:?}",
+                    );
+
+                    // Two-surface parity with lowered Boundary.
+                    assert_eq!(
+                        spec.has_unique_of_condition_kind(query),
+                        lowered.boundary.has_unique_of_condition_kind(query),
+                        "two-surface has_unique_of_condition_kind({query:?}) parity drift \
+                         for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.has_unique_of_precondition_kind(query),
+                        lowered.boundary.has_unique_of_precondition_kind(query),
+                        "two-surface has_unique_of_precondition_kind({query:?}) parity drift",
+                    );
+                    assert_eq!(
+                        spec.has_unique_of_postcondition_kind(query),
+                        lowered.boundary.has_unique_of_postcondition_kind(query),
+                        "two-surface has_unique_of_postcondition_kind({query:?}) parity drift",
+                    );
+                }
+            }
+        }
+
+        // Saturated-singleton spec — every kind appears exactly once
+        // on every slice; per-slice arms return true on every kind,
+        // union returns false on every kind (= 2 chain matches).
+        let mut spec = empty_ephemeral();
+        for k in ConditionKind::ALL {
+            spec.preconditions.push(cond(k));
+            spec.postconditions.push(cond(k));
+        }
+        for kind in ConditionKind::ALL {
+            assert!(
+                spec.has_unique_of_precondition_kind(kind),
+                "saturated-singleton ephemeral must return true on has_unique_of_precondition_kind({kind:?})",
+            );
+            assert!(
+                spec.has_unique_of_postcondition_kind(kind),
+                "saturated-singleton ephemeral must return true on has_unique_of_postcondition_kind({kind:?})",
+            );
+            assert!(
+                !spec.has_unique_of_condition_kind(kind),
+                "saturated-singleton ephemeral must return false on union has_unique_of_condition_kind({kind:?}) (2 chain matches)",
             );
         }
     }

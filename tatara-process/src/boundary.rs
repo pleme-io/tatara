@@ -3484,6 +3484,105 @@ impl Boundary {
     pub fn unique_of_postcondition_kind(&self, kind: ConditionKind) -> Option<&Condition> {
         self.postconditions.unique_of_kind(kind)
     }
+
+    /// Returns the LAST [`Condition`] with the given
+    /// [`ConditionKind`] in `preconditions ∪ postconditions`, or
+    /// [`None`] when no match exists — the union arm of the
+    /// (precondition, postcondition, condition-union) latest-position
+    /// `Option<&Condition>`-witnessing peer of [`Self::find_condition_kind`]
+    /// on the per-kind axis at the boundary level. Composed body:
+    /// `self.iter_condition_kind(kind).last()` — one walk over the
+    /// pre-then-post chain that yields the terminal element. Byte-
+    /// for-byte peer of [`ConditionSliceExt::last_of_kind`] one slice-
+    /// layer down, lifted to compose against the two-slice chain
+    /// rather than a single slice's `iter_kind`.
+    ///
+    /// Composition laws:
+    /// - `last_condition_kind(k).is_some() == has_condition_kind(k)`
+    /// - `last_condition_kind(k).map(|c| c.kind) == Some(k)` iff
+    ///   `has_condition_kind(k)`, else `None`.
+    /// - Precondition-first walk order + latest-element projection
+    ///   yields the postcondition side when both are populated:
+    ///   `last_condition_kind(k) == last_postcondition_kind(k)
+    ///       .or_else(|| last_precondition_kind(k))` — the mirror of
+    ///   [`Self::find_condition_kind`]'s
+    ///   `find_precondition_kind(k).or_else(|| find_postcondition_kind(k))`
+    ///   under the (first, last) endpoint-swap on the two-slice chain.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::last_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self, ConditionKind) ->
+    /// Option<&Condition>`, byte-identical `iter_condition_kind(k).last()`
+    /// body composed against the ephemeral surface's own chained
+    /// per-kind iterator. Both methods compose against the SAME
+    /// slice-level substrate primitive
+    /// [`ConditionSliceExt::last_of_kind`] via the two-slice chain —
+    /// a regression at the per-slice latest-position walk fails at
+    /// that primitive's tests rather than as silent drift at either
+    /// struct-level `last-of-<kind>` caller.
+    ///
+    /// # Compounding
+    ///
+    /// A future audit that surfaces "the LATEST authored
+    /// [`ConditionKind::JobAttested`] postcondition across both
+    /// slots" reads `boundary.last_condition_kind(JobAttested)` at
+    /// ONE call site rather than materializing
+    /// `boundary.iter_condition_kind(k).collect::<Vec<_>>().last().copied()`
+    /// or restating the pre-post `.or_else(...)` disjoint-endpoint
+    /// composition at every classifier arm. Together with
+    /// [`Self::find_condition_kind`], a future diagnostic that
+    /// renders a "repeated-kind range" summary reads the two
+    /// endpoints through TWO substrate methods at symmetric shapes
+    /// without allocating through `iter_condition_kind().collect()`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the per-kind latest-position witness
+    /// composes the SAME `iter_kind(k).last()` shape over the two-
+    /// slice chain on both this boundary surface and the ephemeral
+    /// surface). THEORY.md §VI.1 (generation over composition — a
+    /// new [`ConditionKind`] variant reaches both surfaces' per-
+    /// kind latest-witness triads mechanically through the delegated
+    /// chained iterator).
+    #[must_use]
+    pub fn last_condition_kind(&self, kind: ConditionKind) -> Option<&Condition> {
+        self.iter_condition_kind(kind).last()
+    }
+
+    /// Returns the LAST [`Condition`] with the given
+    /// [`ConditionKind`] in [`Self::preconditions`], or [`None`] —
+    /// the precondition-side arm of the (precondition, postcondition,
+    /// condition-union) latest-position `Option<&Condition>`-witnessing
+    /// peer triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::last_of_kind`] over [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::last_postcondition_kind`] on the (precondition,
+    /// postcondition) partition of the boundary's two condition-vector
+    /// slots; both peers compose against the SAME slice-level substrate
+    /// primitive so a regression at the per-slice latest-position walk
+    /// fails at that primitive's tests rather than as silent drift at
+    /// either struct-level arm.
+    #[must_use]
+    pub fn last_precondition_kind(&self, kind: ConditionKind) -> Option<&Condition> {
+        self.preconditions.last_of_kind(kind)
+    }
+
+    /// Returns the LAST [`Condition`] with the given
+    /// [`ConditionKind`] in [`Self::postconditions`], or [`None`] —
+    /// the postcondition-side arm of the (precondition, postcondition,
+    /// condition-union) latest-position `Option<&Condition>`-witnessing
+    /// peer triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::last_of_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::last_precondition_kind`]. See that method for
+    /// the full rationale — the two methods share ONE lift motivation,
+    /// ONE fail-before-pass-after composition-law pin, and ONE
+    /// two-surface parity contract with the ephemeral sugar type via
+    /// [`crate::ephemeral::EphemeralSpec::last_postcondition_kind`].
+    #[must_use]
+    pub fn last_postcondition_kind(&self, kind: ConditionKind) -> Option<&Condition> {
+        self.postconditions.last_of_kind(kind)
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -6653,6 +6752,90 @@ pub trait ConditionSliceExt {
             Some(_) => None,
         }
     }
+
+    /// Returns the LAST [`Condition`] in this slice that carries the
+    /// given [`ConditionKind`], or `None` when no match exists — the
+    /// latest-position `Option<&Condition>` witness on the slice-level
+    /// per-kind axis. Default body: `self.iter_kind(kind).last()` — a
+    /// thin projection of the widened primitive [`Self::iter_kind`]
+    /// onto its terminal element.
+    ///
+    /// # Sibling to [`Self::find_kind`] / [`Self::unique_of_kind`]
+    ///
+    /// Third `Option<&Condition>`-witnessing peer on the per-kind
+    /// axis: `find_kind` witnesses the EARLIEST match ([`Iterator::next`]
+    /// projection), `unique_of_kind` witnesses the SINGLETON match
+    /// (two-step short-circuit — `None` when zero or `≥ 2`), and
+    /// `last_of_kind` witnesses the LATEST match ([`Iterator::last`]
+    /// projection). Together the three close the (first, last, unique)
+    /// triad on the per-kind `Option<&Condition>`-witness axis at the
+    /// slice level, mirroring the closed (first, last, unique) triad
+    /// on the distinct-kind scalar-`Option<ConditionKind>` axis
+    /// ([`Self::first_distinct_kind`], [`Self::last_distinct_kind`],
+    /// [`Self::unique_distinct_kind`]) and on the missing-kind
+    /// scalar-`Option<ConditionKind>` axis
+    /// ([`Self::first_missing_kind`], [`Self::last_missing_kind`],
+    /// [`Self::unique_missing_kind`]). The (bool, `Option<&Condition>`)
+    /// refinement grid on the per-kind axis (Boolean projection ↔
+    /// witness projection) now closes at each of the three position
+    /// slots.
+    ///
+    /// # Composition laws
+    ///
+    /// - `last_of_kind(k).is_some() == has_kind(k)` — the last-match
+    ///   witness fires iff the presence probe fires (both project to
+    ///   the same underlying `count_kind(k) >= 1` predicate).
+    /// - `last_of_kind(k).map(|c| c.kind) == Some(k)` iff `has_kind(k)`,
+    ///   else `None` — the witness carries the queried kind by
+    ///   construction.
+    /// - On the SINGLETON arm (`has_unique_of_kind(k)`), the three
+    ///   witnesses coincide by pointer identity: `find_kind(k) ==
+    ///   unique_of_kind(k) == last_of_kind(k)` (both first and last
+    ///   collapse to the sole match).
+    ///
+    /// Swept substrate-wide by [`assert_slice_refinement_composition_laws`]
+    /// alongside the existing `find_kind` and `unique_of_kind` witness
+    /// pins.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `None` on every kind. A slice carrying
+    /// `kind` exactly once returns `Some(&c)` for that `c` (the same
+    /// slot [`Self::find_kind`] and [`Self::unique_of_kind`] return).
+    /// A slice carrying `kind` two or more times returns `Some(&c)`
+    /// for the LATEST such `c` in slice order (the earliest one being
+    /// what [`Self::find_kind`] returns). Byte-for-byte equivalent to
+    /// `self.iter().filter(|c| c.kind == kind).last()`.
+    ///
+    /// # Compounding
+    ///
+    /// A future audit that surfaces "the most recently authored
+    /// [`ConditionKind::ClosedLoopAuth`] postcondition's `issuer`
+    /// params" reads `slice.last_of_kind(ClosedLoopAuth)` at ONE call
+    /// site — one walk, no allocation, no `iter_kind(k).collect()`
+    /// then `.last().copied()` two-pass dance that would materialize
+    /// the whole `Vec<&Condition>` intermediate. A fleet-wide
+    /// diagnostic that emits both endpoints of a repeated-kind
+    /// authoring pattern reads `find_kind(k)` and `last_of_kind(k)`
+    /// through TWO substrate primitives at symmetric shapes — the
+    /// earlier hit surfaces which slot was authored first, the later
+    /// hit surfaces which slot the operator last touched.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The latest-position `Option<&Condition>` witness lives at
+    ///   ONE substrate site as `iter_kind(k).last()`; the composition
+    ///   laws bind the witness to its Boolean and first-match siblings
+    ///   at the trait's default body.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant reaches this primitive mechanically
+    ///   through the delegated [`Self::iter_kind`] — every downstream
+    ///   `last-of-<kind>` witness callsite sees the wider closed set
+    ///   with no per-caller edit.
+    fn last_of_kind(&self, kind: ConditionKind) -> Option<&Condition> {
+        self.iter_kind(kind).last()
+    }
 }
 
 /// Iterator yielded by [`ConditionSliceExt::iter_kind`] — the widened
@@ -6952,6 +7135,68 @@ where
             "unique_of_kind({kind:?}) must point at the same &Condition as \
              find_kind({kind:?}) on the singleton arm",
         );
+
+        // last_of_kind ↔ has_kind — the latest-position
+        // `Option<&Condition>` witness on the per-kind axis, third
+        // `Option<&Condition>`-witnessing peer alongside `find_kind`
+        // (earliest match) and `unique_of_kind` (singleton match).
+        // Three composition laws bind the witness:
+        //   (1) last_of_kind(k).is_some() == has_kind(k) (both project
+        //       to the same underlying `count_kind(k) >= 1` predicate)
+        //   (2) last_of_kind(k).map(|c| c.kind) == Some(k) iff
+        //       has_kind(k) else None (the witness carries the queried
+        //       kind by construction)
+        //   (3) last_of_kind(k) coincides with find_kind(k) and
+        //       unique_of_kind(k) by pointer identity on the SINGLETON
+        //       arm (`has_unique_of_kind(k)`) — first and last collapse
+        //       to the sole match.
+        // A regression that dropped the last-element projection
+        // (returning `find_kind` on `≥ 2` arms), inverted the walk
+        // direction (returning first instead of last), or returned a
+        // non-matching `&Condition` surfaces HERE at the substrate
+        // boundary rather than as silent drift at every downstream
+        // `last-of-<kind>` witness callsite. Byte-for-byte peer of
+        // `find_kind ↔ iter_kind.next` above under the (first, last)
+        // endpoint-swap on the same widened primitive.
+        let last_result = slice.last_of_kind(kind);
+        assert_eq!(
+            last_result.is_some(),
+            has_result,
+            "last_of_kind({kind:?}).is_some() drifted from has_kind({kind:?})",
+        );
+        assert_eq!(
+            last_result.map(|c| c.kind),
+            if has_result { Some(kind) } else { None },
+            "last_of_kind({kind:?}).map(|c| c.kind) must yield Some({kind:?}) iff \
+             has_kind, else None",
+        );
+        // last_of_kind ↔ iter_kind.last() — the load-bearing
+        // projection pin. `last_of_kind`'s default body IS
+        // `self.iter_kind(k).last()`, so the composition law holds by
+        // construction; catches an override that drifted the walk.
+        assert_eq!(
+            last_result.map(|c| c as *const Condition),
+            slice.iter_kind(kind).last().map(|c| c as *const Condition),
+            "last_of_kind({kind:?}) drifted from iter_kind({kind:?}).last() by pointer identity",
+        );
+        // Singleton-arm coincidence — on the `has_unique_of_kind(k)`
+        // arm, first, last, and unique all point at the SAME slot.
+        // Peer of the `unique_of_kind ↔ find_kind` pointer pin above
+        // under the (first, last) endpoint-collapse.
+        if slice.has_unique_of_kind(kind) {
+            assert_eq!(
+                last_result.map(|c| c as *const Condition),
+                find_result.map(|c| c as *const Condition),
+                "last_of_kind({kind:?}) must point at the same &Condition as \
+                 find_kind({kind:?}) on the singleton arm",
+            );
+            assert_eq!(
+                last_result.map(|c| c as *const Condition),
+                unique_result.map(|c| c as *const Condition),
+                "last_of_kind({kind:?}) must point at the same &Condition as \
+                 unique_of_kind({kind:?}) on the singleton arm",
+            );
+        }
 
         // Trichotomy partition pin — EXACTLY ONE of {lacks_kind,
         // has_unique_of_kind, has_multiple_of_kind} fires on any
@@ -16834,6 +17079,246 @@ mod tests {
                 b.unique_of_condition_kind(doubled).is_none(),
                 "doubled postconditions must collapse union unique_of_condition_kind({doubled:?}) \
                  to None",
+            );
+        }
+    }
+
+    /// Empty-slice pin sweeping [`ConditionKind::ALL`] — every kind
+    /// returns `None` on `last_of_kind`. The Boolean composition law
+    /// `last_of_kind(k).is_some() == has_kind(k)` holds trivially
+    /// (both are `false`).
+    #[test]
+    fn condition_slice_last_of_kind_returns_none_on_empty_slice_for_every_kind() {
+        let slice: &[Condition] = &[];
+        for kind in ConditionKind::ALL {
+            assert!(
+                slice.last_of_kind(kind).is_none(),
+                "empty slice must return None for last_of_kind({kind:?})",
+            );
+            assert_eq!(
+                slice.last_of_kind(kind).is_some(),
+                slice.has_kind(kind),
+                "empty slice last_of_kind({kind:?}).is_some() must equal has_kind",
+            );
+        }
+    }
+
+    /// SINGLETON + DOUBLED sweep — pins pointer identity on the
+    /// singleton arm (last collapses to the sole match, coinciding
+    /// with `find_kind` and `unique_of_kind`) and pins the last-
+    /// element projection on the doubled arm (last returns the
+    /// LATER slot, distinct from `find_kind`'s earlier slot).
+    #[test]
+    fn condition_slice_last_of_kind_witnesses_last_position_and_coincides_on_singleton() {
+        // Singleton sweep — one condition per kind, in isolation.
+        for populated in ConditionKind::ALL {
+            let slice: [Condition; 1] = [condition_with(populated)];
+            for query in ConditionKind::ALL {
+                let last = slice.last_of_kind(query);
+                if query == populated {
+                    let c = last.expect("singleton match must be Some");
+                    assert_eq!(
+                        c.kind, populated,
+                        "last_of_kind({query:?}) yielded &Condition with wrong kind {:?}",
+                        c.kind,
+                    );
+                    // Pointer identity on singleton: first == last == unique.
+                    assert!(
+                        std::ptr::eq(c, &slice[0]),
+                        "last_of_kind({query:?}) singleton must point at the matched slot",
+                    );
+                    assert!(
+                        std::ptr::eq(c, slice.find_kind(query).unwrap()),
+                        "last_of_kind({query:?}) must coincide with find_kind on singleton arm",
+                    );
+                    assert!(
+                        std::ptr::eq(c, slice.unique_of_kind(query).unwrap()),
+                        "last_of_kind({query:?}) must coincide with unique_of_kind on singleton arm",
+                    );
+                } else {
+                    assert!(
+                        last.is_none(),
+                        "last_of_kind({query:?}) must be None on singleton-{populated:?} for \
+                         non-matching query",
+                    );
+                }
+                // Boolean composition-law pin.
+                assert_eq!(
+                    last.is_some(),
+                    slice.has_kind(query),
+                    "last_of_kind({query:?}).is_some() must equal has_kind on \
+                     populated={populated:?}",
+                );
+            }
+        }
+
+        // Doubled-kind sweep — LAST returns the second slot, distinct
+        // from `find_kind`'s first slot. `iter_kind.last() ==
+        // last_of_kind` composition-law pin.
+        for doubled in ConditionKind::ALL {
+            let slice: [Condition; 2] = [condition_with(doubled), condition_with(doubled)];
+            let last = slice.last_of_kind(doubled);
+            let last_c = last.expect("doubled match must be Some");
+            assert!(
+                std::ptr::eq(last_c, &slice[1]),
+                "last_of_kind({doubled:?}) on doubled-slice must point at slot[1] (LATER slot)",
+            );
+            let first = slice.find_kind(doubled).unwrap();
+            assert!(
+                std::ptr::eq(first, &slice[0]),
+                "find_kind({doubled:?}) on doubled-slice must point at slot[0] (EARLIER slot)",
+            );
+            assert!(
+                !std::ptr::eq(first, last_c),
+                "on the doubled arm, find_kind({doubled:?}) and last_of_kind must point at \
+                 DISTINCT slots (first vs last)",
+            );
+            // Union of witnesses: on ≥ 2 matches, `unique_of_kind`
+            // returns None, and last still fires.
+            assert!(
+                slice.unique_of_kind(doubled).is_none(),
+                "unique_of_kind({doubled:?}) collapses to None on ≥ 2 matches",
+            );
+        }
+    }
+
+    /// Boundary triad — sweeps every `(pre_kind, post_kind, query)`
+    /// arrangement of a single-condition-per-side spec, asserts each
+    /// per-slice arm delegates verbatim to
+    /// [`ConditionSliceExt::last_of_kind`], and pins the union arm
+    /// against the chained `iter_condition_kind(k).last()` walk.
+    /// Composition laws pinned: `last_condition_kind(k).is_some() ==
+    /// has_condition_kind(k)`, `last_condition_kind(k).map(|c| c.kind)
+    /// == Some(k)` iff `has_condition_kind(k)`, and the (first, last)
+    /// endpoint-swap `last_condition_kind == last_postcondition_kind
+    /// .or_else(|| last_precondition_kind)` mirror of
+    /// `find_condition_kind`'s precondition-first `or_else`.
+    #[test]
+    fn last_condition_kind_triad_delegates_to_slice_last_of_kind() {
+        // Empty boundary — every arm returns None on every kind.
+        let b = Boundary::default();
+        for kind in ConditionKind::ALL {
+            assert!(
+                b.last_precondition_kind(kind).is_none(),
+                "empty boundary must return None on last_precondition_kind({kind:?})",
+            );
+            assert!(
+                b.last_postcondition_kind(kind).is_none(),
+                "empty boundary must return None on last_postcondition_kind({kind:?})",
+            );
+            assert!(
+                b.last_condition_kind(kind).is_none(),
+                "empty boundary must return None on last_condition_kind({kind:?})",
+            );
+        }
+
+        // Single-populated-per-side sweep. Per-slice arms match slice
+        // primitive on pointer identity. Union arm follows the
+        // (post-side wins on dual) endpoint-swap.
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                for query in ConditionKind::ALL {
+                    // Delegation pins — per-slice arms match slice
+                    // primitive on identity of the &Condition.
+                    assert_eq!(
+                        b.last_precondition_kind(query)
+                            .map(|c| c as *const Condition),
+                        b.preconditions
+                            .last_of_kind(query)
+                            .map(|c| c as *const Condition),
+                        "Boundary::last_precondition_kind must delegate verbatim to \
+                         preconditions.last_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+                    assert_eq!(
+                        b.last_postcondition_kind(query)
+                            .map(|c| c as *const Condition),
+                        b.postconditions
+                            .last_of_kind(query)
+                            .map(|c| c as *const Condition),
+                        "Boundary::last_postcondition_kind must delegate verbatim to \
+                         postconditions.last_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+
+                    // Boolean-projection composition-law pin.
+                    assert_eq!(
+                        b.last_condition_kind(query).is_some(),
+                        b.has_condition_kind(query),
+                        "Boundary::last_condition_kind({query:?}).is_some() drifted from \
+                         has_condition_kind for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        b.last_condition_kind(query).map(|c| c.kind),
+                        if b.has_condition_kind(query) {
+                            Some(query)
+                        } else {
+                            None
+                        },
+                        "Boundary::last_condition_kind({query:?}).map(kind) must yield \
+                         Some({query:?}) iff has_condition_kind for pre={pre_kind:?} \
+                         post={post_kind:?}",
+                    );
+
+                    // Endpoint-swap composition law: last_condition_kind
+                    // is postcondition-first `or_else`, the mirror of
+                    // find_condition_kind's precondition-first `or_else`.
+                    assert_eq!(
+                        b.last_condition_kind(query).map(|c| c as *const Condition),
+                        b.last_postcondition_kind(query)
+                            .or_else(|| b.last_precondition_kind(query))
+                            .map(|c| c as *const Condition),
+                        "Boundary::last_condition_kind drifted from postcondition-first \
+                         `or_else(precondition-side)` composition for pre={pre_kind:?} \
+                         post={post_kind:?} query={query:?}",
+                    );
+
+                    // Union-arm shape — post wins when both hit.
+                    let pre_hit = pre_kind == query;
+                    let post_hit = post_kind == query;
+                    let last = b.last_condition_kind(query);
+                    assert_eq!(
+                        last.is_some(),
+                        pre_hit || post_hit,
+                        "Boundary::last_condition_kind({query:?}).is_some() must equal \
+                         (pre_hit OR post_hit) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    if post_hit {
+                        assert!(
+                            std::ptr::eq(last.unwrap(), &b.postconditions[0]),
+                            "last_condition_kind must point at postconditions slot when post \
+                             hits for pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                        );
+                    } else if pre_hit {
+                        assert!(
+                            std::ptr::eq(last.unwrap(), &b.preconditions[0]),
+                            "last_condition_kind must point at preconditions slot when only pre \
+                             hits for pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                        );
+                    }
+                }
+            }
+        }
+
+        // Doubled-post sweep — union yields the LATER post slot, and
+        // per-slice arm mirrors the same identity.
+        for doubled in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            b.postconditions.push(condition_with(doubled));
+            b.postconditions.push(condition_with(doubled));
+            let last_post = b.last_postcondition_kind(doubled);
+            let last_union = b.last_condition_kind(doubled);
+            assert!(
+                std::ptr::eq(last_post.unwrap(), &b.postconditions[1]),
+                "doubled-post last_postcondition_kind({doubled:?}) must point at slot[1]",
+            );
+            assert!(
+                std::ptr::eq(last_union.unwrap(), &b.postconditions[1]),
+                "doubled-post last_condition_kind({doubled:?}) must point at slot[1]",
             );
         }
     }

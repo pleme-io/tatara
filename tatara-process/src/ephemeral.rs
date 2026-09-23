@@ -3233,6 +3233,65 @@ impl EphemeralSpec {
         self.postconditions.unique_of_kind(kind)
     }
 
+    /// Returns the LAST [`crate::boundary::Condition`] with the given
+    /// [`ConditionKind`] in `preconditions ∪ postconditions`, or
+    /// [`None`] when no match exists — the union arm of the
+    /// (precondition, postcondition, condition-union) latest-position
+    /// `Option<&Condition>`-witnessing peer of
+    /// [`Self::find_condition_kind`] on the per-kind axis at the
+    /// ephemeral surface. Composed body:
+    /// `self.iter_condition_kind(kind).last()` — one walk over the
+    /// pre-then-post chain that yields the terminal element. Byte-
+    /// for-byte peer of [`crate::boundary::Boundary::last_condition_kind`]
+    /// on the point-domain surface — both compose against the SAME
+    /// slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::last_of_kind`] via the
+    /// two-slice chain.
+    #[must_use]
+    pub fn last_condition_kind(&self, kind: ConditionKind) -> Option<&crate::boundary::Condition> {
+        self.iter_condition_kind(kind).last()
+    }
+
+    /// Returns the LAST [`crate::boundary::Condition`] with the given
+    /// [`ConditionKind`] in [`Self::preconditions`], or [`None`] —
+    /// the precondition-side arm of the (precondition, postcondition,
+    /// condition-union) latest-position `Option<&Condition>`-witnessing
+    /// peer triad on [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::last_of_kind`] over
+    /// [`Self::preconditions`]. Peer of
+    /// [`crate::boundary::Boundary::last_precondition_kind`] on the
+    /// point-domain surface — both compose against the SAME slice-
+    /// level substrate primitive.
+    #[must_use]
+    pub fn last_precondition_kind(
+        &self,
+        kind: ConditionKind,
+    ) -> Option<&crate::boundary::Condition> {
+        self.preconditions.last_of_kind(kind)
+    }
+
+    /// Returns the LAST [`crate::boundary::Condition`] with the given
+    /// [`ConditionKind`] in [`Self::postconditions`], or [`None`] —
+    /// the postcondition-side arm of the (precondition, postcondition,
+    /// condition-union) latest-position `Option<&Condition>`-witnessing
+    /// peer triad on [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::last_of_kind`] over
+    /// [`Self::postconditions`]. Peer of
+    /// [`crate::boundary::Boundary::last_postcondition_kind`] on the
+    /// point-domain surface. See [`Self::last_precondition_kind`] for
+    /// the full rationale — the two methods share ONE lift motivation,
+    /// ONE fail-before-pass-after composition-law pin, and ONE two-
+    /// surface parity contract with the point-domain
+    /// [`crate::boundary::Boundary`] per-kind latest-witness peer
+    /// methods.
+    #[must_use]
+    pub fn last_postcondition_kind(
+        &self,
+        kind: ConditionKind,
+    ) -> Option<&crate::boundary::Condition> {
+        self.postconditions.last_of_kind(kind)
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -15555,6 +15614,176 @@ mod tests {
                 spec.unique_of_condition_kind(doubled).is_none(),
                 "doubled postconditions must collapse union unique_of_condition_kind({doubled:?}) \
                  to None",
+            );
+        }
+    }
+
+    // ── EphemeralSpec::last_(pre|post|)condition_kind triad ────────
+    //
+    // Two-surface parity contract with `Boundary::last_condition_kind`
+    // on the per-kind latest-position `Option<&Condition>` witnessing
+    // arm. Both surfaces compose against the SAME slice-level
+    // substrate primitive `ConditionSliceExt::last_of_kind` via
+    // delegation on each side and via
+    // `iter_condition_kind(k).last()` on the union chain.
+
+    /// Ephemeral triad delegation + two-surface parity pin — sweeps
+    /// every kind on every reachable `(pre_kind, post_kind, query)`
+    /// arrangement of a single-condition-per-side spec, asserts each
+    /// per-slice arm delegates verbatim to the slice-level primitive,
+    /// asserts the union arm equals the chained `iter_condition_kind
+    /// (k).last()` walk (post-side wins on dual hits), and asserts the
+    /// ephemeral-side arm agrees with the lowered [`Boundary`] arm
+    /// through the same slice-level substrate primitive.
+    #[test]
+    fn last_condition_kind_triad_delegates_to_slice_last_of_kind() {
+        use crate::boundary::ConditionSliceExt as _;
+
+        // Empty ephemeral — every arm returns None on every kind.
+        let spec = empty_ephemeral();
+        for kind in ConditionKind::ALL {
+            assert!(
+                spec.last_precondition_kind(kind).is_none(),
+                "empty ephemeral must return None on last_precondition_kind({kind:?})",
+            );
+            assert!(
+                spec.last_postcondition_kind(kind).is_none(),
+                "empty ephemeral must return None on last_postcondition_kind({kind:?})",
+            );
+            assert!(
+                spec.last_condition_kind(kind).is_none(),
+                "empty ephemeral must return None on last_condition_kind({kind:?})",
+            );
+        }
+
+        // Single-populated-per-side sweep with two-surface parity.
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+
+                let lowered: ProcessSpec = spec.clone().into();
+                let boundary = &lowered.boundary;
+
+                for query in ConditionKind::ALL {
+                    // Per-side delegation pins.
+                    assert_eq!(
+                        spec.last_precondition_kind(query)
+                            .map(|c| c as *const Condition),
+                        spec.preconditions
+                            .last_of_kind(query)
+                            .map(|c| c as *const Condition),
+                        "EphemeralSpec::last_precondition_kind must delegate verbatim to \
+                         preconditions.last_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.last_postcondition_kind(query)
+                            .map(|c| c as *const Condition),
+                        spec.postconditions
+                            .last_of_kind(query)
+                            .map(|c| c as *const Condition),
+                        "EphemeralSpec::last_postcondition_kind must delegate verbatim to \
+                         postconditions.last_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+
+                    // Boolean-projection composition-law pin.
+                    assert_eq!(
+                        spec.last_condition_kind(query).is_some(),
+                        spec.has_condition_kind(query),
+                        "EphemeralSpec::last_condition_kind({query:?}).is_some() drifted from \
+                         has_condition_kind for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.last_condition_kind(query).map(|c| c.kind),
+                        if spec.has_condition_kind(query) {
+                            Some(query)
+                        } else {
+                            None
+                        },
+                        "EphemeralSpec::last_condition_kind({query:?}).map(kind) must yield \
+                         Some({query:?}) iff has_condition_kind for pre={pre_kind:?} \
+                         post={post_kind:?}",
+                    );
+
+                    // Endpoint-swap composition law: post-side wins.
+                    assert_eq!(
+                        spec.last_condition_kind(query)
+                            .map(|c| c as *const Condition),
+                        spec.last_postcondition_kind(query)
+                            .or_else(|| spec.last_precondition_kind(query))
+                            .map(|c| c as *const Condition),
+                        "EphemeralSpec::last_condition_kind drifted from postcondition-first \
+                         `or_else(precondition-side)` composition for pre={pre_kind:?} \
+                         post={post_kind:?} query={query:?}",
+                    );
+
+                    // Union-arm shape — post wins when both hit.
+                    let pre_hit = pre_kind == query;
+                    let post_hit = post_kind == query;
+                    let last = spec.last_condition_kind(query);
+                    assert_eq!(
+                        last.is_some(),
+                        pre_hit || post_hit,
+                        "EphemeralSpec::last_condition_kind({query:?}).is_some() must equal \
+                         (pre_hit OR post_hit) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    if post_hit {
+                        assert!(
+                            std::ptr::eq(last.unwrap(), &spec.postconditions[0]),
+                            "last_condition_kind must point at postconditions slot when post \
+                             hits for pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                        );
+                    } else if pre_hit {
+                        assert!(
+                            std::ptr::eq(last.unwrap(), &spec.preconditions[0]),
+                            "last_condition_kind must point at preconditions slot when only pre \
+                             hits for pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                        );
+                    }
+
+                    // Two-surface parity — the lowered Boundary's
+                    // triad yields the SAME Option<kind> shape on
+                    // every arm.
+                    assert_eq!(
+                        spec.last_precondition_kind(query).map(|c| c.kind),
+                        boundary.last_precondition_kind(query).map(|c| c.kind),
+                        "ephemeral last_precondition_kind({query:?}) kind drifted from \
+                         lowered Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.last_postcondition_kind(query).map(|c| c.kind),
+                        boundary.last_postcondition_kind(query).map(|c| c.kind),
+                        "ephemeral last_postcondition_kind({query:?}) kind drifted from \
+                         lowered Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.last_condition_kind(query).map(|c| c.kind),
+                        boundary.last_condition_kind(query).map(|c| c.kind),
+                        "ephemeral last_condition_kind({query:?}) kind drifted from \
+                         lowered Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+            }
+        }
+
+        // Doubled-post sweep — union yields the LATER post slot,
+        // distinct from the earlier one.
+        for doubled in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            spec.postconditions.push(cond(doubled));
+            spec.postconditions.push(cond(doubled));
+            let last_post = spec.last_postcondition_kind(doubled);
+            let last_union = spec.last_condition_kind(doubled);
+            assert!(
+                std::ptr::eq(last_post.unwrap(), &spec.postconditions[1]),
+                "doubled-post last_postcondition_kind({doubled:?}) must point at slot[1]",
+            );
+            assert!(
+                std::ptr::eq(last_union.unwrap(), &spec.postconditions[1]),
+                "doubled-post last_condition_kind({doubled:?}) must point at slot[1]",
             );
         }
     }

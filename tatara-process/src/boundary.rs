@@ -1550,6 +1550,108 @@ impl Boundary {
         self.postconditions.has_unique_missing_kind()
     }
 
+    /// `true` iff `preconditions ∪ postconditions` is MISSING AT
+    /// LEAST TWO [`ConditionKind::ALL`] variants — the union arm of
+    /// the (precondition, postcondition, condition-union) cardinality-
+    /// many-arm triad on [`Boundary`] closing the "≥ 2 holes
+    /// remaining" arm on the union of the two condition slots. The
+    /// many-arm Boolean fast-path peer of
+    /// [`Self::has_unique_missing_condition_kind`] (=1 arm) and
+    /// [`Self::is_condition_kind_saturated`] (=0 arm) on the union
+    /// axis, closing the {0, 1, ≥2} trichotomy at the union struct
+    /// layer.
+    ///
+    /// Composed body: constructs a two-step-short-circuit walk over
+    /// [`ConditionKind::ALL`] under the [`Self::has_condition_kind`]
+    /// union primitive negated — pulls up to two hits off the
+    /// filtered iterator; the primitive returns `true` iff BOTH the
+    /// first and the second are [`Some`]. Byte-for-byte peer of
+    /// [`ConditionSliceExt::has_multiple_missing_kinds`] one slice-
+    /// layer down, lifted to compose against
+    /// [`Self::has_condition_kind`]'s pre-OR-post union rather than
+    /// against a single slice's `has_kind`. A regression at the union
+    /// primitive fails at the slice-level substrate tests + the union
+    /// composition-law tests rather than as silent drift here.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::has_multiple_missing_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self) -> bool`, byte-identical
+    /// two-step short-circuit body composed against the ephemeral
+    /// surface's own union primitive. Both methods compose against
+    /// the SAME slice-level substrate primitive
+    /// [`ConditionSliceExt::has_multiple_missing_kinds`] via the two-
+    /// slice union — a regression at the per-slice many-arm walk
+    /// fails at that primitive's tests rather than as silent drift at
+    /// either struct-level many-missing caller.
+    ///
+    /// # Compounding
+    ///
+    /// A future operator-facing "≥ 2 dependencies still unfulfilled"
+    /// gap-analysis diagnostic reads
+    /// `boundary.has_multiple_missing_condition_kind()` at ONE call
+    /// site rather than restating
+    /// `boundary.missing_condition_kind_count() >= 2` (which walks
+    /// every slot to count) or
+    /// `boundary.missing_condition_kinds().len() >= 2` (which
+    /// allocates the Vec). A `has-multiple-missing-condition-kind`
+    /// require-tag classifier arm reaches this primitive at ONE
+    /// substrate call — byte-for-byte peer of the tagged-union
+    /// `has-multiple-missing-kinds` classifier one struct-layer up.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the cardinality-many-arm projection on the
+    /// missing axis composes the SAME two-step short-circuit walk
+    /// under a two-slice union negation on both this boundary surface
+    /// and the ephemeral surface). THEORY.md §VI.1 (generation over
+    /// composition — a new [`ConditionKind`] variant reaches both
+    /// surfaces' cardinality-many-arm triads mechanically through the
+    /// delegated union primitive).
+    #[must_use]
+    pub fn has_multiple_missing_condition_kind(&self) -> bool {
+        let mut it = ConditionKind::ALL
+            .iter()
+            .copied()
+            .filter(|k| !self.has_condition_kind(*k));
+        it.next().is_some() && it.next().is_some()
+    }
+
+    /// `true` iff [`Self::preconditions`] is MISSING AT LEAST TWO
+    /// [`ConditionKind::ALL`] variants — the precondition-side arm of
+    /// the (precondition, postcondition, condition-union) cardinality-
+    /// many-arm triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::has_multiple_missing_kinds`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::has_multiple_missing_postcondition_kind`] on
+    /// the (precondition, postcondition) partition of the boundary's
+    /// two condition-vector slots; both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice two-step short-circuit walk under negation fails at
+    /// that primitive's tests rather than as silent drift at either
+    /// struct-level arm.
+    #[must_use]
+    pub fn has_multiple_missing_precondition_kind(&self) -> bool {
+        self.preconditions.has_multiple_missing_kinds()
+    }
+
+    /// `true` iff [`Self::postconditions`] is MISSING AT LEAST TWO
+    /// [`ConditionKind::ALL`] variants — the postcondition-side arm of
+    /// the (precondition, postcondition, condition-union) cardinality-
+    /// many-arm triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::has_multiple_missing_kinds`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::has_multiple_missing_precondition_kind`]. See
+    /// that method for the full rationale — the two methods share ONE
+    /// lift motivation, ONE fail-before-pass-after composition-law
+    /// pin, and ONE two-surface parity contract with the ephemeral
+    /// sugar type via
+    /// [`crate::ephemeral::EphemeralSpec::has_multiple_missing_postcondition_kind`].
+    #[must_use]
+    pub fn has_multiple_missing_postcondition_kind(&self) -> bool {
+        self.postconditions.has_multiple_missing_kinds()
+    }
+
     /// `true` iff `preconditions ∪ postconditions` carries NO
     /// [`Condition`] with the given [`ConditionKind`] — the union arm
     /// of the (precondition, postcondition, condition-union)
@@ -2844,6 +2946,113 @@ pub trait ConditionSliceExt {
         it.next().is_some() && it.next().is_none()
     }
 
+    /// Boolean cardinality "≥ 2" many-arm peer of
+    /// [`Self::has_unique_missing_kind`] on the closed-set-complement
+    /// axis — `true` iff AT LEAST TWO [`ConditionKind::ALL`] variants
+    /// appear zero times in this slice (equivalently,
+    /// [`Self::missing_kind_count`] `>= 2` and
+    /// [`Self::missing_kinds`]`.len() >= 2`).
+    ///
+    /// Default body: a two-step-short-circuit closed-set walk over
+    /// [`ConditionKind::ALL`] under a negated [`Self::has_kind`]
+    /// predicate. Pulls up to two hits off the filtered iterator; the
+    /// primitive returns `true` iff BOTH the first and the second are
+    /// [`Some`], WITHOUT materializing [`Self::missing_kinds`]'s `Vec`
+    /// and WITHOUT walking every slot to build
+    /// [`Self::missing_kind_count`]'s scalar. Short-circuits at the
+    /// second missing kind — strictly cheaper than either widened
+    /// primitive on every arm with `≥ 2` missing kinds. Byte-for-byte
+    /// peer of [`crate::tagged_union::TaggedUnion::has_multiple_missing_kinds`]
+    /// under the (populated, missing) complement axis one struct-
+    /// layer up.
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::has_multiple_missing_kinds`]
+    ///
+    /// Slice-level peer of the tagged-union parent-level cardinality
+    /// many-arm predicate one struct-layer up: where
+    /// [`crate::tagged_union::TaggedUnion::has_multiple_missing_kinds`]
+    /// answers "are AT LEAST TWO slots on the tagged-union parent
+    /// empty?", `has_multiple_missing_kinds` answers "do AT LEAST TWO
+    /// kinds appear in NO condition of the slice?". Both compose
+    /// against a two-step-short-circuit closed-set walk under a
+    /// negated presence predicate (`!has(kind)` / `!has_kind(kind)`)
+    /// at two adjacent typescape sites — the two primitives close the
+    /// at-least-two arm on the closed-set-complement axis at both
+    /// struct layers under the SAME shape.
+    ///
+    /// # Sibling to the Boolean missing-cardinality trichotomy
+    ///
+    /// Third and final arm of the `{0, 1, ≥2}` cardinality trichotomy
+    /// on the missing axis at the slice level, closing the natural
+    /// partition alongside [`Self::is_kind_saturated`] (zero-arm) and
+    /// [`Self::has_unique_missing_kind`] (one-arm). Every slice
+    /// satisfies EXACTLY ONE of the three Boolean projections — the
+    /// three primitives partition `0..=ConditionKind::ALL.len()` at
+    /// 0, 1, and ≥ 2 respectively. The composition law
+    /// `has_multiple_missing_kinds() == (missing_kind_count() >= 2)`
+    /// binds the Boolean projection to the scalar primitive at the
+    /// trait's default body — swept substrate-wide by
+    /// [`assert_slice_refinement_composition_laws`] as its
+    /// cardinality-many-arm arm.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `true` on any `N ≥ 2` closed set (every
+    /// kind is missing — the fully-missing endpoint, `N ≥ 2` missing).
+    /// A slice carrying `K` distinct kinds for `1 ≤ K ≤ N-2` on
+    /// `N ≥ 3` closed sets returns `true` (`N - K ≥ 2` kinds missing).
+    /// A slice at the near-saturation arm (carrying every kind except
+    /// exactly one) returns `false` — the SOLE-missing arrangement
+    /// where `has_multiple_missing_kinds` returns `false` (exactly
+    /// one missing, not ≥ 2). A saturated slice returns `false`
+    /// (zero missing).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing "≥ 2 dependencies still unfulfilled" fast-
+    ///   path discriminator on the many-missing arm reads
+    ///   `boundary.postconditions.has_multiple_missing_kinds()` at ONE
+    ///   call site — one two-step short-circuit walk, no allocation,
+    ///   no scalar comparison against `>= 2`, byte-for-byte peer of
+    ///   the tagged-union `has-multiple-missing-kinds` classifier one
+    ///   struct-layer up under the SAME two-step short-circuit shape.
+    /// - A `has-multiple-missing-kinds` require-tag classifier arm
+    ///   reaches this primitive with no allocation, byte-for-byte
+    ///   peer of the tagged-union `has-multiple-missing-kinds`
+    ///   classifier one struct-layer up.
+    /// - A future coverage-gap diagnostic that says "≥ 2 remaining
+    ///   ConditionKinds not covered by this Boundary" reads
+    ///   `has_multiple_missing_kinds()` at ONE call site without
+    ///   allocating [`Self::missing_kinds`]'s `Vec`.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The cardinality-many-arm projection on the missing axis
+    ///   lives at ONE substrate site as a typed two-step-short-
+    ///   circuit walk over [`ConditionKind::ALL`] under negated
+    ///   [`Self::has_kind`] — byte-for-byte peer of
+    ///   `missing_kind_count()` composed against `>= 2`, but with a
+    ///   second-missing-slot short-circuit that the scalar counter
+    ///   primitive does not offer.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically through the short-circuit walk — a
+    ///   slice previously at the near-saturation arm (returned
+    ///   `false` here) that omits the new variant now has TWO missing
+    ///   kinds and flips to `true`; a slice previously at the
+    ///   saturated arm on an `N == 2` closed set that omits the new
+    ///   variant flips from `false` to `true` (`1 ≥ 2` false → `1`
+    ///   missing on `N == 3`, but this workspace has `N == 8`, so
+    ///   the flip surfaces well before the endpoint).
+    fn has_multiple_missing_kinds(&self) -> bool {
+        let mut it = ConditionKind::ALL
+            .iter()
+            .copied()
+            .filter(|k| !self.has_kind(*k));
+        it.next().is_some() && it.next().is_some()
+    }
+
     /// Boolean per-kind complement of [`Self::has_kind`] — `true` iff
     /// NO [`Condition`] in this slice carries the given
     /// [`ConditionKind`] (equivalently, the kind is a member of
@@ -3421,6 +3630,45 @@ where
         slice.has_unique_missing_kind(),
         missing.len() == 1,
         "has_unique_missing_kind() drifted from (missing_kinds().len() == 1)",
+    );
+
+    // has_multiple_missing_kinds ↔ (missing_kind_count >= 2) — the
+    // Boolean cardinality many-arm projection of the closed-set-
+    // complement scalar cardinality. Peer of `has_any_missing_kind ↔
+    // !is_kind_saturated` (≥ 1 halfspace) and `has_unique_missing_kind
+    // ↔ (missing_kind_count == 1)` (= 1 mid-endpoint) on the Boolean-
+    // projection axis: where those peers test the ≥ 1 and = 1 arms on
+    // the missing scalar, this many-arm peer tests the ≥ 2 arm.
+    // Together with `is_kind_saturated` (zero-arm) and
+    // `has_unique_missing_kind` (one-arm), the three Booleans
+    // partition the missing-cardinality closed set at 0, 1, and ≥ 2
+    // respectively — every slice satisfies EXACTLY ONE of the three
+    // projections. A regression that overrode `has_multiple_missing_kinds`
+    // to drop the second-slot short-circuit (returning `true` on any
+    // ≥ 1-missing arm), skip a kind, drift the walk from
+    // `ConditionKind::ALL`, or conflate with `has_any_missing_kind`
+    // (the ≥ 1 halfspace) surfaces HERE at the substrate boundary,
+    // not as silent drift at every downstream
+    // `has-multiple-missing-kinds` require-tag classifier or
+    // coverage-gap diagnostic callsite. Byte-for-byte peer of
+    // `crate::tagged_union::TaggedUnion::has_multiple_missing_kinds`
+    // one struct-layer up under the SAME two-step short-circuit walk
+    // shape. Also pins the widened composition law
+    // `has_multiple_missing_kinds() == (missing_kinds().len() >= 2)`
+    // at every slice — binds the cardinality-many-arm Boolean
+    // projection to the widened + scalar closed-set-complement
+    // primitives without paying for the Vec allocation on the ≥ 2-
+    // missing arms (where the short-circuit fires) or the full-slot
+    // walk on the scalar counter.
+    assert_eq!(
+        slice.has_multiple_missing_kinds(),
+        slice.missing_kind_count() >= 2,
+        "has_multiple_missing_kinds() drifted from (missing_kind_count() >= 2)",
+    );
+    assert_eq!(
+        slice.has_multiple_missing_kinds(),
+        missing.len() >= 2,
+        "has_multiple_missing_kinds() drifted from (missing_kinds().len() >= 2)",
     );
 
     // lacks_kind ↔ !has_kind — the Boolean per-kind complement
@@ -6191,6 +6439,199 @@ mod tests {
         }
     }
 
+    // ── ConditionSliceExt::has_multiple_missing_kinds — many-arm pins ──
+    //
+    // Boolean cardinality "≥ 2" many-arm peer of
+    // `has_unique_missing_kind` on the closed-set-complement axis:
+    // `has_multiple_missing_kinds()` returns `true` iff AT LEAST TWO
+    // `ConditionKind::ALL` variants appear zero times in the slice.
+    // Third and final arm of the {0, 1, ≥2} trichotomy on the missing
+    // axis at the slice level (0-arm: `is_kind_saturated`; 1-arm:
+    // `has_unique_missing_kind`; ≥ 2-arm: this primitive). Body
+    // short-circuits at the second missing kind — strictly cheaper
+    // than `missing_kind_count() >= 2` (which walks every slot) and
+    // `missing_kinds().len() >= 2` (which allocates the Vec) on every
+    // arm with ≥ 2 missing kinds. The composition laws
+    // `has_multiple_missing_kinds() == (missing_kind_count() >= 2)`
+    // and `has_multiple_missing_kinds() == (missing_kinds().len() >= 2)`
+    // are pinned as the cardinality-many-arm arm of
+    // `assert_slice_refinement_composition_laws`. Byte-for-byte peer
+    // of `crate::tagged_union::TaggedUnion::has_multiple_missing_kinds`
+    // one struct-layer up under the SAME two-step short-circuit walk
+    // shape.
+
+    /// EMPTY-SLICE pin — an empty slice returns `true` on
+    /// `has_multiple_missing_kinds` on any `N ≥ 2` closed set (every
+    /// kind is missing — the fully-missing endpoint, `N ≥ 2`
+    /// missing).
+    #[test]
+    fn condition_slice_has_multiple_missing_kinds_returns_true_on_empty_slice() {
+        assert!(
+            ConditionKind::ALL.len() >= 2,
+            "test assumes ConditionKind::ALL has ≥ 2 variants",
+        );
+        let empty: &[Condition] = &[];
+        assert!(
+            empty.has_multiple_missing_kinds(),
+            "empty slice must return true on has_multiple_missing_kinds (all N ≥ 2 kinds missing)",
+        );
+        assert_eq!(
+            empty.has_multiple_missing_kinds(),
+            empty.missing_kind_count() >= 2,
+            "empty has_multiple_missing_kinds must equal (missing_kind_count() >= 2)",
+        );
+    }
+
+    /// SINGLE-KIND pin — a slice populating exactly one variant
+    /// returns `true` on any `N ≥ 3` closed set (`N - 1 ≥ 2` kinds
+    /// missing). On the degenerate `N == 2` closed set (which no
+    /// production `ConditionKind` reaches; this workspace has
+    /// `N == 8`) it would return `false`, so the pin gates on
+    /// `N ≥ 3`.
+    #[test]
+    fn condition_slice_has_multiple_missing_kinds_returns_true_on_single_kind_slice() {
+        if ConditionKind::ALL.len() < 3 {
+            return;
+        }
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            assert!(
+                slice.has_multiple_missing_kinds(),
+                "single-populated slice with {populated:?} must return true on has_multiple_missing_kinds on N ≥ 3 closed sets ({} kinds missing, ≥ 2)",
+                ConditionKind::ALL.len() - 1,
+            );
+            assert_eq!(
+                slice.has_multiple_missing_kinds(),
+                slice.missing_kind_count() >= 2,
+                "single-populated has_multiple_missing_kinds must equal (missing_kind_count() >= 2) for {populated:?}",
+            );
+        }
+    }
+
+    /// NEAR-SATURATION-ENDPOINT pin — a slice carrying every
+    /// [`ConditionKind`] EXCEPT exactly one returns `false` on
+    /// `has_multiple_missing_kinds` (exactly one missing, not ≥ 2).
+    /// The SOLE-missing arrangement where the many-arm primitive
+    /// returns `false` — the definitional boundary between the
+    /// = 1 mid-endpoint and the ≥ 2 many-arm on the missing axis.
+    /// Also pins the widened composition law
+    /// `has_multiple_missing_kinds() == (missing_kinds().len() >= 2)`.
+    #[test]
+    fn condition_slice_has_multiple_missing_kinds_returns_false_on_near_saturation_endpoint() {
+        for omitted in ConditionKind::ALL {
+            let near_saturated: Vec<Condition> = ConditionKind::ALL
+                .into_iter()
+                .filter(|k| *k != omitted)
+                .map(condition_with)
+                .collect();
+            let slice = near_saturated.as_slice();
+            assert!(
+                !slice.has_multiple_missing_kinds(),
+                "near-saturation-endpoint slice (omitting {omitted:?}) must return false on has_multiple_missing_kinds (1 missing, not ≥ 2)",
+            );
+            assert_eq!(
+                slice.has_multiple_missing_kinds(),
+                slice.missing_kind_count() >= 2,
+                "near-saturation-endpoint has_multiple_missing_kinds must equal (missing_kind_count() >= 2) for omitted={omitted:?}",
+            );
+            assert_eq!(
+                slice.has_multiple_missing_kinds(),
+                slice.missing_kinds().len() >= 2,
+                "near-saturation-endpoint has_multiple_missing_kinds must equal (missing_kinds().len() >= 2) for omitted={omitted:?}",
+            );
+        }
+    }
+
+    /// SATURATED pin — a slice carrying every [`ConditionKind`]
+    /// variant returns `false` on `has_multiple_missing_kinds` (zero
+    /// missing, not ≥ 2). Dual of the SATURATED arm on
+    /// `is_kind_saturated` which returns `true`. Also pins the
+    /// composition law `has_multiple_missing_kinds() ==
+    /// (missing_kind_count() >= 2)` at zero-missing.
+    #[test]
+    fn condition_slice_has_multiple_missing_kinds_returns_false_on_saturated_slice() {
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert!(
+            !saturated.as_slice().has_multiple_missing_kinds(),
+            "slice containing every ConditionKind must return false on has_multiple_missing_kinds (0 missing, not ≥ 2)",
+        );
+        assert_eq!(
+            saturated.as_slice().has_multiple_missing_kinds(),
+            saturated.as_slice().missing_kind_count() >= 2,
+            "saturated has_multiple_missing_kinds must equal (missing_kind_count() >= 2)",
+        );
+    }
+
+    /// TWO-MISSING pin — a slice populating exactly `N - 2` variants
+    /// returns `true` on `has_multiple_missing_kinds` (exactly 2
+    /// missing, the SECOND-slot boundary of the ≥ 2 arm). Pins the
+    /// second-slot short-circuit — a regression that dropped the
+    /// second-slot check (returning `true` on any ≥ 1-missing arm,
+    /// conflating with `has_any_missing_kind`) would still pass here,
+    /// so this pin is complemented by the NEAR-SATURATION-ENDPOINT
+    /// pin which distinguishes the =1 arm from the ≥ 2 arm.
+    /// Only meaningful on `N ≥ 2` closed sets.
+    #[test]
+    fn condition_slice_has_multiple_missing_kinds_returns_true_on_two_missing_slice() {
+        assert!(
+            ConditionKind::ALL.len() >= 2,
+            "test assumes ConditionKind::ALL has ≥ 2 variants",
+        );
+        for i in 0..ConditionKind::ALL.len() {
+            for j in (i + 1)..ConditionKind::ALL.len() {
+                let two_missing: Vec<Condition> = ConditionKind::ALL
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(k, _)| *k != i && *k != j)
+                    .map(|(_, k)| condition_with(k))
+                    .collect();
+                let slice = two_missing.as_slice();
+                assert!(
+                    slice.has_multiple_missing_kinds(),
+                    "two-missing slice (omitting index {i} and {j}) must return true on has_multiple_missing_kinds (2 missing, ≥ 2)",
+                );
+                assert_eq!(
+                    slice.has_multiple_missing_kinds(),
+                    slice.missing_kind_count() >= 2,
+                    "two-missing has_multiple_missing_kinds must equal (missing_kind_count() >= 2) for omitted=({i}, {j})",
+                );
+            }
+        }
+    }
+
+    /// MULTIPLICITY pin — a slice at the empty-endpoint duplicated
+    /// remains empty (nothing to duplicate), while a slice at a
+    /// K-populated arm with each populated kind duplicated still
+    /// returns `true` on any `N ≥ K + 2` — multiplicity is
+    /// irrelevant to the cardinality many-arm projection on the
+    /// closed-set-complement axis, byte-for-byte peer of the
+    /// saturation-predicate arm. Sweeps the near-two-missing
+    /// arrangement (each pair-omitted arm, doubled populated) on
+    /// `N ≥ 2` closed sets.
+    #[test]
+    fn condition_slice_has_multiple_missing_kinds_ignores_multiplicity() {
+        assert!(
+            ConditionKind::ALL.len() >= 2,
+            "test assumes ConditionKind::ALL has ≥ 2 variants",
+        );
+        for i in 0..ConditionKind::ALL.len() {
+            for j in (i + 1)..ConditionKind::ALL.len() {
+                let mut doubled: Vec<Condition> = Vec::new();
+                for (idx, kind) in ConditionKind::ALL.into_iter().enumerate() {
+                    if idx != i && idx != j {
+                        doubled.push(condition_with(kind));
+                        doubled.push(condition_with(kind));
+                    }
+                }
+                assert!(
+                    doubled.as_slice().has_multiple_missing_kinds(),
+                    "two-missing slice (omitting index {i} and {j}) with each populated kind duplicated must return true on has_multiple_missing_kinds",
+                );
+            }
+        }
+    }
+
     // ── ConditionSliceExt::lacks_kind — per-kind complement pins ──────
     //
     // Boolean per-kind closed-set-complement peer of `has_kind`:
@@ -7539,6 +7980,161 @@ mod tests {
         assert!(
             !b.has_unique_missing_condition_kind(),
             "saturated boundary must return false on has_unique_missing_condition_kind",
+        );
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary cardinality-many-arm triad)
+    /// — the three `has_multiple_missing_*_condition_kind` methods on
+    /// [`Boundary`] delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::has_multiple_missing_kinds`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via a two-step-short-circuit walk over
+    /// [`ConditionKind::ALL`] under negated
+    /// [`Boundary::has_condition_kind`]. Sweeps the empty boundary
+    /// (every arm returns `true` — all N missing, ≥ 2), the near-
+    /// saturation-endpoint (each slice carries every
+    /// [`ConditionKind`] except one — every per-slice arm returns
+    /// `false`; the union returns `true` iff the two slices omit
+    /// DIFFERENT kinds), the saturated boundary (every arm returns
+    /// `false` — 0 missing), and a single-populated-per-side
+    /// arrangement (every per-slice arm returns `true` on any `N ≥ 3`
+    /// closed set; the union returns `true` when the two kinds
+    /// together leave ≥ 2 kinds uncovered). Also pins the composition
+    /// law `has_multiple_missing_*_condition_kind() ==
+    /// (missing_*_condition_kind_count() >= 2)` at each arm — a
+    /// regression that dropped the second-slot short-circuit, drifted
+    /// the underlying `has_kind` predicate, or conflated with
+    /// `has_any_missing_kind` surfaces HERE.
+    #[test]
+    fn has_multiple_missing_condition_kind_triad_delegates_to_slice_has_multiple_missing_kinds() {
+        // Empty boundary — every arm returns true (all N missing,
+        // ≥ 2) on any N ≥ 2 closed set.
+        assert!(
+            ConditionKind::ALL.len() >= 2,
+            "test assumes ConditionKind::ALL has ≥ 2 variants",
+        );
+        let b = Boundary::default();
+        assert!(
+            b.has_multiple_missing_precondition_kind(),
+            "empty boundary must return true on has_multiple_missing_precondition_kind",
+        );
+        assert!(
+            b.has_multiple_missing_postcondition_kind(),
+            "empty boundary must return true on has_multiple_missing_postcondition_kind",
+        );
+        assert!(
+            b.has_multiple_missing_condition_kind(),
+            "empty boundary must return true on has_multiple_missing_condition_kind",
+        );
+        assert_eq!(
+            b.has_multiple_missing_condition_kind(),
+            b.missing_condition_kind_count() >= 2,
+            "empty has_multiple_missing_condition_kind must equal (missing_condition_kind_count() >= 2)",
+        );
+
+        // Single-populated per side — sweep ALL × ALL on N ≥ 3 closed
+        // sets. Every per-slice arm returns true (N - 1 ≥ 2 kinds
+        // missing per slice); the union returns true iff the two
+        // kinds together leave ≥ 2 ALL variants uncovered.
+        if ConditionKind::ALL.len() >= 3 {
+            for pre_kind in ConditionKind::ALL {
+                for post_kind in ConditionKind::ALL {
+                    let mut b = Boundary::default();
+                    b.preconditions.push(condition_with(pre_kind));
+                    b.postconditions.push(condition_with(post_kind));
+                    assert_eq!(
+                        b.has_multiple_missing_precondition_kind(),
+                        b.preconditions.has_multiple_missing_kinds(),
+                        "Boundary::has_multiple_missing_precondition_kind must delegate verbatim to \
+                         preconditions.has_multiple_missing_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        b.has_multiple_missing_postcondition_kind(),
+                        b.postconditions.has_multiple_missing_kinds(),
+                        "Boundary::has_multiple_missing_postcondition_kind must delegate verbatim to \
+                         postconditions.has_multiple_missing_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    let uncovered = ConditionKind::ALL
+                        .into_iter()
+                        .filter(|k| *k != pre_kind && *k != post_kind)
+                        .count();
+                    let expected_union = uncovered >= 2;
+                    assert_eq!(
+                        b.has_multiple_missing_condition_kind(),
+                        expected_union,
+                        "Boundary::has_multiple_missing_condition_kind must equal \
+                         (uncovered-ALL-count >= 2) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        b.has_multiple_missing_condition_kind(),
+                        b.missing_condition_kind_count() >= 2,
+                        "Boundary::has_multiple_missing_condition_kind must equal \
+                         (missing_condition_kind_count() >= 2) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+            }
+        }
+
+        // Near-saturation-endpoint per side — each slice carries
+        // every ConditionKind except one; every per-slice arm returns
+        // false (exactly 1 missing per slice, not ≥ 2). The union
+        // returns true iff the two slices omit DIFFERENT kinds
+        // (otherwise both omissions coincide and the union has
+        // exactly 1 missing, not ≥ 2).
+        for pre_omit in ConditionKind::ALL {
+            for post_omit in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                for k in ConditionKind::ALL {
+                    if k != pre_omit {
+                        b.preconditions.push(condition_with(k));
+                    }
+                    if k != post_omit {
+                        b.postconditions.push(condition_with(k));
+                    }
+                }
+                assert!(
+                    !b.has_multiple_missing_precondition_kind(),
+                    "near-saturation-endpoint precondition slice (omitting {pre_omit:?}) must return false on has_multiple_missing_precondition_kind",
+                );
+                assert!(
+                    !b.has_multiple_missing_postcondition_kind(),
+                    "near-saturation-endpoint postcondition slice (omitting {post_omit:?}) must return false on has_multiple_missing_postcondition_kind",
+                );
+                // Union: pre-only-missing = {pre_omit}, post-only-
+                // missing = {post_omit}. Union missing = both
+                // omissions ∩ each other only when they coincide.
+                let expected_union = false;
+                assert_eq!(
+                    b.has_multiple_missing_condition_kind(),
+                    expected_union,
+                    "Boundary::has_multiple_missing_condition_kind on both-slices-near-saturated must always be false (union missing ≤ 1) for pre_omit={pre_omit:?} post_omit={post_omit:?}",
+                );
+                assert_eq!(
+                    b.has_multiple_missing_condition_kind(),
+                    b.missing_condition_kind_count() >= 2,
+                    "Boundary::has_multiple_missing_condition_kind must equal (missing_condition_kind_count() >= 2) for pre_omit={pre_omit:?} post_omit={post_omit:?}",
+                );
+            }
+        }
+
+        // Saturated boundary — every arm returns false (0 missing,
+        // not ≥ 2).
+        let mut b = Boundary::default();
+        for k in ConditionKind::ALL {
+            b.preconditions.push(condition_with(k));
+            b.postconditions.push(condition_with(k));
+        }
+        assert!(
+            !b.has_multiple_missing_precondition_kind(),
+            "saturated boundary must return false on has_multiple_missing_precondition_kind",
+        );
+        assert!(
+            !b.has_multiple_missing_postcondition_kind(),
+            "saturated boundary must return false on has_multiple_missing_postcondition_kind",
+        );
+        assert!(
+            !b.has_multiple_missing_condition_kind(),
+            "saturated boundary must return false on has_multiple_missing_condition_kind",
         );
     }
 

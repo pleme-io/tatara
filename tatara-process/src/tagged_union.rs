@@ -1867,11 +1867,7 @@ pub trait TaggedUnion: Sized {
     ///   and every downstream consumer sees the wider cardinality
     ///   without further per-caller edit.
     fn populated_kind_count(&self) -> usize {
-        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .filter(|k| self.has(*k))
-            .count()
+        self.iter_populated_kinds().count()
     }
 
     /// Closed-set-COMPLEMENT refinement — enumerate the set of
@@ -2132,11 +2128,7 @@ pub trait TaggedUnion: Sized {
     ///   that doesn't yet populate the new slot sees the cardinality
     ///   rise by one at every downstream callsite).
     fn missing_kind_count(&self) -> usize {
-        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .filter(|k| !self.has(*k))
-            .count()
+        self.iter_missing_kinds().count()
     }
 
     /// Short-circuiting `Option<Self::Kind>` peer of
@@ -2215,10 +2207,7 @@ pub trait TaggedUnion: Sized {
     ///   `Some(new_variant)` at every downstream callsite without
     ///   further per-caller edit.
     fn first_populated_kind(&self) -> Option<Self::Kind> {
-        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .find(|k| self.has(*k))
+        self.iter_populated_kinds().next()
     }
 
     /// Short-circuiting `Option<Self::Kind>` peer of
@@ -2289,10 +2278,7 @@ pub trait TaggedUnion: Sized {
     ///   the missing side) — every downstream consumer sees the wider
     ///   complement's earliest hit without further per-caller edit.
     fn first_missing_kind(&self) -> Option<Self::Kind> {
-        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .find(|k| !self.has(*k))
+        self.iter_missing_kinds().next()
     }
 
     /// Short-circuiting `Option<Self::Kind>` peer of
@@ -2368,11 +2354,7 @@ pub trait TaggedUnion: Sized {
     ///   consumer sees the wider latest-hit projection with no
     ///   per-caller edit.
     fn last_populated_kind(&self) -> Option<Self::Kind> {
-        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .rev()
-            .copied()
-            .find(|k| self.has(*k))
+        self.iter_populated_kinds().last()
     }
 
     /// Short-circuiting `Option<Self::Kind>` peer of
@@ -2447,11 +2429,7 @@ pub trait TaggedUnion: Sized {
     ///   mechanically (the reversed closed-set walk picks up the new
     ///   entry at its canonical `ALL` position on the missing side).
     fn last_missing_kind(&self) -> Option<Self::Kind> {
-        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .rev()
-            .copied()
-            .find(|k| !self.has(*k))
+        self.iter_missing_kinds().last()
     }
 
     /// Exactly-one-populated `Option<Self::Kind>` peer of
@@ -2543,10 +2521,7 @@ pub trait TaggedUnion: Sized {
     ///   returns `Some(new_variant)` at every downstream callsite
     ///   without further per-caller edit.
     fn unique_populated_kind(&self) -> Option<Self::Kind> {
-        let mut iter = <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .filter(|k| self.has(*k));
+        let mut iter = self.iter_populated_kinds();
         let first = iter.next()?;
         match iter.next() {
             None => Some(first),
@@ -2633,10 +2608,7 @@ pub trait TaggedUnion: Sized {
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically on the missing side.
     fn unique_missing_kind(&self) -> Option<Self::Kind> {
-        let mut iter = <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .filter(|k| !self.has(*k));
+        let mut iter = self.iter_missing_kinds();
         let first = iter.next()?;
         match iter.next() {
             None => Some(first),
@@ -2737,10 +2709,7 @@ pub trait TaggedUnion: Sized {
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the `any` short-circuit.
     fn is_empty(&self) -> bool {
-        !<Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .any(|k| self.has(k))
+        self.iter_populated_kinds().next().is_none()
     }
 
     /// Boolean cardinality-endpoint peer of [`Self::missing_kinds`] —
@@ -2834,10 +2803,7 @@ pub trait TaggedUnion: Sized {
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the `all` short-circuit.
     fn is_saturated(&self) -> bool {
-        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .all(|k| self.has(k))
+        self.iter_missing_kinds().next().is_none()
     }
 
     /// Boolean cardinality "at-least-one" peer of
@@ -2949,10 +2915,7 @@ pub trait TaggedUnion: Sized {
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the `any` short-circuit.
     fn has_any_populated_kind(&self) -> bool {
-        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .any(|k| self.has(k))
+        self.iter_populated_kinds().next().is_some()
     }
 
     /// Boolean cardinality "at-least-one" peer of [`Self::missing_kinds`]
@@ -3055,10 +3018,7 @@ pub trait TaggedUnion: Sized {
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the `any` short-circuit.
     fn has_any_missing_kind(&self) -> bool {
-        <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .any(|k| !self.has(k))
+        self.iter_missing_kinds().next().is_some()
     }
 
     /// Boolean cardinality-mid-endpoint peer of
@@ -3331,10 +3291,7 @@ pub trait TaggedUnion: Sized {
     ///   [`Self::Kind`] variant added to `ALL` reaches this
     ///   primitive mechanically.
     fn has_multiple_populated_kinds(&self) -> bool {
-        let mut iter = <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .filter(|k| self.has(*k));
+        let mut iter = self.iter_populated_kinds();
         iter.next().is_some() && iter.next().is_some()
     }
 
@@ -3396,10 +3353,7 @@ pub trait TaggedUnion: Sized {
     /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
     /// - THEORY.md §VI.1 — generation over composition.
     fn has_multiple_missing_kinds(&self) -> bool {
-        let mut iter = <Self::Kind as tatara_closed_set::ClosedSet>::ALL
-            .iter()
-            .copied()
-            .filter(|k| !self.has(*k));
+        let mut iter = self.iter_missing_kinds();
         iter.next().is_some() && iter.next().is_some()
     }
 
@@ -8374,7 +8328,184 @@ where
     assert_find_agrees_with_has::<T, _>(&single_slot);
     assert_iter_populated_kinds_matches_populated_kinds::<T, _>(&single_slot);
     assert_iter_missing_kinds_matches_missing_kinds::<T, _>(&single_slot);
+    assert_scalar_peers_fold_through_iter_kinds::<T, _>(&single_slot);
     assert_single_slot_key_matches_label::<T, _>(single_slot);
+}
+
+/// Generic scalar-peers-fold-through-iter-kinds testkit — pins that
+/// every scalar closed-set peer on [`TaggedUnion`] equals its
+/// standard-library `Iterator` fold over the load-bearing iterator
+/// peer [`TaggedUnion::iter_populated_kinds`] (populated side) or
+/// [`TaggedUnion::iter_missing_kinds`] (missing side), on every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) single-slot
+/// arrangement.
+///
+/// The load-bearing iterator peer is the ONE substrate site every
+/// scalar peer folds through — a regression that overrides ANY
+/// scalar peer with a divergent walk (short-circuit skipping a kind,
+/// forgetting the negation on the complement side, drifting from
+/// `ClosedSet::ALL` order, ignoring the load-bearing iterator entirely
+/// with a duplicate closed-set walk of its own) surfaces at this ONE
+/// testkit rather than as silent skew between the scalar callsite and
+/// the iterator callsite at every downstream consumer.
+///
+/// Sixteen composition arms swept per single-slot arrangement — one per
+/// rebased scalar peer:
+///
+/// **Populated side (folds through [`TaggedUnion::iter_populated_kinds`]):**
+///
+/// 1. `populated_kind_count() == iter_populated_kinds().count()`
+/// 2. `first_populated_kind() == iter_populated_kinds().next()`
+/// 3. `last_populated_kind() == iter_populated_kinds().last()`
+/// 4. `unique_populated_kind()` matches the two-step short-circuit
+///    (first present + second absent).
+/// 5. `is_empty() == iter_populated_kinds().next().is_none()`
+/// 6. `has_any_populated_kind() == iter_populated_kinds().next().is_some()`
+/// 7. `has_multiple_populated_kinds()` matches the two-step short-circuit
+///    (first present + second present).
+///
+/// **Missing side (folds through [`TaggedUnion::iter_missing_kinds`]):**
+///
+/// 8. `missing_kind_count() == iter_missing_kinds().count()`
+/// 9. `first_missing_kind() == iter_missing_kinds().next()`
+/// 10. `last_missing_kind() == iter_missing_kinds().last()`
+/// 11. `unique_missing_kind()` matches the two-step short-circuit.
+/// 12. `is_saturated() == iter_missing_kinds().next().is_none()`
+/// 13. `has_any_missing_kind() == iter_missing_kinds().next().is_some()`
+/// 14. `has_multiple_missing_kinds()` matches the two-step short-circuit.
+///
+/// Peer of [`crate::boundary::assert_slice_refinement_composition_laws`]'s
+/// load-bearing-iterator arms at the slice level under symmetric
+/// (present/absent) point-probes — closes the "every scalar peer folds
+/// through the load-bearing iterator" invariant at both trait sites.
+///
+/// Same `Lifetime` exclusion as [`assert_populated_kinds_matches_has`]:
+/// the `T: TaggedUnion` bound doesn't reach it. Any of the four
+/// production `.variant()` parents on `ProcessSpec` binds through this
+/// ONE primitive with its per-site `single_slot` factory. A fifth
+/// sibling picks up the composition-law sweep through ONE call site —
+/// no re-authored per-peer assertion at the test surface.
+///
+/// Theory grounding: THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs) — every scalar peer's default body composes through the
+/// load-bearing iterator peer at ONE substrate site; this testkit pins
+/// that composition as a first-class typed invariant. A future run that
+/// specializes `iter_populated_kinds` with a fast path (e.g. a bitmap
+/// scan on a compact-representation tagged union) reaches every scalar
+/// peer through THIS ONE testkit's binding — an override that
+/// re-inlines the closed-set walk at a scalar peer independently of
+/// the iter override drifts HERE.
+#[track_caller]
+pub fn assert_scalar_peers_fold_through_iter_kinds<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+
+        // -------- Populated side ----------------------------------------
+        assert_eq!(
+            parent.populated_kind_count(),
+            parent.iter_populated_kinds().count(),
+            "TaggedUnion::populated_kind_count() drifted from iter_populated_kinds().count() — populated={populated:?}",
+        );
+        assert_eq!(
+            parent.first_populated_kind(),
+            parent.iter_populated_kinds().next(),
+            "TaggedUnion::first_populated_kind() drifted from iter_populated_kinds().next() — populated={populated:?}",
+        );
+        assert_eq!(
+            parent.last_populated_kind(),
+            parent.iter_populated_kinds().last(),
+            "TaggedUnion::last_populated_kind() drifted from iter_populated_kinds().last() — populated={populated:?}",
+        );
+        let via_iter_unique_populated = {
+            let mut it = parent.iter_populated_kinds();
+            let first = it.next();
+            match (first, it.next()) {
+                (Some(k), None) => Some(k),
+                _ => None,
+            }
+        };
+        assert_eq!(
+            parent.unique_populated_kind(),
+            via_iter_unique_populated,
+            "TaggedUnion::unique_populated_kind() drifted from iter_populated_kinds() two-step short-circuit — populated={populated:?}",
+        );
+        assert_eq!(
+            parent.is_empty(),
+            parent.iter_populated_kinds().next().is_none(),
+            "TaggedUnion::is_empty() drifted from iter_populated_kinds().next().is_none() — populated={populated:?}",
+        );
+        assert_eq!(
+            parent.has_any_populated_kind(),
+            parent.iter_populated_kinds().next().is_some(),
+            "TaggedUnion::has_any_populated_kind() drifted from iter_populated_kinds().next().is_some() — populated={populated:?}",
+        );
+        let via_iter_multi_populated = {
+            let mut it = parent.iter_populated_kinds();
+            it.next().is_some() && it.next().is_some()
+        };
+        assert_eq!(
+            parent.has_multiple_populated_kinds(),
+            via_iter_multi_populated,
+            "TaggedUnion::has_multiple_populated_kinds() drifted from iter_populated_kinds() two-step short-circuit — populated={populated:?}",
+        );
+
+        // -------- Missing side ------------------------------------------
+        assert_eq!(
+            parent.missing_kind_count(),
+            parent.iter_missing_kinds().count(),
+            "TaggedUnion::missing_kind_count() drifted from iter_missing_kinds().count() — populated={populated:?}",
+        );
+        assert_eq!(
+            parent.first_missing_kind(),
+            parent.iter_missing_kinds().next(),
+            "TaggedUnion::first_missing_kind() drifted from iter_missing_kinds().next() — populated={populated:?}",
+        );
+        assert_eq!(
+            parent.last_missing_kind(),
+            parent.iter_missing_kinds().last(),
+            "TaggedUnion::last_missing_kind() drifted from iter_missing_kinds().last() — populated={populated:?}",
+        );
+        let via_iter_unique_missing = {
+            let mut it = parent.iter_missing_kinds();
+            let first = it.next();
+            match (first, it.next()) {
+                (Some(k), None) => Some(k),
+                _ => None,
+            }
+        };
+        assert_eq!(
+            parent.unique_missing_kind(),
+            via_iter_unique_missing,
+            "TaggedUnion::unique_missing_kind() drifted from iter_missing_kinds() two-step short-circuit — populated={populated:?}",
+        );
+        assert_eq!(
+            parent.is_saturated(),
+            parent.iter_missing_kinds().next().is_none(),
+            "TaggedUnion::is_saturated() drifted from iter_missing_kinds().next().is_none() — populated={populated:?}",
+        );
+        assert_eq!(
+            parent.has_any_missing_kind(),
+            parent.iter_missing_kinds().next().is_some(),
+            "TaggedUnion::has_any_missing_kind() drifted from iter_missing_kinds().next().is_some() — populated={populated:?}",
+        );
+        let via_iter_multi_missing = {
+            let mut it = parent.iter_missing_kinds();
+            it.next().is_some() && it.next().is_some()
+        };
+        assert_eq!(
+            parent.has_multiple_missing_kinds(),
+            via_iter_multi_missing,
+            "TaggedUnion::has_multiple_missing_kinds() drifted from iter_missing_kinds() two-step short-circuit — populated={populated:?}",
+        );
+    }
 }
 
 #[cfg(test)]

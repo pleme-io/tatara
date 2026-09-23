@@ -2721,10 +2721,7 @@ pub trait ConditionSliceExt {
     ///   entry) and every downstream consumer sees the wider
     ///   cardinality without further per-caller edit.
     fn distinct_kind_count(&self) -> usize {
-        ConditionKind::ALL
-            .iter()
-            .filter(|k| self.has_kind(**k))
-            .count()
+        self.iter_distinct_kinds().count()
     }
 
     /// The set of [`ConditionKind`] variants that do NOT appear in this
@@ -2984,10 +2981,7 @@ pub trait ConditionSliceExt {
     ///   that doesn't yet populate the new kind sees the cardinality
     ///   rise by one at every downstream callsite).
     fn missing_kind_count(&self) -> usize {
-        ConditionKind::ALL
-            .iter()
-            .filter(|k| !self.has_kind(**k))
-            .count()
+        self.iter_missing_kinds().count()
     }
 
     /// Short-circuiting `Option<ConditionKind>` peer of
@@ -3064,10 +3058,7 @@ pub trait ConditionSliceExt {
     ///   every downstream consumer sees the wider earliest-hit projection
     ///   without further per-caller edit.
     fn first_distinct_kind(&self) -> Option<ConditionKind> {
-        ConditionKind::ALL
-            .iter()
-            .copied()
-            .find(|k| self.has_kind(*k))
+        self.iter_distinct_kinds().next()
     }
 
     /// Short-circuiting `Option<ConditionKind>` peer of
@@ -3154,10 +3145,7 @@ pub trait ConditionSliceExt {
     ///   missing side) — every downstream consumer sees the wider
     ///   complement's earliest hit without further per-caller edit.
     fn first_missing_kind(&self) -> Option<ConditionKind> {
-        ConditionKind::ALL
-            .iter()
-            .copied()
-            .find(|k| !self.has_kind(*k))
+        self.iter_missing_kinds().next()
     }
 
     /// Short-circuiting `Option<ConditionKind>` peer of
@@ -3243,11 +3231,7 @@ pub trait ConditionSliceExt {
     ///   downstream consumer sees the wider latest-hit projection
     ///   without further per-caller edit.
     fn last_distinct_kind(&self) -> Option<ConditionKind> {
-        ConditionKind::ALL
-            .iter()
-            .rev()
-            .copied()
-            .find(|k| self.has_kind(*k))
+        self.iter_distinct_kinds().last()
     }
 
     /// Short-circuiting `Option<ConditionKind>` peer of
@@ -3338,11 +3322,7 @@ pub trait ConditionSliceExt {
     ///   position) — every downstream consumer sees the wider
     ///   complement's latest hit without further per-caller edit.
     fn last_missing_kind(&self) -> Option<ConditionKind> {
-        ConditionKind::ALL
-            .iter()
-            .rev()
-            .copied()
-            .find(|k| !self.has_kind(*k))
+        self.iter_missing_kinds().last()
     }
 
     /// Boolean saturation predicate on the closed-set-inversion axis —
@@ -3426,7 +3406,7 @@ pub trait ConditionSliceExt {
     ///   at every downstream callsite unless it also carries the new
     ///   variant.
     fn is_kind_saturated(&self) -> bool {
-        ConditionKind::ALL.iter().all(|k| self.has_kind(*k))
+        self.iter_missing_kinds().next().is_none()
     }
 
     /// Boolean at-least-one halfspace peer of [`Self::has_any_missing_kind`]
@@ -3537,7 +3517,7 @@ pub trait ConditionSliceExt {
     ///   new variant returns `true` at every downstream `has-any-
     ///   distinct-kind` callsite.
     fn has_any_distinct_kind(&self) -> bool {
-        ConditionKind::ALL.iter().copied().any(|k| self.has_kind(k))
+        self.iter_distinct_kinds().next().is_some()
     }
 
     /// Boolean at-least-one halfspace peer of [`Self::is_kind_saturated`]
@@ -3755,10 +3735,7 @@ pub trait ConditionSliceExt {
     ///   remains at the near-saturation arm on `N ≥ 3` iff it
     ///   picks up every OTHER variant.
     fn has_unique_missing_kind(&self) -> bool {
-        let mut it = ConditionKind::ALL
-            .iter()
-            .copied()
-            .filter(|k| !self.has_kind(*k));
+        let mut it = self.iter_missing_kinds();
         it.next().is_some() && it.next().is_none()
     }
 
@@ -3862,10 +3839,7 @@ pub trait ConditionSliceExt {
     ///   missing on `N == 3`, but this workspace has `N == 8`, so
     ///   the flip surfaces well before the endpoint).
     fn has_multiple_missing_kinds(&self) -> bool {
-        let mut it = ConditionKind::ALL
-            .iter()
-            .copied()
-            .filter(|k| !self.has_kind(*k));
+        let mut it = self.iter_missing_kinds();
         it.next().is_some() && it.next().is_some()
     }
 
@@ -5149,6 +5123,80 @@ where
             "lacks_only_kind({kind:?}) drifted from (has_unique_missing_kind() && first_missing_kind() == Some({kind:?}))",
         );
     }
+
+    // -------- Load-bearing iterator fold: scalar peers ------------------
+    //
+    // Every scalar closed-set peer folds through the load-bearing
+    // iterator peer at ONE substrate site — a regression that overrides
+    // ANY scalar peer with a divergent walk (short-circuit skipping a
+    // kind, forgetting the negation on the complement side, drifting
+    // from `ConditionKind::ALL` order, ignoring the load-bearing
+    // iterator entirely with a duplicate closed-set walk of its own)
+    // surfaces at THIS arm rather than as silent skew between the
+    // scalar callsite and the iterator callsite at every downstream
+    // consumer.
+    //
+    // Complements the Vec-based composition arms above (`distinct_kinds
+    // ↔ iter_distinct_kinds`, `distinct_kind_count ↔ distinct_kinds`)
+    // by binding each scalar peer DIRECTLY to the iterator surface —
+    // catches an override that specializes ONE scalar peer with a
+    // divergent walk while leaving the Vec-based intermediate coherent,
+    // which the transitive `scalar ↔ Vec ↔ iter` composition arms
+    // cannot detect on their own.
+    //
+    // Peer of tagged-union parent-level substrate testkit
+    // `crate::tagged_union::assert_scalar_peers_fold_through_iter_kinds`.
+    //
+    // -------- Distinct side (folds through iter_distinct_kinds) ---------
+    assert_eq!(
+        slice.first_distinct_kind(),
+        slice.iter_distinct_kinds().next(),
+        "first_distinct_kind() drifted from iter_distinct_kinds().next()",
+    );
+    assert_eq!(
+        slice.last_distinct_kind(),
+        slice.iter_distinct_kinds().last(),
+        "last_distinct_kind() drifted from iter_distinct_kinds().last()",
+    );
+    assert_eq!(
+        slice.has_any_distinct_kind(),
+        slice.iter_distinct_kinds().next().is_some(),
+        "has_any_distinct_kind() drifted from iter_distinct_kinds().next().is_some()",
+    );
+    // -------- Missing side (folds through iter_missing_kinds) -----------
+    assert_eq!(
+        slice.first_missing_kind(),
+        slice.iter_missing_kinds().next(),
+        "first_missing_kind() drifted from iter_missing_kinds().next()",
+    );
+    assert_eq!(
+        slice.last_missing_kind(),
+        slice.iter_missing_kinds().last(),
+        "last_missing_kind() drifted from iter_missing_kinds().last()",
+    );
+    assert_eq!(
+        slice.is_kind_saturated(),
+        slice.iter_missing_kinds().next().is_none(),
+        "is_kind_saturated() drifted from iter_missing_kinds().next().is_none()",
+    );
+    let via_iter_unique_missing = {
+        let mut it = slice.iter_missing_kinds();
+        it.next().is_some() && it.next().is_none()
+    };
+    assert_eq!(
+        slice.has_unique_missing_kind(),
+        via_iter_unique_missing,
+        "has_unique_missing_kind() drifted from iter_missing_kinds() two-step short-circuit",
+    );
+    let via_iter_multi_missing = {
+        let mut it = slice.iter_missing_kinds();
+        it.next().is_some() && it.next().is_some()
+    };
+    assert_eq!(
+        slice.has_multiple_missing_kinds(),
+        via_iter_multi_missing,
+        "has_multiple_missing_kinds() drifted from iter_missing_kinds() two-step short-circuit",
+    );
 }
 
 /// Substrate testkit macro — pins the FOUR union composition laws that

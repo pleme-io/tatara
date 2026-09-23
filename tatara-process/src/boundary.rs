@@ -3092,6 +3092,98 @@ impl Boundary {
     pub fn lacks_only_postcondition_kind(&self, kind: ConditionKind) -> bool {
         self.postconditions.lacks_only_kind(kind)
     }
+
+    /// `true` iff `preconditions ∪ postconditions` carries AT LEAST
+    /// TWO [`Condition`] values with the given [`ConditionKind`] —
+    /// the union arm of the (precondition, postcondition, condition-
+    /// union) per-kind cardinality "≥ 2" many-arm triad on
+    /// [`Boundary`]. Composes a two-step-short-circuit walk over the
+    /// chained per-kind iterator [`Self::iter_condition_kind`], which
+    /// itself chains [`ConditionSliceExt::iter_kind`] over
+    /// [`Self::preconditions`] then [`Self::postconditions`].
+    ///
+    /// Composed body: pulls up to two hits off the chained per-kind
+    /// iterator; returns `true` iff BOTH the first and the second are
+    /// [`Some`]. Byte-for-byte peer of
+    /// [`ConditionSliceExt::has_multiple_of_kind`] one slice-layer
+    /// down, lifted to compose against the two-slice chain rather
+    /// than a single slice's `iter_kind`. A regression at either
+    /// per-slice many-arm walk fails at that primitive's substrate
+    /// tests + the union composition-law tests rather than as silent
+    /// drift here.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::has_multiple_of_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self, ConditionKind) -> bool`,
+    /// byte-identical two-step short-circuit body composed against
+    /// the ephemeral surface's own chained per-kind iterator. Both
+    /// methods compose against the SAME slice-level substrate
+    /// primitive [`ConditionSliceExt::has_multiple_of_kind`] via the
+    /// two-slice chain — a regression at the per-slice many-arm walk
+    /// fails at that primitive's tests rather than as silent drift
+    /// at either struct-level `has-multiple-of-<kind>` caller.
+    ///
+    /// # Compounding
+    ///
+    /// A future operator-facing "duplicate boundary condition
+    /// detected" audit reads
+    /// `boundary.has_multiple_of_condition_kind(ConditionKind::ProcessPhase)`
+    /// at ONE call site rather than restating
+    /// `boundary.count_condition_kind(kind) >= 2` (which walks every
+    /// slot on both slices to count) or the pre + post OR-composition
+    /// with hand-authored short-circuit at every classifier arm.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the per-kind cardinality-many-arm projection
+    /// composes the SAME two-step short-circuit walk over the two-
+    /// slice chain on both this boundary surface and the ephemeral
+    /// surface). THEORY.md §VI.1 (generation over composition —
+    /// a new [`ConditionKind`] variant reaches both surfaces'
+    /// per-kind-many-arm triads mechanically through the delegated
+    /// chained iterator).
+    #[must_use]
+    pub fn has_multiple_of_condition_kind(&self, kind: ConditionKind) -> bool {
+        let mut it = self.iter_condition_kind(kind);
+        it.next().is_some() && it.next().is_some()
+    }
+
+    /// `true` iff [`Self::preconditions`] carries AT LEAST TWO
+    /// [`Condition`] values with the given [`ConditionKind`] — the
+    /// precondition-side arm of the (precondition, postcondition,
+    /// condition-union) per-kind cardinality "≥ 2" many-arm triad
+    /// on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::has_multiple_of_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::has_multiple_of_postcondition_kind`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice two-step short-circuit walk fails at that primitive's
+    /// tests rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn has_multiple_of_precondition_kind(&self, kind: ConditionKind) -> bool {
+        self.preconditions.has_multiple_of_kind(kind)
+    }
+
+    /// `true` iff [`Self::postconditions`] carries AT LEAST TWO
+    /// [`Condition`] values with the given [`ConditionKind`] — the
+    /// postcondition-side arm of the (precondition, postcondition,
+    /// condition-union) per-kind cardinality "≥ 2" many-arm triad
+    /// on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::has_multiple_of_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::has_multiple_of_precondition_kind`]. See that
+    /// method for the full rationale — the two methods share ONE
+    /// lift motivation, ONE fail-before-pass-after composition-law
+    /// pin, and ONE two-surface parity contract with the ephemeral
+    /// sugar type via
+    /// [`crate::ephemeral::EphemeralSpec::has_multiple_of_postcondition_kind`].
+    #[must_use]
+    pub fn has_multiple_of_postcondition_kind(&self, kind: ConditionKind) -> bool {
+        self.postconditions.has_multiple_of_kind(kind)
+    }
 }
 
 /// Slice-level `(ConditionKind, presence)` probe on any `&[Condition]`
@@ -5877,6 +5969,84 @@ pub trait ConditionSliceExt {
         }
         saw_kind
     }
+
+    /// Boolean cardinality "≥ 2" many-arm peer of [`Self::has_kind`]
+    /// (≥ 1) and [`Self::lacks_kind`] (= 0) on the per-kind count axis
+    /// — `true` iff AT LEAST TWO [`Condition`] values with the given
+    /// `kind` appear in this slice (equivalently,
+    /// [`Self::count_kind`]`(kind) >= 2` and
+    /// [`Self::iter_kind`]`(kind).count() >= 2`).
+    ///
+    /// Default body: a two-step-short-circuit walk over
+    /// [`Self::iter_kind`]`(kind)` — pulls up to two hits off the
+    /// load-bearing per-kind iterator; the primitive returns `true`
+    /// iff BOTH the first and the second are [`Some`], WITHOUT
+    /// walking every slot to build [`Self::count_kind`]'s scalar.
+    /// Short-circuits at the second matching condition — strictly
+    /// cheaper than [`Self::count_kind`]`(kind) >= 2` on every arm
+    /// with `≥ 2` matches. Byte-for-byte peer of
+    /// [`Self::has_multiple_distinct_kinds`] under the (distinct-
+    /// kinds axis, per-kind matches axis) parity: both compose the
+    /// SAME two-step short-circuit shape one iterator over.
+    ///
+    /// # Sibling to [`Self::lacks_kind`] / [`Self::has_kind`] / [`Self::count_kind`]
+    ///
+    /// Many-arm on the per-kind count axis alongside
+    /// [`Self::lacks_kind`] (= 0 zero-endpoint) and
+    /// [`Self::has_kind`] (≥ 1 halfspace) — the three Booleans
+    /// project [`Self::count_kind`]`(kind)`'s scalar onto its
+    /// {= 0, ≥ 1, ≥ 2} arms. The composition law
+    /// `has_multiple_of_kind(k) == (count_kind(k) >= 2)` binds the
+    /// per-kind many-arm Boolean projection to the scalar counter
+    /// primitive at the trait's default body — swept substrate-wide
+    /// by [`assert_slice_refinement_composition_laws`] as its per-
+    /// kind many-arm arm.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `false` on every kind (0 matches, not
+    /// `≥ 2`). A slice carrying `kind` exactly once (with any other
+    /// kinds in any multiplicity) returns `false` on THAT kind (1
+    /// match). A slice carrying `kind` two or more times returns
+    /// `true` on THAT kind. Multiplicity of OTHER kinds is
+    /// irrelevant — the primitive projects the slice onto the per-
+    /// kind count axis for the queried kind alone.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A boundary-well-formedness coherence check that rejects a
+    ///   Process whose preconditions carry duplicate
+    ///   [`ConditionKind::ProcessPhase`] entries reads
+    ///   `boundary.preconditions.has_multiple_of_kind(ConditionKind::ProcessPhase)`
+    ///   at ONE call site — one two-step short-circuit walk, no
+    ///   allocation, no scalar comparison against `>= 2`.
+    /// - A `has-multiple-of-<kind>` require-tag classifier arm reads
+    ///   this primitive with no allocation, byte-for-byte peer of the
+    ///   whole-slice `has-multiple-distinct-kinds` classifier one
+    ///   axis over under the SAME two-step short-circuit shape.
+    /// - A fleet-wide "duplicate condition detected" audit dump reads
+    ///   `ConditionKind::ALL.into_iter().filter(|k|
+    ///   slice.has_multiple_of_kind(*k))` at ONE call site.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The per-kind cardinality-many-arm projection on the count
+    ///   axis lives at ONE substrate site as a typed two-step-short-
+    ///   circuit fold through the load-bearing [`Self::iter_kind`]
+    ///   iterator — byte-for-byte peer of `count_kind(kind)` composed
+    ///   against `>= 2`, but with a second-match short-circuit that
+    ///   the scalar counter primitive does not offer.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically through the per-kind iterator — a
+    ///   slice previously containing no conditions of the new kind
+    ///   returns `false` on it here, and picks up `true` the moment
+    ///   an operator authors a second matching condition.
+    fn has_multiple_of_kind(&self, kind: ConditionKind) -> bool {
+        let mut it = self.iter_kind(kind);
+        it.next().is_some() && it.next().is_some()
+    }
 }
 
 /// Iterator yielded by [`ConditionSliceExt::iter_kind`] — the widened
@@ -6053,6 +6223,41 @@ where
             distinct.contains(&kind),
             has_result,
             "distinct_kinds().contains({kind:?}) drifted from has_kind({kind:?})",
+        );
+
+        // has_multiple_of_kind ↔ (count_kind >= 2) — the Boolean
+        // cardinality many-arm projection on the per-kind count axis.
+        // Peer of `has ↔ (count > 0)` above under the {=0, ≥1, ≥2}
+        // per-kind count trichotomy; the per-kind many-arm sits at the
+        // ≥ 2 arm. A regression that dropped the second-match short-
+        // circuit (returning any ≥ 1 arm), swapped the sides, or
+        // conflated with the whole-slice `has_multiple_distinct_kinds`
+        // (one axis over) surfaces HERE at the substrate boundary, not
+        // as silent drift at every downstream `has-multiple-of-<kind>`
+        // require-tag classifier or fleet-wide duplicate-condition
+        // audit callsite. Byte-for-byte peer of
+        // `has_multiple_distinct_kinds ↔ (distinct_kind_count >= 2)`
+        // one axis over under the SAME two-step short-circuit walk
+        // shape via the per-kind iterator instead of the distinct
+        // iterator.
+        let via_iter_multi_kind = {
+            let mut it = slice.iter_kind(kind);
+            it.next().is_some() && it.next().is_some()
+        };
+        assert_eq!(
+            slice.has_multiple_of_kind(kind),
+            count_result >= 2,
+            "has_multiple_of_kind({kind:?}) drifted from (count_kind({kind:?}) >= 2)",
+        );
+        assert_eq!(
+            slice.has_multiple_of_kind(kind),
+            iter_count >= 2,
+            "has_multiple_of_kind({kind:?}) drifted from (iter_kind({kind:?}).count() >= 2)",
+        );
+        assert_eq!(
+            slice.has_multiple_of_kind(kind),
+            via_iter_multi_kind,
+            "has_multiple_of_kind({kind:?}) drifted from iter_kind({kind:?}) two-step short-circuit",
         );
     }
 
@@ -9866,6 +10071,107 @@ mod tests {
                 !tripled.as_slice().has_multiple_distinct_kinds(),
                 "slice carrying {k:?} three times must return false on has_multiple_distinct_kinds (still 1 distinct)",
             );
+        }
+    }
+
+    // ── ConditionSliceExt::has_multiple_of_kind — per-kind "≥ 2" pins ─
+    //
+    // Boolean cardinality "≥ 2" many-arm peer of `has_kind` (≥ 1) and
+    // `lacks_kind` (= 0) on the per-kind count axis:
+    // `has_multiple_of_kind(k)` returns `true` iff AT LEAST TWO
+    // `Condition` values with kind `k` appear in the slice. Composes
+    // through a two-step short-circuit walk over `iter_kind(k)` —
+    // byte-for-byte peer of `has_multiple_distinct_kinds` one axis
+    // over (whole-slice distinct kinds vs per-kind matches). The
+    // composition laws `has_multiple_of_kind(k) == (count_kind(k) >= 2)`,
+    // `has_multiple_of_kind(k) == (iter_kind(k).count() >= 2)`, and
+    // `has_multiple_of_kind(k) == { iter_kind(k) two-step short-circuit }`
+    // are pinned as the per-kind many-arm of
+    // `assert_slice_refinement_composition_laws`. Detects duplicate
+    // conditions of a specific kind — the substrate primitive that a
+    // future boundary-well-formedness coherence check (reject a
+    // Process whose preconditions carry duplicate `ProcessPhase`
+    // entries) or `has-multiple-of-<kind>` require-tag classifier
+    // arm reaches through with no allocation.
+
+    /// EMPTY-SLICE pin — an empty slice returns `false` on
+    /// `has_multiple_of_kind` for EVERY kind (0 matches, not ≥ 2).
+    /// Also pins the composition law
+    /// `has_multiple_of_kind(k) == (count_kind(k) >= 2)` at zero-count
+    /// for every kind.
+    #[test]
+    fn condition_slice_has_multiple_of_kind_returns_false_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        for k in ConditionKind::ALL {
+            assert!(
+                !empty.has_multiple_of_kind(k),
+                "empty slice must return false on has_multiple_of_kind({k:?}) (0 matches, not ≥ 2)",
+            );
+            assert_eq!(
+                empty.has_multiple_of_kind(k),
+                empty.count_kind(k) >= 2,
+                "empty has_multiple_of_kind({k:?}) must equal (count_kind({k:?}) >= 2)",
+            );
+        }
+    }
+
+    /// COUNT-AXIS pin — sweeps a range of per-kind multiplicities
+    /// (0, 1, 2, 3) and asserts the primitive equals
+    /// `count_kind(k) >= 2` at each arm. Pins the transition from
+    /// the =1 (single-match) arm where the primitive returns
+    /// `false` to the =2 (duplicate) arm where it returns `true`.
+    /// Also pins per-kind independence: multiplicity of OTHER kinds
+    /// is irrelevant.
+    #[test]
+    fn condition_slice_has_multiple_of_kind_tracks_count_kind_ge_two() {
+        for target in ConditionKind::ALL {
+            for target_multiplicity in [0usize, 1, 2, 3] {
+                // Build a slice with `target` repeated
+                // `target_multiplicity` times, plus one instance of
+                // every OTHER kind. `has_multiple_of_kind(target)`
+                // must depend only on `target_multiplicity`.
+                let mut slice: Vec<Condition> = Vec::new();
+                for _ in 0..target_multiplicity {
+                    slice.push(condition_with(target));
+                }
+                for other in ConditionKind::ALL {
+                    if other != target {
+                        slice.push(condition_with(other));
+                    }
+                }
+                let s = slice.as_slice();
+
+                assert_eq!(
+                    s.has_multiple_of_kind(target),
+                    target_multiplicity >= 2,
+                    "has_multiple_of_kind({target:?}) with multiplicity {target_multiplicity} \
+                     must equal ({target_multiplicity} >= 2)",
+                );
+                assert_eq!(
+                    s.has_multiple_of_kind(target),
+                    s.count_kind(target) >= 2,
+                    "has_multiple_of_kind({target:?}) drifted from (count_kind >= 2) at \
+                     multiplicity {target_multiplicity}",
+                );
+                assert_eq!(
+                    s.has_multiple_of_kind(target),
+                    s.iter_kind(target).count() >= 2,
+                    "has_multiple_of_kind({target:?}) drifted from (iter_kind.count() >= 2) \
+                     at multiplicity {target_multiplicity}",
+                );
+
+                // OTHER kinds appear exactly once; their many-arm
+                // stays `false` regardless of `target`'s multiplicity.
+                for other in ConditionKind::ALL {
+                    if other != target {
+                        assert!(
+                            !s.has_multiple_of_kind(other),
+                            "other kind {other:?} present once must return false on \
+                             has_multiple_of_kind (target={target:?} mult={target_multiplicity})",
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -14824,6 +15130,162 @@ mod tests {
                 b.unique_missing_condition_kind(),
                 Some(hole),
                 "near-saturation boundary must return Some(hole={hole:?}) on unique_missing_condition_kind",
+            );
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary per-kind cardinality "≥ 2"
+    /// many-arm triad on the count axis) — the three
+    /// `has_multiple_of_*_condition_kind` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::has_multiple_of_kind`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via a two-step-short-circuit walk over the
+    /// chained per-kind iterator [`Boundary::iter_condition_kind`].
+    /// Sweeps: (a) the empty boundary (every arm returns `false` on
+    /// every kind — 0 matches, not ≥ 2); (b) a
+    /// single-populated-per-side arrangement where each per-slice
+    /// arm returns `false` (1 match per slice) but the union returns
+    /// `true` iff the two kinds COINCIDE (2 matches on the shared
+    /// kind); (c) a double-populated postcondition (post arm returns
+    /// `true`, pre arm returns `false`, union returns `true`); (d)
+    /// the saturated-doubled boundary (every arm returns `true` on
+    /// every kind — every slice carries every kind twice). Also pins
+    /// the composition law
+    /// `has_multiple_of_*_condition_kind(k) ==
+    ///  (count_*_condition_kind(k) >= 2)` at each arm.
+    #[test]
+    fn has_multiple_of_condition_kind_triad_delegates_to_slice_has_multiple_of_kind() {
+        // Empty boundary — every arm returns false on every kind.
+        let b = Boundary::default();
+        for kind in ConditionKind::ALL {
+            assert!(
+                !b.has_multiple_of_precondition_kind(kind),
+                "empty boundary must return false on has_multiple_of_precondition_kind({kind:?})",
+            );
+            assert!(
+                !b.has_multiple_of_postcondition_kind(kind),
+                "empty boundary must return false on has_multiple_of_postcondition_kind({kind:?})",
+            );
+            assert!(
+                !b.has_multiple_of_condition_kind(kind),
+                "empty boundary must return false on has_multiple_of_condition_kind({kind:?})",
+            );
+            assert_eq!(
+                b.has_multiple_of_condition_kind(kind),
+                b.count_condition_kind(kind) >= 2,
+                "empty has_multiple_of_condition_kind({kind:?}) must equal \
+                 (count_condition_kind >= 2)",
+            );
+        }
+
+        // Single-populated-per-side sweep — per-slice arms stay
+        // false; union goes true iff pre and post carry the SAME
+        // kind (chain sums to 2 matches on the shared kind).
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                assert_eq!(
+                    b.has_multiple_of_precondition_kind(pre_kind),
+                    b.preconditions.has_multiple_of_kind(pre_kind),
+                    "Boundary::has_multiple_of_precondition_kind must delegate verbatim to \
+                     preconditions.has_multiple_of_kind for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.has_multiple_of_postcondition_kind(post_kind),
+                    b.postconditions.has_multiple_of_kind(post_kind),
+                    "Boundary::has_multiple_of_postcondition_kind must delegate verbatim to \
+                     postconditions.has_multiple_of_kind for pre={pre_kind:?} post={post_kind:?}",
+                );
+
+                for query in ConditionKind::ALL {
+                    assert!(
+                        !b.has_multiple_of_precondition_kind(query),
+                        "single-populated preconditions must return false on \
+                         has_multiple_of_precondition_kind({query:?}) for \
+                         pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert!(
+                        !b.has_multiple_of_postcondition_kind(query),
+                        "single-populated postconditions must return false on \
+                         has_multiple_of_postcondition_kind({query:?}) for \
+                         pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    let expected_union = pre_kind == query && post_kind == query;
+                    assert_eq!(
+                        b.has_multiple_of_condition_kind(query),
+                        expected_union,
+                        "Boundary::has_multiple_of_condition_kind({query:?}) must equal \
+                         (pre_kind == query && post_kind == query) for \
+                         pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        b.has_multiple_of_condition_kind(query),
+                        b.count_condition_kind(query) >= 2,
+                        "Boundary::has_multiple_of_condition_kind({query:?}) drifted from \
+                         (count_condition_kind >= 2) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+            }
+        }
+
+        // Double-populated postcondition — post arm goes true on
+        // the doubled kind, pre arm stays false, union goes true.
+        for doubled in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            b.postconditions.push(condition_with(doubled));
+            b.postconditions.push(condition_with(doubled));
+
+            assert!(
+                !b.has_multiple_of_precondition_kind(doubled),
+                "empty preconditions must return false on has_multiple_of_precondition_kind \
+                 for doubled={doubled:?}",
+            );
+            assert!(
+                b.has_multiple_of_postcondition_kind(doubled),
+                "doubled postconditions must return true on has_multiple_of_postcondition_kind \
+                 for doubled={doubled:?}",
+            );
+            assert!(
+                b.has_multiple_of_condition_kind(doubled),
+                "doubled postconditions must return true on union has_multiple_of_condition_kind \
+                 for doubled={doubled:?}",
+            );
+            for query in ConditionKind::ALL {
+                if query != doubled {
+                    assert!(
+                        !b.has_multiple_of_condition_kind(query),
+                        "other kind {query:?} must return false on union has_multiple_of_condition_kind \
+                         when only {doubled:?} is doubled",
+                    );
+                }
+            }
+        }
+
+        // Saturated-doubled boundary — every arm returns true on
+        // every kind (every slice carries every kind twice).
+        let mut b = Boundary::default();
+        for k in ConditionKind::ALL {
+            b.preconditions.push(condition_with(k));
+            b.preconditions.push(condition_with(k));
+            b.postconditions.push(condition_with(k));
+            b.postconditions.push(condition_with(k));
+        }
+        for kind in ConditionKind::ALL {
+            assert!(
+                b.has_multiple_of_precondition_kind(kind),
+                "saturated-doubled boundary must return true on has_multiple_of_precondition_kind({kind:?})",
+            );
+            assert!(
+                b.has_multiple_of_postcondition_kind(kind),
+                "saturated-doubled boundary must return true on has_multiple_of_postcondition_kind({kind:?})",
+            );
+            assert!(
+                b.has_multiple_of_condition_kind(kind),
+                "saturated-doubled boundary must return true on has_multiple_of_condition_kind({kind:?})",
             );
         }
     }

@@ -2953,6 +2953,73 @@ impl EphemeralSpec {
         self.postconditions.lacks_only_kind(kind)
     }
 
+    /// `true` iff `preconditions ∪ postconditions` carries AT LEAST
+    /// TWO [`crate::boundary::Condition`] values with the given
+    /// [`ConditionKind`] — the union arm of the (precondition,
+    /// postcondition, condition-union) per-kind cardinality "≥ 2"
+    /// many-arm triad on [`EphemeralSpec`]. Composes a two-step-
+    /// short-circuit walk over the chained per-kind iterator
+    /// [`Self::iter_condition_kind`], which itself chains
+    /// [`crate::boundary::ConditionSliceExt::iter_kind`] over
+    /// [`Self::preconditions`] then [`Self::postconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::has_multiple_of_condition_kind`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::has_multiple_of_kind`]
+    /// via the two-slice chain, so a regression at the per-slice
+    /// two-step short-circuit walk fails at that primitive's tests
+    /// rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn has_multiple_of_condition_kind(&self, kind: ConditionKind) -> bool {
+        let mut it = self.iter_condition_kind(kind);
+        it.next().is_some() && it.next().is_some()
+    }
+
+    /// `true` iff [`Self::preconditions`] carries AT LEAST TWO
+    /// [`crate::boundary::Condition`] values with the given
+    /// [`ConditionKind`] — the precondition-side arm of the
+    /// (precondition, postcondition, condition-union) per-kind
+    /// cardinality "≥ 2" many-arm triad on [`EphemeralSpec`]. Thin
+    /// typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::has_multiple_of_kind`]
+    /// over [`Self::preconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::has_multiple_of_precondition_kind`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice two-step short-circuit walk fails at that
+    /// primitive's tests rather than as silent drift at either
+    /// struct-level arm.
+    #[must_use]
+    pub fn has_multiple_of_precondition_kind(&self, kind: ConditionKind) -> bool {
+        self.preconditions.has_multiple_of_kind(kind)
+    }
+
+    /// `true` iff [`Self::postconditions`] carries AT LEAST TWO
+    /// [`crate::boundary::Condition`] values with the given
+    /// [`ConditionKind`] — the postcondition-side arm of the
+    /// (precondition, postcondition, condition-union) per-kind
+    /// cardinality "≥ 2" many-arm triad on [`EphemeralSpec`]. Thin
+    /// typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::has_multiple_of_kind`]
+    /// over [`Self::postconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::has_multiple_of_postcondition_kind`]
+    /// on the point-domain surface. See
+    /// [`Self::has_multiple_of_precondition_kind`] for the full
+    /// rationale — the two methods share ONE lift motivation, ONE
+    /// fail-before-pass-after composition-law pin, and ONE two-
+    /// surface parity contract with the point-domain
+    /// [`crate::boundary::Boundary`] per-kind-many-arm peer methods.
+    #[must_use]
+    pub fn has_multiple_of_postcondition_kind(&self, kind: ConditionKind) -> bool {
+        self.postconditions.has_multiple_of_kind(kind)
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -14736,6 +14803,123 @@ mod tests {
                 spec.unique_missing_condition_kind(),
                 Some(hole),
                 "near-saturation ephemeral must return Some(hole={hole:?}) on unique_missing_condition_kind",
+            );
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (EphemeralSpec per-kind cardinality
+    /// "≥ 2" many-arm triad on the count axis) — the three
+    /// `has_multiple_of_*_condition_kind` methods on
+    /// [`EphemeralSpec`] delegate to the slice-level substrate
+    /// primitive
+    /// [`crate::boundary::ConditionSliceExt::has_multiple_of_kind`]
+    /// over the two `Vec<Condition>` slots and compose the union via
+    /// a two-step-short-circuit walk over the chained per-kind
+    /// iterator [`EphemeralSpec::iter_condition_kind`]. Sweeps: (a)
+    /// the empty spec (every arm returns `false` on every kind); (b)
+    /// a single-populated-per-side arrangement where each per-slice
+    /// arm returns `false` but the union goes true iff pre and post
+    /// carry the SAME kind; (c) the saturated-doubled spec (every
+    /// arm returns `true` on every kind). Also verifies TWO-SURFACE
+    /// PARITY — the ephemeral-side arm agrees with the lowered
+    /// [`crate::boundary::Boundary`] arm through the same slice-
+    /// level substrate primitive. A regression at either surface
+    /// fails HERE rather than as silent drift between the two.
+    #[test]
+    fn has_multiple_of_condition_kind_triad_delegates_to_slice_has_multiple_of_kind() {
+        // Empty ephemeral — every arm returns false on every kind.
+        let spec = empty_ephemeral();
+        for kind in ConditionKind::ALL {
+            assert!(
+                !spec.has_multiple_of_precondition_kind(kind),
+                "empty ephemeral must return false on has_multiple_of_precondition_kind({kind:?})",
+            );
+            assert!(
+                !spec.has_multiple_of_postcondition_kind(kind),
+                "empty ephemeral must return false on has_multiple_of_postcondition_kind({kind:?})",
+            );
+            assert!(
+                !spec.has_multiple_of_condition_kind(kind),
+                "empty ephemeral must return false on has_multiple_of_condition_kind({kind:?})",
+            );
+        }
+
+        // Single-populated-per-side sweep — per-slice arms stay
+        // false; union goes true iff pre and post carry the SAME
+        // kind. Also verifies two-surface parity with Boundary.
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+                let lowered: ProcessSpec = spec.clone().into();
+
+                for query in ConditionKind::ALL {
+                    assert_eq!(
+                        spec.has_multiple_of_precondition_kind(query),
+                        spec.preconditions.has_multiple_of_kind(query),
+                        "EphemeralSpec::has_multiple_of_precondition_kind must delegate \
+                         verbatim to preconditions.has_multiple_of_kind for \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.has_multiple_of_postcondition_kind(query),
+                        spec.postconditions.has_multiple_of_kind(query),
+                        "EphemeralSpec::has_multiple_of_postcondition_kind must delegate \
+                         verbatim to postconditions.has_multiple_of_kind for \
+                         pre={pre_kind:?} post={post_kind:?} query={query:?}",
+                    );
+
+                    let expected_union = pre_kind == query && post_kind == query;
+                    assert_eq!(
+                        spec.has_multiple_of_condition_kind(query),
+                        expected_union,
+                        "EphemeralSpec::has_multiple_of_condition_kind({query:?}) must equal \
+                         (pre == query && post == query) for pre={pre_kind:?} post={post_kind:?}",
+                    );
+
+                    // Two-surface parity with lowered Boundary.
+                    assert_eq!(
+                        spec.has_multiple_of_condition_kind(query),
+                        lowered.boundary.has_multiple_of_condition_kind(query),
+                        "two-surface has_multiple_of_condition_kind({query:?}) parity drift \
+                         for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.has_multiple_of_precondition_kind(query),
+                        lowered.boundary.has_multiple_of_precondition_kind(query),
+                        "two-surface has_multiple_of_precondition_kind({query:?}) parity drift",
+                    );
+                    assert_eq!(
+                        spec.has_multiple_of_postcondition_kind(query),
+                        lowered.boundary.has_multiple_of_postcondition_kind(query),
+                        "two-surface has_multiple_of_postcondition_kind({query:?}) parity drift",
+                    );
+                }
+            }
+        }
+
+        // Saturated-doubled spec — every arm returns true on every
+        // kind (every slice carries every kind twice).
+        let mut spec = empty_ephemeral();
+        for k in ConditionKind::ALL {
+            spec.preconditions.push(cond(k));
+            spec.preconditions.push(cond(k));
+            spec.postconditions.push(cond(k));
+            spec.postconditions.push(cond(k));
+        }
+        for kind in ConditionKind::ALL {
+            assert!(
+                spec.has_multiple_of_precondition_kind(kind),
+                "saturated-doubled ephemeral must return true on has_multiple_of_precondition_kind({kind:?})",
+            );
+            assert!(
+                spec.has_multiple_of_postcondition_kind(kind),
+                "saturated-doubled ephemeral must return true on has_multiple_of_postcondition_kind({kind:?})",
+            );
+            assert!(
+                spec.has_multiple_of_condition_kind(kind),
+                "saturated-doubled ephemeral must return true on has_multiple_of_condition_kind({kind:?})",
             );
         }
     }

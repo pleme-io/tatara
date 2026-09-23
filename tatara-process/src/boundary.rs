@@ -1450,6 +1450,107 @@ impl Boundary {
         self.postconditions.has_any_missing_kind()
     }
 
+    /// `true` iff `preconditions ∪ postconditions` carries at least one
+    /// [`ConditionKind::ALL`] variant — the union arm of the
+    /// (precondition, postcondition, condition-union) at-least-one
+    /// halfspace triad on [`Boundary`] on the closed-set-inversion
+    /// axis, byte-for-byte peer of the at-least-one halfspace triad
+    /// [`Self::has_any_missing_condition_kind`] on the closed-set-
+    /// complement axis.
+    ///
+    /// # Composed body
+    ///
+    /// `ConditionKind::ALL.iter().copied().any(|k|
+    /// self.has_condition_kind(k))` — a SHORT-CIRCUITING closed-set
+    /// walk under the two-slice union primitive
+    /// [`Self::has_condition_kind`]. The walk returns `true` at the
+    /// FIRST kind present in EITHER slice WITHOUT materializing
+    /// [`Self::distinct_condition_kinds`]'s `Vec` and WITHOUT walking
+    /// every kind to build [`Self::distinct_condition_kind_count`]'s
+    /// scalar. Strictly cheaper than either widened primitive on every
+    /// non-empty arm because the walk short-circuits at the first
+    /// populated kind rather than paying for the Vec allocation or the
+    /// full cardinality count.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::has_any_distinct_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self) -> bool`, byte-identical
+    /// `ConditionKind::ALL.iter().copied().any(|k|
+    /// self.has_condition_kind(k))` body, on the sugar-surface type
+    /// whose pre/post condition vectors live directly on the struct.
+    /// Both methods compose against the SAME slice-level substrate
+    /// primitive [`ConditionSliceExt::has_any_distinct_kind`] via the
+    /// two-slice union through [`Self::has_condition_kind`] — a
+    /// regression at the per-slice `any` short-circuit fails at that
+    /// primitive's tests rather than as silent drift at either struct-
+    /// level at-least-one halfspace caller.
+    ///
+    /// # Compounding
+    ///
+    /// A `has-any-distinct-condition-kind` require-tag classifier arm
+    /// — byte-for-byte peer of the tagged-union `has-any-populated-
+    /// kind` classifier one struct-layer up + the at-least-one
+    /// halfspace triad's closed-set-inversion peer — reaches this
+    /// primitive at ONE call site rather than restating
+    /// `boundary.distinct_condition_kind_count() > 0` (which walks
+    /// every kind to count) or
+    /// `!boundary.distinct_condition_kinds().is_empty()` (which
+    /// allocates the Vec before the negated emptiness check).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the at-least-one halfspace projection
+    /// composes the SAME closed-set walk on both this boundary surface
+    /// and the slice-level substrate primitive under short-circuit
+    /// semantics). THEORY.md §VI.1 (generation over composition — a
+    /// new [`ConditionKind`] variant reaches both surfaces' at-least-
+    /// one halfspace triads mechanically through the delegated union
+    /// primitive).
+    #[must_use]
+    pub fn has_any_distinct_condition_kind(&self) -> bool {
+        ConditionKind::ALL
+            .iter()
+            .copied()
+            .any(|k| self.has_condition_kind(k))
+    }
+
+    /// `true` iff [`Self::preconditions`] carries at least one
+    /// [`ConditionKind::ALL`] variant — the precondition-side arm of
+    /// the (precondition, postcondition, condition-union) at-least-one
+    /// halfspace triad on [`Boundary`] on the closed-set-inversion
+    /// axis. Thin typed delegate to
+    /// [`ConditionSliceExt::has_any_distinct_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::has_any_distinct_postcondition_kind`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice `any` short-circuit fails at that primitive's tests
+    /// rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn has_any_distinct_precondition_kind(&self) -> bool {
+        self.preconditions.has_any_distinct_kind()
+    }
+
+    /// `true` iff [`Self::postconditions`] carries at least one
+    /// [`ConditionKind::ALL`] variant — the postcondition-side arm of
+    /// the (precondition, postcondition, condition-union) at-least-one
+    /// halfspace triad on [`Boundary`] on the closed-set-inversion
+    /// axis. Thin typed delegate to
+    /// [`ConditionSliceExt::has_any_distinct_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::has_any_distinct_precondition_kind`]. See that
+    /// method for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via
+    /// [`crate::ephemeral::EphemeralSpec::has_any_distinct_postcondition_kind`].
+    #[must_use]
+    pub fn has_any_distinct_postcondition_kind(&self) -> bool {
+        self.postconditions.has_any_distinct_kind()
+    }
+
     /// `true` iff `preconditions ∪ postconditions` is MISSING EXACTLY
     /// ONE [`ConditionKind::ALL`] variant — the union arm of the
     /// (precondition, postcondition, condition-union) cardinality-mid-
@@ -3073,6 +3174,117 @@ pub trait ConditionSliceExt {
         ConditionKind::ALL.iter().all(|k| self.has_kind(*k))
     }
 
+    /// Boolean at-least-one halfspace peer of [`Self::has_any_missing_kind`]
+    /// on the closed-set-inversion axis — `true` iff AT LEAST ONE
+    /// [`ConditionKind::ALL`] variant appears at least once in this slice
+    /// (equivalently, [`Self::distinct_kinds`] is non-empty,
+    /// [`Self::distinct_kind_count`] `> 0`, and
+    /// [`Self::first_distinct_kind`] is `Some`).
+    ///
+    /// Default body: `ConditionKind::ALL.iter().copied().any(|k|
+    /// self.has_kind(k))` — a SHORT-CIRCUITING closed-set walk that
+    /// returns `true` at the FIRST populated kind WITHOUT materializing
+    /// [`Self::distinct_kinds`]'s `Vec`, WITHOUT walking every slot to
+    /// build [`Self::distinct_kind_count`]'s scalar, and WITHOUT
+    /// allocating the closed-set-inversion scan. Strictly cheaper than
+    /// either widened primitive on every non-empty arm because the walk
+    /// short-circuits at the first `has_kind` hit rather than paying
+    /// for the Vec allocation or the full cardinality count.
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::has_any_populated_kind`]
+    ///
+    /// Slice-level peer of the tagged-union parent-level at-least-one
+    /// halfspace predicate one struct-layer up: where
+    /// [`crate::tagged_union::TaggedUnion::has_any_populated_kind`]
+    /// answers "is ANY slot on the tagged-union parent occupied?",
+    /// `has_any_distinct_kind` answers "does ANY kind appear in AT
+    /// LEAST ONE condition of the slice?". Both compose against a
+    /// SHORT-CIRCUITING closed-set walk under the SAME `has` /
+    /// `has_kind` predicate at two adjacent typescape sites — the two
+    /// primitives close the at-least-one halfspace on the closed-set-
+    /// inversion axis at both struct layers under the SAME shape.
+    ///
+    /// # Sibling to [`Self::has_any_missing_kind`]
+    ///
+    /// Closed-set-inversion peer of the at-least-one halfspace on the
+    /// closed-set-complement axis — where `has_any_missing_kind`
+    /// returns `true` iff at least one kind is ABSENT,
+    /// `has_any_distinct_kind` returns `true` iff at least one kind is
+    /// PRESENT. Together with their zero-arm endpoints
+    /// ([`Self::is_kind_saturated`] on the missing axis and the empty-
+    /// slice endpoint on the distinct axis), the two Booleans partition
+    /// the (distinct, missing) product: a slice is EMPTY iff neither
+    /// `has_any_distinct_kind()` nor `is_kind_saturated()` returns
+    /// `true`; a slice is SATURATED iff both `has_any_distinct_kind()`
+    /// returns `true` and `has_any_missing_kind()` returns `false`; a
+    /// slice is PARTIALLY POPULATED iff both `has_any_distinct_kind()`
+    /// and `has_any_missing_kind()` return `true`.
+    ///
+    /// # Sibling to [`Self::distinct_kinds`] / [`Self::distinct_kind_count`]
+    ///
+    /// Boolean at-least-one halfspace peer of the widened + scalar
+    /// closed-set-inversion primitives — where `distinct_kinds` returns
+    /// the FULL distinct SET and `distinct_kind_count` returns its
+    /// cardinality, `has_any_distinct_kind` collapses either the
+    /// widened primitive to its non-emptiness Boolean or the scalar to
+    /// its `>= 1` halfspace Boolean. The composition laws
+    /// `has_any_distinct_kind() == !distinct_kinds().is_empty()` and
+    /// `has_any_distinct_kind() == (distinct_kind_count() > 0)` bind
+    /// this Boolean projection to the widened + scalar primitives at
+    /// the trait's default body — strictly cheaper than either widened
+    /// primitive on every non-empty arm because the walk short-circuits
+    /// at the first populated kind on the has-side walk rather than
+    /// allocating the closed-set-inversion scan or walking every slot
+    /// to build the scalar cardinality.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `false` — the SOLE arm on which
+    /// `has_any_distinct_kind` returns `false`. A slice carrying any
+    /// [`ConditionKind`] at least once returns `true` (a single-
+    /// populated slice, a partially-populated slice, and a saturated
+    /// slice all return `true`).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A fleet-wide "any coverage at all" fast-path that discriminates
+    ///   "the slice carries at least one closed-set kind" from "the
+    ///   slice is empty" reads
+    ///   `boundary.postconditions.has_any_distinct_kind()` at ONE call
+    ///   site rather than restating `distinct_kind_count() > 0` (which
+    ///   walks every slot to count) or `!distinct_kinds().is_empty()`
+    ///   (which allocates the Vec before the negated emptiness check).
+    /// - A `has-any-distinct-kind` require-tag classifier arm reaches
+    ///   this primitive with no allocation, byte-for-byte peer of the
+    ///   tagged-union `has-any-populated-kind` classifier one struct-
+    ///   layer up under the SAME `any(has)` short-circuit shape.
+    /// - A coherence check that flags "any process boundary whose
+    ///   postcondition slice covers at least one [`ConditionKind`]"
+    ///   reads `boundary.postconditions.has_any_distinct_kind()` at
+    ///   ONE substrate primitive per test rather than restating the
+    ///   `.iter().copied().any(|k| slice.has_kind(k))` body at every
+    ///   callsite.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The at-least-one halfspace projection on the closed-set-
+    ///   inversion axis lives at ONE substrate site as a typed short-
+    ///   circuiting closed-set walk `ConditionKind::ALL.iter().any(
+    ///   has_kind)`. Every downstream consumer whose semantic reading
+    ///   is "at least one kind is present" reads through this
+    ///   primitive rather than paying for the widened primitive's Vec
+    ///   allocation.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically through the `any` short-circuit — an
+    ///   empty slice (returning `false` here) that later picks up the
+    ///   new variant returns `true` at every downstream `has-any-
+    ///   distinct-kind` callsite.
+    fn has_any_distinct_kind(&self) -> bool {
+        ConditionKind::ALL.iter().copied().any(|k| self.has_kind(k))
+    }
+
     /// Boolean at-least-one halfspace peer of [`Self::is_kind_saturated`]
     /// on the closed-set-complement axis — `true` iff AT LEAST ONE
     /// [`ConditionKind::ALL`] variant appears zero times in this slice
@@ -4307,6 +4519,41 @@ where
         slice.has_any_missing_kind(),
         !missing.is_empty(),
         "has_any_missing_kind() drifted from !missing_kinds().is_empty()",
+    );
+
+    // has_any_distinct_kind ↔ (distinct_kind_count > 0) — the Boolean
+    // at-least-one halfspace projection of the closed-set-inversion
+    // scalar cardinality. Peer of `has_any_missing_kind ↔
+    // !is_kind_saturated` on the axis-parity axis: where the at-least-
+    // one halfspace peer on the closed-set-complement axis tests the
+    // ≥ 1 arm on the missing scalar, this at-least-one halfspace peer
+    // on the closed-set-inversion axis tests the ≥ 1 arm on the
+    // distinct scalar. A regression that overrode `has_any_distinct_kind`
+    // to drop the short-circuit, skip a kind, or drift the walk from
+    // `ConditionKind::ALL` surfaces HERE at the substrate boundary, not
+    // as silent drift at every downstream `has-any-distinct-kind`
+    // require-tag classifier or fleet-wide coverage-analysis dashboard
+    // callsite. Byte-for-byte peer of
+    // `crate::tagged_union::TaggedUnion::has_any_populated_kind` one
+    // struct-layer up under the SAME `any(has)` short-circuit shape.
+    // Also pins the widened composition law `has_any_distinct_kind() ==
+    // !distinct_kinds().is_empty()` at every slice — binds the at-
+    // least-one halfspace Boolean projection to the widened primitive
+    // without paying for the Vec allocation.
+    assert_eq!(
+        slice.has_any_distinct_kind(),
+        slice.distinct_kind_count() > 0,
+        "has_any_distinct_kind() drifted from (distinct_kind_count() > 0)",
+    );
+    assert_eq!(
+        slice.has_any_distinct_kind(),
+        !distinct.is_empty(),
+        "has_any_distinct_kind() drifted from !distinct_kinds().is_empty()",
+    );
+    assert_eq!(
+        slice.has_any_distinct_kind(),
+        slice.first_distinct_kind().is_some(),
+        "has_any_distinct_kind() drifted from first_distinct_kind().is_some()",
     );
 
     // has_unique_missing_kind ↔ (missing_kind_count == 1) — the
@@ -7047,6 +7294,109 @@ mod tests {
         );
     }
 
+    // ── ConditionSliceExt::has_any_distinct_kind — at-least-one halfspace pins ──
+    //
+    // Boolean at-least-one halfspace peer of `has_any_missing_kind` on
+    // the closed-set-inversion axis: `has_any_distinct_kind()` returns
+    // `true` iff AT LEAST ONE `ConditionKind::ALL` variant appears at
+    // least once in the slice, via a SHORT-CIRCUITING closed-set walk
+    // `ConditionKind::ALL.iter().copied().any(|k| self.has_kind(k))`
+    // that returns `true` at the FIRST populated kind. The composition
+    // laws `has_any_distinct_kind() == (distinct_kind_count() > 0)`,
+    // `has_any_distinct_kind() == !distinct_kinds().is_empty()`, and
+    // `has_any_distinct_kind() == first_distinct_kind().is_some()` are
+    // pinned as the at-least-one halfspace arm of
+    // `assert_slice_refinement_composition_laws` on the closed-set-
+    // inversion axis. Byte-for-byte peer of
+    // `crate::tagged_union::TaggedUnion::has_any_populated_kind` one
+    // struct-layer up under the SAME `any(has)` short-circuit shape.
+
+    /// EMPTY-SLICE pin — an empty slice returns `false` on
+    /// `has_any_distinct_kind` (no kind is present) — the SOLE arm
+    /// where the primitive returns `false`. Dual of the empty-slice
+    /// arm on `has_any_missing_kind` (which returns `true`).
+    #[test]
+    fn condition_slice_has_any_distinct_kind_returns_false_on_empty_slice() {
+        let empty: &[Condition] = &[];
+        assert!(
+            !empty.has_any_distinct_kind(),
+            "empty slice must return false on has_any_distinct_kind",
+        );
+        assert_eq!(
+            empty.has_any_distinct_kind(),
+            empty.distinct_kind_count() > 0,
+            "empty has_any_distinct_kind must equal (distinct_kind_count() > 0)",
+        );
+        assert_eq!(
+            empty.has_any_distinct_kind(),
+            !empty.distinct_kinds().is_empty(),
+            "empty has_any_distinct_kind must equal !distinct_kinds().is_empty()",
+        );
+        assert_eq!(
+            empty.has_any_distinct_kind(),
+            empty.first_distinct_kind().is_some(),
+            "empty has_any_distinct_kind must equal first_distinct_kind().is_some()",
+        );
+    }
+
+    /// SINGLE-KIND pin — a slice populating exactly one variant
+    /// returns `true` on `has_any_distinct_kind` for every
+    /// [`ConditionKind`] (a single element contributes one distinct
+    /// kind, ≥ 1). Also pins the composition law
+    /// `has_any_distinct_kind() == (distinct_kind_count() > 0)` at
+    /// the single-populated arm.
+    #[test]
+    fn condition_slice_has_any_distinct_kind_returns_true_on_single_kind_slice() {
+        for populated in ConditionKind::ALL {
+            let slice = [condition_with(populated)];
+            assert!(
+                slice.has_any_distinct_kind(),
+                "single-populated slice with {populated:?} must return true on has_any_distinct_kind",
+            );
+            assert_eq!(
+                slice.has_any_distinct_kind(),
+                slice.distinct_kind_count() > 0,
+                "single-populated has_any_distinct_kind must equal (distinct_kind_count() > 0) for {populated:?}",
+            );
+        }
+    }
+
+    /// FULL-COVERAGE pin — a slice that carries every
+    /// [`ConditionKind`] variant returns `true` on
+    /// `has_any_distinct_kind`. Dual of the FULL-COVERAGE arm on
+    /// `has_any_missing_kind` (which returns `false`) — the two
+    /// Booleans DISAGREE on the saturated arm.
+    #[test]
+    fn condition_slice_has_any_distinct_kind_returns_true_on_saturated_slice() {
+        let saturated: Vec<Condition> =
+            ConditionKind::ALL.into_iter().map(condition_with).collect();
+        assert!(
+            saturated.as_slice().has_any_distinct_kind(),
+            "slice containing every ConditionKind must return true on has_any_distinct_kind",
+        );
+        assert_eq!(
+            saturated.as_slice().has_any_distinct_kind(),
+            !saturated.as_slice().distinct_kinds().is_empty(),
+            "saturated has_any_distinct_kind must equal !distinct_kinds().is_empty()",
+        );
+    }
+
+    /// DUPLICATE-COVERAGE pin — a slice that carries the SAME
+    /// [`ConditionKind`] multiple times still returns `true`
+    /// (multiplicity is irrelevant to the at-least-one halfspace
+    /// predicate on the closed-set-inversion axis, byte-for-byte peer
+    /// of the closed-set-complement halfspace arm).
+    #[test]
+    fn condition_slice_has_any_distinct_kind_ignores_multiplicity() {
+        for k in ConditionKind::ALL {
+            let doubled: Vec<Condition> = vec![condition_with(k), condition_with(k)];
+            assert!(
+                doubled.as_slice().has_any_distinct_kind(),
+                "slice carrying {k:?} twice must return true on has_any_distinct_kind",
+            );
+        }
+    }
+
     // ── ConditionSliceExt::has_any_missing_kind — at-least-one halfspace pins ──
     //
     // Boolean at-least-one halfspace peer of `is_kind_saturated`:
@@ -9212,6 +9562,118 @@ mod tests {
         assert!(
             !b.has_any_missing_condition_kind(),
             "saturated boundary must return false on has_any_missing_condition_kind",
+        );
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary at-least-one halfspace triad
+    /// on the closed-set-inversion axis) — the three
+    /// `has_any_distinct_*_condition_kind` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::has_any_distinct_kind`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via a SHORT-CIRCUITING closed-set walk over
+    /// [`ConditionKind::ALL`] under [`Boundary::has_condition_kind`].
+    /// Sweeps the empty boundary (every arm returns `false` — no kind
+    /// present in either slice), a single-populated-per-side
+    /// arrangement (every per-slice arm returns `true`, the union
+    /// returns `true`), a single-populated-precondition-only
+    /// arrangement (precondition arm `true`, postcondition arm
+    /// `false`, union `true`), and the saturated boundary (every arm
+    /// returns `true`). Also pins the composition law
+    /// `has_any_distinct_*_condition_kind() ==
+    /// (distinct_*_condition_kind_count() > 0)` at each arm — a
+    /// regression that dropped the short-circuit, drifted the
+    /// underlying `has_condition_kind` predicate, or negated the wrong
+    /// side surfaces HERE.
+    #[test]
+    fn has_any_distinct_condition_kind_triad_delegates_to_slice_has_any_distinct_kind() {
+        // Empty boundary — every arm returns false (no kind present
+        // in either slice; distinct_kind_count == 0 in both).
+        let b = Boundary::default();
+        assert!(
+            !b.has_any_distinct_precondition_kind(),
+            "empty boundary must return false on has_any_distinct_precondition_kind",
+        );
+        assert!(
+            !b.has_any_distinct_postcondition_kind(),
+            "empty boundary must return false on has_any_distinct_postcondition_kind",
+        );
+        assert!(
+            !b.has_any_distinct_condition_kind(),
+            "empty boundary must return false on has_any_distinct_condition_kind",
+        );
+
+        // Single-populated per side — sweep ALL × ALL. Every per-slice
+        // arm returns true; the union returns true.
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+                assert_eq!(
+                    b.has_any_distinct_precondition_kind(),
+                    b.preconditions.has_any_distinct_kind(),
+                    "Boundary::has_any_distinct_precondition_kind must delegate verbatim to \
+                     preconditions.has_any_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.has_any_distinct_postcondition_kind(),
+                    b.postconditions.has_any_distinct_kind(),
+                    "Boundary::has_any_distinct_postcondition_kind must delegate verbatim to \
+                     postconditions.has_any_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert!(
+                    b.has_any_distinct_precondition_kind(),
+                    "single-populated preconditions must return true on has_any_distinct_precondition_kind for pre={pre_kind:?}",
+                );
+                assert!(
+                    b.has_any_distinct_postcondition_kind(),
+                    "single-populated postconditions must return true on has_any_distinct_postcondition_kind for post={post_kind:?}",
+                );
+                assert!(
+                    b.has_any_distinct_condition_kind(),
+                    "single-populated-per-side must return true on has_any_distinct_condition_kind for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+
+        // Single-populated precondition only — precondition arm true,
+        // postcondition arm false, union true.
+        for pre_kind in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            b.preconditions.push(condition_with(pre_kind));
+            assert!(
+                b.has_any_distinct_precondition_kind(),
+                "pre-only boundary must return true on has_any_distinct_precondition_kind for pre={pre_kind:?}",
+            );
+            assert!(
+                !b.has_any_distinct_postcondition_kind(),
+                "pre-only boundary must return false on has_any_distinct_postcondition_kind for pre={pre_kind:?}",
+            );
+            assert!(
+                b.has_any_distinct_condition_kind(),
+                "pre-only boundary must return true on has_any_distinct_condition_kind for pre={pre_kind:?}",
+            );
+        }
+
+        // Saturated boundary — both slices carry every ConditionKind
+        // at least once; every arm returns true.
+        let mut b = Boundary::default();
+        for k in ConditionKind::ALL {
+            b.preconditions.push(condition_with(k));
+            b.postconditions.push(condition_with(k));
+        }
+        assert!(
+            b.has_any_distinct_precondition_kind(),
+            "saturated boundary must return true on has_any_distinct_precondition_kind",
+        );
+        assert!(
+            b.has_any_distinct_postcondition_kind(),
+            "saturated boundary must return true on has_any_distinct_postcondition_kind",
+        );
+        assert!(
+            b.has_any_distinct_condition_kind(),
+            "saturated boundary must return true on has_any_distinct_condition_kind",
         );
     }
 

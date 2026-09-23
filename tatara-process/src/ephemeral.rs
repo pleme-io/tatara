@@ -1915,6 +1915,97 @@ impl EphemeralSpec {
         self.postconditions.has_at_most_one_distinct_kind()
     }
 
+    /// `true` iff `preconditions ∪ postconditions` carries NO
+    /// [`ConditionKind::ALL`] variant — the peer of
+    /// [`crate::boundary::Boundary::is_condition_kind_empty`] on the
+    /// [`EphemeralSpec`] sugar surface. Names the cardinality zero-
+    /// endpoint on the closed-set-inversion axis at the union struct
+    /// layer.
+    ///
+    /// # Composed body — byte-identical to
+    /// [`crate::boundary::Boundary::is_condition_kind_empty`]
+    ///
+    /// `!self.has_any_distinct_condition_kind()` — a definitional
+    /// negation of the at-least-one halfspace union primitive. Byte-
+    /// identical to the peer method on the point-domain
+    /// [`crate::boundary::Boundary`] surface — both compose against
+    /// the SAME slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::is_kind_empty`] via the
+    /// two-slice union so a regression at the per-slice zero-endpoint
+    /// short-circuit fails at that primitive's tests rather than as
+    /// silent drift at either struct-level empty caller.
+    ///
+    /// # Sibling to [`Self::is_condition_kind_saturated`]
+    ///
+    /// Axis-parity mirror of the closed-set-complement saturation-
+    /// endpoint peer at the union struct layer — where
+    /// `is_condition_kind_saturated` tests "every kind PRESENT across
+    /// the union", this primitive tests "no kind PRESENT across the
+    /// union". Both name a cardinality-endpoint on their respective
+    /// axis under the same union struct layer.
+    ///
+    /// # Sibling to [`Self::distinct_condition_kinds`] /
+    /// [`Self::distinct_condition_kind_count`]
+    ///
+    /// Cardinality zero-endpoint Boolean projection of the widened +
+    /// scalar closed-set-inversion primitives on the ephemeral-union
+    /// surface — where those primitives return the FULL distinct SET
+    /// and its cardinality, `is_condition_kind_empty` collapses either
+    /// the widened primitive to its emptiness Boolean or the scalar to
+    /// its `== 0` cardinality-endpoint Boolean.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the cardinality zero-endpoint projection on
+    /// the distinct axis composes the SAME definitional negation of
+    /// the at-least-one halfspace short-circuit walk on both this
+    /// ephemeral surface and the point-domain
+    /// [`crate::boundary::Boundary`] surface). THEORY.md §VI.1
+    /// (generation over composition — a new [`ConditionKind`] variant
+    /// reaches both surfaces' cardinality zero-endpoint triads
+    /// mechanically through the delegated union primitive).
+    #[must_use]
+    pub fn is_condition_kind_empty(&self) -> bool {
+        !self.has_any_distinct_condition_kind()
+    }
+
+    /// `true` iff [`Self::preconditions`] carries NO
+    /// [`ConditionKind::ALL`] variant — the precondition-side arm of
+    /// the (precondition, postcondition, condition-union) cardinality
+    /// zero-endpoint triad on [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::is_kind_empty`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::is_precondition_kind_empty`] on the
+    /// point-domain surface — both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-slice
+    /// zero-endpoint short-circuit fails at that primitive's tests
+    /// rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn is_precondition_kind_empty(&self) -> bool {
+        self.preconditions.is_kind_empty()
+    }
+
+    /// `true` iff [`Self::postconditions`] carries NO
+    /// [`ConditionKind::ALL`] variant — the postcondition-side arm of
+    /// the (precondition, postcondition, condition-union) cardinality
+    /// zero-endpoint triad on [`EphemeralSpec`]. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::is_kind_empty`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::is_postcondition_kind_empty`] on
+    /// the point-domain surface. See
+    /// [`Self::is_precondition_kind_empty`] for the full rationale —
+    /// the two methods share ONE lift motivation, ONE fail-before-pass-
+    /// after composition-law pin, and ONE two-surface parity contract
+    /// with the point-domain [`crate::boundary::Boundary`] cardinality
+    /// zero-endpoint peer methods.
+    #[must_use]
+    pub fn is_postcondition_kind_empty(&self) -> bool {
+        self.postconditions.is_kind_empty()
+    }
+
     /// `true` iff `preconditions ∪ postconditions` is MISSING EXACTLY
     /// ONE [`ConditionKind::ALL`] variant — the union arm of the
     /// (precondition, postcondition, condition-union) cardinality-
@@ -12839,6 +12930,141 @@ mod tests {
         assert!(
             !spec.has_at_most_one_distinct_condition_kind(),
             "saturated ephemeral must return false on has_at_most_one_distinct_condition_kind",
+        );
+    }
+
+    /// SUBSTRATE-DELEGATION pin (EphemeralSpec cardinality zero-
+    /// endpoint triad) — the three `is_*_condition_kind_empty` methods
+    /// on [`EphemeralSpec`] delegate to the slice-level substrate
+    /// primitive
+    /// [`crate::boundary::ConditionSliceExt::is_kind_empty`] over the
+    /// two `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via a definitional negation of the at-least-
+    /// one halfspace primitive
+    /// [`EphemeralSpec::has_any_distinct_condition_kind`]. Two-surface
+    /// parity pin against
+    /// [`crate::boundary::Boundary::is_condition_kind_empty`] on the
+    /// point-domain [`ProcessSpec`] surface — the two struct-level
+    /// zero-endpoint callers compose against the SAME slice-level
+    /// substrate primitive so a regression at the per-slice zero-
+    /// endpoint short-circuit fails at that primitive's tests rather
+    /// than as silent drift at either sugar-surface arm.
+    #[test]
+    fn is_condition_kind_empty_triad_delegates_to_slice_is_kind_empty() {
+        // Empty ephemeral spec — every arm returns true (0 distinct,
+        // = 0).
+        let spec = empty_ephemeral();
+        assert!(
+            spec.is_precondition_kind_empty(),
+            "empty ephemeral must return true on is_precondition_kind_empty",
+        );
+        assert!(
+            spec.is_postcondition_kind_empty(),
+            "empty ephemeral must return true on is_postcondition_kind_empty",
+        );
+        assert!(
+            spec.is_condition_kind_empty(),
+            "empty ephemeral must return true on is_condition_kind_empty",
+        );
+
+        // Two-surface parity: EphemeralSpec's three arms are byte-for-
+        // byte equal to the lowered ProcessSpec's Boundary arms across
+        // every sweep arm.
+        let lowered: ProcessSpec = spec.clone().into();
+        assert_eq!(
+            spec.is_precondition_kind_empty(),
+            lowered.boundary.is_precondition_kind_empty(),
+            "empty ephemeral is_precondition_kind_empty must equal lowered Boundary is_precondition_kind_empty",
+        );
+        assert_eq!(
+            spec.is_postcondition_kind_empty(),
+            lowered.boundary.is_postcondition_kind_empty(),
+            "empty ephemeral is_postcondition_kind_empty must equal lowered Boundary is_postcondition_kind_empty",
+        );
+        assert_eq!(
+            spec.is_condition_kind_empty(),
+            lowered.boundary.is_condition_kind_empty(),
+            "empty ephemeral is_condition_kind_empty must equal lowered Boundary is_condition_kind_empty",
+        );
+
+        // Single-populated per side — every per-slice arm returns
+        // false; the union always returns false.
+        assert!(
+            !ConditionKind::ALL.is_empty(),
+            "test assumes ConditionKind::ALL has ≥ 1 variants",
+        );
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+                assert_eq!(
+                    spec.is_precondition_kind_empty(),
+                    spec.preconditions.is_kind_empty(),
+                    "EphemeralSpec::is_precondition_kind_empty must delegate verbatim to \
+                     preconditions.is_kind_empty() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.is_postcondition_kind_empty(),
+                    spec.postconditions.is_kind_empty(),
+                    "EphemeralSpec::is_postcondition_kind_empty must delegate verbatim to \
+                     postconditions.is_kind_empty() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert!(
+                    !spec.is_precondition_kind_empty(),
+                    "single-populated preconditions must return false on is_precondition_kind_empty for pre={pre_kind:?}",
+                );
+                assert!(
+                    !spec.is_postcondition_kind_empty(),
+                    "single-populated postconditions must return false on is_postcondition_kind_empty for post={post_kind:?}",
+                );
+                assert!(
+                    !spec.is_condition_kind_empty(),
+                    "single-populated union must return false on is_condition_kind_empty for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.is_condition_kind_empty(),
+                    !spec.has_any_distinct_condition_kind(),
+                    "EphemeralSpec::is_condition_kind_empty must equal !has_any_distinct_condition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                // Two-surface parity with lowered Boundary.
+                let lowered: ProcessSpec = spec.clone().into();
+                assert_eq!(
+                    spec.is_precondition_kind_empty(),
+                    lowered.boundary.is_precondition_kind_empty(),
+                    "EphemeralSpec::is_precondition_kind_empty must equal lowered Boundary::is_precondition_kind_empty for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.is_postcondition_kind_empty(),
+                    lowered.boundary.is_postcondition_kind_empty(),
+                    "EphemeralSpec::is_postcondition_kind_empty must equal lowered Boundary::is_postcondition_kind_empty for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.is_condition_kind_empty(),
+                    lowered.boundary.is_condition_kind_empty(),
+                    "EphemeralSpec::is_condition_kind_empty must equal lowered Boundary::is_condition_kind_empty for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+
+        // Saturated ephemeral spec — every arm returns false on N ≥ 1
+        // (every kind PRESENT across the union, not = 0).
+        let mut spec = empty_ephemeral();
+        for k in ConditionKind::ALL {
+            spec.preconditions.push(cond(k));
+            spec.postconditions.push(cond(k));
+        }
+        assert!(
+            !spec.is_precondition_kind_empty(),
+            "saturated ephemeral must return false on is_precondition_kind_empty",
+        );
+        assert!(
+            !spec.is_postcondition_kind_empty(),
+            "saturated ephemeral must return false on is_postcondition_kind_empty",
+        );
+        assert!(
+            !spec.is_condition_kind_empty(),
+            "saturated ephemeral must return false on is_condition_kind_empty",
         );
     }
 

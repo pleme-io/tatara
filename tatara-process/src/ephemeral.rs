@@ -3352,6 +3352,65 @@ impl EphemeralSpec {
         self.postconditions.all_of_kind(kind)
     }
 
+    /// Returns the slice index of the FIRST
+    /// [`crate::boundary::Condition`] carrying the given
+    /// [`ConditionKind`] in `preconditions ∪ postconditions`, walking
+    /// preconditions first — the union arm of the (precondition,
+    /// postcondition, condition-union) index-domain peer of
+    /// [`Self::find_condition_kind`] on the per-kind axis at the
+    /// ephemeral surface. Composed body:
+    /// `self.position_of_precondition_kind(k).or_else(||
+    /// self.position_of_postcondition_kind(k))` — the returned
+    /// [`usize`] refers to the slice whose half-arm produced the hit
+    /// ([`Self::preconditions`] if the precondition-side arm yielded
+    /// `Some`, otherwise [`Self::postconditions`]). Byte-for-byte
+    /// peer of [`crate::boundary::Boundary::position_of_condition_kind`]
+    /// on the point-domain surface — both compose against the SAME
+    /// slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::position_of_kind`] via the
+    /// two half-slice arms.
+    #[must_use]
+    pub fn position_of_condition_kind(&self, kind: ConditionKind) -> Option<usize> {
+        self.position_of_precondition_kind(kind)
+            .or_else(|| self.position_of_postcondition_kind(kind))
+    }
+
+    /// Returns the slice index of the FIRST
+    /// [`crate::boundary::Condition`] in [`Self::preconditions`]
+    /// carrying the given [`ConditionKind`], or `None` — the
+    /// precondition-side arm of the (precondition, postcondition,
+    /// condition-union) index-domain peer triad on [`EphemeralSpec`].
+    /// Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::position_of_kind`] over
+    /// [`Self::preconditions`]. Peer of
+    /// [`crate::boundary::Boundary::position_of_precondition_kind`] on
+    /// the point-domain surface — both compose against the SAME
+    /// slice-level substrate primitive.
+    #[must_use]
+    pub fn position_of_precondition_kind(&self, kind: ConditionKind) -> Option<usize> {
+        self.preconditions.position_of_kind(kind)
+    }
+
+    /// Returns the slice index of the FIRST
+    /// [`crate::boundary::Condition`] in [`Self::postconditions`]
+    /// carrying the given [`ConditionKind`], or `None` — the
+    /// postcondition-side arm of the (precondition, postcondition,
+    /// condition-union) index-domain peer triad on [`EphemeralSpec`].
+    /// Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::position_of_kind`] over
+    /// [`Self::postconditions`]. Peer of
+    /// [`crate::boundary::Boundary::position_of_postcondition_kind`]
+    /// on the point-domain surface. See
+    /// [`Self::position_of_precondition_kind`] for the full rationale
+    /// — the two methods share ONE lift motivation, ONE fail-before-
+    /// pass-after composition-law pin, and ONE two-surface parity
+    /// contract with the point-domain [`crate::boundary::Boundary`]
+    /// index-domain peer methods.
+    #[must_use]
+    pub fn position_of_postcondition_kind(&self, kind: ConditionKind) -> Option<usize> {
+        self.postconditions.position_of_kind(kind)
+    }
+
     /// True iff this ephemeral spec's stored [`TeardownPolicy`] equals
     /// `kind` — the substrate primitive that owns the
     /// (`&EphemeralSpec`, [`TeardownPolicy`]) → `bool` presence-probe
@@ -16051,6 +16110,126 @@ mod tests {
                 std::ptr::eq(all_union[0], &spec.postconditions[0])
                     && std::ptr::eq(all_union[1], &spec.postconditions[1]),
                 "doubled-post all_of_condition_kind({doubled:?}) must walk in slice order",
+            );
+        }
+    }
+
+    /// Ephemeral surface's index-domain triad — sweeps every
+    /// `(pre_kind, post_kind, query)` arrangement of a
+    /// single-condition-per-side spec, asserts each per-slice arm
+    /// delegates verbatim to
+    /// [`crate::boundary::ConditionSliceExt::position_of_kind`], and
+    /// pins the union arm against the `or_else` composition of the
+    /// two half-slice arms. Also asserts two-surface parity — the
+    /// lowered [`Boundary`]'s triad yields the SAME `Option<usize>`
+    /// on every arm.
+    #[test]
+    fn position_of_condition_kind_triad_delegates_to_slice_position_of_kind() {
+        use crate::boundary::ConditionSliceExt as _;
+
+        // Empty ephemeral — every arm returns None on every kind.
+        let spec = empty_ephemeral();
+        for kind in ConditionKind::ALL {
+            assert!(
+                spec.position_of_precondition_kind(kind).is_none(),
+                "empty ephemeral position_of_precondition_kind({kind:?}) must be None",
+            );
+            assert!(
+                spec.position_of_postcondition_kind(kind).is_none(),
+                "empty ephemeral position_of_postcondition_kind({kind:?}) must be None",
+            );
+            assert!(
+                spec.position_of_condition_kind(kind).is_none(),
+                "empty ephemeral position_of_condition_kind({kind:?}) must be None",
+            );
+        }
+
+        // Single-populated-per-side sweep with two-surface parity.
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+
+                let lowered: ProcessSpec = spec.clone().into();
+                let boundary = &lowered.boundary;
+
+                for query in ConditionKind::ALL {
+                    // Per-side delegation pins.
+                    assert_eq!(
+                        spec.position_of_precondition_kind(query),
+                        spec.preconditions.position_of_kind(query),
+                        "EphemeralSpec::position_of_precondition_kind must delegate verbatim to \
+                         preconditions.position_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+                    assert_eq!(
+                        spec.position_of_postcondition_kind(query),
+                        spec.postconditions.position_of_kind(query),
+                        "EphemeralSpec::position_of_postcondition_kind must delegate verbatim to \
+                         postconditions.position_of_kind for pre={pre_kind:?} post={post_kind:?} \
+                         query={query:?}",
+                    );
+
+                    // Union-arm composition-law pin — or_else of the
+                    // two half-slice arms.
+                    let union = spec.position_of_condition_kind(query);
+                    let via_or_else = spec
+                        .position_of_precondition_kind(query)
+                        .or_else(|| spec.position_of_postcondition_kind(query));
+                    assert_eq!(
+                        union, via_or_else,
+                        "position_of_condition_kind({query:?}) must equal the or_else of the \
+                         two half-slice arms for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        union.is_some(),
+                        spec.has_condition_kind(query),
+                        "position_of_condition_kind({query:?}).is_some() drifted from \
+                         has_condition_kind for pre={pre_kind:?} post={post_kind:?}",
+                    );
+
+                    // Two-surface parity — lowered Boundary agrees on
+                    // every arm.
+                    assert_eq!(
+                        spec.position_of_precondition_kind(query),
+                        boundary.position_of_precondition_kind(query),
+                        "ephemeral position_of_precondition_kind({query:?}) drifted from lowered \
+                         Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.position_of_postcondition_kind(query),
+                        boundary.position_of_postcondition_kind(query),
+                        "ephemeral position_of_postcondition_kind({query:?}) drifted from \
+                         lowered Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        spec.position_of_condition_kind(query),
+                        boundary.position_of_condition_kind(query),
+                        "ephemeral position_of_condition_kind({query:?}) drifted from lowered \
+                         Boundary for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+            }
+        }
+
+        // Doubled-post sweep — position_of_kind returns index 0 of
+        // the postconditions slice; union arm equals the postcondition
+        // arm because preconditions is empty.
+        for doubled in ConditionKind::ALL {
+            let mut spec = empty_ephemeral();
+            spec.postconditions.push(cond(doubled));
+            spec.postconditions.push(cond(doubled));
+            assert_eq!(
+                spec.position_of_postcondition_kind(doubled),
+                Some(0),
+                "doubled-post position_of_postcondition_kind({doubled:?}) must equal Some(0)",
+            );
+            assert_eq!(
+                spec.position_of_condition_kind(doubled),
+                Some(0),
+                "doubled-post position_of_condition_kind({doubled:?}) must fall through to \
+                 postconditions and yield Some(0)",
             );
         }
     }

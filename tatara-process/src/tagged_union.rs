@@ -356,6 +356,34 @@ macro_rules! declare_tagged_union_impls {
                 <Self as $crate::tagged_union::TaggedUnion>::populated_kinds(self)
             }
 
+            /// Zero-allocation iterator peer of [`Self::populated_kinds`]
+            /// — walks
+            /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL)
+            /// in canonical order and yields every Kind whose slot on
+            /// `self` is populated, without materializing an
+            /// intermediate `Vec`.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::iter_populated_kinds`],
+            /// whose default body is
+            /// `<Kind as ClosedSet>::ALL.iter().copied().filter(|&k| self.has(k))`.
+            /// Consumers reach for the iterator peer when they need
+            /// a short-circuiting fold (`.any(|k| pred(k))`,
+            /// `.find(|&k| pred(k))`, `.take_while(|k| pred(k))`) or
+            /// a projection (`.map(|k| project(k))`) that would
+            /// otherwise pay for the heap allocation the Vec-widened
+            /// [`Self::populated_kinds`] peer materializes. The
+            /// composition law
+            /// `parent.populated_kinds() == parent.iter_populated_kinds().collect::<Vec<_>>()`
+            /// is pinned as a first-class typed invariant by the
+            /// trait's own default body (which IS `iter_populated_kinds().collect()`)
+            /// and swept substrate-wide by
+            /// [`crate::tagged_union::assert_iter_populated_kinds_matches_populated_kinds`].
+            pub fn iter_populated_kinds(&self) -> impl ::std::iter::Iterator<Item = $kind> + '_ {
+                <Self as $crate::tagged_union::TaggedUnion>::iter_populated_kinds(self)
+            }
+
             /// Scalar cardinality peer of [`Self::populated_kinds`] —
             /// the number of populated slots on this tagged union.
             ///
@@ -409,6 +437,35 @@ macro_rules! declare_tagged_union_impls {
             /// [`crate::tagged_union::assert_missing_kinds_matches_has`].
             pub fn missing_kinds(&self) -> ::std::vec::Vec<$kind> {
                 <Self as $crate::tagged_union::TaggedUnion>::missing_kinds(self)
+            }
+
+            /// Zero-allocation iterator peer of [`Self::missing_kinds`]
+            /// — walks
+            /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL)
+            /// in canonical order and yields every Kind whose slot on
+            /// `self` is EMPTY, without materializing an intermediate
+            /// `Vec`.
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::iter_missing_kinds`],
+            /// whose default body is
+            /// `<Kind as ClosedSet>::ALL.iter().copied().filter(|&k| !self.has(k))`.
+            /// Consumers reach for the iterator peer when they need
+            /// a short-circuiting fold under negation
+            /// (`.any(|k| pred(k))`, `.find(|&k| pred(k))`,
+            /// `.take_while(|k| pred(k))`) or a projection (`.map(|k|
+            /// project(k))`) that would otherwise pay for the heap
+            /// allocation the Vec-widened [`Self::missing_kinds`] peer
+            /// materializes. The composition law
+            /// `parent.missing_kinds() == parent.iter_missing_kinds().collect::<Vec<_>>()`
+            /// is pinned as a first-class typed invariant by the
+            /// trait's own default body (which IS
+            /// `iter_missing_kinds().collect()`) and swept substrate-
+            /// wide by
+            /// [`crate::tagged_union::assert_iter_missing_kinds_matches_missing_kinds`].
+            pub fn iter_missing_kinds(&self) -> impl ::std::iter::Iterator<Item = $kind> + '_ {
+                <Self as $crate::tagged_union::TaggedUnion>::iter_missing_kinds(self)
             }
 
             /// Scalar cardinality peer of [`Self::missing_kinds`] —
@@ -1626,11 +1683,89 @@ pub trait TaggedUnion: Sized {
     ///   mechanically and every downstream consumer sees the wider
     ///   set with no per-caller edit.
     fn populated_kinds(&self) -> ::std::vec::Vec<Self::Kind> {
+        self.iter_populated_kinds().collect()
+    }
+
+    /// Zero-allocation iterator peer of [`Self::populated_kinds`] —
+    /// walk [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) in
+    /// canonical order and yield every Kind whose corresponding slot
+    /// on `self` is populated, WITHOUT materializing an intermediate
+    /// [`Vec`].
+    ///
+    /// Default body:
+    /// `<Self::Kind as ClosedSet>::ALL.iter().copied().filter(|&k| self.has(k))`.
+    /// The composition law
+    /// `populated_kinds() == iter_populated_kinds().collect::<Vec<_>>()`
+    /// holds by construction — [`Self::populated_kinds`]'s default
+    /// body IS `self.iter_populated_kinds().collect()`, so a caller
+    /// that overrides the widened Vec primitive with a divergent walk
+    /// simultaneously drifts both surfaces (surfacing at the substrate
+    /// testkit [`assert_iter_populated_kinds_matches_populated_kinds`]
+    /// which pins the Vec projection equals `iter().collect()`).
+    ///
+    /// # Sibling to [`Self::populated_kinds`] / [`Self::populated_kind_count`]
+    ///
+    /// Load-bearing iterator peer of the closed-set-inversion axis —
+    /// where `populated_kinds` returns the SET (heap-allocated `Vec`,
+    /// canonical `ClosedSet::ALL` order) and `populated_kind_count`
+    /// scalar-projects its cardinality, `iter_populated_kinds` opens
+    /// the walk as a `Copy` iterator so consumers that need a
+    /// short-circuiting fold (`.any(|k| pred(k))`, `.find(|&k|
+    /// pred(k))`, `.take_while(|k| pred(k))`, `.map(|k| project(k))`)
+    /// avoid the intermediate allocation entirely.
+    ///
+    /// # Peer to [`Self::iter_missing_kinds`]
+    ///
+    /// Closed-set-COMPLEMENT peer under a NEGATED point-probe. The two
+    /// iterators PARTITION `ClosedSet::ALL`:
+    /// `iter_populated_kinds().chain(iter_missing_kinds()).collect::<HashSet<_>>()`
+    /// equals `<Self::Kind as ClosedSet>::ALL.iter().copied().collect()`,
+    /// and the two iterators yield disjoint element sets.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - Every scalar closed-set-inversion peer already at the trait
+    ///   (`populated_kind_count`, `first_populated_kind`,
+    ///   `last_populated_kind`, `unique_populated_kind`, `is_empty`,
+    ///   `has_any_populated_kind`, `has_unique_populated_kind`,
+    ///   `has_multiple_populated_kinds`, `has_at_most_one_populated_kind`,
+    ///   `has_only`) folds a specialization of
+    ///   `<Kind::ALL>.iter().copied().filter(|k| self.has(*k))` —
+    ///   they can now compose over `iter_populated_kinds()` at ONE
+    ///   substrate site rather than restating the closed-set walk
+    ///   body per peer. A future run's `iter_populated_kinds`-fold
+    ///   refactor at those peers collapses ≥ 9 walk bodies onto ONE
+    ///   substrate primitive.
+    /// - A new kind-cardinality peer (e.g. a hypothetical
+    ///   `populated-kind-count-<n>` require-tag classifier that returns
+    ///   the FIRST N populated kinds without allocating) reaches
+    ///   `parent.iter_populated_kinds().take(n)` at ONE call site,
+    ///   without the `Vec<Kind>` allocation-then-slice overhead
+    ///   `populated_kinds().into_iter().take(n).collect()` pays.
+    /// - A downstream diagnostic composer (an operator-facing
+    ///   "populated: [{}]" message that streams the label list into a
+    ///   `write!` buffer) reads
+    ///   `parent.iter_populated_kinds().map(|k| k.label())` and folds
+    ///   through `itertools::join` without the allocation `Vec<Kind>
+    ///   -> String` pays.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The load-bearing iterator projection lives at ONE substrate
+    ///   site; every downstream aggregate consumer refines it through
+    ///   a standard-library iterator fold rather than restating the
+    ///   `Kind::ALL`-walk closure body.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches the walk
+    ///   mechanically (the closed-set filter picks up the new entry)
+    ///   and every downstream fold sees the wider set without further
+    ///   per-caller edit.
+    fn iter_populated_kinds(&self) -> impl Iterator<Item = Self::Kind> + '_ {
         <Self::Kind as tatara_closed_set::ClosedSet>::ALL
             .iter()
             .copied()
-            .filter(|k| self.has(*k))
-            .collect()
+            .filter(|&k| self.has(k))
     }
 
     /// Scalar cardinality refinement on the closed-set-inversion axis —
@@ -1827,11 +1962,83 @@ pub trait TaggedUnion: Sized {
     ///   mechanically and every downstream consumer sees the wider
     ///   complement without further per-caller edit.
     fn missing_kinds(&self) -> ::std::vec::Vec<Self::Kind> {
+        self.iter_missing_kinds().collect()
+    }
+
+    /// Zero-allocation iterator peer of [`Self::missing_kinds`] —
+    /// walk [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) in
+    /// canonical order and yield every Kind whose corresponding slot
+    /// on `self` is EMPTY, WITHOUT materializing an intermediate
+    /// [`Vec`].
+    ///
+    /// Default body:
+    /// `<Self::Kind as ClosedSet>::ALL.iter().copied().filter(|&k| !self.has(k))`.
+    /// The composition law
+    /// `missing_kinds() == iter_missing_kinds().collect::<Vec<_>>()`
+    /// holds by construction — [`Self::missing_kinds`]'s default body
+    /// IS `self.iter_missing_kinds().collect()`, so a caller that
+    /// overrides the widened Vec primitive with a divergent walk
+    /// simultaneously drifts both surfaces (surfacing at the substrate
+    /// testkit [`assert_iter_missing_kinds_matches_missing_kinds`]
+    /// which pins the Vec projection equals `iter().collect()`).
+    ///
+    /// # Sibling to [`Self::missing_kinds`] / [`Self::missing_kind_count`]
+    ///
+    /// Load-bearing iterator peer of the closed-set-complement axis
+    /// — where `missing_kinds` returns the SET (heap-allocated `Vec`,
+    /// canonical `ClosedSet::ALL` order) and `missing_kind_count`
+    /// scalar-projects its cardinality, `iter_missing_kinds` opens
+    /// the walk as a `Copy` iterator so consumers that need a
+    /// short-circuiting fold (`.any(|k| pred(k))`, `.find(|&k|
+    /// pred(k))`, `.take_while(|k| pred(k))`, `.map(|k| project(k))`)
+    /// avoid the intermediate allocation entirely.
+    ///
+    /// # Peer to [`Self::iter_populated_kinds`]
+    ///
+    /// Closed-set-INVERSION peer under a POSITIVE point-probe. The
+    /// two iterators PARTITION `ClosedSet::ALL`:
+    /// `iter_populated_kinds().chain(iter_missing_kinds()).collect::<HashSet<_>>()`
+    /// equals `<Self::Kind as ClosedSet>::ALL.iter().copied().collect()`,
+    /// and the two iterators yield disjoint element sets.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - Every scalar closed-set-complement peer already at the trait
+    ///   (`missing_kind_count`, `first_missing_kind`,
+    ///   `last_missing_kind`, `unique_missing_kind`, `is_saturated`,
+    ///   `has_any_missing_kind`, `has_unique_missing_kind`,
+    ///   `has_multiple_missing_kinds`, `has_at_most_one_missing_kind`)
+    ///   folds a specialization of
+    ///   `<Kind::ALL>.iter().copied().filter(|k| !self.has(*k))` —
+    ///   they can now compose over `iter_missing_kinds()` at ONE
+    ///   substrate site rather than restating the closed-set walk
+    ///   body per peer. A future run's `iter_missing_kinds`-fold
+    ///   refactor at those peers collapses ≥ 9 walk bodies onto ONE
+    ///   substrate primitive on the complement side, symmetrical with
+    ///   the closed-set-inversion side.
+    /// - A downstream diagnostic composer (an operator-facing
+    ///   "still missing: [{}]" message that streams the label list
+    ///   into a `write!` buffer on the partially-populated arm) reads
+    ///   `parent.iter_missing_kinds().map(|k| k.label())` and folds
+    ///   through `itertools::join` without the allocation `Vec<Kind>
+    ///   -> String` pays.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The load-bearing iterator projection on the complement side
+    ///   lives at ONE substrate site, byte-for-byte symmetrical with
+    ///   [`Self::iter_populated_kinds`] under negated `has` predicate.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`Self::Kind`] variant added to `ALL` reaches the walk
+    ///   mechanically (the closed-set filter picks up the new entry
+    ///   on the missing side) and every downstream fold sees the
+    ///   wider complement without further per-caller edit.
+    fn iter_missing_kinds(&self) -> impl Iterator<Item = Self::Kind> + '_ {
         <Self::Kind as tatara_closed_set::ClosedSet>::ALL
             .iter()
             .copied()
-            .filter(|k| !self.has(*k))
-            .collect()
+            .filter(|&k| !self.has(k))
     }
 
     /// Scalar cardinality refinement on the closed-set-complement axis —
@@ -4077,6 +4284,78 @@ where
     }
 }
 
+/// Generic zero-allocation-iterator testkit — pins that
+/// [`TaggedUnion::iter_populated_kinds`] yields byte-identically to
+/// [`TaggedUnion::populated_kinds`] after `.collect::<Vec<_>>()`,
+/// and that repeated calls yield the same sequence (the iterator is
+/// pure over `&self`).
+///
+/// Substrate primitive for the load-bearing iterator half of the
+/// closed-set-inversion axis — [`TaggedUnion::populated_kinds`]'s
+/// default body IS `self.iter_populated_kinds().collect()`, so the
+/// composition law
+/// `populated_kinds() == iter_populated_kinds().collect::<Vec<_>>()`
+/// holds by construction. The pin here surfaces an
+/// `iter_populated_kinds` override that would drift from the Vec
+/// projection (a specialization that yields kinds out of
+/// `Kind::ALL` order, duplicates an entry, or short-circuits before
+/// reaching a populated slot) at ONE substrate site rather than at
+/// every downstream fold that composes over the iterator.
+///
+/// The three sub-assertions swept per populated slot:
+///
+/// 1. `iter_populated_kinds().collect::<Vec<_>>() == populated_kinds()`
+///    — the composition law binding the iterator peer to the Vec
+///    widened primitive at the trait-default boundary.
+/// 2. `iter_populated_kinds().collect::<Vec<_>>() ==
+///    iter_populated_kinds().collect::<Vec<_>>()` (called twice) —
+///    the iterator is pure over `&self`, so repeated calls yield
+///    the same sequence. Pins that no closure-captured state leaks
+///    between invocations.
+/// 3. On the single-slot diagonal, the collected vec equals
+///    `vec![populated]` — the single-slot round-trip through the
+///    iterator peer matches the round-trip through the widened Vec
+///    peer at exactly one populated entry.
+///
+/// A fifth sibling tagged-union parent picks up the iterator-side
+/// composition-law check through ONE
+/// `assert_iter_populated_kinds_matches_populated_kinds::<X, _>(single_slot)`
+/// invocation — no re-authored `for k in K::ALL { … }` sweep at the
+/// test site, no re-authored `.collect::<Vec<_>>()` assertion
+/// against the widened Vec peer.
+#[track_caller]
+pub fn assert_iter_populated_kinds_matches_populated_kinds<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let via_iter: Vec<T::Kind> = parent.iter_populated_kinds().collect();
+        let via_vec = parent.populated_kinds();
+        assert_eq!(
+            via_iter, via_vec,
+            "TaggedUnion::iter_populated_kinds().collect() drifted from populated_kinds() — populated={populated:?}",
+        );
+        // Purity — repeated invocations yield the same sequence.
+        let via_iter_again: Vec<T::Kind> = parent.iter_populated_kinds().collect();
+        assert_eq!(
+            via_iter, via_iter_again,
+            "TaggedUnion::iter_populated_kinds() must be pure over &self — populated={populated:?}",
+        );
+        // Single-slot diagonal — round-trip yields exactly [populated].
+        assert_eq!(
+            via_iter,
+            vec![populated],
+            "TaggedUnion::iter_populated_kinds() on single_slot({populated:?}) must yield exactly [{populated:?}]",
+        );
+    }
+}
+
 /// Generic two-slot closed-set-inversion testkit — peer of
 /// [`assert_populated_kinds_matches_has`] on the ambiguous-parent
 /// side. Pins that a `two_slot(a, b)` parent's `populated_kinds()`
@@ -4380,6 +4659,84 @@ where
         assert_eq!(
             missing, expected_missing,
             "TaggedUnion::missing_kinds() on single_slot({populated:?}) must return ClosedSet::ALL with {populated:?} removed",
+        );
+    }
+}
+
+/// Generic zero-allocation-iterator testkit for the closed-set-
+/// complement axis — pins that [`TaggedUnion::iter_missing_kinds`]
+/// yields byte-identically to [`TaggedUnion::missing_kinds`] after
+/// `.collect::<Vec<_>>()`, and that repeated calls yield the same
+/// sequence (the iterator is pure over `&self`).
+///
+/// Complement-side peer of
+/// [`assert_iter_populated_kinds_matches_populated_kinds`] on the
+/// closed-set-complement axis — [`TaggedUnion::missing_kinds`]'s
+/// default body IS `self.iter_missing_kinds().collect()`, so the
+/// composition law
+/// `missing_kinds() == iter_missing_kinds().collect::<Vec<_>>()`
+/// holds by construction. The pin here surfaces an
+/// `iter_missing_kinds` override that would drift from the Vec
+/// projection (a specialization that yields kinds out of
+/// `Kind::ALL` order, duplicates an entry, or short-circuits before
+/// reaching an empty slot) at ONE substrate site rather than at
+/// every downstream fold that composes over the complement-side
+/// iterator.
+///
+/// The three sub-assertions swept per populated slot:
+///
+/// 1. `iter_missing_kinds().collect::<Vec<_>>() == missing_kinds()`
+///    — the composition law binding the iterator peer to the Vec
+///    widened primitive at the trait-default boundary.
+/// 2. `iter_missing_kinds().collect::<Vec<_>>() ==
+///    iter_missing_kinds().collect::<Vec<_>>()` (called twice) —
+///    the iterator is pure over `&self`.
+/// 3. On the single-slot diagonal, the collected vec equals
+///    `ClosedSet::ALL \ {populated}` in canonical order — the
+///    single-slot round-trip through the iterator peer matches
+///    the round-trip through the widened Vec peer on the
+///    complement side (length `ALL.len() - 1`, `populated`
+///    absent).
+///
+/// A fifth sibling tagged-union parent picks up the complement-
+/// side iterator composition-law check through ONE
+/// `assert_iter_missing_kinds_matches_missing_kinds::<X, _>(single_slot)`
+/// invocation — no re-authored `for k in K::ALL { … }` sweep at the
+/// test site, no re-authored `.collect::<Vec<_>>()` assertion
+/// against the widened Vec peer.
+#[track_caller]
+pub fn assert_iter_missing_kinds_matches_missing_kinds<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        let via_iter: Vec<T::Kind> = parent.iter_missing_kinds().collect();
+        let via_vec = parent.missing_kinds();
+        assert_eq!(
+            via_iter, via_vec,
+            "TaggedUnion::iter_missing_kinds().collect() drifted from missing_kinds() — populated={populated:?}",
+        );
+        // Purity — repeated invocations yield the same sequence.
+        let via_iter_again: Vec<T::Kind> = parent.iter_missing_kinds().collect();
+        assert_eq!(
+            via_iter, via_iter_again,
+            "TaggedUnion::iter_missing_kinds() must be pure over &self — populated={populated:?}",
+        );
+        // Single-slot diagonal — round-trip yields ALL \ {populated}.
+        let expected_missing: Vec<T::Kind> = <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|k| *k != populated)
+            .collect();
+        assert_eq!(
+            via_iter, expected_missing,
+            "TaggedUnion::iter_missing_kinds() on single_slot({populated:?}) must yield ClosedSet::ALL with {populated:?} removed",
         );
     }
 }
@@ -8015,6 +8372,8 @@ where
     assert_two_slots_ambiguous::<T, _>(two_slot);
     assert_has_matches_select::<T, _>(&single_slot);
     assert_find_agrees_with_has::<T, _>(&single_slot);
+    assert_iter_populated_kinds_matches_populated_kinds::<T, _>(&single_slot);
+    assert_iter_missing_kinds_matches_missing_kinds::<T, _>(&single_slot);
     assert_single_slot_key_matches_label::<T, _>(single_slot);
 }
 
@@ -10020,6 +10379,160 @@ mod tests {
         assert_populated_kinds_matches_has::<LocalParent, _>(always_pair);
     }
 
+    /// The trait's default `iter_populated_kinds` body composes over
+    /// [`ClosedSet::ALL`] under a positive `has` predicate WITHOUT
+    /// materializing an intermediate `Vec` — pin the walk shape on
+    /// the sibling-shaped scaffold at every arm of the exactly-one
+    /// contract (empty, single-slot, two-slot, saturated) so a
+    /// regression that inlined a divergent walk body at the trait's
+    /// `iter_populated_kinds` default fails here rather than as
+    /// silent drift at every downstream fold.
+    #[test]
+    fn tagged_union_default_iter_populated_kinds_folds_over_closed_set_all_arms() {
+        // Empty — yields nothing.
+        let empty = LocalParent::default();
+        assert!(empty.iter_populated_kinds().next().is_none());
+        assert_eq!(empty.iter_populated_kinds().count(), 0);
+
+        // Single-slot — yields exactly [populated] in canonical order.
+        for populated in LocalKind::ALL.iter().copied() {
+            let parent = match populated {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            };
+            let walk: Vec<LocalKind> = parent.iter_populated_kinds().collect();
+            assert_eq!(walk, vec![populated]);
+        }
+
+        // Two-slot — yields both kinds in canonical `ClosedSet::ALL`
+        // order, regardless of struct-field assignment order.
+        let ab = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: None,
+        };
+        assert_eq!(
+            ab.iter_populated_kinds().collect::<Vec<_>>(),
+            vec![LocalKind::Alpha, LocalKind::Beta],
+        );
+        let ag = LocalParent {
+            alpha: Some(1),
+            beta: None,
+            gamma: Some(3),
+        };
+        assert_eq!(
+            ag.iter_populated_kinds().collect::<Vec<_>>(),
+            vec![LocalKind::Alpha, LocalKind::Gamma],
+        );
+        let bg = LocalParent {
+            alpha: None,
+            beta: Some(2),
+            gamma: Some(3),
+        };
+        assert_eq!(
+            bg.iter_populated_kinds().collect::<Vec<_>>(),
+            vec![LocalKind::Beta, LocalKind::Gamma],
+        );
+
+        // Saturated — yields every kind in `ClosedSet::ALL`.
+        let saturated = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: Some(3),
+        };
+        assert_eq!(
+            saturated.iter_populated_kinds().collect::<Vec<_>>(),
+            LocalKind::ALL.to_vec(),
+        );
+    }
+
+    /// [`TaggedUnion::populated_kinds`]'s default body IS
+    /// `self.iter_populated_kinds().collect()`, so the composition
+    /// law
+    /// `populated_kinds() == iter_populated_kinds().collect::<Vec<_>>()`
+    /// holds by construction across every closed-set arrangement.
+    /// Pin the composition law directly on the sibling-shaped
+    /// scaffold at every arm of the exactly-one contract so a
+    /// regression that split the two peer bodies (specialized
+    /// `populated_kinds` past its `.collect()` delegation, or
+    /// specialized `iter_populated_kinds` past its `Kind::ALL`
+    /// filter walk) fails at ONE substrate test rather than as
+    /// silent drift at downstream folds.
+    #[test]
+    fn tagged_union_default_iter_populated_kinds_collect_matches_populated_kinds_vec() {
+        let parents = [
+            LocalParent::default(),
+            LocalParent {
+                alpha: Some(11),
+                ..Default::default()
+            },
+            LocalParent {
+                beta: Some(22),
+                ..Default::default()
+            },
+            LocalParent {
+                gamma: Some(33),
+                ..Default::default()
+            },
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: None,
+            },
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            },
+        ];
+        for parent in &parents {
+            let via_iter: Vec<LocalKind> = parent.iter_populated_kinds().collect();
+            let via_vec = parent.populated_kinds();
+            assert_eq!(
+                via_iter, via_vec,
+                "iter_populated_kinds().collect() must match populated_kinds() byte-identically",
+            );
+        }
+    }
+
+    /// `assert_iter_populated_kinds_matches_populated_kinds` testkit
+    /// accepts the coherent local scaffold — sweeping every populated
+    /// slot through the three sub-assertions (Vec-equality, iterator
+    /// purity, single-slot diagonal). A regression on any of the
+    /// three composition laws fails at the substrate primitive's
+    /// `#[track_caller]` boundary here rather than at four per-parent
+    /// production sites downstream.
+    #[test]
+    fn assert_iter_populated_kinds_matches_populated_kinds_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_iter_populated_kinds_matches_populated_kinds::<LocalParent, _>(make_local);
+    }
+
     /// `assert_populated_kinds_across_pairs` testkit accepts the
     /// coherent local scaffold — sweeping every off-diagonal `(a, b)`
     /// pair through the three sub-assertions (cardinality-2,
@@ -10516,6 +11029,131 @@ mod tests {
             LocalParent::default()
         }
         assert_missing_kinds_matches_has::<LocalParent, _>(empty_factory);
+    }
+
+    /// The trait's default `iter_missing_kinds` body composes over
+    /// [`ClosedSet::ALL`] under a NEGATED `has` predicate WITHOUT
+    /// materializing an intermediate `Vec` — pin the walk shape on
+    /// the sibling-shaped scaffold at every arm of the exactly-one
+    /// contract (empty → full ALL, single-slot → ALL\\{k}, two-slot
+    /// → ALL\\{a,b}, saturated → empty). Complement-side peer of
+    /// [`tagged_union_default_iter_populated_kinds_folds_over_closed_set_all_arms`].
+    #[test]
+    fn tagged_union_default_iter_missing_kinds_folds_over_closed_set_all_arms() {
+        // Empty parent — every slot missing, yields every ALL entry.
+        let empty = LocalParent::default();
+        assert_eq!(
+            empty.iter_missing_kinds().collect::<Vec<_>>(),
+            LocalKind::ALL.to_vec(),
+        );
+
+        // Single-slot — yields ALL\\{populated} in canonical order.
+        for populated in LocalKind::ALL.iter().copied() {
+            let parent = match populated {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            };
+            let expected: Vec<LocalKind> = LocalKind::ALL
+                .iter()
+                .copied()
+                .filter(|&k| k != populated)
+                .collect();
+            assert_eq!(parent.iter_missing_kinds().collect::<Vec<_>>(), expected);
+        }
+
+        // Two-slot — yields the single remaining slot.
+        let ab = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: None,
+        };
+        assert_eq!(
+            ab.iter_missing_kinds().collect::<Vec<_>>(),
+            vec![LocalKind::Gamma],
+        );
+
+        // Saturated — yields nothing.
+        let saturated = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: Some(3),
+        };
+        assert!(saturated.iter_missing_kinds().next().is_none());
+    }
+
+    /// [`TaggedUnion::missing_kinds`]'s default body IS
+    /// `self.iter_missing_kinds().collect()`, so the composition law
+    /// `missing_kinds() == iter_missing_kinds().collect::<Vec<_>>()`
+    /// holds by construction across every closed-set arrangement.
+    /// Complement-side peer of
+    /// [`tagged_union_default_iter_populated_kinds_collect_matches_populated_kinds_vec`].
+    #[test]
+    fn tagged_union_default_iter_missing_kinds_collect_matches_missing_kinds_vec() {
+        let parents = [
+            LocalParent::default(),
+            LocalParent {
+                alpha: Some(11),
+                ..Default::default()
+            },
+            LocalParent {
+                beta: Some(22),
+                ..Default::default()
+            },
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: None,
+            },
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: Some(3),
+            },
+        ];
+        for parent in &parents {
+            let via_iter: Vec<LocalKind> = parent.iter_missing_kinds().collect();
+            let via_vec = parent.missing_kinds();
+            assert_eq!(
+                via_iter, via_vec,
+                "iter_missing_kinds().collect() must match missing_kinds() byte-identically",
+            );
+        }
+    }
+
+    /// `assert_iter_missing_kinds_matches_missing_kinds` testkit
+    /// accepts the coherent local scaffold — sweeping every populated
+    /// slot through the three sub-assertions (Vec-equality, iterator
+    /// purity, single-slot diagonal). Complement-side peer of
+    /// [`assert_iter_populated_kinds_matches_populated_kinds_accepts_coherent_local_impl`].
+    #[test]
+    fn assert_iter_missing_kinds_matches_missing_kinds_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_iter_missing_kinds_matches_missing_kinds::<LocalParent, _>(make_local);
     }
 
     /// Every one of the four production `.variant()` sites on

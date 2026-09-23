@@ -592,6 +592,58 @@ impl Boundary {
         self.postconditions.distinct_kinds()
     }
 
+    /// Zero-allocation iterator peer of [`Self::distinct_condition_kinds`]
+    /// — the condition-union arm of the (precondition, postcondition,
+    /// condition-union) closed-set-inversion iterator triad on
+    /// [`Boundary`]. Walks [`ConditionKind::ALL`] in canonical order and
+    /// yields every [`ConditionKind`] appearing at least once in
+    /// `preconditions ∪ postconditions`, WITHOUT materializing an
+    /// intermediate `Vec<ConditionKind>`.
+    ///
+    /// Composed body:
+    /// `ConditionKind::ALL.iter().copied().filter(|&k|
+    /// self.has_condition_kind(k))` — a thin projection over the closed
+    /// set composed against the two-slice union primitive
+    /// [`Self::has_condition_kind`], byte-identical to the trait-level
+    /// [`ConditionSliceExt::iter_distinct_kinds`] but reaching through
+    /// the boundary's two-slice union rather than a single slice.
+    /// Equivalent to `self.distinct_condition_kinds().into_iter()` without
+    /// the intermediate heap allocation.
+    ///
+    /// Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::iter_distinct_condition_kinds`].
+    /// Sibling to the three-slice `iter_*_condition_kinds` triad —
+    /// `iter_distinct_condition_kinds` walks the union, the two half-
+    /// slice arms `iter_distinct_precondition_kinds` and
+    /// `iter_distinct_postcondition_kinds` walk each side alone. See
+    /// [`Self::distinct_condition_kinds`] for the full rationale on the
+    /// closed-set-inversion aggregate.
+    pub fn iter_distinct_condition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        ConditionKind::ALL
+            .iter()
+            .copied()
+            .filter(|&k| self.has_condition_kind(k))
+    }
+
+    /// Zero-allocation iterator peer of
+    /// [`Self::distinct_precondition_kinds`] — the precondition-side arm
+    /// of the (precondition, postcondition, condition-union) closed-set-
+    /// inversion iterator triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::iter_distinct_kinds`] over
+    /// [`Self::preconditions`].
+    pub fn iter_distinct_precondition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        self.preconditions.iter_distinct_kinds()
+    }
+
+    /// Zero-allocation iterator peer of
+    /// [`Self::distinct_postcondition_kinds`] — the postcondition-side
+    /// arm of the (precondition, postcondition, condition-union) closed-
+    /// set-inversion iterator triad on [`Boundary`]. Thin typed delegate
+    /// to [`ConditionSliceExt::iter_distinct_kinds`] over
+    /// [`Self::postconditions`].
+    pub fn iter_distinct_postcondition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        self.postconditions.iter_distinct_kinds()
+    }
+
     /// Scalar cardinality of the [`ConditionKind`] set appearing at
     /// least once in `preconditions ∪ postconditions` — the
     /// condition-union arm of the (precondition, postcondition,
@@ -790,6 +842,59 @@ impl Boundary {
     #[must_use]
     pub fn missing_postcondition_kinds(&self) -> Vec<ConditionKind> {
         self.postconditions.missing_kinds()
+    }
+
+    /// Zero-allocation iterator peer of [`Self::missing_condition_kinds`]
+    /// — the condition-union arm of the (precondition, postcondition,
+    /// condition-union) closed-set-complement iterator triad on
+    /// [`Boundary`]. Walks [`ConditionKind::ALL`] in canonical order and
+    /// yields every [`ConditionKind`] that does NOT appear in
+    /// `preconditions ∪ postconditions`, WITHOUT materializing an
+    /// intermediate `Vec<ConditionKind>`.
+    ///
+    /// Composed body:
+    /// `ConditionKind::ALL.iter().copied().filter(|&k|
+    /// !self.has_condition_kind(k))` — a thin projection over the closed
+    /// set composed against the two-slice union primitive
+    /// [`Self::has_condition_kind`] under a NEGATED predicate, byte-
+    /// identical to the trait-level
+    /// [`ConditionSliceExt::iter_missing_kinds`] but reaching through
+    /// the boundary's two-slice union rather than a single slice.
+    /// Equivalent to `self.missing_condition_kinds().into_iter()` without
+    /// the intermediate heap allocation.
+    ///
+    /// Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::iter_missing_condition_kinds`].
+    /// Sibling to the three-slice `iter_missing_*_kinds` triad and to the
+    /// closed-set-INVERSION peer [`Self::iter_distinct_condition_kinds`] —
+    /// the two iterators PARTITION `ConditionKind::ALL` under the
+    /// `has_condition_kind` union probe. See
+    /// [`Self::missing_condition_kinds`] for the full rationale on the
+    /// closed-set-complement aggregate.
+    pub fn iter_missing_condition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        ConditionKind::ALL
+            .iter()
+            .copied()
+            .filter(|&k| !self.has_condition_kind(k))
+    }
+
+    /// Zero-allocation iterator peer of
+    /// [`Self::missing_precondition_kinds`] — the precondition-side arm
+    /// of the (precondition, postcondition, condition-union) closed-set-
+    /// complement iterator triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::iter_missing_kinds`] over
+    /// [`Self::preconditions`].
+    pub fn iter_missing_precondition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        self.preconditions.iter_missing_kinds()
+    }
+
+    /// Zero-allocation iterator peer of
+    /// [`Self::missing_postcondition_kinds`] — the postcondition-side arm
+    /// of the (precondition, postcondition, condition-union) closed-set-
+    /// complement iterator triad on [`Boundary`]. Thin typed delegate to
+    /// [`ConditionSliceExt::iter_missing_kinds`] over
+    /// [`Self::postconditions`].
+    pub fn iter_missing_postcondition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        self.postconditions.iter_missing_kinds()
     }
 
     /// Scalar cardinality of the [`ConditionKind`] set NOT appearing in
@@ -2472,10 +2577,80 @@ pub trait ConditionSliceExt {
     ///   entry) and every downstream consumer sees the wider set
     ///   without further per-caller edit.
     fn distinct_kinds(&self) -> Vec<ConditionKind> {
+        self.iter_distinct_kinds().collect()
+    }
+
+    /// Zero-allocation iterator peer of [`Self::distinct_kinds`] — walk
+    /// [`ConditionKind::ALL`] in canonical order and yield every
+    /// [`ConditionKind`] whose corresponding slot on this slice is
+    /// populated (at least one [`Condition`] with that kind), WITHOUT
+    /// materializing an intermediate [`Vec<ConditionKind>`].
+    ///
+    /// Default body:
+    /// `ConditionKind::ALL.iter().copied().filter(|&k| self.has_kind(k))`.
+    /// The composition law
+    /// `distinct_kinds() == iter_distinct_kinds().collect::<Vec<_>>()`
+    /// holds by construction — [`Self::distinct_kinds`]'s default body IS
+    /// `self.iter_distinct_kinds().collect()`, so a caller that overrides
+    /// the widened Vec primitive with a divergent walk simultaneously
+    /// drifts both surfaces (surfacing at the substrate testkit
+    /// [`assert_slice_refinement_composition_laws`] which pins the Vec
+    /// projection equals `iter().collect()`).
+    ///
+    /// # Sibling to [`Self::distinct_kinds`] / [`Self::distinct_kind_count`]
+    ///
+    /// Load-bearing iterator peer of the slice-level closed-set-inversion
+    /// axis — where `distinct_kinds` returns the SET (heap-allocated
+    /// `Vec`, canonical `ConditionKind::ALL` order) and
+    /// `distinct_kind_count` scalar-projects its cardinality,
+    /// `iter_distinct_kinds` opens the walk as a `Copy` iterator so
+    /// consumers that need a short-circuiting fold (`.any(|k| pred(k))`,
+    /// `.find(|&k| pred(k))`, `.take_while(|k| pred(k))`, `.map(|k|
+    /// project(k))`) avoid the intermediate allocation entirely.
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::iter_populated_kinds`]
+    ///
+    /// Same shape at the peer axis one struct layer up: where
+    /// `iter_populated_kinds` opens the closed-set-inversion walk on the
+    /// tagged-union parent-level presence-probe axis,
+    /// `iter_distinct_kinds` opens the closed-set-inversion walk on the
+    /// slice-level presence-probe axis. Both close the "load-bearing
+    /// iterator" refinement at two adjacent typescape sites through the
+    /// SAME `<CLOSED_SET>::ALL.iter().copied().filter(|&k| has_probe(k))`
+    /// composition body under a POSITIVE point-probe.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - Every scalar closed-set-inversion peer already at the trait
+    ///   (`distinct_kind_count`, `first_distinct_kind`,
+    ///   `last_distinct_kind`, `unique_distinct_kind`,
+    ///   `has_any_distinct_kind`) folds a specialization of
+    ///   `ConditionKind::ALL.iter().filter(|k| self.has_kind(**k))` —
+    ///   they can compose over `iter_distinct_kinds()` at ONE substrate
+    ///   site rather than restating the closed-set walk body per peer.
+    /// - A downstream diagnostic composer (an operator-facing "boundary
+    ///   carries: [{}]" message that streams the label list into a
+    ///   `write!` buffer) reads `slice.iter_distinct_kinds().map(|k|
+    ///   k.label())` and folds through `itertools::join` without the
+    ///   allocation `Vec<ConditionKind> -> String` pays.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The load-bearing iterator projection lives at ONE substrate
+    ///   site; every downstream aggregate consumer refines it through a
+    ///   standard-library iterator fold rather than restating the
+    ///   [`ConditionKind::ALL`]-walk closure body.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches the walk
+    ///   mechanically (the closed-set filter picks up the new entry) and
+    ///   every downstream fold sees the wider set without further
+    ///   per-caller edit.
+    fn iter_distinct_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
         ConditionKind::ALL
-            .into_iter()
-            .filter(|k| self.has_kind(*k))
-            .collect()
+            .iter()
+            .copied()
+            .filter(|&k| self.has_kind(k))
     }
 
     /// Scalar cardinality projection of [`Self::distinct_kinds`] onto
@@ -2638,10 +2813,90 @@ pub trait ConditionSliceExt {
     ///   any slice that doesn't yet populate the new kind sees it
     ///   listed as missing at every downstream callsite).
     fn missing_kinds(&self) -> Vec<ConditionKind> {
+        self.iter_missing_kinds().collect()
+    }
+
+    /// Zero-allocation iterator peer of [`Self::missing_kinds`] — walk
+    /// [`ConditionKind::ALL`] in canonical order and yield every
+    /// [`ConditionKind`] whose corresponding slot on this slice is EMPTY
+    /// (no [`Condition`] in the slice carries that kind), WITHOUT
+    /// materializing an intermediate [`Vec<ConditionKind>`].
+    ///
+    /// Default body:
+    /// `ConditionKind::ALL.iter().copied().filter(|&k| !self.has_kind(k))`.
+    /// The composition law
+    /// `missing_kinds() == iter_missing_kinds().collect::<Vec<_>>()`
+    /// holds by construction — [`Self::missing_kinds`]'s default body IS
+    /// `self.iter_missing_kinds().collect()`, so a caller that overrides
+    /// the widened Vec primitive with a divergent walk simultaneously
+    /// drifts both surfaces (surfacing at the substrate testkit
+    /// [`assert_slice_refinement_composition_laws`] which pins the Vec
+    /// projection equals `iter().collect()`).
+    ///
+    /// # Sibling to [`Self::missing_kinds`] / [`Self::missing_kind_count`]
+    ///
+    /// Load-bearing iterator peer of the slice-level closed-set-complement
+    /// axis — where `missing_kinds` returns the SET (heap-allocated `Vec`,
+    /// canonical `ConditionKind::ALL` order) and `missing_kind_count`
+    /// scalar-projects its cardinality, `iter_missing_kinds` opens the
+    /// walk as a `Copy` iterator so consumers that need a short-
+    /// circuiting fold avoid the intermediate allocation entirely.
+    ///
+    /// # Peer to [`Self::iter_distinct_kinds`]
+    ///
+    /// Closed-set-COMPLEMENT peer under a NEGATED point-probe. The two
+    /// iterators PARTITION `ConditionKind::ALL`:
+    /// `iter_distinct_kinds().chain(iter_missing_kinds()).collect::<HashSet<_>>()`
+    /// equals `ConditionKind::ALL.iter().copied().collect()`, and the two
+    /// iterators yield disjoint element sets.
+    ///
+    /// # Peer to [`crate::tagged_union::TaggedUnion::iter_missing_kinds`]
+    ///
+    /// Same shape at the peer axis one struct layer up: where
+    /// `iter_missing_kinds` on the tagged-union parent opens the closed-
+    /// set-complement walk under a negated `has` point-probe, this method
+    /// opens the SAME walk on the slice-level presence-probe axis under a
+    /// negated `has_kind` point-probe. Both close the "load-bearing
+    /// iterator on the complement side" refinement at two adjacent
+    /// typescape sites through the SAME
+    /// `<CLOSED_SET>::ALL.iter().copied().filter(|&k| !has_probe(k))`
+    /// composition body.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - Every scalar closed-set-complement peer already at the trait
+    ///   (`missing_kind_count`, `first_missing_kind`, `last_missing_kind`,
+    ///   `unique_missing_kind`, `is_kind_saturated`,
+    ///   `has_any_missing_kind`, `has_unique_missing_kind`,
+    ///   `has_multiple_missing_kinds`, `has_at_most_one_missing_kind`)
+    ///   folds a specialization of
+    ///   `ConditionKind::ALL.iter().filter(|k| !self.has_kind(**k))` —
+    ///   they can compose over `iter_missing_kinds()` at ONE substrate
+    ///   site rather than restating the closed-set walk body per peer.
+    /// - A downstream diagnostic composer (an operator-facing "still
+    ///   missing: [{}]" message that streams the label list into a
+    ///   `write!` buffer on the partially-populated arm) reads
+    ///   `slice.iter_missing_kinds().map(|k| k.label())` and folds through
+    ///   `itertools::join` without the allocation `Vec<ConditionKind> ->
+    ///   String` pays.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The load-bearing iterator projection on the complement side
+    ///   lives at ONE substrate site, byte-for-byte symmetrical with
+    ///   [`Self::iter_distinct_kinds`] under a negated `has_kind`
+    ///   predicate.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches the walk
+    ///   mechanically (the closed-set filter picks up the new entry on
+    ///   the missing side) and every downstream fold sees the wider
+    ///   complement without further per-caller edit.
+    fn iter_missing_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
         ConditionKind::ALL
-            .into_iter()
-            .filter(|k| !self.has_kind(*k))
-            .collect()
+            .iter()
+            .copied()
+            .filter(|&k| !self.has_kind(k))
     }
 
     /// Scalar cardinality projection of [`Self::missing_kinds`] onto its
@@ -4275,6 +4530,31 @@ where
         "distinct_kinds() must yield ConditionKind::ALL-ordered subsequence of kinds where has_kind is true (no duplicates, canonical order)",
     );
 
+    // iter_distinct_kinds ↔ distinct_kinds — the load-bearing iterator
+    // peer of the closed-set-inversion widened primitive. `distinct_kinds`'s
+    // default body IS `self.iter_distinct_kinds().collect()`, so the
+    // composition law `distinct_kinds() ==
+    // iter_distinct_kinds().collect::<Vec<_>>()` holds by construction —
+    // a regression that overrode either surface with a divergent walk
+    // (short-circuit skipping a kind, drifting the walk order from
+    // ConditionKind::ALL, forgetting the `has_kind` filter, or divergent
+    // yield sequences between repeated invocations) surfaces HERE at the
+    // substrate boundary, not as silent skew between the iter-based fold
+    // callsite and the Vec-based callsite. Symmetrical to the tagged-union
+    // parent-level substrate testkit
+    // `assert_iter_populated_kinds_matches_populated_kinds` under a
+    // POSITIVE point-probe.
+    let via_iter_distinct: Vec<ConditionKind> = slice.iter_distinct_kinds().collect();
+    assert_eq!(
+        via_iter_distinct, distinct,
+        "iter_distinct_kinds().collect::<Vec<_>>() drifted from distinct_kinds()",
+    );
+    let via_iter_distinct_again: Vec<ConditionKind> = slice.iter_distinct_kinds().collect();
+    assert_eq!(
+        via_iter_distinct, via_iter_distinct_again,
+        "iter_distinct_kinds() must be pure over &self — repeated collect diverged",
+    );
+
     // distinct_kind_count ↔ distinct_kinds.len() — the scalar
     // cardinality projection of the closed-set-inversion widened
     // primitive. A regression that overrode `distinct_kind_count` to
@@ -4320,6 +4600,30 @@ where
     assert_eq!(
         missing, canonical_missing,
         "missing_kinds() must yield ConditionKind::ALL-ordered subsequence of kinds where has_kind is false (no duplicates, canonical order)",
+    );
+
+    // iter_missing_kinds ↔ missing_kinds — the load-bearing iterator peer
+    // of the closed-set-complement widened primitive on the missing side.
+    // `missing_kinds`'s default body IS `self.iter_missing_kinds().collect()`,
+    // so the composition law
+    // `missing_kinds() == iter_missing_kinds().collect::<Vec<_>>()` holds by
+    // construction. Byte-for-byte peer of the `iter_distinct_kinds ↔
+    // distinct_kinds` arm above under a NEGATED point-probe: a regression
+    // that dropped the negation (returning `iter_distinct_kinds`), skipped
+    // a kind on the complement side, or drifted the walk from
+    // `ConditionKind::ALL` surfaces HERE at the substrate boundary.
+    // Symmetrical to the tagged-union parent-level substrate testkit
+    // `assert_iter_missing_kinds_matches_missing_kinds` under a NEGATED
+    // point-probe.
+    let via_iter_missing: Vec<ConditionKind> = slice.iter_missing_kinds().collect();
+    assert_eq!(
+        via_iter_missing, missing,
+        "iter_missing_kinds().collect::<Vec<_>>() drifted from missing_kinds()",
+    );
+    let via_iter_missing_again: Vec<ConditionKind> = slice.iter_missing_kinds().collect();
+    assert_eq!(
+        via_iter_missing, via_iter_missing_again,
+        "iter_missing_kinds() must be pure over &self — repeated collect diverged",
     );
 
     // (distinct, missing) partition ConditionKind::ALL — three peer
@@ -8876,6 +9180,116 @@ mod tests {
                     expected_union,
                     "Boundary::distinct_condition_kinds must equal ConditionKind::ALL-ordered \
                      set-union of the two half-slice distinct-sets for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary distinct-set ITERATOR triad) —
+    /// the three `iter_distinct_*_condition_kinds` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::iter_distinct_kinds`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and compose
+    /// the union via `ConditionKind::ALL.iter().copied().filter(|&k|
+    /// has_condition_kind(k))`. Byte-for-byte peer of
+    /// [`distinct_condition_kinds_triad_delegates_to_slice_distinct_kinds`]
+    /// on the iterator side — the two tests share ONE closed-set walk
+    /// semantics and pin the composition law
+    /// `iter_distinct_*_condition_kinds().collect::<Vec<_>>() ==
+    /// distinct_*_condition_kinds()` for every arm across
+    /// `ConditionKind::ALL × ConditionKind::ALL`. A regression that
+    /// materialized the Vec then re-iterated it (round-trip through the
+    /// heap), drifted the yield order, or diverged from the widened
+    /// primitive on any arm surfaces HERE.
+    #[test]
+    fn iter_distinct_condition_kinds_triad_delegates_to_slice_iter_distinct_kinds() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                let pre_via_iter: Vec<_> = b.iter_distinct_precondition_kinds().collect();
+                let pre_via_vec = b.distinct_precondition_kinds();
+                assert_eq!(
+                    pre_via_iter, pre_via_vec,
+                    "Boundary::iter_distinct_precondition_kinds().collect() drifted from \
+                     distinct_precondition_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let post_via_iter: Vec<_> = b.iter_distinct_postcondition_kinds().collect();
+                let post_via_vec = b.distinct_postcondition_kinds();
+                assert_eq!(
+                    post_via_iter, post_via_vec,
+                    "Boundary::iter_distinct_postcondition_kinds().collect() drifted from \
+                     distinct_postcondition_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let union_via_iter: Vec<_> = b.iter_distinct_condition_kinds().collect();
+                let union_via_vec = b.distinct_condition_kinds();
+                assert_eq!(
+                    union_via_iter, union_via_vec,
+                    "Boundary::iter_distinct_condition_kinds().collect() drifted from \
+                     distinct_condition_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary missing-set ITERATOR triad) —
+    /// the three `iter_missing_*_condition_kinds` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::iter_missing_kinds`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and compose
+    /// the union via `ConditionKind::ALL.iter().copied().filter(|&k|
+    /// !has_condition_kind(k))`. Peer of
+    /// [`iter_distinct_condition_kinds_triad_delegates_to_slice_iter_distinct_kinds`]
+    /// on the missing side under a NEGATED point-probe.
+    #[test]
+    fn iter_missing_condition_kinds_triad_delegates_to_slice_iter_missing_kinds() {
+        // Empty boundary — every iter arm yields ConditionKind::ALL.
+        let b = Boundary::default();
+        let all: Vec<_> = ConditionKind::ALL.to_vec();
+        assert_eq!(
+            b.iter_missing_precondition_kinds().collect::<Vec<_>>(),
+            all,
+            "empty boundary must yield ConditionKind::ALL on iter_missing_precondition_kinds",
+        );
+        assert_eq!(
+            b.iter_missing_postcondition_kinds().collect::<Vec<_>>(),
+            all,
+            "empty boundary must yield ConditionKind::ALL on iter_missing_postcondition_kinds",
+        );
+        assert_eq!(
+            b.iter_missing_condition_kinds().collect::<Vec<_>>(),
+            all,
+            "empty boundary must yield ConditionKind::ALL on iter_missing_condition_kinds",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                let pre_via_iter: Vec<_> = b.iter_missing_precondition_kinds().collect();
+                let pre_via_vec = b.missing_precondition_kinds();
+                assert_eq!(
+                    pre_via_iter, pre_via_vec,
+                    "Boundary::iter_missing_precondition_kinds().collect() drifted from \
+                     missing_precondition_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let post_via_iter: Vec<_> = b.iter_missing_postcondition_kinds().collect();
+                let post_via_vec = b.missing_postcondition_kinds();
+                assert_eq!(
+                    post_via_iter, post_via_vec,
+                    "Boundary::iter_missing_postcondition_kinds().collect() drifted from \
+                     missing_postcondition_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let union_via_iter: Vec<_> = b.iter_missing_condition_kinds().collect();
+                let union_via_vec = b.missing_condition_kinds();
+                assert_eq!(
+                    union_via_iter, union_via_vec,
+                    "Boundary::iter_missing_condition_kinds().collect() drifted from \
+                     missing_condition_kinds() for pre={pre_kind:?} post={post_kind:?}",
                 );
             }
         }

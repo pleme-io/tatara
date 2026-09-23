@@ -639,6 +639,43 @@ impl EphemeralSpec {
         self.postconditions.distinct_kinds()
     }
 
+    /// Zero-allocation iterator peer of [`Self::distinct_condition_kinds`]
+    /// — the condition-union arm of the (precondition, postcondition,
+    /// condition-union) closed-set-inversion iterator triad on
+    /// [`EphemeralSpec`]. Byte-identical to
+    /// [`crate::boundary::Boundary::iter_distinct_condition_kinds`] on the
+    /// point-domain surface. Walks [`ConditionKind::ALL`] in canonical
+    /// order and yields every [`ConditionKind`] appearing at least once in
+    /// `preconditions ∪ postconditions`, WITHOUT materializing an
+    /// intermediate `Vec<ConditionKind>`.
+    pub fn iter_distinct_condition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        ConditionKind::ALL
+            .iter()
+            .copied()
+            .filter(|&k| self.has_condition_kind(k))
+    }
+
+    /// Zero-allocation iterator peer of
+    /// [`Self::distinct_precondition_kinds`] — the precondition-side arm
+    /// of the (precondition, postcondition, condition-union) closed-set-
+    /// inversion iterator triad on [`EphemeralSpec`]. Thin typed delegate
+    /// to [`crate::boundary::ConditionSliceExt::iter_distinct_kinds`] over
+    /// [`Self::preconditions`].
+    pub fn iter_distinct_precondition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        self.preconditions.iter_distinct_kinds()
+    }
+
+    /// Zero-allocation iterator peer of
+    /// [`Self::distinct_postcondition_kinds`] — the postcondition-side
+    /// arm of the (precondition, postcondition, condition-union) closed-
+    /// set-inversion iterator triad on [`EphemeralSpec`]. Thin typed
+    /// delegate to
+    /// [`crate::boundary::ConditionSliceExt::iter_distinct_kinds`] over
+    /// [`Self::postconditions`].
+    pub fn iter_distinct_postcondition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        self.postconditions.iter_distinct_kinds()
+    }
+
     /// Scalar cardinality of the [`ConditionKind`] set appearing at
     /// least once in `preconditions ∪ postconditions` — the peer of
     /// [`crate::boundary::Boundary::distinct_condition_kind_count`] on
@@ -824,6 +861,42 @@ impl EphemeralSpec {
     #[must_use]
     pub fn missing_postcondition_kinds(&self) -> Vec<ConditionKind> {
         self.postconditions.missing_kinds()
+    }
+
+    /// Zero-allocation iterator peer of [`Self::missing_condition_kinds`]
+    /// — the condition-union arm of the (precondition, postcondition,
+    /// condition-union) closed-set-complement iterator triad on
+    /// [`EphemeralSpec`]. Byte-identical to
+    /// [`crate::boundary::Boundary::iter_missing_condition_kinds`] on the
+    /// point-domain surface. Walks [`ConditionKind::ALL`] in canonical
+    /// order and yields every [`ConditionKind`] that does NOT appear in
+    /// `preconditions ∪ postconditions`, WITHOUT materializing an
+    /// intermediate `Vec<ConditionKind>`.
+    pub fn iter_missing_condition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        ConditionKind::ALL
+            .iter()
+            .copied()
+            .filter(|&k| !self.has_condition_kind(k))
+    }
+
+    /// Zero-allocation iterator peer of
+    /// [`Self::missing_precondition_kinds`] — the precondition-side arm
+    /// of the (precondition, postcondition, condition-union) closed-set-
+    /// complement iterator triad on [`EphemeralSpec`]. Thin typed delegate
+    /// to [`crate::boundary::ConditionSliceExt::iter_missing_kinds`] over
+    /// [`Self::preconditions`].
+    pub fn iter_missing_precondition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        self.preconditions.iter_missing_kinds()
+    }
+
+    /// Zero-allocation iterator peer of
+    /// [`Self::missing_postcondition_kinds`] — the postcondition-side arm
+    /// of the (precondition, postcondition, condition-union) closed-set-
+    /// complement iterator triad on [`EphemeralSpec`]. Thin typed delegate
+    /// to [`crate::boundary::ConditionSliceExt::iter_missing_kinds`] over
+    /// [`Self::postconditions`].
+    pub fn iter_missing_postcondition_kinds(&self) -> impl Iterator<Item = ConditionKind> + '_ {
+        self.postconditions.iter_missing_kinds()
     }
 
     /// Scalar cardinality of the [`ConditionKind`] set NOT appearing in
@@ -6780,6 +6853,109 @@ mod tests {
                     expected_union,
                     "EphemeralSpec::distinct_condition_kinds must equal ConditionKind::ALL-ordered \
                      set-union of the two half-slice distinct-sets for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (EphemeralSpec distinct-set ITERATOR
+    /// triad) — the three `iter_distinct_*_condition_kinds` methods on
+    /// [`EphemeralSpec`] delegate to the slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::iter_distinct_kinds`] over
+    /// the two `Vec<Condition>` slots and compose the union via
+    /// `ConditionKind::ALL.iter().copied().filter(|&k|
+    /// has_condition_kind(k))`. Byte-for-byte peer of
+    /// `iter_distinct_condition_kinds_triad_delegates_to_slice_iter_distinct_kinds`
+    /// on the point-domain [`crate::boundary::Boundary`] surface — both
+    /// peers compose against the SAME slice-level iterator substrate.
+    #[test]
+    fn ephemeral_iter_distinct_condition_kinds_triad_delegates_to_slice_iter_distinct_kinds() {
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+
+                let pre_via_iter: Vec<_> = spec.iter_distinct_precondition_kinds().collect();
+                assert_eq!(
+                    pre_via_iter,
+                    spec.distinct_precondition_kinds(),
+                    "EphemeralSpec::iter_distinct_precondition_kinds().collect() drifted from \
+                     distinct_precondition_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let post_via_iter: Vec<_> = spec.iter_distinct_postcondition_kinds().collect();
+                assert_eq!(
+                    post_via_iter,
+                    spec.distinct_postcondition_kinds(),
+                    "EphemeralSpec::iter_distinct_postcondition_kinds().collect() drifted from \
+                     distinct_postcondition_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let union_via_iter: Vec<_> = spec.iter_distinct_condition_kinds().collect();
+                assert_eq!(
+                    union_via_iter,
+                    spec.distinct_condition_kinds(),
+                    "EphemeralSpec::iter_distinct_condition_kinds().collect() drifted from \
+                     distinct_condition_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (EphemeralSpec missing-set ITERATOR
+    /// triad) — the three `iter_missing_*_condition_kinds` methods on
+    /// [`EphemeralSpec`] delegate to the slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::iter_missing_kinds`] over
+    /// the two `Vec<Condition>` slots and compose the union via
+    /// `ConditionKind::ALL.iter().copied().filter(|&k|
+    /// !has_condition_kind(k))`. Peer of
+    /// `ephemeral_iter_distinct_condition_kinds_triad_delegates_to_slice_iter_distinct_kinds`
+    /// on the missing side under a NEGATED point-probe.
+    #[test]
+    fn ephemeral_iter_missing_condition_kinds_triad_delegates_to_slice_iter_missing_kinds() {
+        let empty = empty_ephemeral();
+        let all: Vec<_> = ConditionKind::ALL.to_vec();
+        assert_eq!(
+            empty.iter_missing_precondition_kinds().collect::<Vec<_>>(),
+            all,
+            "empty ephemeral spec must yield ConditionKind::ALL on iter_missing_precondition_kinds",
+        );
+        assert_eq!(
+            empty.iter_missing_postcondition_kinds().collect::<Vec<_>>(),
+            all,
+            "empty ephemeral spec must yield ConditionKind::ALL on iter_missing_postcondition_kinds",
+        );
+        assert_eq!(
+            empty.iter_missing_condition_kinds().collect::<Vec<_>>(),
+            all,
+            "empty ephemeral spec must yield ConditionKind::ALL on iter_missing_condition_kinds",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+
+                let pre_via_iter: Vec<_> = spec.iter_missing_precondition_kinds().collect();
+                assert_eq!(
+                    pre_via_iter,
+                    spec.missing_precondition_kinds(),
+                    "EphemeralSpec::iter_missing_precondition_kinds().collect() drifted from \
+                     missing_precondition_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let post_via_iter: Vec<_> = spec.iter_missing_postcondition_kinds().collect();
+                assert_eq!(
+                    post_via_iter,
+                    spec.missing_postcondition_kinds(),
+                    "EphemeralSpec::iter_missing_postcondition_kinds().collect() drifted from \
+                     missing_postcondition_kinds() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let union_via_iter: Vec<_> = spec.iter_missing_condition_kinds().collect();
+                assert_eq!(
+                    union_via_iter,
+                    spec.missing_condition_kinds(),
+                    "EphemeralSpec::iter_missing_condition_kinds().collect() drifted from \
+                     missing_condition_kinds() for pre={pre_kind:?} post={post_kind:?}",
                 );
             }
         }

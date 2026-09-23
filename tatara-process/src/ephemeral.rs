@@ -1613,6 +1613,97 @@ impl EphemeralSpec {
         self.postconditions.has_any_distinct_kind()
     }
 
+    /// `true` iff `preconditions ∪ postconditions` carries EXACTLY
+    /// ONE [`ConditionKind::ALL`] variant — the union arm of the
+    /// (precondition, postcondition, condition-union) cardinality-
+    /// mid-endpoint triad on [`EphemeralSpec`] closing the singleton-
+    /// coverage arm on the closed-set-inversion axis on the union of
+    /// the two condition slots. The Boolean cardinality-mid-endpoint
+    /// fast-path peer of [`Self::has_any_distinct_condition_kind`]
+    /// (≥1 halfspace) on the union axis: where the at-least-one
+    /// halfspace predicate answers "is ANY kind covered by the
+    /// union?", `has_unique_distinct_condition_kind` answers "is
+    /// EXACTLY ONE kind covered by the union?".
+    ///
+    /// Composed body: constructs a two-step-short-circuit walk over
+    /// [`ConditionKind::ALL`] under the [`Self::has_condition_kind`]
+    /// union primitive — the first covered union arm surfaces, then
+    /// the walk short-circuits at the second. Byte-for-byte peer of
+    /// [`crate::boundary::ConditionSliceExt::has_unique_distinct_kind`]
+    /// one slice-layer down, lifted to compose against
+    /// [`Self::has_condition_kind`]'s pre-OR-post union rather than
+    /// against a single slice's `has_kind`.
+    ///
+    /// # Peer on the point-domain surface — [`crate::boundary::Boundary::has_unique_distinct_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self) -> bool`, byte-identical
+    /// two-step short-circuit body composed against the point-domain
+    /// surface's own union primitive. Both methods compose against
+    /// the SAME slice-level substrate primitive
+    /// [`crate::boundary::ConditionSliceExt::has_unique_distinct_kind`]
+    /// via the two-slice union — a regression at the per-slice
+    /// singleton-coverage walk fails at that primitive's tests rather
+    /// than as silent drift at either struct-level singleton-coverage
+    /// caller.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the cardinality-mid-endpoint projection on
+    /// the closed-set-inversion axis composes the SAME two-step
+    /// short-circuit walk on both this ephemeral surface and the
+    /// point-domain [`crate::boundary::Boundary`] surface). THEORY.md
+    /// §VI.1 (generation over composition — a new [`ConditionKind`]
+    /// variant reaches both surfaces' cardinality-mid-endpoint triads
+    /// mechanically through the delegated union primitive).
+    #[must_use]
+    pub fn has_unique_distinct_condition_kind(&self) -> bool {
+        let mut it = ConditionKind::ALL
+            .iter()
+            .copied()
+            .filter(|k| self.has_condition_kind(*k));
+        it.next().is_some() && it.next().is_none()
+    }
+
+    /// `true` iff [`Self::preconditions`] carries EXACTLY ONE
+    /// [`ConditionKind::ALL`] variant — the precondition-side arm of
+    /// the (precondition, postcondition, condition-union)
+    /// cardinality-mid-endpoint triad on [`EphemeralSpec`] on the
+    /// closed-set-inversion axis. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::has_unique_distinct_kind`]
+    /// over [`Self::preconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::has_unique_distinct_precondition_kind`]
+    /// on the point-domain surface — both peers compose against the
+    /// SAME slice-level substrate primitive so a regression at the
+    /// per-slice two-step short-circuit walk fails at that primitive's
+    /// tests rather than as silent drift at either struct-level arm.
+    #[must_use]
+    pub fn has_unique_distinct_precondition_kind(&self) -> bool {
+        self.preconditions.has_unique_distinct_kind()
+    }
+
+    /// `true` iff [`Self::postconditions`] carries EXACTLY ONE
+    /// [`ConditionKind::ALL`] variant — the postcondition-side arm of
+    /// the (precondition, postcondition, condition-union)
+    /// cardinality-mid-endpoint triad on [`EphemeralSpec`] on the
+    /// closed-set-inversion axis. Thin typed delegate to
+    /// [`crate::boundary::ConditionSliceExt::has_unique_distinct_kind`]
+    /// over [`Self::postconditions`].
+    ///
+    /// Peer of
+    /// [`crate::boundary::Boundary::has_unique_distinct_postcondition_kind`]
+    /// on the point-domain surface. See
+    /// [`Self::has_unique_distinct_precondition_kind`] for the full
+    /// rationale — the two methods share ONE lift motivation, ONE
+    /// fail-before-pass-after composition-law pin, and ONE two-surface
+    /// parity contract with the point-domain
+    /// [`crate::boundary::Boundary`] cardinality-mid-endpoint peer
+    /// methods.
+    #[must_use]
+    pub fn has_unique_distinct_postcondition_kind(&self) -> bool {
+        self.postconditions.has_unique_distinct_kind()
+    }
+
     /// `true` iff `preconditions ∪ postconditions` is MISSING EXACTLY
     /// ONE [`ConditionKind::ALL`] variant — the union arm of the
     /// (precondition, postcondition, condition-union) cardinality-
@@ -12178,6 +12269,123 @@ mod tests {
             spec.has_any_distinct_condition_kind(),
             "saturated ephemeral must return true on has_any_distinct_condition_kind",
         );
+    }
+
+    /// SUBSTRATE-DELEGATION pin (EphemeralSpec singleton-coverage
+    /// triad on the closed-set-inversion axis) — the three
+    /// `has_unique_distinct_*_condition_kind` methods on
+    /// [`EphemeralSpec`] delegate to the slice-level substrate
+    /// primitive
+    /// [`crate::boundary::ConditionSliceExt::has_unique_distinct_kind`]
+    /// over the two `Vec<Condition>` slots (precondition +
+    /// postcondition) and compose the union via a two-step-short-
+    /// circuit walk over [`ConditionKind::ALL`] under
+    /// [`EphemeralSpec::has_condition_kind`]. Two-surface parity pin
+    /// against
+    /// [`crate::boundary::Boundary::has_unique_distinct_condition_kind`]
+    /// on the point-domain [`ProcessSpec`] surface — the two struct-
+    /// level singleton-coverage callers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice two-step short-circuit walk fails at that primitive's
+    /// tests rather than as silent drift at either sugar-surface arm.
+    #[test]
+    fn has_unique_distinct_condition_kind_triad_delegates_to_slice_has_unique_distinct_kind() {
+        // Empty ephemeral spec — every arm returns false (0 distinct,
+        // not exactly 1).
+        let spec = empty_ephemeral();
+        assert!(
+            !spec.has_unique_distinct_precondition_kind(),
+            "empty ephemeral must return false on has_unique_distinct_precondition_kind",
+        );
+        assert!(
+            !spec.has_unique_distinct_postcondition_kind(),
+            "empty ephemeral must return false on has_unique_distinct_postcondition_kind",
+        );
+        assert!(
+            !spec.has_unique_distinct_condition_kind(),
+            "empty ephemeral must return false on has_unique_distinct_condition_kind",
+        );
+        assert_eq!(
+            spec.has_unique_distinct_condition_kind(),
+            spec.distinct_condition_kind_count() == 1,
+            "empty has_unique_distinct_condition_kind must equal (distinct_condition_kind_count() == 1)",
+        );
+
+        // Single-populated per side — sweep ALL × ALL. Every per-
+        // slice arm returns true; the union returns true iff the two
+        // populated kinds coincide (union covers exactly one kind).
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut spec = empty_ephemeral();
+                spec.preconditions.push(cond(pre_kind));
+                spec.postconditions.push(cond(post_kind));
+                assert_eq!(
+                    spec.has_unique_distinct_precondition_kind(),
+                    spec.preconditions.has_unique_distinct_kind(),
+                    "EphemeralSpec::has_unique_distinct_precondition_kind must delegate verbatim to \
+                     preconditions.has_unique_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.has_unique_distinct_postcondition_kind(),
+                    spec.postconditions.has_unique_distinct_kind(),
+                    "EphemeralSpec::has_unique_distinct_postcondition_kind must delegate verbatim to \
+                     postconditions.has_unique_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                let covered_count = ConditionKind::ALL
+                    .into_iter()
+                    .filter(|k| *k == pre_kind || *k == post_kind)
+                    .count();
+                let expected_union = covered_count == 1;
+                assert_eq!(
+                    spec.has_unique_distinct_condition_kind(),
+                    expected_union,
+                    "EphemeralSpec::has_unique_distinct_condition_kind must equal \
+                     (covered-ALL-count == 1) for pre={pre_kind:?} post={post_kind:?}",
+                );
+
+                // Two-surface parity: lowered ProcessSpec's Boundary
+                // must agree bit-for-bit with the ephemeral sugar
+                // triad on every arm.
+                let lowered: ProcessSpec = spec.clone().into();
+                assert_eq!(
+                    spec.has_unique_distinct_precondition_kind(),
+                    lowered.boundary.has_unique_distinct_precondition_kind(),
+                    "two-surface has_unique_distinct_precondition_kind parity drift for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.has_unique_distinct_postcondition_kind(),
+                    lowered.boundary.has_unique_distinct_postcondition_kind(),
+                    "two-surface has_unique_distinct_postcondition_kind parity drift for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    spec.has_unique_distinct_condition_kind(),
+                    lowered.boundary.has_unique_distinct_condition_kind(),
+                    "two-surface has_unique_distinct_condition_kind parity drift for pre={pre_kind:?} post={post_kind:?}",
+                );
+            }
+        }
+
+        // Saturated ephemeral — every arm returns false on N ≥ 2 (N
+        // distinct, not exactly 1).
+        if ConditionKind::ALL.len() >= 2 {
+            let mut spec = empty_ephemeral();
+            for k in ConditionKind::ALL {
+                spec.preconditions.push(cond(k));
+                spec.postconditions.push(cond(k));
+            }
+            assert!(
+                !spec.has_unique_distinct_precondition_kind(),
+                "saturated ephemeral must return false on has_unique_distinct_precondition_kind",
+            );
+            assert!(
+                !spec.has_unique_distinct_postcondition_kind(),
+                "saturated ephemeral must return false on has_unique_distinct_postcondition_kind",
+            );
+            assert!(
+                !spec.has_unique_distinct_condition_kind(),
+                "saturated ephemeral must return false on has_unique_distinct_condition_kind",
+            );
+        }
     }
 
     /// SUBSTRATE-DELEGATION pin (EphemeralSpec cardinality-mid-endpoint

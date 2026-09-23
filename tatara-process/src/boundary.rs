@@ -1759,6 +1759,113 @@ impl Boundary {
         self.postconditions.has_unique_distinct_kind()
     }
 
+    /// The SOLE [`ConditionKind::ALL`] variant covered by
+    /// `preconditions ∪ postconditions`, or `None` when the union
+    /// covers 0 or ≥ 2 kinds — the union arm of the (precondition,
+    /// postcondition, condition-union) exactly-one-hit witnessing
+    /// triad on [`Boundary`] closing the singleton-coverage witness on
+    /// the closed-set-inversion axis on the union of the two condition
+    /// slots. Witnessing scalar peer of
+    /// [`Self::has_unique_distinct_condition_kind`] (=1 predicate) on
+    /// the union axis: where the Boolean predicate answers "does the
+    /// union cover EXACTLY one kind?", `unique_distinct_condition_kind`
+    /// returns `Some(k)` naming that SOLE kind (or `None` on the 0 or
+    /// ≥ 2 arms).
+    ///
+    /// # Composed body
+    ///
+    /// A two-step-short-circuit walk over [`ConditionKind::ALL`] under
+    /// the [`Self::has_condition_kind`] union primitive — pull the
+    /// first hit; return `Some(first)` iff the second hit is [`None`],
+    /// else `None`. Byte-for-byte peer of
+    /// [`ConditionSliceExt::unique_distinct_kind`] one slice-layer
+    /// down, lifted to compose against
+    /// [`Self::has_condition_kind`]'s pre-OR-post union rather than
+    /// against a single slice's `has_kind`. A regression at the union
+    /// primitive fails at the slice-level substrate tests + the union
+    /// composition-law tests rather than as silent drift here.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::unique_distinct_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self) -> Option<ConditionKind>`,
+    /// byte-identical two-step short-circuit body composed against the
+    /// ephemeral surface's own union primitive. Both methods compose
+    /// against the SAME slice-level substrate primitive
+    /// [`ConditionSliceExt::unique_distinct_kind`] via the two-slice
+    /// union — a regression at the per-slice singleton-coverage
+    /// witnessing walk fails at that primitive's tests rather than as
+    /// silent drift at either struct-level singleton-coverage caller.
+    ///
+    /// # Sibling to [`Self::unique_missing_condition_kind`]
+    ///
+    /// Closed-set-inversion peer of the exactly-one-hit witness on the
+    /// closed-set-complement axis at the boundary union struct layer —
+    /// where `unique_missing_condition_kind` names the SOLE kind AWAY
+    /// from covered, `unique_distinct_condition_kind` names the SOLE
+    /// kind covered. Both compose against a two-step-short-circuit walk
+    /// over [`ConditionKind::ALL`] under [`Self::has_condition_kind`]
+    /// (this primitive) vs `!has_condition_kind` (the missing peer).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the exactly-one-hit witnessing projection on
+    /// the closed-set-inversion axis composes the SAME two-step short-
+    /// circuit walk under a two-slice union on both this boundary
+    /// surface and the ephemeral surface). THEORY.md §VI.1 (generation
+    /// over composition — a new [`ConditionKind`] variant reaches both
+    /// surfaces' unique-distinct-kind triads mechanically through the
+    /// delegated union primitive).
+    #[must_use]
+    pub fn unique_distinct_condition_kind(&self) -> Option<ConditionKind> {
+        let mut it = ConditionKind::ALL
+            .iter()
+            .copied()
+            .filter(|k| self.has_condition_kind(*k));
+        let first = it.next()?;
+        match it.next() {
+            None => Some(first),
+            Some(_) => None,
+        }
+    }
+
+    /// The SOLE [`ConditionKind::ALL`] variant covered by
+    /// [`Self::preconditions`], or `None` when preconditions cover 0
+    /// or ≥ 2 kinds — the precondition-side arm of the (precondition,
+    /// postcondition, condition-union) exactly-one-hit witnessing
+    /// triad on [`Boundary`] on the closed-set-inversion axis. Thin
+    /// typed delegate to [`ConditionSliceExt::unique_distinct_kind`]
+    /// over [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::unique_distinct_postcondition_kind`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice two-step short-circuit witnessing walk fails at that
+    /// primitive's tests rather than as silent drift at either
+    /// struct-level arm.
+    #[must_use]
+    pub fn unique_distinct_precondition_kind(&self) -> Option<ConditionKind> {
+        self.preconditions.unique_distinct_kind()
+    }
+
+    /// The SOLE [`ConditionKind::ALL`] variant covered by
+    /// [`Self::postconditions`], or `None` when postconditions cover 0
+    /// or ≥ 2 kinds — the postcondition-side arm of the (precondition,
+    /// postcondition, condition-union) exactly-one-hit witnessing
+    /// triad on [`Boundary`] on the closed-set-inversion axis. Thin
+    /// typed delegate to [`ConditionSliceExt::unique_distinct_kind`]
+    /// over [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::unique_distinct_precondition_kind`]. See that
+    /// method for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via
+    /// [`crate::ephemeral::EphemeralSpec::unique_distinct_postcondition_kind`].
+    #[must_use]
+    pub fn unique_distinct_postcondition_kind(&self) -> Option<ConditionKind> {
+        self.postconditions.unique_distinct_kind()
+    }
+
     /// `true` iff `preconditions ∪ postconditions` COVERS AT LEAST
     /// TWO [`ConditionKind::ALL`] variants — the union arm of the
     /// (precondition, postcondition, condition-union) cardinality-
@@ -2324,6 +2431,123 @@ impl Boundary {
     #[must_use]
     pub fn has_unique_missing_postcondition_kind(&self) -> bool {
         self.postconditions.has_unique_missing_kind()
+    }
+
+    /// The SOLE [`ConditionKind::ALL`] variant ABSENT from
+    /// `preconditions ∪ postconditions`, or `None` when the union is
+    /// missing 0 or ≥ 2 kinds — the union arm of the (precondition,
+    /// postcondition, condition-union) exactly-one-missing witnessing
+    /// triad on [`Boundary`] closing the near-saturation witness on
+    /// the closed-set-complement axis on the union of the two
+    /// condition slots. Witnessing scalar peer of
+    /// [`Self::has_unique_missing_condition_kind`] (=1 predicate) on
+    /// the union axis: where the Boolean predicate answers "is the
+    /// union one kind AWAY from covered?", `unique_missing_condition_kind`
+    /// returns `Some(k)` naming that SOLE remaining hole (or `None` on
+    /// the 0 or ≥ 2 arms).
+    ///
+    /// # Composed body
+    ///
+    /// A two-step-short-circuit walk over [`ConditionKind::ALL`] under
+    /// a NEGATED [`Self::has_condition_kind`] union primitive — pull
+    /// the first hit; return `Some(first)` iff the second hit is
+    /// [`None`], else `None`. Byte-for-byte peer of
+    /// [`ConditionSliceExt::unique_missing_kind`] one slice-layer
+    /// down, lifted to compose against the two-slice union rather than
+    /// against a single slice's `has_kind`. A regression at the union
+    /// primitive fails at the slice-level substrate tests + the union
+    /// composition-law tests rather than as silent drift here.
+    ///
+    /// # Peer on the ephemeral surface — [`crate::ephemeral::EphemeralSpec::unique_missing_condition_kind`]
+    ///
+    /// Byte-identical signature `(&Self) -> Option<ConditionKind>`,
+    /// byte-identical two-step short-circuit body composed against the
+    /// ephemeral surface's own union primitive. Both methods compose
+    /// against the SAME slice-level substrate primitive
+    /// [`ConditionSliceExt::unique_missing_kind`] via the two-slice
+    /// union — a regression at the per-slice near-saturation
+    /// witnessing walk fails at that primitive's tests rather than as
+    /// silent drift at either struct-level near-saturation caller.
+    ///
+    /// # Sibling to [`Self::unique_distinct_condition_kind`]
+    ///
+    /// Closed-set-complement peer of the exactly-one-hit witness on
+    /// the closed-set-inversion axis at the boundary union struct
+    /// layer — where `unique_distinct_condition_kind` names the SOLE
+    /// kind COVERED, `unique_missing_condition_kind` names the SOLE
+    /// kind ABSENT. Both compose against a two-step-short-circuit walk
+    /// over [`ConditionKind::ALL`] under [`Self::has_condition_kind`]
+    /// vs `!has_condition_kind` (this primitive).
+    ///
+    /// # Compounding
+    ///
+    /// A future gap-analysis diagnostic that names "one remaining
+    /// [`ConditionKind`] not covered by this Boundary" reads
+    /// `boundary.unique_missing_condition_kind()` at ONE call site —
+    /// the WITNESS + the exactly-one predicate composed at ONE short-
+    /// circuit walk, rather than pairing the Boolean
+    /// [`Self::has_unique_missing_condition_kind`] with
+    /// [`Self::first_missing_condition_kind`] at TWO independent walks
+    /// whose agreement is a coincidence.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the complement-exactly-one-hit witnessing
+    /// projection composes the SAME two-step short-circuit walk under
+    /// a two-slice union negation on both this boundary surface and
+    /// the ephemeral surface). THEORY.md §VI.1 (generation over
+    /// composition — a new [`ConditionKind`] variant reaches both
+    /// surfaces' unique-missing-kind triads mechanically through the
+    /// delegated union primitive).
+    #[must_use]
+    pub fn unique_missing_condition_kind(&self) -> Option<ConditionKind> {
+        let mut it = ConditionKind::ALL
+            .iter()
+            .copied()
+            .filter(|k| !self.has_condition_kind(*k));
+        let first = it.next()?;
+        match it.next() {
+            None => Some(first),
+            Some(_) => None,
+        }
+    }
+
+    /// The SOLE [`ConditionKind::ALL`] variant ABSENT from
+    /// [`Self::preconditions`], or `None` when preconditions are
+    /// missing 0 or ≥ 2 kinds — the precondition-side arm of the
+    /// (precondition, postcondition, condition-union) exactly-one-
+    /// missing witnessing triad on [`Boundary`]. Thin typed delegate
+    /// to [`ConditionSliceExt::unique_missing_kind`] over
+    /// [`Self::preconditions`].
+    ///
+    /// Peer of [`Self::unique_missing_postcondition_kind`] on the
+    /// (precondition, postcondition) partition of the boundary's two
+    /// condition-vector slots; both peers compose against the SAME
+    /// slice-level substrate primitive so a regression at the per-
+    /// slice two-step short-circuit witnessing walk under negation
+    /// fails at that primitive's tests rather than as silent drift at
+    /// either struct-level arm.
+    #[must_use]
+    pub fn unique_missing_precondition_kind(&self) -> Option<ConditionKind> {
+        self.preconditions.unique_missing_kind()
+    }
+
+    /// The SOLE [`ConditionKind::ALL`] variant ABSENT from
+    /// [`Self::postconditions`], or `None` when postconditions are
+    /// missing 0 or ≥ 2 kinds — the postcondition-side arm of the
+    /// (precondition, postcondition, condition-union) exactly-one-
+    /// missing witnessing triad on [`Boundary`]. Thin typed delegate
+    /// to [`ConditionSliceExt::unique_missing_kind`] over
+    /// [`Self::postconditions`].
+    ///
+    /// Peer of [`Self::unique_missing_precondition_kind`]. See that
+    /// method for the full rationale — the two methods share ONE lift
+    /// motivation, ONE fail-before-pass-after composition-law pin, and
+    /// ONE two-surface parity contract with the ephemeral sugar type
+    /// via
+    /// [`crate::ephemeral::EphemeralSpec::unique_missing_postcondition_kind`].
+    #[must_use]
+    pub fn unique_missing_postcondition_kind(&self) -> Option<ConditionKind> {
+        self.postconditions.unique_missing_kind()
     }
 
     /// `true` iff `preconditions ∪ postconditions` is MISSING AT
@@ -4461,6 +4685,94 @@ pub trait ConditionSliceExt {
         it.next().is_some() && it.next().is_none()
     }
 
+    /// Witnessing `Option<ConditionKind>` peer of
+    /// [`Self::has_unique_distinct_kind`] on the closed-set-inversion
+    /// axis — `Some(k)` iff `k` is the SOLE [`ConditionKind::ALL`]
+    /// variant appearing at least once in this slice, else `None`.
+    ///
+    /// Default body: a two-step-short-circuit fold through
+    /// [`Self::iter_distinct_kinds`] — pull the first hit; return
+    /// `Some(first)` iff the second hit is [`None`], else `None`.
+    /// Byte-for-byte peer of
+    /// [`crate::tagged_union::TaggedUnion::unique_populated_kind`]
+    /// one struct-layer up under the SAME `iter_populated_kinds`
+    /// two-step short-circuit shape, and the WITNESSING scalar peer of
+    /// the Boolean [`Self::has_unique_distinct_kind`] predicate at the
+    /// SAME two-step short-circuit shape.
+    ///
+    /// # Sibling to [`Self::first_distinct_kind`] / [`Self::last_distinct_kind`]
+    ///
+    /// FIFTH refinement on the closed-set-inversion axis under exactly-
+    /// one-hit semantics, `Option<ConditionKind>`-valued: together with
+    /// [`Self::first_distinct_kind`] and [`Self::last_distinct_kind`]
+    /// the three primitives project [`Self::distinct_kinds`] onto its
+    /// cardinality-conditioned scalar identity on the present side. The
+    /// composition laws
+    /// `unique_distinct_kind().is_some() == (distinct_kind_count() == 1)`
+    /// and (on the `Some` arm) `unique_distinct_kind() ==
+    /// first_distinct_kind() == last_distinct_kind()` bind the exactly-
+    /// one scalar identity to the widened primitives at the trait's
+    /// default body.
+    ///
+    /// # Peer to [`Self::unique_missing_kind`]
+    ///
+    /// Closed-set-inversion peer of the exactly-one-hit scalar on the
+    /// closed-set-complement axis — where `unique_missing_kind` names
+    /// the SOLE ABSENT kind, `unique_distinct_kind` names the SOLE
+    /// PRESENT kind. The two primitives close the (present, absent) x
+    /// (endpoint, exactly-one) 2x3 scalar-Option grid on the slice
+    /// level under the SAME two-step short-circuit shape via the
+    /// load-bearing iterator peers.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `None` (0 distinct, not 1). A slice
+    /// carrying a single [`ConditionKind`] (with any multiplicity)
+    /// returns `Some(k)` — the SOLE arm where `unique_distinct_kind`
+    /// returns `Some` on any `N ≥ 2` closed set. A slice carrying `K ≥ 2`
+    /// distinct kinds returns `None`. A saturated slice returns `None`
+    /// on `N ≥ 2` closed sets.
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - A future singleton-coverage diagnostic that prints "the SOLE
+    ///   [`ConditionKind`] covered by this Boundary is X" reads
+    ///   `boundary.postconditions.unique_distinct_kind()` at ONE call
+    ///   site — the WITNESS + the exactly-one predicate composed at
+    ///   ONE short-circuit walk, rather than pairing the Boolean
+    ///   [`Self::has_unique_distinct_kind`] with [`Self::first_distinct_kind`]
+    ///   at TWO independent walks whose agreement is a coincidence.
+    /// - A `unique-distinct-<kind>` require-tag classifier arm reads
+    ///   this primitive with no allocation, byte-for-byte symmetrical
+    ///   with `slice.unique_missing_kind()`.
+    /// - A fast-path branch that discriminates "exactly one kind
+    ///   covered" from "0 or ≥ 2 covered" reads
+    ///   `slice.unique_distinct_kind().is_some()` at ONE call site.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The exactly-one-hit witnessing projection on the closed-set-
+    ///   inversion axis lives at ONE substrate site as a typed two-
+    ///   step-short-circuit fold through the load-bearing
+    ///   [`Self::iter_distinct_kinds`] iterator — byte-for-byte peer of
+    ///   the tagged-union [`crate::tagged_union::TaggedUnion::unique_populated_kind`]
+    ///   under the SAME iterator shape.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically through the short-circuit walk — a
+    ///   slice previously at the singleton-coverage arm (returned
+    ///   `Some(k)` here) that also picks up the new variant now has
+    ///   TWO distinct kinds and returns `None`.
+    fn unique_distinct_kind(&self) -> Option<ConditionKind> {
+        let mut it = self.iter_distinct_kinds();
+        let first = it.next()?;
+        match it.next() {
+            None => Some(first),
+            Some(_) => None,
+        }
+    }
+
     /// Boolean cardinality many-arm peer of
     /// [`Self::has_unique_distinct_kind`] on the closed-set-inversion
     /// axis — `true` iff AT LEAST TWO [`ConditionKind::ALL`] variants
@@ -4908,6 +5220,91 @@ pub trait ConditionSliceExt {
     fn has_unique_missing_kind(&self) -> bool {
         let mut it = self.iter_missing_kinds();
         it.next().is_some() && it.next().is_none()
+    }
+
+    /// Witnessing `Option<ConditionKind>` peer of
+    /// [`Self::has_unique_missing_kind`] on the closed-set-complement
+    /// axis — `Some(k)` iff `k` is the SOLE [`ConditionKind::ALL`]
+    /// variant ABSENT from this slice, else `None`.
+    ///
+    /// Default body: a two-step-short-circuit fold through
+    /// [`Self::iter_missing_kinds`] — pull the first hit; return
+    /// `Some(first)` iff the second hit is [`None`], else `None`.
+    /// Byte-for-byte peer of
+    /// [`crate::tagged_union::TaggedUnion::unique_missing_kind`] one
+    /// struct-layer up under the SAME `iter_missing_kinds` two-step
+    /// short-circuit shape, and the WITNESSING scalar peer of the
+    /// Boolean [`Self::has_unique_missing_kind`] predicate at the SAME
+    /// two-step short-circuit shape.
+    ///
+    /// # Sibling to [`Self::first_missing_kind`] / [`Self::last_missing_kind`]
+    ///
+    /// FIFTH refinement on the closed-set-complement axis under
+    /// exactly-one-hit semantics, `Option<ConditionKind>`-valued:
+    /// together with [`Self::first_missing_kind`] and
+    /// [`Self::last_missing_kind`] the three primitives project
+    /// [`Self::missing_kinds`] onto its cardinality-conditioned scalar
+    /// identity on the absent side. The composition laws
+    /// `unique_missing_kind().is_some() == (missing_kind_count() == 1)`
+    /// and (on the `Some` arm) `unique_missing_kind() ==
+    /// first_missing_kind() == last_missing_kind()` bind the exactly-
+    /// one scalar identity to the widened primitives at the trait's
+    /// default body.
+    ///
+    /// # Peer to [`Self::unique_distinct_kind`]
+    ///
+    /// Closed-set-complement peer of the exactly-one-hit scalar on the
+    /// closed-set-inversion axis — where `unique_distinct_kind` names
+    /// the SOLE PRESENT kind, `unique_missing_kind` names the SOLE
+    /// ABSENT kind. The two primitives close the (present, absent) x
+    /// (endpoint, exactly-one) 2x3 scalar-Option grid on the slice
+    /// level under the SAME two-step short-circuit shape via the
+    /// load-bearing iterator peers on the two opposite sides.
+    ///
+    /// # Semantics
+    ///
+    /// An empty slice returns `None` on any `N ≥ 2` closed set (every
+    /// kind is missing — the fully-missing endpoint, `N` missing not
+    /// `1`). A slice at the near-saturation arm (carrying every kind
+    /// except exactly one) returns `Some(the-lone-empty)` — the SOLE
+    /// arm where `unique_missing_kind` returns `Some` on any `N ≥ 3`
+    /// closed set. A saturated slice returns `None` (zero missing).
+    ///
+    /// # Compounding future consumers
+    ///
+    /// - An operator-facing "one dependency still unfulfilled: X"
+    ///   diagnostic on the near-saturation arm reads
+    ///   `boundary.postconditions.unique_missing_kind()` at ONE call
+    ///   site — the WITNESS + the exactly-one predicate composed at
+    ///   ONE short-circuit walk, rather than pairing the Boolean
+    ///   [`Self::has_unique_missing_kind`] with [`Self::first_missing_kind`]
+    ///   at TWO independent walks whose agreement is a coincidence.
+    /// - A `unique-missing-<kind>` require-tag classifier arm reads
+    ///   this primitive with no allocation, byte-for-byte symmetrical
+    ///   with `slice.unique_distinct_kind()`.
+    /// - A fast-path branch that discriminates "exactly one kind
+    ///   still missing" from "0 or ≥ 2 still missing" reads
+    ///   `slice.unique_missing_kind().is_some()` at ONE call site.
+    ///
+    /// # Theory grounding
+    ///
+    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    ///   The complement-exactly-one-hit witnessing projection lives at
+    ///   ONE substrate site as a typed two-step-short-circuit fold
+    ///   through the load-bearing [`Self::iter_missing_kinds`] iterator
+    ///   — byte-for-byte peer of the tagged-union
+    ///   [`crate::tagged_union::TaggedUnion::unique_missing_kind`]
+    ///   under the SAME iterator shape.
+    /// - THEORY.md §VI.1 — generation over composition. A new
+    ///   [`ConditionKind`] variant added to `ALL` reaches this
+    ///   primitive mechanically on the missing side.
+    fn unique_missing_kind(&self) -> Option<ConditionKind> {
+        let mut it = self.iter_missing_kinds();
+        let first = it.next()?;
+        match it.next() {
+            None => Some(first),
+            Some(_) => None,
+        }
     }
 
     /// Boolean cardinality "≥ 2" many-arm peer of
@@ -14113,5 +14510,321 @@ mod tests {
             params: json!({ "side": "post-1" }),
         });
         crate::assert_surface_union_composition_laws!(b);
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary unique-distinct-kind
+    /// witnessing triad on the closed-set-inversion axis) — the three
+    /// `unique_distinct_*_condition_kind` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::unique_distinct_kind`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via a two-step-short-circuit walk over
+    /// [`ConditionKind::ALL`] under [`Boundary::has_condition_kind`].
+    /// Sweep `ConditionKind::ALL × ConditionKind::ALL` so a regression
+    /// that (a) dropped the second-hit short-circuit (returning
+    /// `Some(first)` on a two-distinct union), (b) inlined a divergent
+    /// closed-set walk at either half-slice arm, or (c) diverged the
+    /// witness scalar from the Boolean predicate surfaces HERE. Also
+    /// pins the composition laws `unique_distinct_*_kind().is_some() ==
+    /// has_unique_distinct_*_kind()` and (on the `Some` arm)
+    /// `unique_distinct_*_kind() == first_distinct_*_kind() ==
+    /// last_distinct_*_kind()` at each arm.
+    #[test]
+    fn unique_distinct_condition_kind_triad_delegates_to_slice_unique_distinct_kind() {
+        // Empty boundary — every arm returns None.
+        let b = Boundary::default();
+        assert_eq!(
+            b.unique_distinct_precondition_kind(),
+            None,
+            "empty boundary must return None on unique_distinct_precondition_kind",
+        );
+        assert_eq!(
+            b.unique_distinct_postcondition_kind(),
+            None,
+            "empty boundary must return None on unique_distinct_postcondition_kind",
+        );
+        assert_eq!(
+            b.unique_distinct_condition_kind(),
+            None,
+            "empty boundary must return None on unique_distinct_condition_kind",
+        );
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                assert_eq!(
+                    b.unique_distinct_precondition_kind(),
+                    b.preconditions.unique_distinct_kind(),
+                    "Boundary::unique_distinct_precondition_kind must delegate verbatim to \
+                     preconditions.unique_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.unique_distinct_precondition_kind(),
+                    Some(pre_kind),
+                    "Boundary::unique_distinct_precondition_kind must equal Some(pre_kind) on \
+                     single-populated preconditions for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.unique_distinct_postcondition_kind(),
+                    b.postconditions.unique_distinct_kind(),
+                    "Boundary::unique_distinct_postcondition_kind must delegate verbatim to \
+                     postconditions.unique_distinct_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.unique_distinct_postcondition_kind(),
+                    Some(post_kind),
+                    "Boundary::unique_distinct_postcondition_kind must equal Some(post_kind) on \
+                     single-populated postconditions for pre={pre_kind:?} post={post_kind:?}",
+                );
+
+                // Union arm: Some(k) iff the union covers exactly one kind.
+                let covered: Vec<ConditionKind> = ConditionKind::ALL
+                    .into_iter()
+                    .filter(|k| pre_kind == *k || post_kind == *k)
+                    .collect();
+                let expected_union = if covered.len() == 1 {
+                    Some(covered[0])
+                } else {
+                    None
+                };
+                assert_eq!(
+                    b.unique_distinct_condition_kind(),
+                    expected_union,
+                    "Boundary::unique_distinct_condition_kind must equal Some(k) iff the \
+                     ALL-entries covered by either half-slice sum to exactly one for \
+                     pre={pre_kind:?} post={post_kind:?}",
+                );
+
+                // Boolean-witness composition laws.
+                assert_eq!(
+                    b.unique_distinct_condition_kind().is_some(),
+                    b.has_unique_distinct_condition_kind(),
+                    "unique_distinct_condition_kind().is_some() must equal \
+                     has_unique_distinct_condition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.unique_distinct_precondition_kind().is_some(),
+                    b.has_unique_distinct_precondition_kind(),
+                    "unique_distinct_precondition_kind().is_some() must equal \
+                     has_unique_distinct_precondition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.unique_distinct_postcondition_kind().is_some(),
+                    b.has_unique_distinct_postcondition_kind(),
+                    "unique_distinct_postcondition_kind().is_some() must equal \
+                     has_unique_distinct_postcondition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+
+                // Endpoint-agreement — on Some, first == last == unique.
+                if let Some(k) = b.unique_distinct_condition_kind() {
+                    assert_eq!(
+                        b.first_distinct_condition_kind(),
+                        Some(k),
+                        "unique_distinct_condition_kind() Some arm must equal \
+                         first_distinct_condition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        b.last_distinct_condition_kind(),
+                        Some(k),
+                        "unique_distinct_condition_kind() Some arm must equal \
+                         last_distinct_condition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+            }
+        }
+
+        // Saturated boundary — every arm returns None on N ≥ 2.
+        if ConditionKind::ALL.len() >= 2 {
+            let mut b = Boundary::default();
+            for k in ConditionKind::ALL {
+                b.preconditions.push(condition_with(k));
+                b.postconditions.push(condition_with(k));
+            }
+            assert_eq!(
+                b.unique_distinct_precondition_kind(),
+                None,
+                "saturated boundary must return None on unique_distinct_precondition_kind",
+            );
+            assert_eq!(
+                b.unique_distinct_postcondition_kind(),
+                None,
+                "saturated boundary must return None on unique_distinct_postcondition_kind",
+            );
+            assert_eq!(
+                b.unique_distinct_condition_kind(),
+                None,
+                "saturated boundary must return None on unique_distinct_condition_kind",
+            );
+        }
+    }
+
+    /// SUBSTRATE-DELEGATION pin (Boundary unique-missing-kind
+    /// witnessing triad on the closed-set-complement axis) — the three
+    /// `unique_missing_*_condition_kind` methods on [`Boundary`]
+    /// delegate to the slice-level substrate primitive
+    /// [`ConditionSliceExt::unique_missing_kind`] over the two
+    /// `Vec<Condition>` slots (precondition + postcondition) and
+    /// compose the union via a two-step-short-circuit walk over
+    /// [`ConditionKind::ALL`] under a NEGATED
+    /// [`Boundary::has_condition_kind`]. Sweep `ConditionKind::ALL ×
+    /// ConditionKind::ALL` so a regression that dropped the negation,
+    /// dropped the second-hit short-circuit, or diverged the witness
+    /// scalar from the Boolean predicate surfaces HERE. Also pins the
+    /// composition laws `unique_missing_*_kind().is_some() ==
+    /// has_unique_missing_*_kind()` and (on the `Some` arm)
+    /// `unique_missing_*_kind() == first_missing_*_kind() ==
+    /// last_missing_*_kind()` at each arm.
+    #[test]
+    fn unique_missing_condition_kind_triad_delegates_to_slice_unique_missing_kind() {
+        // Empty boundary — every arm returns None on N ≥ 2 (every
+        // kind missing, not exactly 1).
+        let b = Boundary::default();
+        if ConditionKind::ALL.len() >= 2 {
+            assert_eq!(
+                b.unique_missing_precondition_kind(),
+                None,
+                "empty boundary must return None on unique_missing_precondition_kind \
+                 on any N ≥ 2 closed set",
+            );
+            assert_eq!(
+                b.unique_missing_postcondition_kind(),
+                None,
+                "empty boundary must return None on unique_missing_postcondition_kind \
+                 on any N ≥ 2 closed set",
+            );
+            assert_eq!(
+                b.unique_missing_condition_kind(),
+                None,
+                "empty boundary must return None on unique_missing_condition_kind \
+                 on any N ≥ 2 closed set",
+            );
+        }
+
+        for pre_kind in ConditionKind::ALL {
+            for post_kind in ConditionKind::ALL {
+                let mut b = Boundary::default();
+                b.preconditions.push(condition_with(pre_kind));
+                b.postconditions.push(condition_with(post_kind));
+
+                assert_eq!(
+                    b.unique_missing_precondition_kind(),
+                    b.preconditions.unique_missing_kind(),
+                    "Boundary::unique_missing_precondition_kind must delegate verbatim to \
+                     preconditions.unique_missing_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.unique_missing_postcondition_kind(),
+                    b.postconditions.unique_missing_kind(),
+                    "Boundary::unique_missing_postcondition_kind must delegate verbatim to \
+                     postconditions.unique_missing_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+
+                // Union arm: Some(k) iff the union is missing exactly one kind.
+                let missing: Vec<ConditionKind> = ConditionKind::ALL
+                    .into_iter()
+                    .filter(|k| pre_kind != *k && post_kind != *k)
+                    .collect();
+                let expected_union = if missing.len() == 1 {
+                    Some(missing[0])
+                } else {
+                    None
+                };
+                assert_eq!(
+                    b.unique_missing_condition_kind(),
+                    expected_union,
+                    "Boundary::unique_missing_condition_kind must equal Some(k) iff the \
+                     ALL-entries NOT covered by either half-slice sum to exactly one for \
+                     pre={pre_kind:?} post={post_kind:?}",
+                );
+
+                // Boolean-witness composition laws.
+                assert_eq!(
+                    b.unique_missing_condition_kind().is_some(),
+                    b.has_unique_missing_condition_kind(),
+                    "unique_missing_condition_kind().is_some() must equal \
+                     has_unique_missing_condition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.unique_missing_precondition_kind().is_some(),
+                    b.has_unique_missing_precondition_kind(),
+                    "unique_missing_precondition_kind().is_some() must equal \
+                     has_unique_missing_precondition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+                assert_eq!(
+                    b.unique_missing_postcondition_kind().is_some(),
+                    b.has_unique_missing_postcondition_kind(),
+                    "unique_missing_postcondition_kind().is_some() must equal \
+                     has_unique_missing_postcondition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                );
+
+                // Endpoint-agreement — on Some, first == last == unique.
+                if let Some(k) = b.unique_missing_condition_kind() {
+                    assert_eq!(
+                        b.first_missing_condition_kind(),
+                        Some(k),
+                        "unique_missing_condition_kind() Some arm must equal \
+                         first_missing_condition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                    assert_eq!(
+                        b.last_missing_condition_kind(),
+                        Some(k),
+                        "unique_missing_condition_kind() Some arm must equal \
+                         last_missing_condition_kind() for pre={pre_kind:?} post={post_kind:?}",
+                    );
+                }
+            }
+        }
+
+        // Saturated boundary — every arm returns None (zero missing).
+        let mut b = Boundary::default();
+        for k in ConditionKind::ALL {
+            b.preconditions.push(condition_with(k));
+            b.postconditions.push(condition_with(k));
+        }
+        assert_eq!(
+            b.unique_missing_precondition_kind(),
+            None,
+            "saturated boundary must return None on unique_missing_precondition_kind",
+        );
+        assert_eq!(
+            b.unique_missing_postcondition_kind(),
+            None,
+            "saturated boundary must return None on unique_missing_postcondition_kind",
+        );
+        assert_eq!(
+            b.unique_missing_condition_kind(),
+            None,
+            "saturated boundary must return None on unique_missing_condition_kind",
+        );
+
+        // Near-saturation arm: exactly one ALL entry missing on each
+        // side (achieved by populating every kind except `hole`).
+        for hole in ConditionKind::ALL {
+            let mut b = Boundary::default();
+            for k in ConditionKind::ALL {
+                if k != hole {
+                    b.preconditions.push(condition_with(k));
+                    b.postconditions.push(condition_with(k));
+                }
+            }
+            assert_eq!(
+                b.unique_missing_precondition_kind(),
+                Some(hole),
+                "near-saturation boundary must return Some(hole={hole:?}) on unique_missing_precondition_kind",
+            );
+            assert_eq!(
+                b.unique_missing_postcondition_kind(),
+                Some(hole),
+                "near-saturation boundary must return Some(hole={hole:?}) on unique_missing_postcondition_kind",
+            );
+            assert_eq!(
+                b.unique_missing_condition_kind(),
+                Some(hole),
+                "near-saturation boundary must return Some(hole={hole:?}) on unique_missing_condition_kind",
+            );
+        }
     }
 }

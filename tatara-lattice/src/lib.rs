@@ -1697,6 +1697,175 @@ pub trait Lattice: Sized + Clone + PartialEq {
         }
         true
     }
+    /// Strict-arm structural peer of [`Lattice::is_chain`] on the
+    /// STRICTNESS axis — the iterated set forms a STRICT CHAIN (a
+    /// totally-ordered SET with no duplicate elements) on the lattice's
+    /// partial order iff EVERY distinct-position pair
+    /// `(vs[i], vs[j])` with `i < j` satisfies
+    /// [`Lattice::is_strictly_comparable`]. `T::is_strict_chain([&a,
+    /// &b, &c])` holds iff `a.is_strictly_comparable(&b) &&
+    /// a.is_strictly_comparable(&c) && b.is_strictly_comparable(&c)`.
+    ///
+    /// The STRICT-ARM STRUCTURAL peer of [`Lattice::is_chain`] one
+    /// STRICTNESS axis over on the (strict, non-strict) × (pairwise,
+    /// structural) 2×2 comparability grid — where
+    /// [`Lattice::is_chain`] decides NON-STRICT structural comparability
+    /// on the full O(N²) all-pairs symmetric nested loop (accepts
+    /// duplicates on the standard-mathematical distinct-pair convention),
+    /// this decides STRICT structural comparability on the SAME nested
+    /// loop (REJECTS duplicates because [`Lattice::is_strictly_comparable`]
+    /// is irreflexive). Together with [`Lattice::is_chain`] on the
+    /// non-strict arm this closes the (strict, non-strict) × (structural
+    /// comparability) 2×1 face at the structural level, exactly one
+    /// STRICTNESS axis over from the pair-level [`Lattice::is_comparable`]
+    /// / [`Lattice::is_strictly_comparable`] pin and exactly one
+    /// CARDINALITY axis up from the same pair-level pin.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_strict_chain(std::iter::
+    /// empty()) == true` on every lattice — the empty conjunction has
+    /// no pair to check, so the universally-quantified predicate fires
+    /// true on the empty case. Peer of [`Lattice::is_chain`]'s
+    /// empty-iterator vacuous truth on the shared vacuous-conjunction
+    /// arm.
+    ///
+    /// **Singleton vacuous truth**: `T::is_strict_chain([&a]) == true`
+    /// for every `a` — a singleton contains no pair, same
+    /// vacuous-conjunction reasoning as the empty case. AGREES with
+    /// [`Lattice::is_chain`]'s singleton verdict on the same shared arm.
+    ///
+    /// **Duplicate rejection at arity ≥ 2** (DIVERGES from
+    /// [`Lattice::is_chain`]'s duplicate-only vacuous truth):
+    /// `T::is_strict_chain([&a, &a]) == false` for every `a` — the
+    /// nested loop compares `vs[0].is_strictly_comparable(vs[1])` on the
+    /// duplicate pair, which fires false because
+    /// [`Lattice::is_strictly_comparable`] is IRREFLEXIVE. This is the
+    /// exact overlap where the strict and non-strict structural
+    /// predicates disagree at the reflexive-diagonal arm — a
+    /// duplicate-only collection at length ≥ 2 is a chain but NOT a
+    /// strict chain.
+    ///
+    /// **Pair-identity**: `T::is_strict_chain([&a, &b]) ==
+    /// a.is_strictly_comparable(&b)` — the 2-input structural strict
+    /// predicate reduces to the pairwise-strict-comparability primitive
+    /// without a duplicate filter (duplicates are rejected by
+    /// [`Lattice::is_strictly_comparable`]'s irreflexivity, so no
+    /// explicit filter is needed). Strict-arm peer of
+    /// [`Lattice::is_chain`]'s pair-identity `T::is_chain([&a, &b]) ==
+    /// (a == b || a.is_comparable(&b))`.
+    ///
+    /// **Refines [`Lattice::is_chain`]**: for every collection,
+    /// `T::is_strict_chain(iter) ⇒ T::is_chain(iter)` — every
+    /// distinct-position pair the strict predicate accepts is
+    /// [`Lattice::is_strictly_comparable`], which refines
+    /// [`Lattice::is_comparable`] (with the distinct-pair filter
+    /// absorbed into the strict predicate's irreflexivity). The
+    /// converse fails on collections with duplicates: any all-duplicate
+    /// slice at length ≥ 2 is a chain but not a strict chain.
+    ///
+    /// **Two-primitive rewriting**: `T::is_strict_chain(iter) ==
+    /// T::is_chain(iter) && vs are pairwise distinct` — a strict chain
+    /// is a chain with no repeats. Equivalent by de-Morgan to
+    /// "for every i < j, vs[i] != vs[j] AND vs[i].is_comparable(&vs[j])",
+    /// which is byte-identical to the definition modulo the filter
+    /// arithmetic. This gives the strict-chain predicate two
+    /// interchangeable readings: `is_strictly_comparable`-on-every-pair
+    /// (the primitive route) or `is_chain`-and-pairwise-distinct (the
+    /// two-primitive composition).
+    ///
+    /// **Any-non-strictly-comparable-pair rejection**: if any two
+    /// positions `(i, j)` with `i < j` fail
+    /// `vs[i].is_strictly_comparable(&vs[j])` — either because the
+    /// values are equal (irreflexive-diagonal arm) OR because they are
+    /// incomparable on the partial order — then
+    /// `T::is_strict_chain(iter) == false`. The nested loop
+    /// short-circuits at the first violating pair.
+    ///
+    /// **Total-order acceptance-on-distinct**: on any totally-ordered
+    /// lattice (e.g. [`baseline::Baseline`], [`DataClassification`],
+    /// [`CalmClassification`]), the predicate accepts EXACTLY the
+    /// collections whose elements are pairwise distinct — every
+    /// distinct pair is [`Lattice::is_comparable`] by the total-order
+    /// property, so the strict-comparable check collapses to the
+    /// distinct-pair check. Contrast with [`Lattice::is_chain`], which
+    /// accepts every collection on the total order (including
+    /// all-duplicate collections). Pinned exhaustively over
+    /// `DataClassification::ALL^3` below.
+    ///
+    /// **Antichain-lattice rejection on distinct-non-top pairs**: on an
+    /// antichain lattice (e.g. [`SubstrateType`]), the predicate
+    /// REJECTS any collection containing two distinct non-top
+    /// substrates — the two-non-top pair is incomparable, so
+    /// [`Lattice::is_strictly_comparable`] fails on that pair.
+    /// ACCEPTS only collections whose distinct values are a subset of
+    /// a chain (either empty, singleton, {top}, or {non-top, top}).
+    ///
+    /// **Sequence-order independence**: `T::is_strict_chain(iter) ==
+    /// T::is_strict_chain(iter.rev())` on every collection — the
+    /// nested loop checks EVERY distinct-position pair `(i, j)`
+    /// symmetrically via [`Lattice::is_strictly_comparable`]'s
+    /// symmetry, so a permutation of the input yields the same verdict.
+    /// Same structural-vs-sequence-shape reading as
+    /// [`Lattice::is_chain`]'s sequence-order independence.
+    ///
+    /// **Strict-monotone-sequence witness**: any collection that
+    /// [`Lattice::strictly_below`] chains left-to-right (i.e.
+    /// [`Lattice::is_strictly_monotone_sequence`] fires true) IS a
+    /// strict chain — transitivity of [`Lattice::strictly_below`]
+    /// extends the pairwise strict relation to every distinct pair,
+    /// and the strict monotonicity forbids duplicates. The converse
+    /// fails on non-totally-ordered lattices: a strict chain need not
+    /// be strictly monotone as-yielded (any permutation of a strict
+    /// chain is still a strict chain, but the permuted sequence need
+    /// not be strictly monotone).
+    ///
+    /// Default routes through a nested-loop `for i in 0..vs.len()` /
+    /// `for j in (i + 1)..vs.len()` over the collected `Vec<&Self>`
+    /// buffer, dispatching to [`Lattice::is_strictly_comparable`]
+    /// (which itself decomposes into
+    /// [`Lattice::strictly_below`] OR [`Lattice::strictly_above`]).
+    /// Same collect-once discipline as [`Lattice::is_chain`] so an
+    /// [`IntoIterator`] that yields distinct values on distinct calls
+    /// cannot break the structural predicate's determinism.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the strict-arm structural comparability
+    /// predicate is itself a typed named `bool` composing
+    /// [`Lattice::is_strictly_comparable`] via nested-loop pair
+    /// iteration; every downstream lattice-law consumer inherits the
+    /// predicate through the default mechanically) + THEORY.md §III
+    /// (typescape — the strict-comparability structural arm on every
+    /// classification-axis lattice binds at ONE substrate owner on
+    /// the [`Lattice`] algebra rather than at each consumer's
+    /// hand-rolled `iter.iter().enumerate().all(|(i, x)|
+    /// iter.iter().skip(i + 1).all(|y| x.is_strictly_comparable(y)))`
+    /// nested traversal).
+    ///
+    /// Frontier inspiration: order-theory's classical "strict chain"
+    /// definition (Dilworth's decomposition theorem is stated on
+    /// chains rather than strict chains, but the strict-chain reading
+    /// — a totally-ordered SET with no repeats — is the natural
+    /// dedup-witnessing refinement of the standard chain predicate).
+    /// Translated: threaded the strict-arm structural comparability
+    /// predicate through the [`Lattice`] trait's default-method
+    /// surface, so every closed-set impl picks up the whole
+    /// strict-chain-detection primitive mechanically — the
+    /// duplicate-rejecting refinement of what [`Lattice::is_chain`]
+    /// already carries at the non-strict arm.
+    fn is_strict_chain<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        for i in 0..vs.len() {
+            for j in (i + 1)..vs.len() {
+                if !vs[i].is_strictly_comparable(vs[j]) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
     /// Sequence-shape (consecutive-pair) peer of [`Lattice::is_chain`]
     /// on the CONSECUTIVE-VS-ALL-PAIRS axis — the iterated set is
     /// ASCENDING (a [`Lattice::leq`]-monotone non-decreasing sequence
@@ -6785,6 +6954,400 @@ mod tests {
                             "strictly-monotone triple ({a:?}, {b:?}, {c:?}) must be \
                              a chain — transitivity of strictly_below extends the \
                              pairwise strict relation to every distinct pair",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Lattice::is_strict_chain — strict-arm structural collection-
+    //    level default peer of Lattice::is_chain ────────────────────────
+    //
+    // Bind [`Lattice::is_strict_chain`] at fail-before-pass-after
+    // granularity. Pre-lift the [`Lattice`] trait's structural
+    // comparability surface was `{is_chain, is_antichain}` on the
+    // non-strict arm; a consumer that wanted the STRICT structural
+    // reading ("this collection is a totally-ordered SET with no
+    // duplicates") hand-authored either a nested-loop composition
+    // over the just-lifted [`Lattice::is_strictly_comparable`]
+    // primitive OR a two-primitive `is_chain(iter) && vs are pairwise
+    // distinct` composition at each callsite. Post-lift the whole
+    // strict-arm structural comparability predicate binds at ONE
+    // substrate primitive on the [`Lattice`] algebra, and every
+    // downstream impl (the four in-tree ones + `Baseline` via the
+    // `crate::Lattice` trait AND any future closed-set lift) inherits
+    // `is_strict_chain` for free through the default. Together with
+    // the prior widening (`is_chain` / `is_antichain` on the non-strict
+    // arm at the structural face; `is_comparable` /
+    // `is_strictly_comparable` on the pair-level face; `is_strictly_
+    // monotone_sequence` on the strict-arm sequence-shape face) the
+    // trait now closes the (strict, non-strict) × (pairwise,
+    // structural) 2×2 comparability grid at the strict-structural
+    // corner via ONE new substrate default.
+    //
+    // The dedup convention DIVERGES from [`Lattice::is_chain`]'s
+    // duplicate-only vacuous-truth arm — the strict predicate REJECTS
+    // duplicate pairs at arity ≥ 2 because
+    // [`Lattice::is_strictly_comparable`] is IRREFLEXIVE. This is the
+    // exact reflexive-diagonal peel-off from the non-strict chain
+    // predicate and the load-bearing distinction the strict predicate
+    // introduces on the structural axis.
+    //
+    // Coverage below spans:
+    //
+    //   • empty / singleton vacuous truth on the shared vacuous-
+    //     conjunction arm with [`Lattice::is_chain`];
+    //   • duplicate rejection at arity 2 and arity 3 (DIVERGES from
+    //     [`Lattice::is_chain`]'s duplicate-only vacuous truth) on
+    //     every closed-set impl;
+    //   • pair-identity `T::is_strict_chain([&a, &b]) ==
+    //     a.is_strictly_comparable(&b)` at every pair of every
+    //     closed-set impl;
+    //   • refines-[`Lattice::is_chain`] via
+    //     [`Lattice::is_strictly_comparable`]-refines-
+    //     [`Lattice::is_comparable`] at every triple of every
+    //     closed-set impl;
+    //   • two-primitive rewriting `T::is_strict_chain(iter) ==
+    //     T::is_chain(iter) && vs are pairwise distinct` at every
+    //     triple of every closed-set impl;
+    //   • total-order acceptance-on-distinct on
+    //     `DataClassification::ALL^3` — the predicate reduces to the
+    //     pairwise-distinct check on any total order;
+    //   • total-order full-enumeration acceptance on
+    //     [`DataClassification::ALL`] and [`CalmClassification::ALL`]
+    //     — the shipped enumerations are pairwise-distinct chains, so
+    //     both fire true;
+    //   • antichain-lattice rejection on distinct-non-top pairs on
+    //     `SubstrateType::ALL^2`;
+    //   • sequence-order independence on `DataClassification::ALL^3`
+    //     and `SubstrateType::ALL^3`;
+    //   • strict-monotone-sequence witness on
+    //     `DataClassification::ALL^3` (any strictly-monotone triple is
+    //     a strict chain).
+
+    /// [`Lattice::is_strict_chain`] is vacuously true at the empty
+    /// iterator on every classification-axis lattice — the empty
+    /// conjunction has no pair to check, so the universally-quantified
+    /// predicate fires true on the empty case. Shared vacuous-truth
+    /// arm with [`Lattice::is_chain`] at the empty case. Fail-before-
+    /// pass-after: pre-lift this pin cannot compile because
+    /// `is_strict_chain` is not exposed as a trait method — consumers
+    /// who wanted the strict-arm structural reading either composed
+    /// [`Lattice::is_strictly_comparable`] through a hand-authored
+    /// nested loop OR combined [`Lattice::is_chain`] with a
+    /// hand-authored pairwise-distinct check at each callsite.
+    #[test]
+    fn is_strict_chain_is_vacuously_true_at_the_empty_iterator() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        assert!(DataClassification::is_strict_chain(std::iter::empty()));
+        assert!(CalmClassification::is_strict_chain(std::iter::empty()));
+        assert!(SubstrateType::is_strict_chain(std::iter::empty()));
+    }
+
+    /// [`Lattice::is_strict_chain`] is vacuously true at every
+    /// singleton on every classification-axis lattice — a singleton
+    /// contains no pair, so the same vacuous-conjunction identity as
+    /// the empty arm holds. Shared vacuous-truth arm with
+    /// [`Lattice::is_chain`] at the singleton case. Pinned exhaustively
+    /// over every variant of every closed-set impl.
+    #[test]
+    fn is_strict_chain_is_vacuously_true_at_every_singleton() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_strict_chain([&a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_strict_chain([&a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_strict_chain([&a]));
+        }
+    }
+
+    /// [`Lattice::is_strict_chain`] REJECTS every duplicate-only
+    /// collection at arity ≥ 2 on every classification-axis lattice —
+    /// the nested loop compares
+    /// `vs[0].is_strictly_comparable(vs[1])` on the duplicate pair,
+    /// which fires false because [`Lattice::is_strictly_comparable`]
+    /// is IRREFLEXIVE. DIVERGES from [`Lattice::is_chain`]'s
+    /// duplicate-only vacuous truth — this is the exact overlap where
+    /// the strict and non-strict structural predicates disagree, and
+    /// the load-bearing distinction the strict predicate introduces
+    /// on the structural axis. Pinned on every closed-set impl at
+    /// arity 2 AND arity 3 so a regression that accidentally added the
+    /// `vs[i] != vs[j]` filter (from copying [`Lattice::is_chain`]'s
+    /// loop body) would surface here at the first duplicate arm.
+    #[test]
+    fn is_strict_chain_rejects_duplicate_only_collections_at_arity_2_and_3() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(!DataClassification::is_strict_chain([&a, &a]));
+            assert!(!DataClassification::is_strict_chain([&a, &a, &a]));
+            // Peer sanity: is_chain accepts the same duplicate-only
+            // collection on the shared vacuous-truth arm.
+            assert!(DataClassification::is_chain([&a, &a]));
+            assert!(DataClassification::is_chain([&a, &a, &a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(!CalmClassification::is_strict_chain([&a, &a]));
+            assert!(!CalmClassification::is_strict_chain([&a, &a, &a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(!SubstrateType::is_strict_chain([&a, &a]));
+            assert!(!SubstrateType::is_strict_chain([&a, &a, &a]));
+        }
+    }
+
+    /// [`Lattice::is_strict_chain`] at arity 2 REDUCES to
+    /// `a.is_strictly_comparable(&b)` on every [`DataClassification`]
+    /// pair — the 2-input structural strict predicate collapses to
+    /// the pairwise-strict-comparability primitive without a
+    /// duplicate filter (duplicates are rejected by
+    /// [`Lattice::is_strictly_comparable`]'s irreflexivity, so no
+    /// explicit filter is needed). Strict-arm peer of the
+    /// `is_chain_and_is_antichain_arity_2_reduces_to_pairwise_over_data_classification_all`
+    /// pair-identity seal on the non-strict arm. Pinned exhaustively
+    /// over `ALL^2` (36 pairs).
+    #[test]
+    fn is_strict_chain_arity_2_reduces_to_pairwise_strictly_comparable_over_data_classification_all(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::is_strict_chain([&a, &b]),
+                    a.is_strictly_comparable(&b),
+                    "is_strict_chain([{a:?}, {b:?}]) must reduce to a.is_strictly_comparable(&b) \
+                     — the 2-input structural strict predicate collapses to the pairwise \
+                     primitive without a duplicate filter (irreflexivity absorbs the filter)",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_chain`] REFINES [`Lattice::is_chain`] on
+    /// every [`DataClassification`] triple — every strict chain is a
+    /// chain because [`Lattice::is_strictly_comparable`] refines
+    /// [`Lattice::is_comparable`], and duplicates rejected by the
+    /// strict predicate are the exact reflexive-diagonal that the
+    /// non-strict predicate absorbs via its distinct-pair filter.
+    /// Pinned exhaustively over `DataClassification::ALL^3` (216
+    /// triples) so a regression that promoted the strict predicate
+    /// past its non-strict superset (accepting a pair that
+    /// [`Lattice::is_comparable`] rejects) would surface here.
+    #[test]
+    fn is_strict_chain_refines_is_chain_on_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if DataClassification::is_strict_chain([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_chain([&a, &b, &c]),
+                            "is_strict_chain([{a:?}, {b:?}, {c:?}]) must imply is_chain \
+                             — is_strictly_comparable refines is_comparable, and duplicates \
+                             the strict arm rejects are the exact reflexive diagonal the \
+                             non-strict arm's distinct-pair filter absorbs",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_chain`] admits a TWO-PRIMITIVE REWRITING
+    /// on every [`SubstrateType`] triple:
+    /// `T::is_strict_chain(iter) == T::is_chain(iter) && vs are
+    /// pairwise distinct`. A strict chain is a chain with no repeats;
+    /// equivalent by de-Morgan to "for every i < j, vs[i] != vs[j]
+    /// AND vs[i].is_comparable(&vs[j])", which is byte-identical to
+    /// the definition modulo the filter arithmetic. Pinned
+    /// exhaustively over `SubstrateType::ALL^3` (512 triples) — the
+    /// mixed-shape antichain lattice is the tightest sieve for this
+    /// rewriting because it stresses BOTH the distinct filter (top-
+    /// duplicated pairs) AND the comparability filter (non-top
+    /// distinct pairs are incomparable).
+    #[test]
+    fn is_strict_chain_two_primitive_rewriting_over_substrate_type_all_triples() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    let strict = SubstrateType::is_strict_chain([&a, &b, &c]);
+                    let chain = SubstrateType::is_chain([&a, &b, &c]);
+                    let distinct = a != b && a != c && b != c;
+                    assert_eq!(
+                        strict,
+                        chain && distinct,
+                        "is_strict_chain([{a:?}, {b:?}, {c:?}]) must equal \
+                         is_chain(iter) && (all pairwise distinct) — the two-primitive \
+                         rewriting is byte-identical modulo the filter arithmetic",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_chain`] REDUCES to the pairwise-distinct
+    /// check on any totally-ordered lattice — every distinct pair is
+    /// [`Lattice::is_comparable`] by the total-order property, so the
+    /// strict-comparable check collapses to the distinct-pair check.
+    /// Pinned exhaustively over `DataClassification::ALL^3` (216
+    /// triples) so a regression that broke the total-order property
+    /// (a variant insertion that made two elements incomparable)
+    /// would surface at the first triple where the strict-chain
+    /// verdict disagrees with the all-distinct check.
+    #[test]
+    fn is_strict_chain_reduces_to_pairwise_distinct_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let strict = DataClassification::is_strict_chain([&a, &b, &c]);
+                    let distinct = a != b && a != c && b != c;
+                    assert_eq!(
+                        strict, distinct,
+                        "is_strict_chain([{a:?}, {b:?}, {c:?}]) on a total order must \
+                         reduce to the pairwise-distinct check — every distinct pair \
+                         is comparable, so the strict-comparable check collapses to \
+                         the distinct check",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_chain`] ACCEPTS the full shipped
+    /// enumeration of [`DataClassification::ALL`] and
+    /// [`CalmClassification::ALL`] — both enumerations are chains of
+    /// pairwise-distinct variants on the total-order lattice, so the
+    /// strict-chain predicate fires true on both. Peer of
+    /// `is_chain_is_universally_true_over_data_classification_all_triples`
+    /// on the strict arm at the full-enumeration cardinality: the
+    /// shipped enumeration is not only a chain (structural
+    /// comparability) but ALSO a strict chain (structural strict
+    /// comparability, because no variant is repeated).
+    #[test]
+    fn is_strict_chain_accepts_the_full_shipped_enumerations_on_total_order_lattices() {
+        use tatara_process::classification::{CalmClassification, DataClassification};
+        let data: Vec<&DataClassification> = DataClassification::ALL.iter().collect();
+        assert!(
+            DataClassification::is_strict_chain(data.iter().copied()),
+            "DataClassification::ALL is the strict chain the sensitivity_rank \
+             projection enumerates in strict order — is_strict_chain must fire true",
+        );
+        let calm: Vec<&CalmClassification> = CalmClassification::ALL.iter().collect();
+        assert!(
+            CalmClassification::is_strict_chain(calm.iter().copied()),
+            "CalmClassification::ALL is a two-variant strict chain (Monotone < NonMonotone) \
+             — is_strict_chain must fire true",
+        );
+    }
+
+    /// [`Lattice::is_strict_chain`] REJECTS every distinct-non-top
+    /// pair on the pointed-top antichain [`SubstrateType`] — two
+    /// distinct non-top substrates are incomparable, so
+    /// [`Lattice::is_strictly_comparable`] fails on that pair.
+    /// ACCEPTS only the empty / singleton / {top} / {non-top, top}
+    /// shapes. Peer of
+    /// `is_antichain_projects_the_pointed_top_antichain_over_substrate_type_all_triples`
+    /// on the strict-chain arm. Pinned exhaustively over
+    /// `SubstrateType::ALL^2` (64 pairs).
+    #[test]
+    fn is_strict_chain_rejects_distinct_non_top_pairs_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                let strict = SubstrateType::is_strict_chain([&a, &b]);
+                let expected = if a == b {
+                    // Duplicate pair: strict arm rejects.
+                    false
+                } else {
+                    // Distinct pair: accepts iff one element is the top.
+                    a == top || b == top
+                };
+                assert_eq!(
+                    strict, expected,
+                    "is_strict_chain([{a:?}, {b:?}]) on the pointed-top antichain \
+                     must reject the duplicate arm AND the two-non-top-distinct arm; \
+                     accept iff one element is the pointed-top and the pair is \
+                     distinct",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_chain`] is SEQUENCE-ORDER INDEPENDENT —
+    /// the nested loop checks EVERY distinct-position pair `(i, j)`
+    /// symmetrically via [`Lattice::is_strictly_comparable`]'s
+    /// symmetry, so a permutation of the input yields the same
+    /// verdict. Pinned over `DataClassification::ALL^3` (216 triples,
+    /// full 6-permutation sweep) and `SubstrateType::ALL^3` (512
+    /// triples, reversal only) — matches the sequence-order
+    /// independence seal on [`Lattice::is_chain`] one STRICTNESS axis
+    /// over.
+    #[test]
+    fn is_strict_chain_is_sequence_order_independent() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let refv = DataClassification::is_strict_chain([&a, &b, &c]);
+                    for perm in &[
+                        [&a, &c, &b],
+                        [&b, &a, &c],
+                        [&b, &c, &a],
+                        [&c, &a, &b],
+                        [&c, &b, &a],
+                    ] {
+                        assert_eq!(
+                            DataClassification::is_strict_chain(perm.iter().copied()),
+                            refv,
+                            "is_strict_chain must be sequence-order independent",
+                        );
+                    }
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    let refc = SubstrateType::is_strict_chain([&a, &b, &c]);
+                    assert_eq!(SubstrateType::is_strict_chain([&c, &b, &a]), refc);
+                }
+            }
+        }
+    }
+
+    /// Any [`DataClassification`] triple that
+    /// [`Lattice::is_strictly_monotone_sequence`] accepts IS a strict
+    /// chain — transitivity of [`Lattice::strictly_below`] extends
+    /// the pairwise strict relation to every distinct pair, and the
+    /// strict monotonicity forbids duplicates. Peer of
+    /// `strictly_monotone_triples_over_data_classification_all_are_chains`
+    /// on the strict-arm structural side. Pinned exhaustively over
+    /// `DataClassification::ALL^3`.
+    #[test]
+    fn strictly_monotone_triples_over_data_classification_all_are_strict_chains() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if DataClassification::is_strictly_monotone_sequence([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_strict_chain([&a, &b, &c]),
+                            "strictly-monotone triple ({a:?}, {b:?}, {c:?}) must be \
+                             a strict chain — transitivity of strictly_below extends \
+                             the pairwise strict relation to every distinct pair, and \
+                             strict monotonicity forbids duplicates",
                         );
                     }
                 }

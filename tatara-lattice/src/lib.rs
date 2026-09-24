@@ -2986,6 +2986,245 @@ pub trait Lattice: Sized + Clone + PartialEq {
         vs.windows(2).all(|w| w[0].strictly_below(w[1]))
             || vs.windows(2).all(|w| w[0].strictly_above(w[1]))
     }
+    /// Direction-free sequence-shape (consecutive-pair) peer of
+    /// [`Lattice::is_chain`] on the CONSECUTIVE-VS-ALL-PAIRS axis, AND
+    /// direction-free peer of [`Lattice::is_monotone_sequence`] on the
+    /// DIRECTION-FIXED-ACROSS-SLICE-VS-DIRECTION-FREE-PER-PAIR axis —
+    /// the iterated set is a COMPARABLE SEQUENCE (every CONSECUTIVE
+    /// pair `(vs[i], vs[i + 1])` is [`Lattice::is_comparable`], with
+    /// the direction of comparability free to VARY INDEPENDENTLY at
+    /// each pair) on the lattice's partial order iff every consecutive
+    /// pair satisfies `vs[i].is_comparable(&vs[i + 1])`.
+    /// `T::is_comparable_sequence([&a, &b, &c])` holds iff
+    /// `a.is_comparable(&b) && b.is_comparable(&c)`; three or more
+    /// elements chain through the consecutive-pair conjunction.
+    ///
+    /// The DIRECTION-FREE peer of [`Lattice::is_monotone_sequence`] on
+    /// the (direction-fixed-across-slice, direction-free-per-pair)
+    /// axis — where [`Lattice::is_monotone_sequence`] requires ONE
+    /// direction FIXED across the whole slice (walks either
+    /// [`Lattice::is_ascending`] OR [`Lattice::is_descending`]
+    /// end-to-end), this allows the direction to FLIP at every
+    /// consecutive pair (each pair may independently be
+    /// [`Lattice::leq`] OR [`Lattice::geq`]). Every sequence
+    /// [`Lattice::is_monotone_sequence`] accepts is also accepted
+    /// here; the converse fails on any peak or valley over a total
+    /// order and on any consecutive walk across a pointed-top
+    /// antichain that transits the top from BOTH sides. Peer of
+    /// [`Lattice::is_chain`] one CONSECUTIVE-VS-ALL-PAIRS axis over —
+    /// where [`Lattice::is_chain`] decides all-pairs comparability
+    /// symmetrically over the multiset, this decides consecutive-
+    /// pair comparability over the emitted sequence.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_comparable_sequence(
+    /// std::iter::empty()) == true` on every lattice —
+    /// [`slice::windows`] on a zero-length slice yields no pair, so
+    /// [`Iterator::all`] on the empty iterator is `true`. Shared
+    /// vacuous-truth arm with all eight sequence-shape predicates
+    /// ([`Lattice::is_ascending`], [`Lattice::is_descending`],
+    /// [`Lattice::is_strictly_ascending`], [`Lattice::is_strictly_descending`],
+    /// [`Lattice::is_constant`], [`Lattice::is_monotone_sequence`],
+    /// [`Lattice::is_strictly_monotone_sequence`], and this) on the
+    /// empty-conjunction identity.
+    ///
+    /// **Singleton vacuous truth**: `T::is_comparable_sequence([&a])
+    /// == true` for every `a` — a singleton has no consecutive pair.
+    ///
+    /// **Consecutive-duplicate identity**: `T::is_comparable_sequence(
+    /// [&a, &a]) == true` for every `a` — [`Lattice::is_comparable`]
+    /// is REFLEXIVE via [`Lattice::leq`]'s reflexivity (its default
+    /// routes through `self.leq(other) || other.leq(self)`, and the
+    /// self-pair satisfies `a.leq(&a)`), so the single consecutive
+    /// pair fires true. Shared reflexive-diagonal arm with
+    /// [`Lattice::is_monotone_sequence`], [`Lattice::is_ascending`],
+    /// [`Lattice::is_descending`], and [`Lattice::is_constant`] at
+    /// every all-duplicate slice. DIVERGES from
+    /// [`Lattice::is_strictly_monotone_sequence`] /
+    /// [`Lattice::is_strictly_ascending`] /
+    /// [`Lattice::is_strictly_descending`] (which reject
+    /// consecutive-duplicate pairs on the irreflexive-diagonal arm).
+    ///
+    /// **Pair-identity**: `T::is_comparable_sequence([&a, &b]) ==
+    /// a.is_comparable(&b)` — the 2-input direction-free sequence-
+    /// shape predicate reduces to the pairwise comparability
+    /// primitive directly. AGREES with
+    /// [`Lattice::is_monotone_sequence`]'s arity-2 seal (both equal
+    /// `a.is_comparable(&b)` — a single consecutive pair carries no
+    /// distinction between "same direction across slice" and "free
+    /// direction per pair"). The divergence only surfaces at arity
+    /// ≥ 3.
+    ///
+    /// **Refined by [`Lattice::is_monotone_sequence`]**: for every
+    /// slice, `T::is_monotone_sequence(iter) ⇒
+    /// T::is_comparable_sequence(iter)` — an all-leq or all-geq walk
+    /// implies each consecutive pair is comparable in that direction,
+    /// so the direction-free predicate fires true. The CONVERSE FAILS
+    /// on peaks and valleys: a strict ascent followed by a strict
+    /// descent (or vice versa) accepts here (every consecutive pair
+    /// is comparable) but rejects on
+    /// [`Lattice::is_monotone_sequence`] (neither all-leq nor all-geq
+    /// holds). This is the exact overlap where the direction-free
+    /// predicate carries strictly LESS information than the
+    /// direction-fixed predicate on a total order — every peak or
+    /// valley is a signal the direction-free predicate cannot see.
+    ///
+    /// **Refined by [`Lattice::is_chain`]**: for every slice,
+    /// `T::is_chain(iter) ⇒ T::is_comparable_sequence(iter)` —
+    /// all-pairs comparability trivially implies consecutive-pair
+    /// comparability. The CONVERSE FAILS on partial orders — a slice
+    /// `[b, a, c]` in a poset with `a ≤ b`, `a ≤ c`, `b ‖ c` has
+    /// both consecutive pairs `(b, a)` and `(a, c)` comparable but
+    /// the multiset pair `(b, c)` incomparable, so
+    /// [`Lattice::is_comparable_sequence`] accepts while
+    /// [`Lattice::is_chain`] rejects. On total orders both predicates
+    /// fire universally (see the total-order universal-truth arm
+    /// below).
+    ///
+    /// **Refined by every directional and direction-collapsed
+    /// sequence-shape predicate**: composes through
+    /// [`Lattice::is_monotone_sequence`]'s refinement arm — every one
+    /// of [`Lattice::is_ascending`], [`Lattice::is_descending`],
+    /// [`Lattice::is_strictly_ascending`],
+    /// [`Lattice::is_strictly_descending`],
+    /// [`Lattice::is_strictly_monotone_sequence`], and
+    /// [`Lattice::is_constant`] refines
+    /// [`Lattice::is_monotone_sequence`], which refines this. The
+    /// direction-free predicate sits at the WEAKEST corner of the
+    /// sequence-shape lattice — the LARGEST accepting set on the
+    /// consecutive-pair face — and every stronger sequence-shape
+    /// predicate refines it mechanically.
+    ///
+    /// **Total-order UNIVERSAL truth**: on any totally-ordered
+    /// lattice (e.g. [`baseline::Baseline`], [`DataClassification`],
+    /// [`CalmClassification`]), the predicate accepts EVERY slice at
+    /// EVERY arity — every pair on a total order is comparable, so
+    /// [`Lattice::is_comparable`] fires true on every consecutive
+    /// pair unconditionally. DIVERGES from
+    /// [`Lattice::is_monotone_sequence`] (which rejects peaks and
+    /// valleys on total orders — a non-empty signal that the
+    /// direction-free predicate cannot see). This makes
+    /// [`Lattice::is_comparable_sequence`] indistinguishable from the
+    /// tautology on any total-order lattice AND the WIDEST accepting
+    /// sequence-shape predicate on partial-order lattices at the
+    /// consecutive-pair face (accepts every walk that transits
+    /// comparable pairs at every step, regardless of direction).
+    ///
+    /// **Antichain projection**: on an antichain lattice (e.g.
+    /// [`SubstrateType`]), the predicate accepts every consecutive
+    /// pair that is `(a == b)` (reflexive-diagonal arm via
+    /// [`Lattice::is_comparable`]'s reflexivity) OR touches the
+    /// pointed-top [`SubstrateType::Regulatory`] on at least one side
+    /// (the top-absorber comparability arm). The 3-input walk
+    /// `[non_top_x, top, non_top_y]` for `non_top_x != non_top_y`
+    /// ACCEPTS — both consecutive pairs are top-touching, so both
+    /// are comparable — while [`Lattice::is_monotone_sequence`]
+    /// REJECTS the same walk (the ascending arm accepts
+    /// `non_top_x.leq(top)` but rejects `top.leq(non_top_y)`, and
+    /// the descending arm mirrors the failure). This is the
+    /// antichain-projection witness for the direction-free-vs-
+    /// direction-fixed distinction at arity 3.
+    ///
+    /// **Any-incomparable-consecutive-pair rejection**: if any
+    /// consecutive pair `(vs[i], vs[i + 1])` fails
+    /// `vs[i].is_comparable(&vs[i + 1])`, then
+    /// `T::is_comparable_sequence(iter) == false` — [`Iterator::all`]
+    /// on [`slice::windows`] short-circuits at the first violating
+    /// pair. The rejection targets the sequence-shape peer of
+    /// [`Lattice::is_antichain`]'s any-comparable-pair rejection at
+    /// the consecutive-pair face — a single incomparable step
+    /// anywhere in the emitted sequence rejects the whole predicate.
+    ///
+    /// **Reversal invariance**: `T::is_comparable_sequence(iter) ==
+    /// T::is_comparable_sequence(iter.rev())` on every collection —
+    /// [`Lattice::is_comparable`] is SYMMETRIC (its default
+    /// `self.leq(other) || other.leq(self)` is a swap-invariant
+    /// disjunction) AND [`Iterator::all`]'s conjunction is order-
+    /// insensitive, so reversing the slice reverses each consecutive
+    /// pair and preserves the aggregated verdict. AGREES with
+    /// [`Lattice::is_monotone_sequence`]'s reversal invariance (both
+    /// direction-collapsed and direction-free predicates inherit the
+    /// pair-level primitive's symmetry) and DIVERGES from
+    /// [`Lattice::is_ascending`] / [`Lattice::is_descending`] (which
+    /// flip on reversal via [`Lattice::leq`]'s directionality). The
+    /// load-bearing distinction: the direction-free reading inherits
+    /// the pairwise primitive's symmetry mechanically, while the
+    /// directional readings inherit the directional primitive's
+    /// asymmetry.
+    ///
+    /// **NOT permutation-invariant** (contrasts with
+    /// [`Lattice::is_chain`]'s / [`Lattice::is_antichain`]'s FULL
+    /// permutation invariance): the predicate depends on the
+    /// CONSECUTIVE-ADJACENCY structure of the emitted sequence, so a
+    /// permutation that re-groups the same multiset into different
+    /// adjacencies can flip the verdict. Witness on the pointed-top
+    /// antichain [`SubstrateType`]: the top-transit walk `[Compute,
+    /// Regulatory, Storage]` transits the pointed-top on both
+    /// consecutive pairs and accepts; the permutation `[Compute,
+    /// Storage, Regulatory]` re-groups the same multiset so the
+    /// incomparable pair `(Compute, Storage)` becomes adjacent and
+    /// the walk fails at the first window. This is the load-bearing
+    /// distinction between the SEQUENCE-shape and the STRUCTURAL
+    /// (all-pairs) comparability predicates — the direction-free
+    /// SEQUENCE-shape reading is one CARDINALITY axis DOWN from the
+    /// all-pairs STRUCTURAL reading and carries strictly less
+    /// permutation-symmetry (only reversal, not full permutations).
+    ///
+    /// Default routes through
+    /// `iter.into_iter().collect::<Vec<&Self>>()` followed by
+    /// `.windows(2).all(|w| w[0].is_comparable(w[1]))` — one
+    /// [`Lattice::is_comparable`] delegation per consecutive pair on
+    /// the collected `Vec<&Self>` buffer. Mirrors
+    /// [`Lattice::is_ascending`]'s walk with the pair-level primitive
+    /// swapped from [`Lattice::leq`] to [`Lattice::is_comparable`]
+    /// (which itself decomposes into
+    /// `self.leq(other) || other.leq(self)`). The collect
+    /// materializes the iterator once so the walk operates on a
+    /// stable slice — an [`IntoIterator`] that yields distinct
+    /// values on distinct calls cannot break the walk's determinism.
+    /// A future normalization at [`Lattice::is_comparable`] (or at
+    /// the underlying [`Lattice::leq`] the direction-collapse
+    /// disjunction routes through) lands at ONE site and this
+    /// direction-free sequence-shape peer inherits the upgrade
+    /// mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the direction-free sequence-shape
+    /// comparability predicate is itself a typed named `bool`
+    /// composing [`Lattice::is_comparable`] via [`slice::windows`]
+    /// plus [`Iterator::all`]; every downstream lattice-law consumer
+    /// inherits the predicate through the default mechanically) +
+    /// THEORY.md §III (typescape — the direction-free sequence-shape
+    /// comparability arm on every classification-axis lattice now
+    /// binds at ONE substrate owner on the [`Lattice`] algebra,
+    /// closing the (consecutive-pair, all-pairs) × (direction-free
+    /// comparable) 2×1 face at the consecutive-pair corner one
+    /// CONSECUTIVE-VS-ALL-PAIRS axis over from
+    /// [`Lattice::is_chain`] and one
+    /// DIRECTION-FIXED-VS-DIRECTION-FREE axis over from
+    /// [`Lattice::is_monotone_sequence`]).
+    ///
+    /// Frontier inspiration: fence-poset / zigzag-walk detection in
+    /// order theory — the direction-free consecutive-pair-
+    /// comparability predicate is the natural characterization of
+    /// walks that traverse a "fence" (an alternating chain in a
+    /// poset) or, on a total order, any walk whatsoever. Translated:
+    /// threaded the direction-free consecutive-pair comparability
+    /// predicate through the [`Lattice`] trait's default-method
+    /// surface, generalizing the classical fence-walk detection
+    /// primitive to a first-class algebra method so every closed-set
+    /// impl picks up the whole direction-free sequence-shape
+    /// predicate mechanically — the SEQUENCE-SHAPE direction-free
+    /// peer of what [`Lattice::is_chain`] carries at the all-pairs
+    /// face and [`Lattice::is_monotone_sequence`] carries at the
+    /// direction-fixed face.
+    fn is_comparable_sequence<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).all(|w| w[0].is_comparable(w[1]))
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -9438,6 +9677,434 @@ mod tests {
         }
     }
 
+    // ── Lattice::is_comparable_sequence — direction-free sequence-shape
+    //    consecutive-pair default peer ────────────────────────────────────
+    //
+    // Bind [`Lattice::is_comparable_sequence`] at fail-before-pass-after
+    // granularity. Pre-lift the [`Lattice`] trait's sequence-shape face
+    // carried the direction-FIXED consecutive-pair predicates
+    // (`is_ascending`, `is_descending`, `is_strictly_ascending`,
+    // `is_strictly_descending`, `is_constant`, `is_monotone_sequence`,
+    // `is_strictly_monotone_sequence`) but NOT the direction-FREE
+    // consecutive-pair predicate — a consumer that wanted to probe "does
+    // every consecutive pair sit on a comparable edge of the partial
+    // order, without caring which direction each pair walks?" hand-
+    // authored `vs.windows(2).all(|w| w[0].is_comparable(w[1]))` at each
+    // callsite OR reached for `is_monotone_sequence` (which is STRICTLY
+    // STRONGER on partial orders — it rejects any per-pair direction
+    // flip, including the top-transit walks a pointed-top antichain
+    // admits). Post-lift the direction-free sequence-shape comparability
+    // predicate binds at ONE substrate primitive on the [`Lattice`]
+    // algebra, closing the (direction-fixed, direction-free) × (leq-or-
+    // geq) 2×1 face at the consecutive-pair level one DIRECTION-FIXED-
+    // VS-DIRECTION-FREE axis over from `is_monotone_sequence`, AND
+    // closing the (consecutive-pair, all-pairs) × (direction-free
+    // comparable) 2×1 face one CONSECUTIVE-VS-ALL-PAIRS axis over from
+    // `is_chain`. The predicate sits at the WEAKEST corner of the
+    // sequence-shape lattice — every other sequence-shape predicate
+    // refines it.
+
+    /// [`Lattice::is_comparable_sequence`] is vacuously true at the
+    /// empty iterator on every classification-axis lattice —
+    /// [`slice::windows`] on a zero-length slice yields no pair, so
+    /// [`Iterator::all`] on the empty iterator is `true`. Shared
+    /// vacuous-truth arm with all sequence-shape predicates on the
+    /// empty-conjunction identity. Pinned exhaustively over the
+    /// three in-tree closed-set impls.
+    #[test]
+    fn is_comparable_sequence_is_vacuously_true_at_the_empty_iterator() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        assert!(DataClassification::is_comparable_sequence(
+            std::iter::empty()
+        ));
+        assert!(CalmClassification::is_comparable_sequence(
+            std::iter::empty()
+        ));
+        assert!(SubstrateType::is_comparable_sequence(std::iter::empty()));
+    }
+
+    /// [`Lattice::is_comparable_sequence`] is vacuously true at every
+    /// singleton on every classification-axis lattice — a singleton
+    /// has no consecutive pair. Shared vacuous-truth arm with all
+    /// eight sequence-shape predicates at the singleton case. Pinned
+    /// exhaustively over every variant of every closed-set impl.
+    #[test]
+    fn is_comparable_sequence_is_vacuously_true_at_every_singleton() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_comparable_sequence([&a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_comparable_sequence([&a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_comparable_sequence([&a]));
+        }
+    }
+
+    /// [`Lattice::is_comparable_sequence`] ACCEPTS every all-duplicate
+    /// collection at arity 2 and 3 on every classification-axis
+    /// lattice — [`Lattice::is_comparable`] is REFLEXIVE via
+    /// [`Lattice::leq`]'s reflexivity, so `a.is_comparable(&a)` fires
+    /// true on every consecutive-duplicate pair. AGREES with
+    /// [`Lattice::is_monotone_sequence`], [`Lattice::is_ascending`],
+    /// [`Lattice::is_descending`], and [`Lattice::is_constant`] on
+    /// this shared reflexive-diagonal arm; DIVERGES from
+    /// [`Lattice::is_strictly_monotone_sequence`] /
+    /// [`Lattice::is_strictly_ascending`] /
+    /// [`Lattice::is_strictly_descending`] (which reject consecutive-
+    /// duplicate pairs on the irreflexive-diagonal arm). This is the
+    /// STRICTNESS-AXIS CROSS-ARM seal at the reflexive diagonal for
+    /// the direction-free peer.
+    #[test]
+    fn is_comparable_sequence_accepts_all_duplicate_collections_at_arity_2_and_3() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_comparable_sequence([&a, &a]));
+            assert!(DataClassification::is_comparable_sequence([&a, &a, &a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_comparable_sequence([&a, &a]));
+            assert!(CalmClassification::is_comparable_sequence([&a, &a, &a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_comparable_sequence([&a, &a]));
+            assert!(SubstrateType::is_comparable_sequence([&a, &a, &a]));
+        }
+    }
+
+    /// [`Lattice::is_comparable_sequence`] at arity 2 REDUCES to
+    /// `a.is_comparable(&b)` on every [`SubstrateType`] pair — the
+    /// 2-input direction-free sequence-shape predicate collapses to
+    /// the pairwise comparability primitive directly. Pinned
+    /// exhaustively over `ALL^2` (64 pairs) — the antichain-shape
+    /// lattice is where the comparability primitive is non-trivially
+    /// mixed (on total orders every pair is comparable so the
+    /// reduction rides trivial universal truth), so this is the
+    /// tightest sieve. AGREES with [`Lattice::is_monotone_sequence`]'s
+    /// arity-2 seal at every pair (both direction-free and direction-
+    /// fixed direction-collapsed predicates coincide at arity 2 —
+    /// a single consecutive pair carries no distinction between
+    /// "same direction across slice" and "free direction per pair").
+    #[test]
+    fn is_comparable_sequence_arity_2_reduces_to_is_comparable_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                assert_eq!(
+                    SubstrateType::is_comparable_sequence([&a, &b]),
+                    a.is_comparable(&b),
+                    "is_comparable_sequence([{a:?}, {b:?}]) must reduce to \
+                     a.is_comparable(&b) — the 2-input direction-free sequence-shape \
+                     predicate collapses to the pairwise comparability primitive",
+                );
+                // Direction-free / direction-fixed collapse at arity 2:
+                // both predicates coincide because a single consecutive
+                // pair carries no across-slice/per-pair distinction.
+                assert_eq!(
+                    SubstrateType::is_comparable_sequence([&a, &b]),
+                    SubstrateType::is_monotone_sequence([&a, &b]),
+                    "is_comparable_sequence([{a:?}, {b:?}]) must agree with \
+                     is_monotone_sequence at arity 2 — the direction axis carries no \
+                     information on a single consecutive pair",
+                );
+            }
+        }
+    }
+
+    /// **Load-bearing theorem**: [`Lattice::is_comparable_sequence`]
+    /// UNIVERSALLY ACCEPTS every triple on any totally-ordered lattice
+    /// — every pair on a total order is comparable, so
+    /// [`Lattice::is_comparable`] fires true on every consecutive
+    /// pair unconditionally, and [`Iterator::all`] collapses to
+    /// universal truth. DIVERGES from
+    /// [`Lattice::is_monotone_sequence`] (which rejects peaks and
+    /// valleys on total orders — a non-empty signal that the
+    /// direction-free predicate cannot see). Pinned exhaustively over
+    /// `DataClassification::ALL^3` (216 triples). Every triple in the
+    /// sweep must fire true; a regression that broke the total-order
+    /// property would surface as the first non-comparable pair
+    /// forcing a false verdict here.
+    #[test]
+    fn is_comparable_sequence_universally_accepts_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    assert!(
+                        DataClassification::is_comparable_sequence([&a, &b, &c]),
+                        "is_comparable_sequence([{a:?}, {b:?}, {c:?}]) on a total order \
+                         must fire true — every consecutive pair is comparable by the \
+                         total-order property, so the direction-free walk accepts \
+                         unconditionally",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_monotone_sequence`] REFINES
+    /// [`Lattice::is_comparable_sequence`] on every
+    /// [`DataClassification`] triple AND every [`SubstrateType`]
+    /// triple — an all-leq or all-geq walk implies each consecutive
+    /// pair is comparable in that direction, so the direction-free
+    /// predicate fires true. Pinned exhaustively over `ALL^3` on
+    /// BOTH the total-order lattice (216 triples) and the antichain
+    /// lattice (512 triples) so a regression that promoted the
+    /// direction-free predicate past its direction-fixed superset
+    /// (rejecting a pair `is_monotone_sequence` accepts) would
+    /// surface at either sieve.
+    #[test]
+    fn is_monotone_sequence_refines_is_comparable_sequence_over_all_triples() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if DataClassification::is_monotone_sequence([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_comparable_sequence([&a, &b, &c]),
+                            "is_monotone_sequence([{a:?}, {b:?}, {c:?}]) must imply \
+                             is_comparable_sequence — an all-leq or all-geq walk \
+                             makes every consecutive pair comparable in that direction",
+                        );
+                    }
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    if SubstrateType::is_monotone_sequence([&a, &b, &c]) {
+                        assert!(
+                            SubstrateType::is_comparable_sequence([&a, &b, &c]),
+                            "is_monotone_sequence([{a:?}, {b:?}, {c:?}]) must imply \
+                             is_comparable_sequence on the antichain lattice too — \
+                             the direction-fixed reading refines the direction-free \
+                             reading everywhere",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_chain`] REFINES [`Lattice::is_comparable_sequence`]
+    /// on every [`DataClassification`] triple AND every
+    /// [`SubstrateType`] triple — all-pairs comparability trivially
+    /// implies consecutive-pair comparability (the O(N²) sweep
+    /// dominates the O(N) walk). Peer of the
+    /// `is_monotone_sequence_refines_is_comparable_sequence` arm on
+    /// the (all-pairs, consecutive-pair) axis one CONSECUTIVE-VS-ALL-
+    /// PAIRS step over. Pinned exhaustively over `ALL^3` on BOTH the
+    /// total-order lattice (216 triples) and the antichain lattice
+    /// (512 triples).
+    #[test]
+    fn is_chain_refines_is_comparable_sequence_over_all_triples() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if DataClassification::is_chain([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_comparable_sequence([&a, &b, &c]),
+                            "is_chain([{a:?}, {b:?}, {c:?}]) must imply \
+                             is_comparable_sequence — all-pairs comparability \
+                             trivially implies consecutive-pair comparability",
+                        );
+                    }
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    if SubstrateType::is_chain([&a, &b, &c]) {
+                        assert!(
+                            SubstrateType::is_comparable_sequence([&a, &b, &c]),
+                            "is_chain([{a:?}, {b:?}, {c:?}]) must imply \
+                             is_comparable_sequence on the antichain lattice too",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_comparable_sequence`] ACCEPTS every peak and
+    /// valley on [`DataClassification`] where
+    /// [`Lattice::is_monotone_sequence`] REJECTS the same walk. This
+    /// is the SIGNAL cell — the load-bearing distinction between the
+    /// direction-free predicate and the direction-fixed predicate on
+    /// a total order at arity 3: every consecutive pair on a total
+    /// order is comparable, so the direction-free walk accepts peaks
+    /// AND valleys, while the direction-fixed walk requires all-≤
+    /// OR all-≥ end-to-end and rejects both shapes. Peer of the
+    /// `is_monotone_sequence_rejects_peak_and_valley_over_data_classification`
+    /// seal one DIRECTION-FIXED-VS-DIRECTION-FREE axis over — the
+    /// same fixture that pins the direction-fixed predicate's
+    /// signal here pins the direction-free predicate's acceptance.
+    #[test]
+    fn is_comparable_sequence_accepts_peak_and_valley_over_data_classification() {
+        use tatara_process::classification::DataClassification;
+        let a = DataClassification::Public;
+        let b = DataClassification::Internal;
+        let c = DataClassification::Confidential;
+        // Peak: [Public, Confidential, Internal] rises then falls —
+        // rejected by is_monotone_sequence (no fixed direction),
+        // accepted by is_comparable_sequence (every consecutive pair
+        // is comparable on the total order).
+        assert!(!DataClassification::is_monotone_sequence([&a, &c, &b]));
+        assert!(DataClassification::is_comparable_sequence([&a, &c, &b]));
+        // Valley: [Internal, Public, Confidential] falls then rises —
+        // dual shape, same divergence.
+        assert!(!DataClassification::is_monotone_sequence([&b, &a, &c]));
+        assert!(DataClassification::is_comparable_sequence([&b, &a, &c]));
+    }
+
+    /// [`Lattice::is_comparable_sequence`] ACCEPTS the top-transit
+    /// walk `[non_top_x, top, non_top_y]` for distinct non-top
+    /// substrates on [`SubstrateType`] where
+    /// [`Lattice::is_monotone_sequence`] REJECTS the same walk. This
+    /// is the ANTICHAIN-projection witness for the direction-free-vs-
+    /// direction-fixed distinction at arity 3: both consecutive
+    /// pairs `(non_top_x, top)` and `(top, non_top_y)` touch the
+    /// pointed-top and are therefore comparable (the top absorbs
+    /// every substrate on the [`Lattice::join`] side), so the
+    /// direction-free walk accepts; the direction-fixed walk requires
+    /// EITHER `non_top_x.leq(top) && top.leq(non_top_y)` (which
+    /// fails on the second pair — `top` is the antichain's join
+    /// absorber, not its meet absorber) OR the dual reversed reading
+    /// (which fails on the first pair). Peer of the
+    /// `is_monotone_sequence_and_is_strictly_monotone_sequence_project_the_pointed_top_antichain`
+    /// seal at arity 3 on the direction-free arm — the same
+    /// antichain shape that pins the direction-fixed predicate to
+    /// the top-touching diagonal at arity 2 pins the direction-free
+    /// predicate's ACCEPTANCE at every top-transit walk at arity 3.
+    #[test]
+    fn is_comparable_sequence_accepts_top_transit_over_substrate_type() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        let s = SubstrateType::Compute;
+        let t = SubstrateType::Storage;
+        // Top-transit walk: both consecutive pairs touch the top,
+        // so both are comparable, so the direction-free walk accepts.
+        assert!(SubstrateType::is_comparable_sequence([&s, &top, &t]));
+        // But the direction-fixed walk rejects — no single direction
+        // accepts both pairs on the pointed-top antichain.
+        assert!(!SubstrateType::is_monotone_sequence([&s, &top, &t]));
+        // Dual direction of the top-transit walk: same divergence.
+        assert!(SubstrateType::is_comparable_sequence([&t, &top, &s]));
+        assert!(!SubstrateType::is_monotone_sequence([&t, &top, &s]));
+    }
+
+    /// [`Lattice::is_comparable_sequence`] REJECTS every consecutive
+    /// walk that touches an incomparable pair on [`SubstrateType`] —
+    /// two distinct non-top substrates are incomparable, so any
+    /// consecutive pair of them fails the direction-free walk. Peer
+    /// of [`Lattice::is_antichain`]'s any-comparable-pair rejection
+    /// one CONSECUTIVE-VS-ALL-PAIRS axis over at the sequence-shape
+    /// face — the direction-free predicate short-circuits at the
+    /// first incomparable consecutive pair.
+    #[test]
+    fn is_comparable_sequence_rejects_incomparable_consecutive_pair_over_substrate_type() {
+        use tatara_process::classification::SubstrateType;
+        let s = SubstrateType::Compute;
+        let t = SubstrateType::Storage;
+        let u = SubstrateType::Network;
+        // Three distinct non-top substrates: every consecutive pair
+        // is incomparable, so the direction-free walk rejects.
+        assert!(!SubstrateType::is_comparable_sequence([&s, &t, &u]));
+        // Two distinct non-top substrates: same rejection at arity 2.
+        assert!(!SubstrateType::is_comparable_sequence([&s, &t]));
+    }
+
+    /// [`Lattice::is_comparable_sequence`] is REVERSAL-INVARIANT on
+    /// every [`SubstrateType`] triple — [`Lattice::is_comparable`] is
+    /// SYMMETRIC (routes through `self.leq(other) || other.leq(self)`,
+    /// a swap-invariant disjunction), so reversing the slice reverses
+    /// each consecutive pair AND [`Iterator::all`]'s conjunction is
+    /// order-insensitive, so each pair's verdict is preserved AND the
+    /// aggregated verdict is preserved. This is a WEAKER property
+    /// than [`Lattice::is_chain`]'s / [`Lattice::is_antichain`]'s
+    /// FULL PERMUTATION invariance: [`Lattice::is_comparable_sequence`]
+    /// depends on the CONSECUTIVE-ADJACENCY structure of the emitted
+    /// sequence, so a permutation that re-groups the same multiset
+    /// into different adjacencies (e.g. `[Compute, Regulatory,
+    /// Storage]` vs the permutation `[Compute, Storage, Regulatory]`
+    /// on the pointed-top antichain) CAN flip the verdict — the
+    /// first walk transits the top on both pairs and accepts, the
+    /// second hits the incomparable `(Compute, Storage)` pair and
+    /// rejects. AGREES with [`Lattice::is_ascending`] /
+    /// [`Lattice::is_descending`] /
+    /// [`Lattice::is_monotone_sequence`] at the direction-collapse
+    /// level on the reversal arm (they all share reversal invariance
+    /// through the symmetric or symmetrically-disjunctive pair
+    /// primitive), but only the ALL-PAIRS structural predicates lift
+    /// to full permutation invariance. Pinned over `ALL^3` (512
+    /// triples) — the antichain-shape lattice is the axis with the
+    /// most non-trivial comparability structure, so this is the
+    /// tightest sieve for the reversal arm.
+    #[test]
+    fn is_comparable_sequence_is_reversal_invariant_over_substrate_type_all_triples() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    let forward = SubstrateType::is_comparable_sequence([&a, &b, &c]);
+                    let reversed = SubstrateType::is_comparable_sequence([&c, &b, &a]);
+                    assert_eq!(
+                        forward, reversed,
+                        "is_comparable_sequence must be reversal-invariant — \
+                         is_comparable is symmetric, so reversing the slice \
+                         preserves every consecutive pair's verdict AND \
+                         Iterator::all's conjunction is order-insensitive",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_comparable_sequence`] is NOT permutation-
+    /// invariant on the pointed-top antichain [`SubstrateType`] — the
+    /// predicate depends on consecutive adjacency, so a permutation
+    /// that re-groups the same multiset into different adjacencies
+    /// can flip the verdict. This is the LOAD-BEARING distinction
+    /// between the SEQUENCE-shape and the STRUCTURAL (all-pairs)
+    /// comparability predicates: [`Lattice::is_chain`] /
+    /// [`Lattice::is_antichain`] read the multiset symmetrically and
+    /// are permutation-invariant; [`Lattice::is_comparable_sequence`]
+    /// reads the emitted sequence and is only reversal-invariant.
+    /// Witness triple: `[Compute, Regulatory, Storage]` transits the
+    /// pointed-top on both consecutive pairs and accepts;
+    /// `[Compute, Storage, Regulatory]` hits the incomparable
+    /// `(Compute, Storage)` pair as its first window and rejects
+    /// (the trailing `(Storage, Regulatory)` pair is top-touching
+    /// and would accept, but the conjunction short-circuits on the
+    /// first false verdict).
+    #[test]
+    fn is_comparable_sequence_is_not_permutation_invariant_over_substrate_type() {
+        use tatara_process::classification::SubstrateType;
+        let s = SubstrateType::Compute;
+        let t = SubstrateType::Storage;
+        let top = SubstrateType::Regulatory;
+        // Top-transit walk: both consecutive pairs are top-touching,
+        // so both are comparable, so the direction-free walk accepts.
+        assert!(SubstrateType::is_comparable_sequence([&s, &top, &t]));
+        // Same multiset, different adjacency: the incomparable pair
+        // `(Compute, Storage)` is now consecutive, so the walk fails
+        // at the first window.
+        assert!(!SubstrateType::is_comparable_sequence([&s, &t, &top]));
+        // And its reversal: `(Regulatory, Storage)` accepts as top-
+        // touching, then `(Storage, Compute)` fails.
+        assert!(!SubstrateType::is_comparable_sequence([&top, &t, &s]));
+    }
+
     /// [`Lattice::is_strictly_comparable`] on [`DataClassification`]
     /// projects the total-order lattice to strict inequality: every
     /// distinct pair fires `true` (comparable via the total order AND
@@ -9819,6 +10486,83 @@ mod tests {
             prop_assert_eq!(
                 DataClassification::is_strictly_monotone_sequence(forward.iter().copied()),
                 DataClassification::is_strictly_monotone_sequence(reversed.iter().copied()),
+            );
+        }
+
+        /// [`Lattice::is_comparable_sequence`] fires UNIVERSALLY TRUE
+        /// on random [`DataClassification`] sequences of length 0..8
+        /// — every pair on a total order is comparable, so every
+        /// consecutive pair is comparable, so the direction-free
+        /// walk accepts unconditionally. Proptest peer of the
+        /// exhaustive-triple universal-truth seal at extended arity;
+        /// a regression that broke the total-order property would
+        /// surface here on the first slice whose consecutive walk
+        /// found an incomparable pair.
+        #[test]
+        fn is_comparable_sequence_universally_accepts_over_data_classification_random_sequences(
+            vs in proptest::collection::vec(prop_oneof![
+                Just(DataClassification::Public),
+                Just(DataClassification::Internal),
+                Just(DataClassification::Confidential),
+                Just(DataClassification::Pii),
+                Just(DataClassification::Phi),
+                Just(DataClassification::Pci),
+            ], 0..8usize),
+        ) {
+            let refs: Vec<&DataClassification> = vs.iter().collect();
+            prop_assert!(DataClassification::is_comparable_sequence(refs.iter().copied()));
+        }
+
+        /// [`Lattice::is_monotone_sequence`] REFINES
+        /// [`Lattice::is_comparable_sequence`] on random
+        /// [`DataClassification`] sequences of length 0..8 — an
+        /// all-leq or all-geq walk implies each consecutive pair is
+        /// comparable in that direction. Proptest peer of the
+        /// exhaustive-triple refinement seal at extended arity.
+        #[test]
+        fn is_monotone_sequence_refines_is_comparable_sequence_over_data_classification_random_sequences(
+            vs in proptest::collection::vec(prop_oneof![
+                Just(DataClassification::Public),
+                Just(DataClassification::Internal),
+                Just(DataClassification::Confidential),
+                Just(DataClassification::Pii),
+                Just(DataClassification::Phi),
+                Just(DataClassification::Pci),
+            ], 0..8usize),
+        ) {
+            let refs: Vec<&DataClassification> = vs.iter().collect();
+            if DataClassification::is_monotone_sequence(refs.iter().copied()) {
+                prop_assert!(DataClassification::is_comparable_sequence(refs.iter().copied()));
+            }
+        }
+
+        /// [`Lattice::is_comparable_sequence`] is SEQUENCE-ORDER
+        /// INDEPENDENT on random [`SubstrateType`] sequences of length
+        /// 0..8 — [`Lattice::is_comparable`] is symmetric, so
+        /// reversing the slice preserves each consecutive pair's
+        /// verdict. Proptest peer of the exhaustive-triple order-
+        /// independence seal at extended arity — the antichain-shape
+        /// lattice is the axis with the most non-trivial comparability
+        /// structure, so this is the tightest sieve for the symmetry
+        /// arm.
+        #[test]
+        fn is_comparable_sequence_is_sequence_order_independent_over_substrate_type_random_sequences(
+            vs in proptest::collection::vec(prop_oneof![
+                Just(SubstrateType::Financial),
+                Just(SubstrateType::Compute),
+                Just(SubstrateType::Network),
+                Just(SubstrateType::Storage),
+                Just(SubstrateType::Security),
+                Just(SubstrateType::Identity),
+                Just(SubstrateType::Observability),
+                Just(SubstrateType::Regulatory),
+            ], 0..8usize),
+        ) {
+            let forward: Vec<&SubstrateType> = vs.iter().collect();
+            let reversed: Vec<&SubstrateType> = vs.iter().rev().collect();
+            prop_assert_eq!(
+                SubstrateType::is_comparable_sequence(forward.iter().copied()),
+                SubstrateType::is_comparable_sequence(reversed.iter().copied()),
             );
         }
 

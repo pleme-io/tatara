@@ -670,6 +670,203 @@ pub trait Lattice: Sized + Clone + PartialEq {
     {
         iter.into_iter().all(|x| x.strictly_below(self))
     }
+    /// Interval-containment predicate — `self` sits inside the closed
+    /// bracket `[low, high]` on the lattice's partial order.
+    /// `a.is_between(&low, &high)` holds iff `low.leq(&a) && a.leq(&high)`:
+    /// `self` is at-or-above `low` AND at-or-below `high` in the
+    /// refinement order.
+    ///
+    /// The 3-ary interval-containment PREDICATE peer of the 2-ary
+    /// [`Lattice::leq`] / [`Lattice::geq`] pairwise comparators on the
+    /// arity-3 face of the (pairwise, interval, N-ary) primitive-arity
+    /// grid — where [`Lattice::leq`] decides the 2-input half-plane
+    /// membership (is `self` at-or-below `other`) and
+    /// [`Lattice::is_lower_bound_of`] decides the N-input universal
+    /// half-plane membership (is `self` at-or-below EVERY member of the
+    /// iterated set), this decides the 3-input BRACKET membership (does
+    /// `self` sit within `[low, high]`) via the pointwise conjunction of
+    /// the two half-plane decisions. Together with
+    /// [`Lattice::is_strictly_between`] on the strict arm this closes
+    /// the (strict, non-strict) × (interval-containment) 2×1 grid on the
+    /// bracket-membership face of the algebra's predicate surface —
+    /// exactly the way [`Lattice::leq`] / [`Lattice::strictly_below`]
+    /// close the (strict, non-strict) × (pairwise `≤`) 2×1 grid one
+    /// ARITY axis down.
+    ///
+    /// **Endpoint reflexivity**: `low.is_between(&low, &high) == true`
+    /// whenever `low.leq(&high)` — the low endpoint is trivially in
+    /// its own bracket. Dually `high.is_between(&low, &high) == true`
+    /// under the same premise. Both cases route through
+    /// [`Lattice::leq`]'s reflexive arm on the conjunct that fixes the
+    /// endpoint and the caller-supplied `low.leq(&high)` premise on
+    /// the other; when the premise fails (inverted bracket) the
+    /// predicate rejects at the failing conjunct.
+    ///
+    /// **Degenerate-bracket collapse**: `a.is_between(&x, &x) ⇔ a == x`
+    /// on every lattice element — a zero-width bracket admits only the
+    /// single point `x`. Follows from antisymmetry of [`Lattice::leq`]:
+    /// `x.leq(&a) && a.leq(&x) ⇒ a == x`. Peer of the same identity
+    /// pinned in-tree on
+    /// [`tatara_lisp::macro_expand::ResourceLimits::within`]
+    /// (`resource_limits_within_of_equal_bounds_iff_equal_to_bound`);
+    /// this widening lifts the SAME shape from a per-domain `const fn`
+    /// to the trait's default-method surface so every closed-set
+    /// lattice impl inherits the interval-containment predicate for
+    /// free.
+    ///
+    /// **Inverted-bracket rejection**: if `high.strictly_below(&low)`
+    /// (the bracket is empty because its upper endpoint sits strictly
+    /// below its lower one), then `a.is_between(&low, &high) == false`
+    /// for EVERY element — no lattice element can simultaneously be
+    /// at-or-above `low` and at-or-below a `high` that itself sits
+    /// strictly below `low`. Pinned exhaustively over the closed-set
+    /// impls below on the every-inverted-pair sweep.
+    ///
+    /// **Extrema-bracket universal-truth**: `a.is_between(&T::bottom(),
+    /// &T::top()) == true` for EVERY element on EVERY lattice —
+    /// `T::bottom().leq(&a)` and `a.leq(&T::top())` are the lattice's
+    /// bottom/top axioms, so the widest possible bracket admits every
+    /// element. Peer of the extrema-bracket identity pinned in-tree on
+    /// [`tatara_lisp::macro_expand::ResourceLimits::within`]
+    /// (`resource_limits_within_with_lattice_extrema_is_true`); binds
+    /// at ONE substrate primitive on the [`Lattice`] algebra rather
+    /// than at each consumer's hand-authored bounded-lattice cross-
+    /// check.
+    ///
+    /// **Antichain rejection**: on an antichain lattice (e.g.
+    /// [`SubstrateType`]), the predicate rejects most brackets that
+    /// contain distinct incomparable elements — a `[low, high]` with
+    /// incomparable endpoints admits only elements that are
+    /// simultaneously at-or-above `low` AND at-or-below `high`, and on
+    /// the pointed-top antichain that is either the top itself (when
+    /// high == top) or nothing. The predicate does NOT promote
+    /// incomparable brackets to spurious containment.
+    ///
+    /// Default routes through `low.leq(self) && self.leq(high)` — the
+    /// two-primitive antisymmetric composition of two [`Lattice::leq`]
+    /// calls on any partial order. A future normalization at
+    /// [`Lattice::leq`] lands at ONE site and this default inherits
+    /// mechanically. The `(low, high)` parameter order is baked in so
+    /// consumers cannot accidentally swap the bracket bounds — a
+    /// copy-paste that transposed the two would test `high.leq(self) &&
+    /// self.leq(low)` (the WRONG containment direction, returning
+    /// `true` only for the empty set of elements that simultaneously
+    /// sit above `high` AND below `low` when `low.leq(&high)` holds),
+    /// a silent distortion the type system did not gate pre-lift and
+    /// now does through the method's parameter order.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the 3-ary interval-containment predicate is
+    /// itself a typed named `bool` composing two [`Lattice::leq`]
+    /// calls via the boolean `&&` conjunction. Every downstream
+    /// lattice-law consumer inherits the predicate through the
+    /// default. THEORY.md §III — typescape; the interval-containment
+    /// arm on every classification-axis lattice binds at ONE substrate
+    /// owner on the [`Lattice`] algebra rather than at each consumer's
+    /// hand-rolled `low.leq(&x) && x.leq(&high)` conjunction (a
+    /// duplicated pattern in-tree at
+    /// [`tatara_lisp::macro_expand::ResourceLimits::within`] on the
+    /// pointwise resource-posture partial order).
+    ///
+    /// Frontier inspiration: the interval-containment predicate is the
+    /// natural boolean twin of stdlib's [`Ord::clamp`] — stdlib lacks
+    /// an `is_in_range(min, max)` method, but the bounded-lattice
+    /// extension of the pattern is straightforward on any partial order
+    /// and closes the (combinator, predicate) row on the bracket-
+    /// primitive surface. Translated: threaded the same 3-ary bracket-
+    /// containment shape through the [`Lattice`] trait's default-
+    /// method surface, so every closed-set impl (total order, pointed-
+    /// top antichain, boolean lattice) picks it up mechanically —
+    /// generalizing the `const fn` [`tatara_lisp::macro_expand
+    /// ::ResourceLimits::within`] one abstraction level up.
+    fn is_between(&self, low: &Self, high: &Self) -> bool {
+        low.leq(self) && self.leq(high)
+    }
+    /// Strict-order peer of [`Lattice::is_between`] on the STRICT arm —
+    /// `self` sits STRICTLY inside the open bracket `(low, high)` on
+    /// the lattice's partial order. `a.is_strictly_between(&low,
+    /// &high)` holds iff `low.strictly_below(&a) &&
+    /// a.strictly_below(&high)`: `self` is strictly above `low` AND
+    /// strictly below `high` in the refinement order.
+    ///
+    /// The strict-arm interval-containment PREDICATE peer of
+    /// [`Lattice::is_between`] one STRICTNESS axis over on the (strict,
+    /// non-strict) × (interval-containment) 2×1 grid — where
+    /// [`Lattice::is_between`] decides CLOSED-bracket `[low, high]`
+    /// membership, this decides OPEN-bracket `(low, high)` membership.
+    /// Together the two default methods close the (strict, non-strict)
+    /// axis on the interval-containment predicate face of the algebra's
+    /// combinator surface — exactly the way [`Lattice::strictly_below`]
+    /// / [`Lattice::leq`] close the same strictness axis one ARITY
+    /// axis down on the pairwise comparator surface, and
+    /// [`Lattice::is_strict_lower_bound_of`] /
+    /// [`Lattice::is_lower_bound_of`] close it one ARITY axis up on the
+    /// N-ary Boolean-conjunction predicate surface. The (pairwise,
+    /// interval, N-ary) × (strict, non-strict) 3×2 grid on the
+    /// order-comparator predicate face is now closed at ONE substrate
+    /// primitive per cell.
+    ///
+    /// **Endpoint STRICT-exclusion**: `low.is_strictly_between(&low,
+    /// &high) == false` on EVERY lattice element — the strict conjunct
+    /// `low.strictly_below(&low)` short-circuits on the reflexive
+    /// diagonal because [`Lattice::strictly_below`] is irreflexive.
+    /// Dually `high.is_strictly_between(&low, &high) == false`. This
+    /// is the strict-minus-non-strict gap on the endpoint arm — the
+    /// non-strict [`Lattice::is_between`] admits both endpoints; the
+    /// strict version rejects both.
+    ///
+    /// **Degenerate-bracket universal-rejection**: `a.is_strictly_between(
+    /// &x, &x) == false` for EVERY pair of elements — a zero-width
+    /// open bracket admits NO points because no element can be
+    /// simultaneously strictly above AND strictly below the same
+    /// endpoint (the conjunction rejects on the reflexive diagonal at
+    /// `a == x`, and on antisymmetry-plus-strictness at `a != x` since
+    /// only one of `x.strictly_below(a)` / `a.strictly_below(x)` can
+    /// hold on any distinct pair). The strict-minus-non-strict gap on
+    /// the degenerate arm: [`Lattice::is_between`]'s degenerate
+    /// bracket admits ONLY `a == x`; the strict version admits
+    /// NOTHING.
+    ///
+    /// **Refines [`Lattice::is_between`]**: `a.is_strictly_between(
+    /// &low, &high) ⇒ a.is_between(&low, &high)` on every triple —
+    /// the strict conjunction refines the non-strict one at each
+    /// conjunct via [`Lattice::strictly_below`]'s refines-
+    /// [`Lattice::leq`] identity. The strict-minus-non-strict gap on
+    /// the interval arm is exactly the triples where `a == low` OR
+    /// `a == high` — the endpoint diagonal.
+    ///
+    /// **Inverted-bracket rejection**: if `high.leq(&low)` (the bracket
+    /// is empty or degenerate in the strict sense — its upper endpoint
+    /// sits at-or-below its lower one), then `a.is_strictly_between(
+    /// &low, &high) == false` for EVERY element — no lattice element
+    /// can simultaneously be strictly above `low` and strictly below a
+    /// `high` that itself sits at-or-below `low`.
+    ///
+    /// **Antichain rejection**: on an antichain lattice (e.g.
+    /// [`SubstrateType`]), the strict predicate rejects EVERY bracket
+    /// that involves any incomparable pair — the pointed-top antichain
+    /// admits at most the closed strict half-edge from any non-top
+    /// element to the top, and even there the interior of the open
+    /// bracket is empty because the antichain has no elements between
+    /// distinct comparable endpoints.
+    ///
+    /// Default routes through `low.strictly_below(self) &&
+    /// self.strictly_below(high)` — the two-primitive strict-order
+    /// composition of two [`Lattice::strictly_below`] calls on any
+    /// partial order. A future normalization at [`Lattice::strictly_below`]
+    /// (or at the underlying [`Lattice::leq`]) lands at ONE site and
+    /// this default inherits mechanically. Same `(low, high)`
+    /// parameter-order gating as [`Lattice::is_between`].
+    ///
+    /// Theory anchor: same as [`Lattice::is_between`] on the strict
+    /// arm — THEORY.md §II.1 invariant 5 + §III. The interval-
+    /// containment predicate on every classification-axis lattice now
+    /// binds through TWO substrate defaults ([`Lattice::is_between`],
+    /// [`Lattice::is_strictly_between`]) closing the (strict, non-
+    /// strict) axis at ONE algebra owner.
+    fn is_strictly_between(&self, low: &Self, high: &Self) -> bool {
+        low.strictly_below(self) && self.strictly_below(high)
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -3067,6 +3264,334 @@ mod tests {
             }
             if probe.is_strict_upper_bound_of(iter) {
                 prop_assert!(probe.is_upper_bound_of(iter));
+            }
+        }
+    }
+
+    /// [`Lattice::is_between`] on every [`DataClassification`] triple
+    /// AGREES with the pairwise `low.leq(a) && a.leq(high)` two-
+    /// primitive conjunction that pre-lift consumers hand-authored at
+    /// each callsite. Pinned exhaustively over
+    /// `DataClassification::ALL^3` so the substrate primitive matches
+    /// the composed encoding at every triple — the type-level lift
+    /// from a per-consumer `low.leq(a) && a.leq(high)` composition to
+    /// the [`Lattice::is_between`] default method is byte-identical.
+    #[test]
+    fn is_between_agrees_with_leq_conjunction_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                for high in DataClassification::ALL {
+                    assert_eq!(
+                        a.is_between(&low, &high),
+                        low.leq(&a) && a.leq(&high),
+                        "is_between({a:?}, {low:?}, {high:?}) drifted from \
+                         low.leq(&a) && a.leq(&high) — the interval-containment \
+                         predicate must equal the pairwise-conjunction encoding",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_between`] admits BOTH endpoints of every non-
+    /// inverted bracket on [`DataClassification`] — `low.is_between(
+    /// &low, &high) && high.is_between(&low, &high) == true` whenever
+    /// `low.leq(&high)`. The endpoint-reflexivity arm of the closed-
+    /// bracket predicate. Contrast against
+    /// `is_strictly_between_rejects_both_endpoints_over_data_classification_all`
+    /// below where the strict version rejects both.
+    #[test]
+    fn is_between_admits_both_endpoints_of_non_inverted_brackets_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                if low.leq(&high) {
+                    assert!(
+                        low.is_between(&low, &high),
+                        "is_between({low:?}, {low:?}, {high:?}) must be true — the low \
+                         endpoint of a non-inverted bracket is trivially in its own bracket",
+                    );
+                    assert!(
+                        high.is_between(&low, &high),
+                        "is_between({high:?}, {low:?}, {high:?}) must be true — the high \
+                         endpoint of a non-inverted bracket is trivially in its own bracket",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_between`] on a degenerate bracket collapses to
+    /// equality — `a.is_between(&x, &x) ⇔ a == x` on every pair over
+    /// [`DataClassification`]. Follows from antisymmetry of
+    /// [`Lattice::leq`]. Peer of the same identity pinned in-tree on
+    /// [`tatara_lisp::macro_expand::ResourceLimits::within`]
+    /// (`resource_limits_within_of_equal_bounds_iff_equal_to_bound`);
+    /// this seal binds the lifted trait-level default to the SAME
+    /// degenerate-collapse invariant the per-domain `const fn`
+    /// carried.
+    #[test]
+    fn is_between_of_equal_bounds_iff_equal_to_bound_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for x in DataClassification::ALL {
+                assert_eq!(
+                    a.is_between(&x, &x),
+                    a == x,
+                    "is_between({a:?}, {x:?}, {x:?}) must equal ({a:?} == {x:?}) — a \
+                     zero-width bracket admits only the single point x by antisymmetry \
+                     of leq",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_between`] REJECTS every element of the closed
+    /// set whenever the bracket is inverted (`high.strictly_below(
+    /// &low)`) over [`DataClassification`] — the interval-containment
+    /// predicate returns `false` for EVERY `a` when the upper endpoint
+    /// sits strictly below the lower one. Pinned exhaustively over
+    /// every inverted-bracket pair.
+    #[test]
+    fn is_between_rejects_every_element_when_bracket_is_inverted_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                if high.strictly_below(&low) {
+                    for a in DataClassification::ALL {
+                        assert!(
+                            !a.is_between(&low, &high),
+                            "is_between({a:?}, {low:?}, {high:?}) must be false — the \
+                             bracket is inverted ({high:?} strictly below {low:?}) so \
+                             no element can satisfy low.leq(&a) && a.leq(&high)",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_between`] on the extrema bracket admits EVERY
+    /// element of [`DataClassification`] — `a.is_between(
+    /// &DataClassification::bottom(), &DataClassification::top())` is
+    /// `true` at every element. Peer of the same identity pinned
+    /// in-tree on [`tatara_lisp::macro_expand::ResourceLimits::within`]
+    /// (`resource_limits_within_with_lattice_extrema_is_true`); this
+    /// seal binds the lifted trait-level default to the SAME universal-
+    /// truth-under-widest-bracket invariant the per-domain `const fn`
+    /// carried, now expressed via the lattice's own [`Lattice::bottom`]
+    /// / [`Lattice::top`] identities rather than per-domain preset
+    /// constants.
+    #[test]
+    fn is_between_with_lattice_extrema_admits_every_element_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        let bot = DataClassification::bottom();
+        let top = DataClassification::top();
+        for a in DataClassification::ALL {
+            assert!(
+                a.is_between(&bot, &top),
+                "is_between({a:?}, bottom, top) must be true — the widest possible \
+                 bracket admits every element by the lattice's bottom/top axioms",
+            );
+        }
+    }
+
+    /// [`Lattice::is_strictly_between`] REJECTS BOTH endpoints of
+    /// every bracket on [`DataClassification`] — `low.is_strictly_between(
+    /// &low, &high) == false` and `high.is_strictly_between(&low,
+    /// &high) == false` for every triple. The strict-minus-non-strict
+    /// gap at the endpoints: [`Lattice::is_between`] admits both;
+    /// [`Lattice::is_strictly_between`] rejects both because
+    /// [`Lattice::strictly_below`] is irreflexive at the endpoint
+    /// diagonal.
+    #[test]
+    fn is_strictly_between_rejects_both_endpoints_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                assert!(
+                    !low.is_strictly_between(&low, &high),
+                    "is_strictly_between({low:?}, {low:?}, {high:?}) must be false — \
+                     the strict predicate rejects the low endpoint on the reflexive \
+                     diagonal",
+                );
+                assert!(
+                    !high.is_strictly_between(&low, &high),
+                    "is_strictly_between({high:?}, {low:?}, {high:?}) must be false — \
+                     the strict predicate rejects the high endpoint on the reflexive \
+                     diagonal",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_strictly_between`] REJECTS every element on any
+    /// degenerate bracket (`low == high`) over [`DataClassification`]
+    /// — the zero-width open bracket admits NO points because no
+    /// element can be simultaneously strictly above AND strictly below
+    /// the same endpoint. Contrast against
+    /// `is_between_of_equal_bounds_iff_equal_to_bound_over_data_classification_all_pairs`
+    /// where the closed version admits exactly `a == x`.
+    #[test]
+    fn is_strictly_between_of_equal_bounds_rejects_every_element_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for x in DataClassification::ALL {
+                assert!(
+                    !a.is_strictly_between(&x, &x),
+                    "is_strictly_between({a:?}, {x:?}, {x:?}) must be false — no element \
+                     can be simultaneously strictly above AND strictly below the same \
+                     endpoint on any partial order",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_strictly_between`] REFINES [`Lattice::is_between`]
+    /// on every triple over [`DataClassification`] —
+    /// `a.is_strictly_between(&low, &high) ⇒ a.is_between(&low,
+    /// &high)`. The strict conjunction refines the non-strict one at
+    /// each conjunct via [`Lattice::strictly_below`]'s refines-
+    /// [`Lattice::leq`] identity. The strict-minus-non-strict gap on
+    /// the interval arm is the endpoint diagonal (`a == low` OR
+    /// `a == high`).
+    #[test]
+    fn is_strictly_between_refines_is_between_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                for high in DataClassification::ALL {
+                    if a.is_strictly_between(&low, &high) {
+                        assert!(
+                            a.is_between(&low, &high),
+                            "is_strictly_between({a:?}, {low:?}, {high:?}) implies \
+                             is_between — strict refines non-strict on the interval arm",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_between`] projects the pointed-top antichain on
+    /// [`SubstrateType`] to its bracket-shape: on any incomparable
+    /// pair `(low, high)` (both non-Regulatory and distinct), NO
+    /// element sits between them; on the pointed-top bracket
+    /// `[low, Regulatory]` at a non-Regulatory `low`, exactly `low`
+    /// and `Regulatory` sit in the closed bracket. Peer seal to
+    /// `is_strict_lower_bound_of_projects_the_pointed_top_antichain_over_substrate_type_all`
+    /// on the interval arm — the antichain SHAPE is now bound through
+    /// SIX algebra predicates (`leq`, `is_incomparable`,
+    /// `strictly_below`, `is_upper_bound_of`, `is_strict_lower_bound_of`,
+    /// `is_between`) via ONE substrate owner on the [`Lattice`] trait.
+    #[test]
+    fn is_between_projects_the_pointed_top_antichain_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        // On any incomparable pair (both non-top, distinct), NO
+        // element sits in the closed bracket — the antichain rejects
+        // interval containment.
+        for low in SubstrateType::ALL {
+            for high in SubstrateType::ALL {
+                if low != high && low != top && high != top {
+                    for a in SubstrateType::ALL {
+                        assert!(
+                            !a.is_between(&low, &high),
+                            "is_between({a:?}, {low:?}, {high:?}) must be false — the \
+                             antichain's incomparable brackets admit no elements",
+                        );
+                    }
+                }
+            }
+        }
+        // On the pointed-top bracket [low, top] at a non-top low,
+        // exactly `low` and `top` sit in the closed bracket — the
+        // antichain admits only the two endpoints of the strict
+        // half-edge into the top.
+        for low in SubstrateType::ALL {
+            if low != top {
+                for a in SubstrateType::ALL {
+                    let in_bracket = a.is_between(&low, &top);
+                    let expected = a == low || a == top;
+                    assert_eq!(
+                        in_bracket, expected,
+                        "is_between({a:?}, {low:?}, {top:?}) must equal (a == {low:?} || \
+                         a == top) — the pointed-top bracket admits only the two endpoints",
+                    );
+                }
+            }
+        }
+    }
+
+    proptest! {
+        /// [`Lattice::is_between`] AGREES with the pairwise
+        /// `low.leq(a) && a.leq(high)` two-primitive conjunction on
+        /// every random [`DataClassification`] triple — proptest peer
+        /// of the exhaustive
+        /// `is_between_agrees_with_leq_conjunction_over_data_classification_all_triples`
+        /// seal above.
+        #[test]
+        fn data_class_is_between_agrees_with_leq_conjunction(
+            low in any_data_class(),
+            a in any_data_class(),
+            high in any_data_class(),
+        ) {
+            prop_assert_eq!(a.is_between(&low, &high), low.leq(&a) && a.leq(&high));
+        }
+
+        /// [`Lattice::is_strictly_between`] REFINES [`Lattice::is_between`]
+        /// on every random [`DataClassification`] triple — proptest peer
+        /// of the exhaustive
+        /// `is_strictly_between_refines_is_between_over_data_classification_all_triples`
+        /// seal above.
+        #[test]
+        fn data_class_is_strictly_between_refines_is_between(
+            low in any_data_class(),
+            a in any_data_class(),
+            high in any_data_class(),
+        ) {
+            if a.is_strictly_between(&low, &high) {
+                prop_assert!(a.is_between(&low, &high));
+            }
+        }
+
+        /// [`Lattice::is_between`] on a degenerate bracket collapses
+        /// to equality on every random [`DataClassification`] pair —
+        /// proptest peer of the exhaustive
+        /// `is_between_of_equal_bounds_iff_equal_to_bound_over_data_classification_all_pairs`
+        /// seal.
+        #[test]
+        fn data_class_is_between_of_equal_bounds_iff_equal_to_bound(
+            a in any_data_class(),
+            x in any_data_class(),
+        ) {
+            prop_assert_eq!(a.is_between(&x, &x), a == x);
+            prop_assert!(!a.is_strictly_between(&x, &x));
+        }
+
+        /// Peer of the DataClassification is_between agreement
+        /// proptest on the CALM boolean-lattice axis — same shape,
+        /// different closed set.
+        #[test]
+        fn calm_is_between_agrees_with_leq_conjunction(
+            low in any_calm(),
+            a in any_calm(),
+            high in any_calm(),
+        ) {
+            prop_assert_eq!(a.is_between(&low, &high), low.leq(&a) && a.leq(&high));
+        }
+
+        /// Peer of the DataClassification is_strictly_between refines
+        /// is_between proptest on the CALM axis.
+        #[test]
+        fn calm_is_strictly_between_refines_is_between(
+            low in any_calm(),
+            a in any_calm(),
+            high in any_calm(),
+        ) {
+            if a.is_strictly_between(&low, &high) {
+                prop_assert!(a.is_between(&low, &high));
             }
         }
     }

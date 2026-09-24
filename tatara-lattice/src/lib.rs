@@ -164,6 +164,123 @@ pub trait Lattice: Sized + Clone + PartialEq {
     fn is_incomparable(&self, other: &Self) -> bool {
         !self.is_comparable(other)
     }
+    /// Strict-order peer of [`Lattice::leq`] on the strict arm —
+    /// `self` is STRICTLY at least as refined as `other`, i.e.
+    /// `self.leq(other)` AND `self != other`. The IRREFLEXIVE strict
+    /// `<` peer of [`Lattice::leq`]'s REFLEXIVE non-strict `≤` one
+    /// STRICTNESS axis over on the (strict, non-strict) × (leq, geq)
+    /// 2×2 partial-order-comparator grid: together with
+    /// [`Lattice::strictly_above`] on the dual strict-arm this closes
+    /// the whole 2×2 grid on the combinator surface, and every
+    /// downstream consumer that wants the strict comparator picks it
+    /// up through the default rather than composing `a.leq(&b) && a
+    /// != b` at its callsite (a hand-authored composition that
+    /// pleme-io already carries at
+    /// `tatara_lisp::macro_expand::ResourceLimits::lt` — the strict
+    /// `<` on the pointwise resource-posture partial order — so this
+    /// widening lifts the SAME shape from a per-domain `const fn` to
+    /// the trait's default-method surface so every future closed-set
+    /// lattice impl inherits the strict comparator for free).
+    ///
+    /// **Naming**: the trait's non-strict comparators are named on the
+    /// bare-relation axis (`leq` / `geq`), but the strict peers CANNOT
+    /// take the bare `lt` / `gt` names because every in-tree
+    /// closed-set consumer (`DataClassification`, `SubstrateType`,
+    /// `CalmClassification`) also derives `PartialOrd`, whose
+    /// `PartialOrd::lt` / `PartialOrd::gt` methods share the receiver
+    /// shape and would race the trait's methods in method-name
+    /// resolution. The named-relation `strictly_below` /
+    /// `strictly_above` peer names avoid the collision AND match the
+    /// trait's `is_bottom` / `is_top` / `is_comparable` /
+    /// `is_incomparable` "named predicate" naming discipline where
+    /// the receiver is on the left of the relation and the argument
+    /// is on the right, so `a.strictly_below(&b)` reads "a is strictly
+    /// below b" in the lattice's refinement direction.
+    ///
+    /// Default routes through `self.leq(other) && self != other` — the
+    /// two-primitive antisymmetric encoding of strict `<` on any
+    /// partial order. Equivalent on any antisymmetric lattice (every
+    /// partial order IS antisymmetric) to `self.leq(other) &&
+    /// !other.leq(self)`, the alternate encoding [`ResourceLimits::lt`]
+    /// uses; `PartialEq::ne` is O(1) vs. an extra `leq` call, and the
+    /// trait already requires `PartialEq` on `Self`, so the equality-
+    /// negation encoding is preferred here.
+    ///
+    /// **Irreflexivity**: `a.strictly_below(&a) == false` for every
+    /// element. The `self != other` conjunct short-circuits `false`
+    /// at every self-pair since [`PartialEq::eq`] is reflexive on any
+    /// lattice element. Pinned exhaustively over the closed-set impls
+    /// below.
+    ///
+    /// **Asymmetry**: `a.strictly_below(&b) ⇒ !b.strictly_below(&a)`
+    /// for every pair. Follows from [`Lattice::leq`]'s antisymmetry:
+    /// if both directions of the strict relation held, both directions
+    /// of `leq` would hold, forcing `a == b` by antisymmetry,
+    /// contradicting either strict conjunct.
+    ///
+    /// **Transitivity**: `a.strictly_below(&b) && b.strictly_below(&c)
+    /// ⇒ a.strictly_below(&c)` for every triple. Inherits from
+    /// [`Lattice::leq`]'s transitivity on the non-strict conjunct;
+    /// the strict conjunct on the outer relation carries through
+    /// because if `a == c`, then `c.leq(b) = a.leq(b)` (given) and
+    /// `b.leq(c) = b.leq(a)` (given via `b.strictly_below(&c) ⇒
+    /// b.leq(c)`) both hold, forcing `a == b` by antisymmetry, which
+    /// contradicts `a.strictly_below(&b)`.
+    ///
+    /// **Refines [`Lattice::leq`]**: `a.strictly_below(&b) ⇒ a.leq(b)`
+    /// by the first conjunct's construction. Conversely `a.leq(b) &&
+    /// !a.strictly_below(&b) ⇒ a == b` — the non-strict-minus-strict
+    /// gap is exactly the reflexive diagonal.
+    ///
+    /// **Antichain rejection**: on any distinct incomparable pair
+    /// (a [`SubstrateType`] pair where neither is
+    /// [`SubstrateType::Regulatory`], for example), both directions
+    /// of the strict relation fail because neither direction of
+    /// [`Lattice::leq`] holds. The predicate does NOT promote
+    /// incomparable pairs to a strict-order verdict.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the strict-order peer of `leq` is itself a
+    /// typed named `bool` predicate composing `leq` and `PartialEq::ne`
+    /// via the trait's default) + THEORY.md §III (typescape — the
+    /// strict-comparator arm on every classification-axis lattice
+    /// binds at ONE substrate owner on the [`Lattice`] algebra rather
+    /// than at each consumer's hand-rolled conjunction).
+    ///
+    /// Frontier inspiration: [`PartialOrd::lt`] on Rust's partial-
+    /// order trait; [`Ord::lt`] on the total-order trait — the strict
+    /// variant of `≤` is a first-class named method the standard
+    /// library exposes rather than leaving each consumer to compose
+    /// `partial_cmp(&other) == Some(Less)` at its callsite.
+    fn strictly_below(&self, other: &Self) -> bool {
+        self.leq(other) && self != other
+    }
+    /// Strict-order peer of [`Lattice::geq`] on the strict arm — dual
+    /// of [`Lattice::strictly_below`] one MEET/JOIN axis over on the
+    /// (strict, non-strict) × (leq, geq) 2×2 partial-order-comparator
+    /// grid. `self` is STRICTLY at least as relaxed as `other`, i.e.
+    /// `self.geq(other)` AND `self != other`. Default routes through
+    /// `other.strictly_below(self)` so every impl inherits the
+    /// algebraic dual for free; a future override at
+    /// [`Lattice::strictly_below`] (or at the underlying
+    /// [`Lattice::leq`]) lands at ONE site and this dual inherits
+    /// mechanically. Consumers that want to probe "is `self` strictly
+    /// more relaxed than `other`" (the join-side reading of the strict
+    /// relation) write `self.strictly_above(&other)` instead of
+    /// `other.strictly_below(&self)` — the two are byte-identical,
+    /// but the dual name matches the join-side reading discipline.
+    ///
+    /// Inherits [`Lattice::strictly_below`]'s irreflexivity, asymmetry,
+    /// and transitivity mechanically by the `other.strictly_below(self)`
+    /// routing; pinned on the closed-set impls below via the
+    /// byte-identity dual pin `a.strictly_above(&b) ⇔
+    /// b.strictly_below(&a)`.
+    ///
+    /// Theory anchor: same as [`Lattice::strictly_below`] on the dual
+    /// strict arm.
+    fn strictly_above(&self, other: &Self) -> bool {
+        other.strictly_below(self)
+    }
     /// N-ary [`Lattice::meet`] fold — the strongest common refinement
     /// of every element the iterator yields. The empty iterator
     /// collapses to [`Lattice::top`] because top is the algebraic
@@ -1329,6 +1446,346 @@ mod tests {
         fn calm_is_comparable_is_universally_true(a in any_calm(), b in any_calm()) {
             prop_assert!(a.is_comparable(&b));
             prop_assert!(!a.is_incomparable(&b));
+        }
+    }
+
+    // ── Lattice::strictly_below / strictly_above — strict-order
+    //    default peers ────────────────────────────────────────────
+    //
+    // Bind [`Lattice::strictly_below`] + [`Lattice::strictly_above`] at
+    // fail-before-pass-after granularity. Pre-lift the [`Lattice`]
+    // trait's comparator surface was `{leq, geq, is_comparable,
+    // is_incomparable}` — the non-strict arm was complete, but a
+    // consumer that wanted the STRICT `<` / `>` relation composed
+    // `a.leq(&b) && a != b` (or the antisymmetric-leq equivalent
+    // `a.leq(&b) && !b.leq(&a)`) at each callsite. The pattern already
+    // exists in-tree at
+    // [`tatara_lisp::macro_expand::ResourceLimits::lt`] — a per-domain
+    // `const fn` on the pointwise resource-posture partial order —
+    // which seeds the ★★ PRIME-DIRECTIVE `≥ 2`-consumer lift with a
+    // first consumer, so a hypothetical second closed-set lattice
+    // consumer (a compliance-baseline strict-refinement check, an
+    // ephemeral-env strict-tightening probe) would have crossed the
+    // duplication threshold on the SAME conjunction shape. Post-lift
+    // the whole strict-comparator pair binds at ONE substrate primitive
+    // on the [`Lattice`] algebra, and every downstream impl (the six
+    // existing in-tree ones + `Baseline` via the `crate::Lattice`
+    // trait AND any future closed-set lift) inherits
+    // `strictly_below` / `strictly_above` for free through the default.
+    // Together with the prior widening (`geq` / `is_bottom` / `is_top`
+    // / `is_comparable` / `is_incomparable` / `meet_all` / `join_all`)
+    // the trait now closes the (strict, non-strict) × (leq, geq) 2×2
+    // partial-order-comparator grid on the pairwise-relation face of
+    // the combinator surface.
+    //
+    // The bare `lt` / `gt` names cannot be used on the trait: every
+    // closed-set consumer here (`DataClassification`, `SubstrateType`,
+    // `CalmClassification`) also derives `PartialOrd`, whose
+    // `PartialOrd::lt` / `PartialOrd::gt` share the receiver shape and
+    // would race the trait's methods in method-name resolution. The
+    // named-relation `strictly_below` / `strictly_above` peer names
+    // avoid the collision AND match the trait's `is_bottom` /
+    // `is_top` / `is_comparable` / `is_incomparable` "named predicate"
+    // naming discipline.
+    //
+    // Coverage below spans:
+    //
+    //   • irreflexivity (`a.strictly_below(&a) = false`,
+    //     `a.strictly_above(&a) = false`) at every variant of every
+    //     closed-set impl;
+    //   • asymmetry (`a.strictly_below(&b) ⇒ !b.strictly_below(&a)`)
+    //     at every pair;
+    //   • transitivity (`a.strictly_below(&b) && b.strictly_below(&c)
+    //     ⇒ a.strictly_below(&c)`) at every triple;
+    //   • refines-leq (`a.strictly_below(&b) ⇒ a.leq(&b)` AND
+    //     `a.leq(&b) ⇒ a.strictly_below(&b) ∨ a == b`) so the strict
+    //     relation is exactly the non-strict relation minus the
+    //     reflexive diagonal;
+    //   • byte-identity dual (`a.strictly_above(&b) ⇔
+    //     b.strictly_below(&a)`) at every pair;
+    //   • closed-set antichain shape on [`SubstrateType`] — distinct
+    //     non-[`SubstrateType::Regulatory`] pairs fail BOTH strict
+    //     directions.
+
+    /// [`Lattice::strictly_below`] on [`DataClassification`] is
+    /// IRREFLEXIVE and projects to `sensitivity_rank`'s strict
+    /// inequality at every pair — `a.strictly_below(&b) ⇔
+    /// a.sensitivity_rank() < b.sensitivity_rank()`. Fail-before-
+    /// pass-after: pre-lift `strictly_below` is not exposed as a
+    /// trait method — consumers who wanted the strict-order reading
+    /// wrote `a.leq(&b) && a != b` inline at each callsite. Post-lift
+    /// the sweep pins the WHOLE 6×6 pair truth table at ONE substrate
+    /// primitive so a regression that drifted either the `leq`
+    /// projection OR the `!=` conjunct would surface at the pair it
+    /// broke.
+    #[test]
+    fn strictly_below_matches_sensitivity_rank_strict_inequality_over_data_classification_all_pairs(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            // Irreflexivity: no element is strictly less than itself.
+            assert!(
+                !a.strictly_below(&a),
+                "strictly_below({a:?}, {a:?}) must be false — reflexive diagonal"
+            );
+            assert!(
+                !a.strictly_above(&a),
+                "strictly_above({a:?}, {a:?}) must be false — reflexive diagonal"
+            );
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    a.strictly_below(&b),
+                    a.sensitivity_rank() < b.sensitivity_rank(),
+                    "strictly_below({a:?}, {b:?}) drifted from sensitivity_rank strict \
+                     inequality — the default should route `a.leq(&b) && a != b`, and \
+                     DataClassification's `leq` routes through sensitivity_rank, so the \
+                     composition must agree with the rank's strict `<`",
+                );
+                // Dual byte-identity: `a.strictly_above(&b) ⇔
+                // b.strictly_below(&a)`.
+                assert_eq!(
+                    a.strictly_above(&b),
+                    b.strictly_below(&a),
+                    "strictly_above({a:?}, {b:?}) drifted from the strictly_below-dual — \
+                     the default should route `other.strictly_below(self)` verbatim",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::strictly_below`] on [`CalmClassification`] projects
+    /// to the two-arm boolean lattice's strict edge —
+    /// `Monotone.strictly_below(&NonMonotone)` is the ONLY `true`
+    /// slot in the 2×2 pair space; every other pair (both reflexive
+    /// pairs AND the reversed strict pair) is `false`. Peer seal on
+    /// the sibling boolean axis of
+    /// `strictly_below_matches_sensitivity_rank_strict_inequality_over_data_classification_all_pairs`.
+    #[test]
+    fn strictly_below_and_strictly_above_partition_calm_classification_all_at_the_single_strict_edge(
+    ) {
+        use tatara_process::classification::CalmClassification::{Monotone, NonMonotone};
+        // Reflexive diagonal — no element is strictly less than itself.
+        assert!(!Monotone.strictly_below(&Monotone));
+        assert!(!NonMonotone.strictly_below(&NonMonotone));
+        assert!(!Monotone.strictly_above(&Monotone));
+        assert!(!NonMonotone.strictly_above(&NonMonotone));
+        // The single strict edge on the two-arm boolean lattice.
+        assert!(
+            Monotone.strictly_below(&NonMonotone),
+            "Monotone < NonMonotone is the strict edge"
+        );
+        assert!(
+            NonMonotone.strictly_above(&Monotone),
+            "NonMonotone > Monotone is the dual strict edge"
+        );
+        // The reverse strict direction is empty.
+        assert!(!NonMonotone.strictly_below(&Monotone));
+        assert!(!Monotone.strictly_above(&NonMonotone));
+    }
+
+    /// [`Lattice::strictly_below`] on [`SubstrateType`] projects the
+    /// pointed-top antichain to a strict-order predicate: every
+    /// strict edge points FROM a non-[`SubstrateType::Regulatory`]
+    /// substrate TO [`SubstrateType::Regulatory`] (the antichain's
+    /// distinguished top), and EVERY other pair (reflexive pairs,
+    /// distinct non-top pairs, the reversed direction from top) fails
+    /// both strict directions. Peer seal to
+    /// `substrate_type_is_incomparable_matches_the_antichain_shape`
+    /// on the strict-order arm — the antichain SHAPE is now bound
+    /// through THREE algebra predicates (`leq`, `is_incomparable`,
+    /// `strictly_below`) via ONE substrate owner on the [`Lattice`]
+    /// trait rather than per-callsite hand-authored conjunctions.
+    #[test]
+    fn substrate_type_strictly_below_and_strictly_above_project_the_antichain_to_the_top_directed_strict_edge(
+    ) {
+        use tatara_process::classification::SubstrateType;
+        for s in SubstrateType::ALL {
+            for t in SubstrateType::ALL {
+                let below = s.strictly_below(&t);
+                let above = s.strictly_above(&t);
+                if s == t {
+                    // Reflexive diagonal — strict relation is irreflexive.
+                    assert!(
+                        !below,
+                        "strictly_below({s:?}, {s:?}) must be false — reflexive diagonal"
+                    );
+                    assert!(
+                        !above,
+                        "strictly_above({s:?}, {s:?}) must be false — reflexive diagonal"
+                    );
+                } else if t == SubstrateType::top() {
+                    // Every distinct non-top s < top() — the antichain's
+                    // pointed-top-comparability holds strictly on this
+                    // half-edge.
+                    assert!(
+                        below,
+                        "strictly_below({s:?}, Regulatory) must be true — the antichain's \
+                         pointed-top strict edge",
+                    );
+                    assert!(
+                        !above,
+                        "strictly_above({s:?}, Regulatory) must be false — the reverse \
+                         direction of the pointed-top strict edge is empty",
+                    );
+                } else if s == SubstrateType::top() {
+                    // Reverse direction: top() > t for every distinct t.
+                    assert!(
+                        above,
+                        "strictly_above(Regulatory, {t:?}) must be true — dual pointed-top \
+                         strict edge"
+                    );
+                    assert!(
+                        !below,
+                        "strictly_below(Regulatory, {t:?}) must be false — Regulatory is \
+                         the top"
+                    );
+                } else {
+                    // Distinct non-Regulatory pairs sit on an antichain —
+                    // neither strict direction holds.
+                    assert!(
+                        !below && !above,
+                        "distinct non-Regulatory substrates ({s:?}, {t:?}) must fail BOTH \
+                         strict directions — the antichain does not promote incomparable \
+                         pairs to a strict-order verdict",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::strictly_below`] refines [`Lattice::leq`] and the
+    /// gap between them is exactly the reflexive diagonal —
+    /// `a.strictly_below(&b) ⇒ a.leq(&b)` (strict refines non-strict)
+    /// AND `a.leq(&b) && !a.strictly_below(&b) ⇒ a == b` (the
+    /// non-strict-minus-strict gap is the equal pair). Pinned
+    /// exhaustively over `DataClassification::ALL^2` (the 6-arm
+    /// total-order axis) AND `SubstrateType::ALL^2` (the pointed
+    /// antichain) so BOTH shape flavors — total order and antichain —
+    /// bind the same refinement identity via ONE substrate primitive.
+    #[test]
+    fn strictly_below_refines_leq_and_the_gap_is_the_reflexive_diagonal() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                if a.strictly_below(&b) {
+                    assert!(
+                        a.leq(&b),
+                        "strictly_below({a:?}, {b:?}) implies leq({a:?}, {b:?}) — strict \
+                         refines non-strict",
+                    );
+                }
+                if a.leq(&b) && !a.strictly_below(&b) {
+                    assert_eq!(
+                        a, b,
+                        "leq({a:?}, {b:?}) ∧ ¬strictly_below({a:?}, {b:?}) ⇒ a == b — the \
+                         non-strict-minus-strict gap is exactly the reflexive diagonal",
+                    );
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                if a.strictly_below(&b) {
+                    assert!(a.leq(&b));
+                }
+                if a.leq(&b) && !a.strictly_below(&b) {
+                    assert_eq!(a, b);
+                }
+            }
+        }
+    }
+
+    proptest! {
+        /// [`Lattice::strictly_below`] is IRREFLEXIVE on
+        /// [`DataClassification`] — `a.strictly_below(&a) == false`
+        /// for every element. Proptest peer of the exhaustive
+        /// `strictly_below_matches_sensitivity_rank_strict_inequality_over_data_classification_all_pairs`
+        /// seal's diagonal arm. Peers on the CALM axis via
+        /// `calm_strictly_below_is_irreflexive`.
+        #[test]
+        fn data_class_strictly_below_is_irreflexive(a in any_data_class()) {
+            prop_assert!(!a.strictly_below(&a));
+            prop_assert!(!a.strictly_above(&a));
+        }
+
+        /// [`Lattice::strictly_below`] is ASYMMETRIC on
+        /// [`DataClassification`] — `a.strictly_below(&b) ⇒
+        /// !b.strictly_below(&a)` at every pair. Inherits from
+        /// [`Lattice::leq`]'s antisymmetry: if both directions of the
+        /// strict relation held, both directions of `leq` would hold,
+        /// forcing `a == b` by antisymmetry, contradicting either
+        /// strict conjunct.
+        #[test]
+        fn data_class_strictly_below_is_asymmetric(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            if a.strictly_below(&b) {
+                prop_assert!(!b.strictly_below(&a));
+            }
+        }
+
+        /// [`Lattice::strictly_below`] is TRANSITIVE on
+        /// [`DataClassification`] — `a.strictly_below(&b) &&
+        /// b.strictly_below(&c) ⇒ a.strictly_below(&c)` at every
+        /// triple. Inherits from [`Lattice::leq`]'s transitivity on
+        /// the non-strict conjunct; the strict conjunct on the outer
+        /// relation carries through by antisymmetry.
+        #[test]
+        fn data_class_strictly_below_is_transitive(
+            a in any_data_class(),
+            b in any_data_class(),
+            c in any_data_class(),
+        ) {
+            if a.strictly_below(&b) && b.strictly_below(&c) {
+                prop_assert!(a.strictly_below(&c));
+            }
+        }
+
+        /// [`Lattice::strictly_above`] is the BYTE-IDENTITY dual of
+        /// [`Lattice::strictly_below`] on [`DataClassification`] —
+        /// `a.strictly_above(&b) ⇔ b.strictly_below(&a)` at every
+        /// pair. Pinned so the default's `other.strictly_below(self)`
+        /// routing is caught if an impl overrides it with a drift.
+        #[test]
+        fn data_class_strictly_above_is_the_dual_of_strictly_below(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            prop_assert_eq!(a.strictly_above(&b), b.strictly_below(&a));
+        }
+
+        /// Peer of the DataClassification irreflexivity proptest on
+        /// the CALM boolean-lattice axis — same shape, different
+        /// closed set. Together the two proptest cases bind BOTH
+        /// total-order classification axes' strict-order irreflexivity
+        /// to ONE substrate default.
+        #[test]
+        fn calm_strictly_below_is_irreflexive(a in any_calm()) {
+            prop_assert!(!a.strictly_below(&a));
+            prop_assert!(!a.strictly_above(&a));
+        }
+
+        /// Peer of the DataClassification asymmetry proptest on the
+        /// CALM axis.
+        #[test]
+        fn calm_strictly_below_is_asymmetric(a in any_calm(), b in any_calm()) {
+            if a.strictly_below(&b) {
+                prop_assert!(!b.strictly_below(&a));
+            }
+        }
+
+        /// Peer of the DataClassification transitivity proptest on
+        /// the CALM axis.
+        #[test]
+        fn calm_strictly_below_is_transitive(
+            a in any_calm(),
+            b in any_calm(),
+            c in any_calm(),
+        ) {
+            if a.strictly_below(&b) && b.strictly_below(&c) {
+                prop_assert!(a.strictly_below(&c));
+            }
         }
     }
 

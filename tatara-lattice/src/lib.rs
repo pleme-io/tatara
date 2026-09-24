@@ -109,6 +109,61 @@ pub trait Lattice: Sized + Clone + PartialEq {
     fn bottom() -> Self;
     /// Top element — `x ≤ ⊤` for all `x`.
     fn top() -> Self;
+    /// `self ≥ other` — dual of [`Lattice::leq`]. Default routes through
+    /// `other.leq(self)` so every impl inherits the algebraic dual for
+    /// free, and a future normalization at the primary axis (e.g. an
+    /// override that changed [`Lattice::leq`]'s tie-break) lands at ONE
+    /// site and this dual inherits mechanically. Consumers that want to
+    /// probe "is `self` at least as relaxed as `other`" (the join-side
+    /// question) write `self.geq(&other)` instead of `other.leq(&self)`
+    /// — the two are byte-identical, but the dual name matches the
+    /// join-side reading discipline.
+    fn geq(&self, other: &Self) -> bool {
+        other.leq(self)
+    }
+    /// Is `self` the lattice's [`Lattice::bottom`] element? Default
+    /// routes through `PartialEq` against [`Lattice::bottom`] — the
+    /// trait's own `Sized + Clone + PartialEq` supertraits give this
+    /// projection for free. A future impl whose `bottom()` is
+    /// value-parameterized (e.g. a per-fleet compliance floor) still
+    /// inherits the correct predicate without a hand-authored
+    /// per-impl override.
+    fn is_bottom(&self) -> bool {
+        *self == Self::bottom()
+    }
+    /// Is `self` the lattice's [`Lattice::top`] element? Dual of
+    /// [`Lattice::is_bottom`] on the top-endpoint of the same
+    /// closed-set axis. Same routing through `PartialEq` against
+    /// [`Lattice::top`].
+    fn is_top(&self) -> bool {
+        *self == Self::top()
+    }
+    /// Are `self` and `other` comparable — does the lattice's
+    /// partial order relate them in either direction? Default:
+    /// `self.leq(other) || other.leq(self)`. A totally-ordered
+    /// lattice (e.g. [`baseline::Baseline`], `DataClassification`)
+    /// returns `true` for every pair; an antichain-shaped one
+    /// (e.g. `SubstrateType`) returns `true` iff the two are equal
+    /// OR one endpoint is the distinguished [`Lattice::top`] that
+    /// the antichain routes through.
+    fn is_comparable(&self, other: &Self) -> bool {
+        self.leq(other) || other.leq(self)
+    }
+    /// Negation of [`Lattice::is_comparable`] — the two elements sit
+    /// on distinct branches of the partial order. Pre-lift consumers
+    /// hand-authored `!s.leq(&t) && !t.leq(&s)` at each callsite
+    /// (surfaces exactly in the SubstrateType `substrate_flat_antichain`
+    /// test below), which duplicated the disjunction's algebra at each
+    /// consumer AND crossed the ★★ PRIME-DIRECTIVE `≥ 2` duplication
+    /// threshold once a second antichain lattice (a future
+    /// PointType-axis lift, a per-fleet region-axis lift) landed;
+    /// post-lift the whole `!leq && !leq` conjunction binds at ONE
+    /// substrate primitive on the [`Lattice`] algebra and every
+    /// downstream antichain consumer picks up the predicate through
+    /// the default.
+    fn is_incomparable(&self, other: &Self) -> bool {
+        !self.is_comparable(other)
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -489,8 +544,21 @@ mod tests {
     fn substrate_flat_antichain() {
         let s = SubstrateType::Compute;
         let t = SubstrateType::Storage;
-        assert!(!s.leq(&t));
-        assert!(!t.leq(&s));
+        // Route the pre-lift `!s.leq(&t) && !t.leq(&s)` conjunction
+        // through the [`Lattice::is_incomparable`] substrate default
+        // — the ONE typed predicate on the [`Lattice`] algebra the
+        // trait now carries as its antichain-axis reading, seeding
+        // the ★★ PRIME-DIRECTIVE `≥ 2`-consumer lift with a first
+        // consumer at this callsite so a hypothetical second
+        // antichain lattice (a future PointType-axis lift, a
+        // per-fleet region-axis lift) picks up the predicate through
+        // the default rather than recurring the disjunction verbatim.
+        // Exhaustive over `SubstrateType::ALL^2` at
+        // `substrate_type_is_incomparable_matches_the_antichain_shape`
+        // below; this sample keeps the (Compute, Storage) documentation
+        // pair intact.
+        assert!(s.is_incomparable(&t));
+        assert!(t.is_incomparable(&s));
         // Meet of distinct substrates climbs to top (Regulatory).
         assert_eq!(s.meet(&t), SubstrateType::Regulatory);
     }
@@ -900,5 +968,276 @@ mod tests {
             DataClassification::ALL.to_vec(),
             "data-classification sweep via from_all's projection must match ALL declaration-order",
         );
+    }
+
+    // ── Lattice trait default-method surface ───────────────────────────
+    //
+    // Bind the five default methods the trait ships alongside `meet`,
+    // `join`, `leq`, `bottom`, `top` at fail-before-pass-after
+    // granularity. Pre-lift the [`Lattice`] trait's public API was
+    // `{meet, join, leq, bottom, top}` and every consumer that wanted
+    // to probe the algebraic dual (`geq`), the endpoint predicates
+    // (`is_bottom` / `is_top`), or the antichain-comparability disjunction
+    // (`is_comparable` / `is_incomparable`) hand-authored the same
+    // formula per callsite: `other.leq(self)`, `*x == T::bottom()`,
+    // `*x == T::top()`, `s.leq(&t) || t.leq(&s)`, `!s.leq(&t) &&
+    // !t.leq(&s)`. The [`SubstrateType`] antichain test below in
+    // `substrate_flat_antichain` was one such site (`!s.leq(&t) &&
+    // !t.leq(&s)`); a second consumer would have crossed the ★★
+    // PRIME-DIRECTIVE `≥ 2` duplication threshold and forced the
+    // formula to recur at every future antichain lattice (a
+    // hypothetical PointType-axis lift, a per-fleet region-axis lift).
+    // Post-lift the WHOLE five-method predicate family binds at ONE
+    // substrate owner on the [`Lattice`] algebra, and every
+    // downstream lattice consumer inherits the predicates through the
+    // default without a hand-authored per-impl override — an impl
+    // that overrode any of them for a domain reason would still be
+    // free to do so, but the algebraic dual holds by construction
+    // for every impl that doesn't.
+    //
+    // Substrate seals for the four in-tree lattice impls
+    // ([`DataClassification`], [`CalmClassification`],
+    // [`SubstrateType`], [`baseline::Baseline`]) live at the closed-
+    // set level below. Coverage: [`DataClassification`]/[`Baseline`]
+    // are total-order chains — every pair is comparable so
+    // `is_incomparable` returns `false` at every pair;
+    // [`SubstrateType`] is the pointed antichain the trait names
+    // as its distinguishing case; [`CalmClassification`] is the
+    // two-arm boolean lattice whose endpoint predicates carry the
+    // strongest algebraic identity (bottom = Monotone, top =
+    // NonMonotone are mutually exclusive AND collectively exhaustive
+    // over `ALL`).
+
+    /// [`Lattice::geq`] is the algebraic dual of [`Lattice::leq`] on
+    /// [`DataClassification`] — `a.geq(b)` iff `b.leq(a)` for every
+    /// pair over the closed set. Fail-before-pass-after: pre-lift
+    /// this pin cannot compile because `geq` is not exposed as a
+    /// trait method — consumers who wanted the join-side reading
+    /// wrote `other.leq(self)` inline at each callsite. Post-lift
+    /// the dual binds at ONE default method on the [`Lattice`]
+    /// algebra and the sweep pins the byte-identity of the two
+    /// directions over `ALL^2`.
+    #[test]
+    fn geq_is_the_algebraic_dual_of_leq_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    a.geq(&b),
+                    b.leq(&a),
+                    "geq({a:?}, {b:?}) drifted from the leq-dual — \
+                     the default method should route `other.leq(self)` \
+                     verbatim, so a false-positive here means the \
+                     default was overridden AND the override broke \
+                     the dual",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_bottom`] on [`DataClassification`] projects to
+    /// `true` exactly at [`DataClassification::Public`] — the
+    /// closed-set variant that
+    /// [`<DataClassification as Lattice>::bottom`] returns. Pinned
+    /// exhaustively over `ALL` so a future variant added below
+    /// `Public` (a hypothetical `Anonymous` sentinel) would surface
+    /// here as `Anonymous::is_bottom()` returning `false` under the
+    /// same trait default the sweep exercises, forcing the
+    /// bottom-endpoint choice to be re-considered before the new
+    /// variant lands.
+    #[test]
+    fn is_bottom_and_is_top_partition_data_classification_all_at_the_endpoints() {
+        use tatara_process::classification::DataClassification;
+        for v in DataClassification::ALL {
+            assert_eq!(v.is_bottom(), v == DataClassification::Public);
+            assert_eq!(v.is_top(), v == DataClassification::Pci);
+        }
+        // Universal bottom + top laws — the two endpoints stand in
+        // for their `PartialEq` mirrors so a regression that drifted
+        // `bottom()` / `top()` off the closed-set endpoints surfaces
+        // through both the direct equality AND the trait predicate.
+        assert!(DataClassification::bottom().is_bottom());
+        assert!(DataClassification::top().is_top());
+        assert!(!DataClassification::top().is_bottom());
+        assert!(!DataClassification::bottom().is_top());
+    }
+
+    /// [`Lattice::is_comparable`] on [`DataClassification`] returns
+    /// `true` at every pair because the sensitivity axis is a total
+    /// order — sibling seal to
+    /// `substrate_type_is_incomparable_matches_the_antichain_shape`
+    /// below on the pointed-antichain axis. Pinned exhaustively over
+    /// `ALL^2` (36 pairs). A future variant insertion that broke the
+    /// total-order property (e.g. a fork into `PhiCovered` +
+    /// `PhiUncovered` at the same rank without a tie-break on
+    /// `sensitivity_rank`) would surface here as `is_comparable`
+    /// returning `false` at the newly incomparable pair, forcing
+    /// the rank projection to gain the tie-break BEFORE the variant
+    /// lands.
+    #[test]
+    fn is_comparable_is_universally_true_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert!(
+                    a.is_comparable(&b),
+                    "DataClassification is a total order — every pair \
+                     ({a:?}, {b:?}) must be comparable, but \
+                     is_comparable returned false — the sensitivity_rank \
+                     projection has drifted into a non-total shape",
+                );
+                assert!(
+                    !a.is_incomparable(&b),
+                    "DataClassification is a total order — no pair \
+                     ({a:?}, {b:?}) can be incomparable",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_incomparable`] on [`SubstrateType`] projects the
+    /// antichain-shape's pointed-top algebra to a first-class
+    /// predicate: any two DISTINCT non-[`SubstrateType::Regulatory`]
+    /// substrates are incomparable, equal pairs are comparable, and
+    /// [`SubstrateType::Regulatory`] (the antichain's distinguished
+    /// top) is comparable to everything on the top side.
+    ///
+    /// Fail-before-pass-after: pre-lift the `substrate_flat_antichain`
+    /// test below hand-authored the same predicate as `!s.leq(&t) &&
+    /// !t.leq(&s)` — the `SubstrateType`-scoped consumer of the ★★
+    /// PRIME-DIRECTIVE ≥ 2-arm formula the [`Lattice`] trait now
+    /// carries as its `is_incomparable` default. Post-lift this seal
+    /// binds the WHOLE 8×8 pair truth table at ONE substrate primitive
+    /// so a regression that drifted either `leq`'s antichain semantic
+    /// (say, silently added `s.leq(&t)` for some non-Regulatory pair)
+    /// OR the `is_incomparable` default's `!` composition would
+    /// surface at the exact pair it broke.
+    #[test]
+    fn substrate_type_is_incomparable_matches_the_antichain_shape() {
+        use tatara_process::classification::SubstrateType;
+        for s in SubstrateType::ALL {
+            for t in SubstrateType::ALL {
+                let incomparable = s.is_incomparable(&t);
+                let comparable = s.is_comparable(&t);
+                // Comparable + incomparable partition the pair space
+                // — one of the two predicates fires at every pair
+                // and never both.
+                assert_ne!(
+                    comparable, incomparable,
+                    "is_comparable + is_incomparable must partition \
+                     the ({s:?}, {t:?}) pair space",
+                );
+                if s == t {
+                    // Equal pairs are trivially comparable via
+                    // reflexivity — `leq` is reflexive on any
+                    // partial order.
+                    assert!(comparable);
+                } else if s == SubstrateType::top() || t == SubstrateType::top() {
+                    // The antichain's distinguished top
+                    // ([`SubstrateType::Regulatory`]) is comparable
+                    // to everything from below — `t.leq(&Regulatory)`
+                    // holds for every t via `*other == Self::top()`
+                    // in `SubstrateType::leq`.
+                    assert!(comparable);
+                } else {
+                    // Every other distinct pair sits on an
+                    // antichain — neither direction of `leq` holds.
+                    assert!(
+                        incomparable,
+                        "distinct non-Regulatory substrates ({s:?}, {t:?}) \
+                         must be pairwise incomparable",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_bottom`] + [`Lattice::is_top`] partition
+    /// [`CalmClassification::ALL`] cleanly — the two-arm boolean
+    /// lattice's endpoint predicates are mutually exclusive AND
+    /// collectively exhaustive over `ALL`, so `is_bottom(v) ⇔ v ==
+    /// Monotone ⇔ !is_top(v)` at every variant. Pinned as a peer
+    /// seal to
+    /// `is_bottom_and_is_top_partition_data_classification_all_at_the_endpoints`
+    /// on the sibling boolean axis, so the endpoint-predicate default
+    /// binds at BOTH classification-axis consumers (the 6-arm
+    /// DataClassification total order AND the 2-arm CALM boolean
+    /// lattice) via ONE default method.
+    #[test]
+    fn is_bottom_and_is_top_partition_calm_classification_all_at_the_endpoints() {
+        for v in CalmClassification::ALL {
+            assert_eq!(v.is_bottom(), v == CalmClassification::Monotone);
+            assert_eq!(v.is_top(), v == CalmClassification::NonMonotone);
+            // Two-arm boolean lattice: is_bottom and is_top partition
+            // ALL — exactly ONE fires at every variant.
+            assert_ne!(v.is_bottom(), v.is_top());
+        }
+    }
+
+    proptest! {
+        /// [`Lattice::geq`] agrees with the `join`-side equivalent
+        /// `a.join(b) == a` at every pair — the algebraic dual of
+        /// the top-of-file `data_class_leq_agrees_with_join` law on
+        /// the greater-than-or-equal axis. `a.geq(b) ⇔ a.join(b)
+        /// == a` is the lattice-law promise that any consumer of
+        /// the join-side reading (a policy that "relaxes to at
+        /// least this much") depends on.
+        #[test]
+        fn data_class_geq_agrees_with_join(a in any_data_class(), b in any_data_class()) {
+            prop_assert_eq!(a.geq(&b), a.join(&b) == a);
+        }
+
+        /// [`Lattice::is_bottom`] on `DataClassification::bottom()`
+        /// is universally true across the closed set — the trait's
+        /// bottom-endpoint predicate binds `PartialEq` against
+        /// [`Lattice::bottom`] at ONE default method, so any
+        /// consumer that iterates `ALL` and probes `v.is_bottom()`
+        /// picks up the bottom-endpoint variant via the algebra
+        /// rather than a hand-authored `== T::bottom()`.
+        #[test]
+        fn data_class_bottom_is_bottom_true_at_the_endpoint(a in any_data_class()) {
+            prop_assert_eq!(a.is_bottom(), a == DataClassification::bottom());
+            prop_assert_eq!(a.is_top(), a == DataClassification::top());
+        }
+
+        /// [`Lattice::is_comparable`] over any `DataClassification`
+        /// pair returns `true` — the sensitivity axis is a total
+        /// order. Peer of the exhaustive
+        /// `is_comparable_is_universally_true_over_data_classification_all_pairs`
+        /// seal above; the proptest form covers randomized draws
+        /// via [`any_data_class`] so a future non-exhaustive
+        /// closed-set sample would still pin the total-order
+        /// property.
+        #[test]
+        fn data_class_is_comparable_is_universally_true(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            prop_assert!(a.is_comparable(&b));
+            prop_assert!(!a.is_incomparable(&b));
+        }
+
+        /// [`Lattice::geq`] on [`CalmClassification`] agrees with
+        /// the `join`-side equivalent `a.join(b) == a` — dual of
+        /// the sibling `data_class_geq_agrees_with_join` law on the
+        /// two-arm boolean axis. Pinned so the algebraic dual holds
+        /// at both classification-axis consumers.
+        #[test]
+        fn calm_geq_agrees_with_join(a in any_calm(), b in any_calm()) {
+            prop_assert_eq!(a.geq(&b), a.join(&b) == a);
+        }
+
+        /// [`Lattice::is_comparable`] over any [`CalmClassification`]
+        /// pair returns `true` — the two-arm boolean lattice is a
+        /// total order (`Monotone ≤ NonMonotone`). Peer of the
+        /// sibling `data_class_is_comparable_is_universally_true`
+        /// on the DataClassification axis; together the two
+        /// proptest cases bind BOTH total-order classification axes'
+        /// comparability to ONE substrate default.
+        #[test]
+        fn calm_is_comparable_is_universally_true(a in any_calm(), b in any_calm()) {
+            prop_assert!(a.is_comparable(&b));
+            prop_assert!(!a.is_incomparable(&b));
+        }
     }
 }

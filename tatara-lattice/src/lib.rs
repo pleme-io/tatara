@@ -867,6 +867,265 @@ pub trait Lattice: Sized + Clone + PartialEq {
     fn is_strictly_between(&self, low: &Self, high: &Self) -> bool {
         low.strictly_below(self) && self.strictly_below(high)
     }
+    /// Structural (collection-level) peer of [`Lattice::is_comparable`]
+    /// — the iterated set forms a CHAIN on the lattice's partial order:
+    /// every DISTINCT pair of elements the iterator yields is comparable.
+    /// `T::is_chain([&a, &b, &c])` holds iff for every position pair
+    /// `(i, j)` with `i < j` and `vs[i] != vs[j]` (by [`PartialEq`]),
+    /// `vs[i].is_comparable(&vs[j])`; positions yielding equal values
+    /// are filtered on the standard mathematical convention that a
+    /// chain is defined over the DISTINCT elements of the underlying
+    /// set (duplicates in the yielded sequence are the same set
+    /// element, so they don't add a new pair to check).
+    ///
+    /// The COLLECTION-STRUCTURAL peer of [`Lattice::is_comparable`] one
+    /// ARITY axis over on the (pairwise, structural) × (comparable,
+    /// incomparable) 2×2 grid — where [`Lattice::is_comparable`] decides
+    /// pairwise comparability on a single pair of elements, this
+    /// decides STRUCTURAL comparability on the whole collection (does
+    /// the iterated set live inside a single totally-ordered branch of
+    /// the partial order). Together with [`Lattice::is_antichain`] on
+    /// the dual predicate arm closes the (pairwise, structural) ×
+    /// (comparable, incomparable) 2×2 grid on the comparability face of
+    /// the combinator surface: the pairwise arm was closed by
+    /// [`Lattice::is_comparable`] / [`Lattice::is_incomparable`], and
+    /// this widening threads the SAME comparability axis through the
+    /// COLLECTION-STRUCTURAL surface so every future closed-set lattice
+    /// impl inherits BOTH structural predicates for free.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_chain(std::iter::empty())
+    /// == true` on every lattice — the empty collection contains no
+    /// distinct pair to check, so the universally-quantified predicate
+    /// is vacuously true. Peer of [`Lattice::is_lower_bound_of`]'s
+    /// empty-iterator vacuous-true on the empty-conjunction identity.
+    ///
+    /// **Singleton vacuous truth**: `T::is_chain([&a]) == true` for
+    /// every `a` — a singleton contains no distinct pair, same
+    /// vacuous-conjunction reasoning as the empty case.
+    ///
+    /// **Duplicate-only vacuous truth**: `T::is_chain([&a, &a, &a]) ==
+    /// true` for every `a` — the [`PartialEq`] filter drops every
+    /// self-pair, leaving no distinct pair to check.
+    ///
+    /// **Pair-identity**: `T::is_chain([&a, &b]) == (a == b ||
+    /// a.is_comparable(&b))` — the 2-input structural predicate reduces
+    /// to the pairwise-comparability primitive (with the duplicate
+    /// filter). Same identity peer that [`Lattice::is_lower_bound_of`]
+    /// exposes at singleton reduction, one arity axis up.
+    ///
+    /// **Any-incomparable-distinct-pair rejection**: if any two distinct
+    /// positions `(i, j)` with `vs[i] != vs[j]` fail
+    /// `vs[i].is_comparable(&vs[j])`, then `T::is_chain(iter) == false`
+    /// — the nested-loop short-circuits at the first violating pair,
+    /// so the predicate does NOT promote incomparable elements to a
+    /// chain verdict.
+    ///
+    /// **Total-order universal truth**: on any totally-ordered lattice
+    /// (e.g. [`baseline::Baseline`], [`DataClassification`],
+    /// [`CalmClassification`]), every collection is a chain — every
+    /// pair is comparable by the total-order property, so the
+    /// structural predicate universally accepts. The
+    /// non-vacuous-truth signal on such a lattice is
+    /// [`Lattice::is_antichain`]'s rejection of distinct-value
+    /// non-singleton collections.
+    ///
+    /// **Antichain rejection**: on an antichain lattice (e.g.
+    /// [`SubstrateType`]), the structural predicate rejects most
+    /// distinct-value non-singleton collections — a collection of two
+    /// distinct non-top substrates is NOT a chain, whereas a collection
+    /// containing the pointed-top [`SubstrateType::Regulatory`] and one
+    /// other substrate IS a chain (the top-directed edge is
+    /// comparable). Together with the duplicate-only vacuous-truth arm,
+    /// the antichain shape's chain predicate cleanly partitions into:
+    /// vacuously-true (empty / singleton / all-duplicate), top-directed
+    /// (contains only the top plus copies of one non-top substrate),
+    /// or rejected (any two distinct non-top substrates).
+    ///
+    /// **Sequence-order independence**: `T::is_chain(iter) ==
+    /// T::is_chain(iter.rev())` on every collection — the nested loop
+    /// checks EVERY distinct-position pair `(i, j)` symmetrically via
+    /// [`Lattice::is_comparable`]'s `leq || geq` disjunction, so a
+    /// permutation of the input yields the same verdict. This is what
+    /// justifies calling the predicate STRUCTURAL rather than SEQUENCE-
+    /// SHAPED — the property depends only on the underlying multiset,
+    /// not the emission order.
+    ///
+    /// **Strict-monotone-sequence witness**: any collection that
+    /// [`Lattice::strictly_below`] chains left-to-right (i.e. every
+    /// consecutive pair `(vs[i], vs[i + 1])` satisfies
+    /// `vs[i].strictly_below(&vs[i + 1])`) is a chain — transitivity of
+    /// [`Lattice::strictly_below`] extends the pairwise strict relation
+    /// to every distinct pair, which refines [`Lattice::leq`] and
+    /// therefore [`Lattice::is_comparable`]. The converse fails on
+    /// non-totally-ordered lattices: a chain need not be strictly
+    /// monotone as-yielded (any permutation of a chain is still a
+    /// chain, but the permuted sequence need not be strictly monotone).
+    ///
+    /// Default routes through a nested-loop `for i in 0..vs.len()` /
+    /// `for j in (i + 1)..vs.len()` over the collected `Vec<&Self>`
+    /// buffer, guarded by `vs[i] != vs[j]` to filter duplicates on the
+    /// standard-mathematical convention. The collect materializes the
+    /// iterator once so both loop arms iterate the same set — an
+    /// [`IntoIterator`] that yields distinct values on distinct calls
+    /// (a `Range` over a randomizing iterator) would otherwise break
+    /// the structural predicate's determinism.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the structural chain predicate is itself a typed named
+    /// `bool` composing [`Lattice::is_comparable`] via nested-loop
+    /// pair iteration; every downstream lattice-law consumer inherits
+    /// the predicate through the default mechanically) + THEORY.md §III
+    /// (typescape — the structural comparability predicate on every
+    /// classification-axis lattice binds at ONE substrate owner on the
+    /// [`Lattice`] algebra rather than at each consumer's hand-rolled
+    /// `iter.iter().enumerate().all(|(i, x)| iter.iter().skip(i +
+    /// 1).all(|y| x.is_comparable(y)))` nested traversal).
+    ///
+    /// Frontier inspiration: order-theory's classical chain / antichain
+    /// duality (Dilworth's theorem, Mirsky's theorem) — a poset's
+    /// structural decomposition into chains and antichains is the
+    /// canonical two-halves-of-the-comparability-relation reading, and
+    /// chain-detection is its most-primitive membership predicate.
+    /// Translated: threaded the same structural comparability predicate
+    /// through the [`Lattice`] trait's default-method surface, so every
+    /// closed-set impl (total order, pointed-top antichain, boolean
+    /// lattice) picks up the whole chain-detection primitive
+    /// mechanically — generalizing the classical order-theoretic
+    /// decomposition to a first-class algebra method the trait carries
+    /// alongside its pairwise-comparability arm.
+    fn is_chain<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        for i in 0..vs.len() {
+            for j in (i + 1)..vs.len() {
+                if vs[i] != vs[j] && !vs[i].is_comparable(vs[j]) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+    /// Dual of [`Lattice::is_chain`] on the comparability axis — the
+    /// iterated set forms an ANTICHAIN (Sperner family) on the
+    /// lattice's partial order: every DISTINCT pair of elements the
+    /// iterator yields is incomparable. `T::is_antichain([&a, &b, &c])`
+    /// holds iff for every position pair `(i, j)` with `i < j` and
+    /// `vs[i] != vs[j]` (by [`PartialEq`]),
+    /// `vs[i].is_incomparable(&vs[j])`; positions yielding equal values
+    /// are filtered on the same standard-mathematical convention as
+    /// [`Lattice::is_chain`] (an antichain is defined over the DISTINCT
+    /// elements of the underlying set, so duplicates in the yielded
+    /// sequence don't add a new pair to check).
+    ///
+    /// The COLLECTION-STRUCTURAL peer of [`Lattice::is_incomparable`]
+    /// one ARITY axis over on the (pairwise, structural) ×
+    /// (comparable, incomparable) 2×2 grid — where
+    /// [`Lattice::is_incomparable`] decides pairwise INCOMPARABILITY on
+    /// a single pair of elements, this decides STRUCTURAL
+    /// INCOMPARABILITY on the whole collection (does the iterated set
+    /// live entirely inside a single antichain of the partial order).
+    /// Together with [`Lattice::is_chain`] on the dual predicate arm
+    /// closes the (pairwise, structural) × (comparable, incomparable)
+    /// 2×2 grid on the comparability face of the combinator surface.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_antichain(std::iter::
+    /// empty()) == true` on every lattice — same vacuous-conjunction
+    /// identity as [`Lattice::is_chain`]'s empty arm.
+    ///
+    /// **Singleton vacuous truth**: `T::is_antichain([&a]) == true` for
+    /// every `a` — a singleton is both a chain AND an antichain,
+    /// vacuously.
+    ///
+    /// **Duplicate-only vacuous truth**: `T::is_antichain([&a, &a, &a])
+    /// == true` for every `a` — the [`PartialEq`] filter drops every
+    /// self-pair. This is the shared vacuous-truth arm with
+    /// [`Lattice::is_chain`]; on every collection with no distinct-value
+    /// pair, BOTH structural predicates fire true.
+    ///
+    /// **Pair-identity**: `T::is_antichain([&a, &b]) == (a == b ||
+    /// a.is_incomparable(&b))` — the 2-input structural predicate
+    /// reduces to the pairwise-incomparability primitive (with the
+    /// duplicate filter). Dual identity to [`Lattice::is_chain`]'s
+    /// pair-identity on the comparability axis.
+    ///
+    /// **Any-comparable-distinct-pair rejection**: if any two distinct
+    /// positions `(i, j)` with `vs[i] != vs[j]` fail
+    /// `vs[i].is_incomparable(&vs[j])` (i.e. the two values ARE
+    /// comparable), then `T::is_antichain(iter) == false` — the
+    /// nested-loop short-circuits at the first violating pair.
+    ///
+    /// **Total-order rejection**: on any totally-ordered lattice
+    /// (e.g. [`baseline::Baseline`], [`DataClassification`],
+    /// [`CalmClassification`]), the predicate accepts ONLY collections
+    /// with at most one distinct value — every pair of distinct values
+    /// is comparable by the total-order property, so the structural
+    /// predicate rejects. Dual to [`Lattice::is_chain`]'s total-order
+    /// universal-truth arm.
+    ///
+    /// **Antichain-lattice universal-truth-on-distinct-non-top**: on an
+    /// antichain lattice (e.g. [`SubstrateType`]), the predicate
+    /// universally accepts any collection whose distinct values are ALL
+    /// non-top (all pairwise-incomparable), and rejects any collection
+    /// that mixes the pointed-top [`SubstrateType::Regulatory`] with a
+    /// distinct non-top substrate (the top-directed pair is comparable).
+    ///
+    /// **Chain-antichain overlap**: at a fixed collection, BOTH
+    /// predicates fire true iff the collection has at most one distinct
+    /// value (empty, singleton, or all-duplicate). At every collection
+    /// with two or more distinct values, at most ONE of the two
+    /// structural predicates fires (or NEITHER, on a mixed-shape
+    /// collection on a partial order — e.g. a set containing both a
+    /// chain-pair AND an incomparable pair). This is the structural
+    /// projection of [`Lattice::is_comparable`] / [`Lattice::is_incomparable`]
+    /// partitioning the pair space at the pairwise level.
+    ///
+    /// **Sequence-order independence**: `T::is_antichain(iter) ==
+    /// T::is_antichain(iter.rev())` on every collection — same
+    /// symmetric reasoning as [`Lattice::is_chain`]'s sequence-order
+    /// independence.
+    ///
+    /// Default routes through a nested-loop `for i in 0..vs.len()` /
+    /// `for j in (i + 1)..vs.len()` over the collected `Vec<&Self>`
+    /// buffer, guarded by `vs[i] != vs[j]` to filter duplicates. Same
+    /// collect-once discipline as [`Lattice::is_chain`].
+    ///
+    /// Theory anchor: same as [`Lattice::is_chain`] on the dual arm —
+    /// THEORY.md §II.1 invariant 5 + §III. The comparability axis on
+    /// every classification-axis lattice now binds through FOUR algebra
+    /// predicates ([`Lattice::is_comparable`], [`Lattice::is_incomparable`],
+    /// [`Lattice::is_chain`], [`Lattice::is_antichain`]) closing the
+    /// (pairwise, structural) × (comparable, incomparable) 2×2 grid at
+    /// ONE substrate owner on the trait.
+    ///
+    /// Frontier inspiration: order-theory's Sperner family / Dilworth's
+    /// theorem — the antichain-detection predicate is the dual half of
+    /// the comparability-relation's structural decomposition. Rust's
+    /// standard library does not carry either predicate on [`PartialOrd`]
+    /// (they aren't total-order primitives), but any bounded-lattice
+    /// extension supports them via the pairwise-comparability arm. This
+    /// widening threads the same structural incomparability predicate
+    /// through the [`Lattice`] trait's default-method surface,
+    /// generalizing the classical order-theoretic decomposition to a
+    /// first-class algebra method — the dual half of what
+    /// [`Lattice::is_chain`] lifts on the comparability side.
+    fn is_antichain<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        for i in 0..vs.len() {
+            for j in (i + 1)..vs.len() {
+                if vs[i] != vs[j] && !vs[i].is_incomparable(vs[j]) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -3593,6 +3852,503 @@ mod tests {
             if a.is_strictly_between(&low, &high) {
                 prop_assert!(a.is_between(&low, &high));
             }
+        }
+    }
+
+    // ── Lattice::is_chain / Lattice::is_antichain — structural
+    //    collection-level default peers ───────────────────────────────
+    //
+    // Bind [`Lattice::is_chain`] + [`Lattice::is_antichain`] at
+    // fail-before-pass-after granularity. Pre-lift the [`Lattice`]
+    // trait's comparability surface was `{is_comparable,
+    // is_incomparable}` on the pairwise arm; a consumer that wanted
+    // the STRUCTURAL (collection-level) reading of either predicate
+    // hand-authored a nested-loop `for i in 0..vs.len() { for j in
+    // (i + 1)..vs.len() { if vs[i] != vs[j] && !vs[i].is_comparable(
+    // vs[j]) { return false; } } } true` traversal at each callsite.
+    // Post-lift the whole structural comparability pair binds at ONE
+    // substrate primitive on the [`Lattice`] algebra, and every
+    // downstream impl (the four in-tree ones + `Baseline` via the
+    // `crate::Lattice` trait AND any future closed-set lift) inherits
+    // `is_chain` / `is_antichain` for free through the default.
+    // Together with the prior widening (`is_comparable` /
+    // `is_incomparable` on the pairwise arm; `is_lower_bound_of` /
+    // `is_upper_bound_of` on the N-ary Boolean-conjunction arm;
+    // `is_between` / `is_strictly_between` on the interval arm) the
+    // trait now closes the (pairwise, structural) × (comparable,
+    // incomparable) 2×2 grid on the comparability face of the
+    // combinator surface via FOUR substrate defaults.
+    //
+    // The dedup convention: both structural predicates filter
+    // `vs[i] == vs[j]` pairs on the standard mathematical reading
+    // that a chain / antichain is defined over the DISTINCT elements
+    // of the underlying set. Duplicates in the yielded sequence are
+    // the same set element, so they don't add a new pair to check.
+    // Under this convention, at every collection with at most one
+    // distinct value (empty, singleton, all-duplicate), BOTH
+    // predicates fire true — this is the shared vacuous-truth arm
+    // and the exact overlap of the chain and antichain predicates.
+    //
+    // Coverage below spans:
+    //
+    //   • empty / singleton / duplicate-only vacuous truth on the
+    //     shared arm;
+    //   • pair-identity `T::is_chain([&a, &b]) == (a == b ||
+    //     a.is_comparable(&b))` (dual on the antichain arm) at every
+    //     pair of every closed-set impl;
+    //   • total-order universal-truth-on-chain / rejection-on-antichain
+    //     over `DataClassification::ALL^2` and `CalmClassification::
+    //     ALL^2`;
+    //   • antichain-lattice acceptance on distinct-non-top /
+    //     rejection-on-top-mixed over `SubstrateType::ALL^3`;
+    //   • three-element seal on the antichain lattice pinning the
+    //     antichain-shape acceptance on the {Compute, Storage, Network}
+    //     triple against the top-mixed rejection on the {Compute,
+    //     Storage, Regulatory} triple;
+    //   • sequence-order independence over `DataClassification::ALL^3`
+    //     and `SubstrateType::ALL^3` — the structural predicates
+    //     depend only on the underlying multiset, not the emission
+    //     order;
+    //   • strict-monotone-sequence witness on
+    //     `DataClassification::ALL^3` — any triple that chains
+    //     strictly is a chain (refines-strictly-below via
+    //     transitivity);
+    //   • proptest peers on the DataClassification + CALM axes for
+    //     the pair-identity and total-order universal-truth /
+    //     rejection arms.
+
+    /// [`Lattice::is_chain`] and [`Lattice::is_antichain`] are BOTH
+    /// vacuously true at the empty iterator on every classification-
+    /// axis lattice — the empty conjunction has no distinct pair to
+    /// check, so both universally-quantified predicates fire true on
+    /// the empty case. Peer of [`Lattice::is_lower_bound_of`]'s
+    /// empty-iterator vacuous truth one arity axis down. Fail-before-
+    /// pass-after: pre-lift this pin cannot compile because neither
+    /// `is_chain` nor `is_antichain` is exposed as a trait method —
+    /// consumers who wanted the structural reading wrote the nested-
+    /// loop inline at each callsite, with no vacuous-truth arm
+    /// enforced at the primitive.
+    #[test]
+    fn is_chain_and_is_antichain_are_vacuously_true_at_the_empty_iterator() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        assert!(DataClassification::is_chain(std::iter::empty()));
+        assert!(DataClassification::is_antichain(std::iter::empty()));
+        assert!(CalmClassification::is_chain(std::iter::empty()));
+        assert!(CalmClassification::is_antichain(std::iter::empty()));
+        assert!(SubstrateType::is_chain(std::iter::empty()));
+        assert!(SubstrateType::is_antichain(std::iter::empty()));
+    }
+
+    /// [`Lattice::is_chain`] and [`Lattice::is_antichain`] are BOTH
+    /// vacuously true at every singleton on every classification-axis
+    /// lattice — a singleton contains no distinct pair, so the same
+    /// vacuous-conjunction identity as the empty arm holds. Pinned
+    /// exhaustively over every variant of every closed-set impl so a
+    /// regression that broke the empty-conjunction identity on the
+    /// nested loop surfaces at the first variant.
+    #[test]
+    fn is_chain_and_is_antichain_are_vacuously_true_at_every_singleton() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_chain([&a]));
+            assert!(DataClassification::is_antichain([&a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_chain([&a]));
+            assert!(CalmClassification::is_antichain([&a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_chain([&a]));
+            assert!(SubstrateType::is_antichain([&a]));
+        }
+    }
+
+    /// [`Lattice::is_chain`] and [`Lattice::is_antichain`] are BOTH
+    /// vacuously true on any duplicate-only collection — the
+    /// [`PartialEq`] filter drops every self-pair, leaving no distinct
+    /// pair to check. This is the shared vacuous-truth arm at the
+    /// non-trivial (non-empty, non-singleton) length; a triple of
+    /// duplicates matches the same vacuous-conjunction identity as
+    /// the empty / singleton arms. Pinned on every closed-set impl at
+    /// arity 3 to catch a regression that dropped the [`PartialEq`]
+    /// filter (which would flip antichain to false on `[&a, &a, &a]`
+    /// because `is_incomparable(&a, &a) == false`).
+    #[test]
+    fn is_chain_and_is_antichain_are_vacuously_true_on_duplicate_only_collections() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_chain([&a, &a, &a]));
+            assert!(DataClassification::is_antichain([&a, &a, &a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_chain([&a, &a, &a]));
+            assert!(CalmClassification::is_antichain([&a, &a, &a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_chain([&a, &a, &a]));
+            assert!(SubstrateType::is_antichain([&a, &a, &a]));
+        }
+    }
+
+    /// [`Lattice::is_chain`] at arity 2 REDUCES to `a == b ||
+    /// a.is_comparable(&b)` on every [`DataClassification`] pair, and
+    /// [`Lattice::is_antichain`] at arity 2 REDUCES to `a == b ||
+    /// a.is_incomparable(&b)` — the 2-input structural predicates
+    /// collapse to the pairwise-comparability primitives with the
+    /// duplicate filter. Pinned exhaustively over `ALL^2` (36 pairs).
+    #[test]
+    fn is_chain_and_is_antichain_arity_2_reduces_to_pairwise_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::is_chain([&a, &b]),
+                    a == b || a.is_comparable(&b),
+                    "is_chain([{a:?}, {b:?}]) must reduce to pairwise-comparability \
+                     with the duplicate filter — the structural predicate is defined \
+                     on distinct pairs and vacuously accepts duplicates",
+                );
+                assert_eq!(
+                    DataClassification::is_antichain([&a, &b]),
+                    a == b || a.is_incomparable(&b),
+                    "is_antichain([{a:?}, {b:?}]) must reduce to pairwise-incomparability \
+                     with the duplicate filter — dual identity on the antichain arm",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_chain`] is UNIVERSALLY TRUE over every subset of
+    /// [`DataClassification::ALL`] — the sensitivity axis is a total
+    /// order, so every collection is a chain. Peer of
+    /// `is_comparable_is_universally_true_over_data_classification_all_pairs`
+    /// one arity axis up. Pinned exhaustively over `ALL^3` (216
+    /// triples) so a future variant insertion that broke the total-
+    /// order property surfaces here at the first triple containing
+    /// the incomparable pair.
+    #[test]
+    fn is_chain_is_universally_true_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    assert!(
+                        DataClassification::is_chain([&a, &b, &c]),
+                        "DataClassification is a total order — every triple \
+                         ({a:?}, {b:?}, {c:?}) must be a chain, but is_chain \
+                         returned false — the sensitivity_rank projection has \
+                         drifted into a non-total shape",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_antichain`] on [`DataClassification`] fires TRUE
+    /// only on collections with at most one distinct value — every
+    /// pair of distinct values on a total-order lattice is comparable,
+    /// so the structural predicate rejects. Dual seal to
+    /// `is_chain_is_universally_true_over_data_classification_all_triples`
+    /// on the total-order axis. Pinned exhaustively over `ALL^2`
+    /// pairs.
+    #[test]
+    fn is_antichain_over_data_classification_all_pairs_fires_true_iff_pair_is_equal() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::is_antichain([&a, &b]),
+                    a == b,
+                    "is_antichain([{a:?}, {b:?}]) on a total order must fire \
+                     true iff the pair is equal — every distinct pair is \
+                     comparable, so the antichain predicate rejects",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_antichain`] PROJECTS the pointed-top antichain on
+    /// [`SubstrateType`] to its structural shape: on any collection
+    /// whose distinct values are ALL non-top, the predicate fires
+    /// TRUE (all pairs are pairwise-incomparable); on any collection
+    /// mixing the pointed-top [`SubstrateType::Regulatory`] with a
+    /// distinct non-top substrate, the predicate fires FALSE (the
+    /// top-directed pair is comparable). Peer seal to
+    /// `substrate_type_is_incomparable_matches_the_antichain_shape`
+    /// one arity axis up. Pinned exhaustively over `ALL^3` (512
+    /// triples).
+    #[test]
+    fn is_antichain_projects_the_pointed_top_antichain_over_substrate_type_all_triples() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    let is_antichain = SubstrateType::is_antichain([&a, &b, &c]);
+                    // Distinct values among the triple.
+                    let distinct: Vec<&SubstrateType> = {
+                        let mut d = vec![&a, &b, &c];
+                        d.sort();
+                        d.dedup();
+                        d
+                    };
+                    // Antichain on the pointed-top substrate iff no
+                    // distinct value in the triple is the pointed top
+                    // OR the distinct set has at most one element
+                    // (a duplicate-only collection is always both).
+                    let expected = distinct.len() <= 1 || distinct.iter().all(|v| **v != top);
+                    assert_eq!(
+                        is_antichain, expected,
+                        "is_antichain([{a:?}, {b:?}, {c:?}]) must match the antichain \
+                         shape — accepts iff at most one distinct value OR every \
+                         distinct value is non-top",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_chain`] on the {Compute, Storage, Network} triple
+    /// REJECTS on [`SubstrateType`] — three distinct non-top substrates
+    /// form a 3-element antichain, not a chain. Peer non-vacuous-truth
+    /// pin on the antichain-shape lattice, distinguishing the
+    /// structural predicates from each other at a non-trivial triple.
+    /// Together with the {Compute, Storage, Regulatory} pin below,
+    /// this seals the chain / antichain shape at the SAME 3-element
+    /// alphabet: swap the top-endpoint arm and the verdict flips
+    /// mechanically.
+    #[test]
+    fn is_chain_rejects_three_distinct_non_top_substrates() {
+        use tatara_process::classification::SubstrateType;
+        let s = SubstrateType::Compute;
+        let t = SubstrateType::Storage;
+        let u = SubstrateType::Network;
+        // Three distinct non-top substrates: antichain, not chain.
+        assert!(SubstrateType::is_antichain([&s, &t, &u]));
+        assert!(!SubstrateType::is_chain([&s, &t, &u]));
+    }
+
+    /// [`Lattice::is_chain`] on the {Compute, Storage, Regulatory}
+    /// triple REJECTS on [`SubstrateType`] — {Compute, Storage} is
+    /// pairwise-incomparable, so even adding the pointed-top does
+    /// NOT rescue the collection into a chain. Peer to the sibling
+    /// non-top triple pin above; this pin also shows that
+    /// [`Lattice::is_antichain`] REJECTS the same triple because
+    /// {Compute, Regulatory} is comparable (Regulatory is the
+    /// pointed-top and every non-top substrate `leq`'s it).
+    /// Together the two pins bind the structural predicates at the
+    /// "mixed-shape collection" case — the exact case where NEITHER
+    /// predicate fires because the collection contains both a
+    /// chain-pair AND an incomparable-pair.
+    #[test]
+    fn neither_chain_nor_antichain_on_the_mixed_shape_substrate_triple() {
+        use tatara_process::classification::SubstrateType;
+        let s = SubstrateType::Compute;
+        let t = SubstrateType::Storage;
+        let top = SubstrateType::Regulatory;
+        // Mixed-shape: {s, t} incomparable AND {s, top} comparable.
+        assert!(!SubstrateType::is_chain([&s, &t, &top]));
+        assert!(!SubstrateType::is_antichain([&s, &t, &top]));
+    }
+
+    /// [`Lattice::is_chain`] on the {non-top, top} pair on
+    /// [`SubstrateType`] ACCEPTS — the pointed-top is comparable to
+    /// every non-top substrate. Peer to the sibling triple rejections
+    /// above; this pin binds the top-directed strict half-edge as a
+    /// 2-element chain on the antichain lattice. Exhaustive over
+    /// every non-top substrate.
+    #[test]
+    fn is_chain_accepts_the_top_directed_pair_over_substrate_type_all_non_top() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        for a in SubstrateType::ALL {
+            if a != top {
+                assert!(
+                    SubstrateType::is_chain([&a, &top]),
+                    "is_chain([{a:?}, {top:?}]) must accept — the pointed-top \
+                     is comparable to every non-top substrate",
+                );
+                // Dual on the antichain arm: rejects the same pair
+                // because it contains one comparable-distinct pair.
+                assert!(
+                    !SubstrateType::is_antichain([&a, &top]),
+                    "is_antichain([{a:?}, {top:?}]) must reject — the \
+                     top-directed pair is comparable",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_chain`] and [`Lattice::is_antichain`] are
+    /// SEQUENCE-ORDER INDEPENDENT — the structural predicates depend
+    /// only on the underlying multiset, not the emission order. Pinned
+    /// over `DataClassification::ALL^3` (216 triples) and
+    /// `SubstrateType::ALL^3` (512 triples): every permutation of every
+    /// triple yields the same verdict. Fail-before-pass-after: a
+    /// regression that broke the symmetric nested-loop (e.g. dropped
+    /// `j > i` and used `j != i`, or checked only `leq` without the
+    /// dual `geq`) would surface here at the first permuted triple
+    /// whose verdict differs from the sorted canonical order.
+    #[test]
+    fn is_chain_and_is_antichain_are_sequence_order_independent() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let refv = DataClassification::is_chain([&a, &b, &c]);
+                    for perm in &[
+                        [&a, &c, &b],
+                        [&b, &a, &c],
+                        [&b, &c, &a],
+                        [&c, &a, &b],
+                        [&c, &b, &a],
+                    ] {
+                        assert_eq!(
+                            DataClassification::is_chain(perm.iter().copied()),
+                            refv,
+                            "is_chain must be sequence-order independent",
+                        );
+                    }
+                    let refav = DataClassification::is_antichain([&a, &b, &c]);
+                    for perm in &[
+                        [&a, &c, &b],
+                        [&b, &a, &c],
+                        [&b, &c, &a],
+                        [&c, &a, &b],
+                        [&c, &b, &a],
+                    ] {
+                        assert_eq!(
+                            DataClassification::is_antichain(perm.iter().copied()),
+                            refav,
+                            "is_antichain must be sequence-order independent",
+                        );
+                    }
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    let refc = SubstrateType::is_chain([&a, &b, &c]);
+                    let refac = SubstrateType::is_antichain([&a, &b, &c]);
+                    // Two permutations are enough to seal symmetry on
+                    // the antichain-shape lattice (the full 6-permutation
+                    // sweep on the total-order sibling above binds the
+                    // stronger form).
+                    assert_eq!(SubstrateType::is_chain([&c, &b, &a]), refc);
+                    assert_eq!(SubstrateType::is_antichain([&c, &b, &a]), refac);
+                }
+            }
+        }
+    }
+
+    /// Any [`DataClassification`] triple that chains STRICTLY MONOTONE
+    /// left-to-right (every consecutive pair satisfies
+    /// [`Lattice::strictly_below`]) IS a chain. Refines-strict-monotone
+    /// witness: transitivity of [`Lattice::strictly_below`] extends the
+    /// pairwise strict relation to every distinct pair, which refines
+    /// [`Lattice::leq`] and therefore [`Lattice::is_comparable`]. Peer
+    /// seal to `strictly_below_matches_sensitivity_rank_strict_inequality_over_data_classification_all_pairs`
+    /// one arity axis up. Pinned exhaustively over
+    /// `DataClassification::ALL^3`.
+    #[test]
+    fn strictly_monotone_triples_over_data_classification_all_are_chains() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if a.strictly_below(&b) && b.strictly_below(&c) {
+                        assert!(
+                            DataClassification::is_chain([&a, &b, &c]),
+                            "strictly-monotone triple ({a:?}, {b:?}, {c:?}) must be \
+                             a chain — transitivity of strictly_below extends the \
+                             pairwise strict relation to every distinct pair",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    proptest! {
+        /// [`Lattice::is_chain`] at arity 2 REDUCES to the pairwise
+        /// comparability primitive with the duplicate filter on every
+        /// random [`DataClassification`] pair — proptest peer of the
+        /// exhaustive
+        /// `is_chain_and_is_antichain_arity_2_reduces_to_pairwise_over_data_classification_all`
+        /// seal above.
+        #[test]
+        fn data_class_is_chain_arity_2_reduces_to_pairwise(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            prop_assert_eq!(
+                DataClassification::is_chain([&a, &b]),
+                a == b || a.is_comparable(&b),
+            );
+            prop_assert_eq!(
+                DataClassification::is_antichain([&a, &b]),
+                a == b || a.is_incomparable(&b),
+            );
+        }
+
+        /// [`Lattice::is_chain`] is UNIVERSALLY TRUE over every random
+        /// [`DataClassification`] triple — proptest peer of the
+        /// exhaustive
+        /// `is_chain_is_universally_true_over_data_classification_all_triples`
+        /// seal above.
+        #[test]
+        fn data_class_is_chain_is_universally_true(
+            a in any_data_class(),
+            b in any_data_class(),
+            c in any_data_class(),
+        ) {
+            prop_assert!(DataClassification::is_chain([&a, &b, &c]));
+        }
+
+        /// [`Lattice::is_antichain`] on [`DataClassification`] fires
+        /// true iff the pair is equal — proptest peer of the exhaustive
+        /// `is_antichain_over_data_classification_all_pairs_fires_true_iff_pair_is_equal`
+        /// seal above.
+        #[test]
+        fn data_class_is_antichain_arity_2_fires_true_iff_pair_is_equal(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            prop_assert_eq!(DataClassification::is_antichain([&a, &b]), a == b);
+        }
+
+        /// Peer of the DataClassification is_chain / is_antichain
+        /// arity-2 pairwise reduction on the CALM boolean-lattice axis
+        /// — same shape, different closed set.
+        #[test]
+        fn calm_is_chain_arity_2_reduces_to_pairwise(a in any_calm(), b in any_calm()) {
+            prop_assert_eq!(
+                CalmClassification::is_chain([&a, &b]),
+                a == b || a.is_comparable(&b),
+            );
+            prop_assert_eq!(
+                CalmClassification::is_antichain([&a, &b]),
+                a == b || a.is_incomparable(&b),
+            );
+        }
+
+        /// [`Lattice::is_chain`] on [`CalmClassification`] is
+        /// universally true over every random pair — the two-arm
+        /// boolean lattice is a total order (`Monotone ≤ NonMonotone`).
+        /// Peer of the sibling `data_class_is_chain_is_universally_true`
+        /// on the DataClassification axis; together the two proptest
+        /// cases bind BOTH total-order classification axes' chain
+        /// universality to ONE substrate default.
+        #[test]
+        fn calm_is_chain_is_universally_true(a in any_calm(), b in any_calm()) {
+            prop_assert!(CalmClassification::is_chain([&a, &b]));
         }
     }
 }

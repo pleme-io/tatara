@@ -4065,6 +4065,174 @@ pub trait Lattice: Sized + Clone + PartialEq {
     {
         iter.into_iter().all(|x| x.is_strictly_between(low, high))
     }
+    /// Existential N-ary interval-containment predicate — AT LEAST ONE
+    /// element the iterator yields sits inside the closed bracket
+    /// `[low, high]` on the lattice's partial order.
+    /// `T::any_between(&low, &high, [&a, &b, &c])` holds iff
+    /// `a.is_between(&low, &high) || b.is_between(&low, &high) ||
+    /// c.is_between(&low, &high)`: some element of the iterated set
+    /// is at-or-above `low` AND at-or-below `high` in the refinement
+    /// order.
+    ///
+    /// The existential N-ary Boolean-DISJUNCTION peer of the universal
+    /// N-ary [`Lattice::all_between`] one QUANTIFIER axis over on the
+    /// (∀, ∃) × (N-ary interval-containment) 2×1 grid — where
+    /// [`Lattice::all_between`] decides UNIVERSAL bracket membership
+    /// (does EVERY element sit within `[low, high]`) via
+    /// [`Iterator::all`] over per-element [`Lattice::is_between`]
+    /// delegations, this decides EXISTENTIAL bracket membership
+    /// (does ANY element sit within `[low, high]`) via
+    /// [`Iterator::any`] over the SAME per-element predicate. Closes
+    /// the (∀, ∃) × (N-ary interval-containment) 2×1 face at the ∃
+    /// cell on the algebra's bracket-membership predicate surface,
+    /// exactly one QUANTIFIER axis over from the [`Lattice::
+    /// all_between`] pin — the last unpinned cell on the (∀, ∃) ×
+    /// (interval-containment N-ary) grid whose universal arm
+    /// [`Lattice::all_between`] already carries.
+    ///
+    /// **Empty-iterator vacuous falsehood**: `T::any_between(&low,
+    /// &high, std::iter::empty()) == false` on every bracket —
+    /// INCLUDING every extrema bracket `(&T::bottom(), &T::top())`
+    /// where the universal peer [`Lattice::all_between`] fires
+    /// vacuously TRUE. The empty disjunction is vacuously false
+    /// because [`Iterator::any`] on the empty iterator is `false` by
+    /// [`Iterator::any`]'s empty-disjunction convention regardless of
+    /// the per-element predicate the caller passed. DIVERGES from
+    /// [`Lattice::all_between`]'s vacuous-truth identity at the empty
+    /// iterator — the ONE cell where the ∃ arm and the ∀ arm split
+    /// on the (∀, ∃) axis. Peer of every other ∃ Boolean-disjunction
+    /// predicate the algebra could carry (an empty [`Iterator::any`]
+    /// is universally `false`).
+    ///
+    /// **Singleton-identity**: `T::any_between(&low, &high, [&a]) ==
+    /// a.is_between(&low, &high)` — the 1-input N-ary existential
+    /// interval predicate reduces to the pairwise 3-ary interval-
+    /// containment primitive on the sole element. AGREES with
+    /// [`Lattice::all_between`]'s singleton reduction at arity 1 —
+    /// both quantifiers collapse to the same per-element predicate
+    /// when the iterator yields exactly one element.
+    ///
+    /// **Any-in-bracket element acceptance**: if any `x` in the
+    /// iterator has `x.is_between(&low, &high)` (both `low.leq(&x)`
+    /// and `x.leq(&high)`), then `T::any_between(&low, &high, iter)
+    /// == true` — [`Iterator::any`] short-circuits on the first
+    /// accepting element. Peer of [`Lattice::all_between`]'s
+    /// any-violating-element rejection on the bracket-face at the
+    /// ∃ arm's short-circuit-on-first-accept dual to the ∀ arm's
+    /// short-circuit-on-first-reject.
+    ///
+    /// **Extrema-bracket admits every non-empty iterable**:
+    /// `T::any_between(&T::bottom(), &T::top(), iter) == !iter.
+    /// is_empty()` on every lattice — [`Lattice::bottom`] /
+    /// [`Lattice::top`] bracket admits every element via
+    /// [`Lattice::is_between`]'s extrema-bracket universal-truth, so
+    /// [`Iterator::any`] over every-element-accepting per-element
+    /// predicate collapses to non-emptiness of the iterator. Peer of
+    /// [`Lattice::all_between`]'s extrema-bracket unconditional
+    /// universal-truth on the ∃ arm — the widest possible bracket
+    /// admits any non-empty iterable at ONE substrate primitive
+    /// rather than at each consumer's hand-authored bounded-lattice
+    /// cross-check per element.
+    ///
+    /// **Inverted-bracket universal rejection**: if `high.strictly_below(
+    /// &low)` (the bracket is empty because its upper endpoint sits
+    /// strictly below its lower one), then `T::any_between(&low,
+    /// &high, iter) == false` for EVERY iterable including the empty
+    /// one — no lattice element can simultaneously be at-or-above
+    /// `low` and at-or-below a `high` that sits strictly below
+    /// `low`, so every element the iterator yields fails
+    /// [`Lattice::is_between`] and [`Iterator::any`] never fires.
+    /// AGREES with [`Lattice::all_between`]'s inverted-bracket
+    /// rejection AT NON-EMPTY iterables; DIVERGES at the empty
+    /// iterable (where [`Lattice::all_between`] fires vacuously true
+    /// and this fires vacuously false).
+    ///
+    /// **Degenerate-bracket existential-equality**:
+    /// `T::any_between(&x, &x, iter)` holds iff SOME element `a` the
+    /// iterator yields satisfies `a == x` — a zero-width bracket
+    /// admits only the single point `x`, so the N-ary existential
+    /// predicate reduces to "some element equals `x`". Follows from
+    /// [`Lattice::is_between`]'s degenerate collapse
+    /// (`a.is_between(&x, &x) ⇔ a == x`) composed through
+    /// [`Iterator::any`]. Peer of [`Lattice::all_between`]'s
+    /// degenerate-bracket universal-equality on the ∃ arm — where
+    /// the ∀ arm admits only iterables all of whose elements equal
+    /// `x`, the ∃ arm admits any iterable containing at least one
+    /// element equal to `x`.
+    ///
+    /// **[`Lattice::all_between`] refinement on non-empty iterables**:
+    /// `T::all_between(&low, &high, iter) && iter is non-empty ⇒
+    /// T::any_between(&low, &high, iter)` — the universal quantifier
+    /// refines the existential one at every non-empty iterable via
+    /// the standard `∀x P(x) ∧ ∃x ⇒ ∃x P(x)` inference, so ∀
+    /// acceptance implies ∃ acceptance when there is at least one
+    /// witness to quantify over. The refinement DOES NOT hold at the
+    /// empty iterable (where ∀ fires true vacuously but ∃ fires
+    /// false vacuously) — the exact cell where the (∀, ∃) axis
+    /// splits.
+    ///
+    /// **Antichain projection**: on an antichain lattice (e.g.
+    /// [`SubstrateType`]), the predicate accepts an iterable iff some
+    /// element `x` it yields satisfies `low.leq(&x) && x.leq(&high)`,
+    /// which on the pointed-top antichain fires only on the reflexive
+    /// diagonal AND on the `x.leq(&top)` half-edge to the pointed
+    /// top. The predicate does NOT promote incomparable brackets to
+    /// spurious containment on the N-ary arm — peer of [`Lattice::
+    /// all_between`]'s antichain-projection identity at the ∃ arm.
+    ///
+    /// Default routes through `iter.into_iter().any(|x| x.is_between(
+    /// low, high))` — the N-ary Boolean-disjunction composition of
+    /// [`Lattice::is_between`] (which itself decomposes into
+    /// `low.leq(&x) && x.leq(&high)`) with [`Iterator::any`] on any
+    /// partial order. Mirrors [`Lattice::all_between`]'s default with
+    /// the fold combinator swapped from [`Iterator::all`] to
+    /// [`Iterator::any`] — the ONLY axis of variation between the two
+    /// on the (∀, ∃) grid at the interval-containment N-ary face. A
+    /// future normalization at either primitive ([`Lattice::
+    /// is_between`] gaining an override, [`Lattice::leq`] tightening
+    /// on the strict-arm dual, [`Iterator::any`] short-circuit tweak
+    /// in the standard library) lands at ONE site and this default
+    /// inherits mechanically. The `(low, high, iter)` parameter order
+    /// matches [`Lattice::all_between`]'s `(low, high, iter)` order
+    /// exactly — a copy-paste that transposed `low` and `high` would
+    /// test the inverted-bracket path (universally false on any
+    /// iterable), a silent distortion the type system did not gate
+    /// pre-lift and now does through the method's parameter order.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the existential N-ary interval-containment
+    /// predicate is itself a typed named `bool` composing [`Lattice::
+    /// is_between`] via [`Iterator::any`]; every downstream lattice-
+    /// law consumer inherits the predicate through the default
+    /// mechanically) + THEORY.md §III (typescape — the existential
+    /// N-ary interval-containment arm on every classification-axis
+    /// lattice binds at ONE substrate owner on the [`Lattice`]
+    /// algebra rather than at each consumer's hand-rolled `iter.any(
+    /// |x| low.leq(x) && x.leq(high))` disjunction — the two-primitive
+    /// rewriting a pre-lift consumer might have reached for at the
+    /// callsite).
+    ///
+    /// Frontier inspiration: the existential N-ary interval-
+    /// containment predicate is the natural bounded-lattice extension
+    /// of stdlib's [`Iterator::any`] over the pairwise-membership
+    /// predicate at the N-ary arm. Rust's stdlib does not carry an
+    /// `iter.any_in_range(min, max)` primitive on [`PartialOrd`]
+    /// (interval-containment is itself a partial-order predicate
+    /// rather than a total-order one). Translated: threaded the same
+    /// existential N-ary interval-containment shape through the
+    /// [`Lattice`] trait's default-method surface as the QUANTIFIER-
+    /// AXIS peer of what [`Lattice::all_between`] carries at the
+    /// universal arm — a first-class algebra method every closed-set
+    /// impl picks up mechanically. Closes the (∀, ∃) × (N-ary
+    /// interval-containment) 2×1 face at the ∃ cell one QUANTIFIER
+    /// axis over from [`Lattice::all_between`].
+    fn any_between<'a, I>(low: &Self, high: &Self, iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().any(|x| x.is_between(low, high))
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -12629,6 +12797,313 @@ mod tests {
         );
     }
 
+    /// [`Lattice::any_between`] fires vacuously FALSE on the empty
+    /// iterator at EVERY bracket on EVERY lattice — INCLUDING every
+    /// extrema bracket `(&T::bottom(), &T::top())` where the
+    /// universal peer [`Lattice::all_between`] fires vacuously TRUE.
+    /// The empty-iterator vacuous-falsehood arm is the ONE cell where
+    /// the existential N-ary Boolean-disjunction predicate DIVERGES
+    /// from the universal N-ary Boolean-conjunction predicate on the
+    /// (∀, ∃) axis: [`Iterator::any`] on the empty iterator is
+    /// `false` by [`Iterator::any`]'s empty-disjunction convention
+    /// regardless of the per-element predicate the caller passed.
+    /// Pinned over BOTH the total-order axis
+    /// (`DataClassification::ALL^2` — 36 brackets) AND the antichain
+    /// axis (`SubstrateType::ALL^2` — 64 brackets) so BOTH shape
+    /// flavors bind the vacuous-falsehood identity via ONE substrate
+    /// primitive.
+    #[test]
+    fn any_between_is_vacuously_false_at_the_empty_iterator_over_every_bracket() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        let empty: [&DataClassification; 0] = [];
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                assert!(
+                    !DataClassification::any_between(&low, &high, empty.iter().copied()),
+                    "any_between({low:?}, {high:?}, []) must be false — the empty \
+                     disjunction is vacuously false at every bracket, including the \
+                     extrema bracket where all_between fires vacuously true",
+                );
+            }
+        }
+        let empty_subs: [&SubstrateType; 0] = [];
+        for low in SubstrateType::ALL {
+            for high in SubstrateType::ALL {
+                assert!(
+                    !SubstrateType::any_between(&low, &high, empty_subs.iter().copied()),
+                    "any_between({low:?}, {high:?}, []) must be false on the \
+                     pointed-top antichain — the empty disjunction is vacuously false \
+                     at every bracket",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::any_between`] at arity 1 reduces to the pairwise
+    /// [`Lattice::is_between`] on the sole element — the 1-input
+    /// N-ary existential interval predicate is the pairwise 3-ary
+    /// interval-containment primitive with the iterator arm
+    /// degenerated to a singleton. AGREES with
+    /// [`Lattice::all_between`]'s singleton reduction at arity 1 —
+    /// both quantifiers collapse to the same per-element predicate
+    /// when the iterator yields exactly one element. Pinned
+    /// exhaustively over `DataClassification::ALL^3` (216 triples).
+    #[test]
+    fn any_between_arity_1_reduces_to_is_between_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                for high in DataClassification::ALL {
+                    assert_eq!(
+                        DataClassification::any_between(&low, &high, [&a]),
+                        a.is_between(&low, &high),
+                        "any_between({low:?}, {high:?}, [{a:?}]) drifted from \
+                         is_between({a:?}, {low:?}, {high:?}) — the arity-1 existential \
+                         N-ary predicate must reduce to the pairwise 3-ary primitive on \
+                         the sole element (both quantifiers collapse at arity 1)",
+                    );
+                    assert_eq!(
+                        DataClassification::any_between(&low, &high, [&a]),
+                        DataClassification::all_between(&low, &high, [&a]),
+                        "any_between({low:?}, {high:?}, [{a:?}]) drifted from \
+                         all_between({low:?}, {high:?}, [{a:?}]) — the two quantifiers \
+                         must agree at arity 1 by collapsing to the same per-element \
+                         is_between",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_between`] on a degenerate bracket `(&x, &x)`
+    /// reduces to existential equality-with-`x` on some element the
+    /// iterator yields — `T::any_between(&x, &x, iter) == iter.any(
+    /// |a| a == x)`. Peer of `all_between_of_equal_bounds_reduces_to_
+    /// universal_equality_over_data_classification_all` on the ∃ arm
+    /// — where the ∀ arm admits only iterables all of whose elements
+    /// equal `x`, this ∃ arm admits any iterable containing at least
+    /// one element equal to `x`. Pinned exhaustively over
+    /// `DataClassification::ALL` bracket points (6) ×
+    /// `DataClassification::ALL^2` iterables (36 pairs) = 216
+    /// (bracket-point, iterable) combinations.
+    #[test]
+    fn any_between_of_equal_bounds_reduces_to_existential_equality_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for x in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                for b in DataClassification::ALL {
+                    let iter_slice: [&DataClassification; 2] = [&a, &b];
+                    assert_eq!(
+                        DataClassification::any_between(&x, &x, iter_slice),
+                        a == x || b == x,
+                        "any_between({x:?}, {x:?}, [{a:?}, {b:?}]) drifted from \
+                         `a == {x:?} || b == {x:?}` — a zero-width bracket admits only \
+                         the single point x, so the ∃ N-ary predicate reduces to \
+                         existential equality-with-x via Iterator::any short-circuit",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_between`] REJECTS every iterable (INCLUDING the
+    /// empty one) when the bracket is inverted
+    /// (`high.strictly_below(&low)`) over [`DataClassification`] —
+    /// the existential N-ary interval-containment predicate returns
+    /// `false` for EVERY iterable when the upper endpoint sits
+    /// strictly below the lower one, because no element the iterator
+    /// yields can satisfy [`Lattice::is_between`] on an empty bracket.
+    /// The inverted-bracket cell AGREES with [`Lattice::all_between`]'s
+    /// inverted-bracket rejection at every non-empty iterable AND at
+    /// the empty iterable — the (∀, ∃) split only appears at the
+    /// empty-iterable / non-inverted-bracket intersection, not here.
+    #[test]
+    fn any_between_rejects_every_iterable_when_bracket_is_inverted_over_data_classification() {
+        use tatara_process::classification::DataClassification;
+        let empty: [&DataClassification; 0] = [];
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                if high.strictly_below(&low) {
+                    assert!(
+                        !DataClassification::any_between(&low, &high, empty.iter().copied()),
+                        "any_between({low:?}, {high:?}, []) must be false — the bracket \
+                         is inverted AND the disjunction is empty, so both routes \
+                         reject",
+                    );
+                    for a in DataClassification::ALL {
+                        assert!(
+                            !DataClassification::any_between(&low, &high, [&a]),
+                            "any_between({low:?}, {high:?}, [{a:?}]) must be false — \
+                             the bracket is inverted ({high:?} strictly below {low:?}) \
+                             so no element can satisfy the pairwise is_between",
+                        );
+                        for b in DataClassification::ALL {
+                            assert!(
+                                !DataClassification::any_between(&low, &high, [&a, &b]),
+                                "any_between({low:?}, {high:?}, [{a:?}, {b:?}]) must be \
+                                 false — the bracket is inverted so every element the \
+                                 iterator yields fails is_between",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_between`] on the extrema bracket
+    /// `(&T::bottom(), &T::top())` admits EVERY NON-EMPTY iterable of
+    /// [`DataClassification`] AND rejects the empty iterable — the
+    /// widest possible bracket admits every element via [`Lattice::
+    /// is_between`]'s extrema-bracket universal truth, so
+    /// [`Iterator::any`] over every-element-accepting per-element
+    /// predicate collapses to non-emptiness of the iterator. This is
+    /// the ONE cell where the ∃ arm and the ∀ arm split on the
+    /// (∀, ∃) axis: [`Lattice::all_between`] fires TRUE at the empty
+    /// iterable (vacuous conjunction), this fires FALSE (vacuous
+    /// disjunction). Peer of `all_between_with_lattice_extrema_
+    /// admits_every_iterable_over_data_classification_all` on the ∃
+    /// arm.
+    #[test]
+    fn any_between_with_lattice_extrema_admits_every_nonempty_iterable_over_data_classification_all(
+    ) {
+        use tatara_process::classification::DataClassification;
+        let bot = DataClassification::bottom();
+        let top = DataClassification::top();
+        let empty: [&DataClassification; 0] = [];
+        assert!(
+            !DataClassification::any_between(&bot, &top, empty.iter().copied()),
+            "any_between(bottom, top, []) must be false — the empty disjunction is \
+             vacuously false EVEN on the widest possible bracket, where all_between \
+             would fire vacuously true (the ONE cell where the (∀, ∃) axis splits)",
+        );
+        for a in DataClassification::ALL {
+            assert!(
+                DataClassification::any_between(&bot, &top, [&a]),
+                "any_between(bottom, top, [{a:?}]) must be true — the widest possible \
+                 bracket admits every element via the lattice's bottom/top axioms",
+            );
+            for b in DataClassification::ALL {
+                assert!(
+                    DataClassification::any_between(&bot, &top, [&a, &b]),
+                    "any_between(bottom, top, [{a:?}, {b:?}]) must be true — some \
+                     element (in fact every element) hits the extrema bracket",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::all_between`] REFINES [`Lattice::any_between`] on
+    /// every bracket AND every NON-EMPTY iterable over
+    /// [`DataClassification`] — the universal quantifier refines the
+    /// existential one at every non-empty iterable via the standard
+    /// `∀x P(x) ∧ ∃x ⇒ ∃x P(x)` inference. The refinement DOES NOT
+    /// hold at the empty iterable (where ∀ fires true vacuously but
+    /// ∃ fires false vacuously) — the exact cell where the (∀, ∃)
+    /// axis splits, exercised in the empty-iterator seals above.
+    /// Pinned exhaustively over `DataClassification::ALL^4` (1296
+    /// combinations at pair-length iterables), which are all
+    /// non-empty by construction so the refinement holds pointwise.
+    #[test]
+    fn all_between_refines_any_between_on_nonempty_iterables_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                for a in DataClassification::ALL {
+                    for b in DataClassification::ALL {
+                        let iter_slice: [&DataClassification; 2] = [&a, &b];
+                        if DataClassification::all_between(&low, &high, iter_slice) {
+                            assert!(
+                                DataClassification::any_between(&low, &high, iter_slice),
+                                "all_between({low:?}, {high:?}, [{a:?}, {b:?}]) implies \
+                                 any_between({low:?}, {high:?}, [{a:?}, {b:?}]) on the \
+                                 non-empty iterable — the universal quantifier must \
+                                 refine the existential one whenever there is at least \
+                                 one witness to quantify over",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_between`] projects the pointed-top antichain to
+    /// the existential-endpoint-admission rule — on [`SubstrateType`]
+    /// the N-ary existential interval-containment predicate accepts
+    /// an iterable iff some element `x` it yields satisfies
+    /// `low.leq(&x) && x.leq(&high)`, which on the antichain shape
+    /// (`leq` fires only on the reflexive diagonal AND on the
+    /// `x.leq(&top)` half-edge to the pointed top) admits a
+    /// half-edge-hitting iterable AND rejects everything else. Peer
+    /// of `all_between_projects_the_pointed_top_antichain_over_
+    /// substrate_type_all` on the ∃ arm — the antichain SHAPE is now
+    /// bound through both the pairwise `is_between` AND the two N-ary
+    /// quantifier arms `all_between` / `any_between` at ONE substrate
+    /// owner on the [`Lattice`] trait.
+    #[test]
+    fn any_between_projects_the_pointed_top_antichain_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        let compute = SubstrateType::Compute;
+        let storage = SubstrateType::Storage;
+        // Distinct-non-top singleton in the top-touching bracket:
+        // `Compute.is_between(&Compute, &top)` is true because
+        // reflexive leq holds on the low side and `Compute.leq(&top)`
+        // holds on the antichain's pointed-top half-edge.
+        assert!(
+            SubstrateType::any_between(&compute, &top, [&compute]),
+            "any_between({compute:?}, top, [{compute:?}]) must be true — the arity-1 \
+             singleton reduces to is_between which admits reflexive on the low side \
+             and top on the high side",
+        );
+        // Distinct-non-top singleton in a distinct-non-top bracket:
+        // `Compute.is_between(&Storage, &top)` fails because
+        // `Storage.leq(&Compute)` is false on the antichain (distinct
+        // non-top substrates are incomparable).
+        assert!(
+            !SubstrateType::any_between(&storage, &top, [&compute]),
+            "any_between({storage:?}, top, [{compute:?}]) must be false — Storage and \
+             Compute are incomparable on the antichain so the low-side is_between \
+             conjunct fails on the sole element",
+        );
+        // Mixed iterable: one element hits the top-touching bracket,
+        // so ∃ fires true even though the other does not.
+        let iter_slice: [&SubstrateType; 2] = [&storage, &top];
+        assert!(
+            SubstrateType::any_between(&compute, &top, iter_slice),
+            "any_between({compute:?}, top, [{storage:?}, top]) must be true — the top \
+             element hits the top-touching bracket even though {storage:?} does not, \
+             so ∃ short-circuits on the witness",
+        );
+        // All-fail iterable on a distinct-non-top bracket:
+        assert!(
+            !SubstrateType::any_between(&storage, &top, [&compute, &compute]),
+            "any_between({storage:?}, top, [{compute:?}, {compute:?}]) must be false — \
+             no element of the iterable hits the incomparable-endpoint bracket",
+        );
+        // Degenerate bracket at the top admits only the top itself:
+        assert!(
+            SubstrateType::any_between(&top, &top, [&top]),
+            "any_between(top, top, [top]) must be true — degenerate bracket at the \
+             top point admits only the top itself, and the iterable contains it",
+        );
+        assert!(
+            !SubstrateType::any_between(&top, &top, [&compute]),
+            "any_between(top, top, [{compute:?}]) must be false — degenerate bracket \
+             at top rejects any non-top element",
+        );
+        // Empty iterator vacuous falsehood on the antichain — pinned
+        // once more here at the antichain shape to complete the
+        // shape-flavor sweep.
+        let empty: [&SubstrateType; 0] = [];
+        assert!(
+            !SubstrateType::any_between(&top, &top, empty.iter().copied()),
+            "any_between(top, top, []) must be false on the antichain — the empty \
+             disjunction is vacuously false at every bracket",
+        );
+    }
+
     proptest! {
         /// [`Lattice::is_constant`] AGREES with the conjunction
         /// `is_ascending && is_descending` on random
@@ -13099,6 +13574,73 @@ mod tests {
                     refs.iter().copied()
                 ));
             }
+        }
+
+        /// [`Lattice::all_between`] REFINES [`Lattice::any_between`]
+        /// on random [`DataClassification`] brackets and random
+        /// NON-EMPTY sequences of length 1..6 — the universal
+        /// quantifier refines the existential one at every non-empty
+        /// iterable via `∀x P(x) ∧ ∃x ⇒ ∃x P(x)`. Proptest peer of
+        /// the exhaustive-quadruple refinement seal at extended
+        /// arity, restricted to non-empty iterables because the
+        /// refinement provably fails at the empty iterable (the ONE
+        /// cell where the (∀, ∃) axis splits, pinned in the
+        /// exhaustive empty-iterator tests above).
+        #[test]
+        fn all_between_refines_any_between_on_nonempty_random_sequences_over_data_classification(
+            low in any_data_class(),
+            high in any_data_class(),
+            vs in proptest::collection::vec(any_data_class(), 1..6usize),
+        ) {
+            let refs: Vec<&DataClassification> = vs.iter().collect();
+            if DataClassification::all_between(&low, &high, refs.iter().copied()) {
+                prop_assert!(DataClassification::any_between(
+                    &low,
+                    &high,
+                    refs.iter().copied()
+                ));
+            }
+        }
+
+        /// [`Lattice::any_between`] fires vacuously FALSE on the
+        /// empty iterator at EVERY bracket on random
+        /// [`DataClassification`] brackets — proptest peer of the
+        /// exhaustive empty-iterator seal above at random bracket
+        /// coverage. The empty-disjunction identity holds
+        /// unconditionally, so this proptest binds the ONE cell where
+        /// the (∀, ∃) axis splits on the interval-containment N-ary
+        /// face at random-bracket arity.
+        #[test]
+        fn any_between_is_vacuously_false_at_the_empty_iterator_over_data_classification_random_brackets(
+            low in any_data_class(),
+            high in any_data_class(),
+        ) {
+            let empty: [&DataClassification; 0] = [];
+            prop_assert!(!DataClassification::any_between(&low, &high, empty.iter().copied()));
+        }
+
+        /// [`Lattice::any_between`] at arity 1 REDUCES to the
+        /// pairwise [`Lattice::is_between`] on the sole element on
+        /// random [`DataClassification`] triples — the 1-input
+        /// existential N-ary interval predicate collapses to the
+        /// pairwise 3-ary interval-containment primitive with the
+        /// iterator arm degenerated to a singleton (both quantifiers
+        /// collapse at arity 1). Proptest peer of the exhaustive-
+        /// triple arity-1 identity seal at extended arity.
+        #[test]
+        fn any_between_arity_1_reduces_to_is_between_over_data_classification_random_triples(
+            low in any_data_class(),
+            a in any_data_class(),
+            high in any_data_class(),
+        ) {
+            prop_assert_eq!(
+                DataClassification::any_between(&low, &high, [&a]),
+                a.is_between(&low, &high),
+            );
+            prop_assert_eq!(
+                DataClassification::any_between(&low, &high, [&a]),
+                DataClassification::all_between(&low, &high, [&a]),
+            );
         }
     }
 }

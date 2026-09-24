@@ -2019,6 +2019,195 @@ pub trait Lattice: Sized + Clone + PartialEq {
         let vs: Vec<&'a Self> = iter.into_iter().collect();
         vs.windows(2).all(|w| w[0].strictly_above(w[1]))
     }
+    /// Equality-arm peer of [`Lattice::is_ascending`] /
+    /// [`Lattice::is_descending`] on the consecutive-pair face — the
+    /// iterated set is CONSTANT (a [`PartialEq`]-agreement sequence,
+    /// every consecutive pair equal) iff every CONSECUTIVE pair
+    /// `(vs[i], vs[i + 1])` satisfies `vs[i] == vs[i + 1]`.
+    /// `T::is_constant([&a, &b, &c])` holds iff `a == b && b == c`;
+    /// three or more elements chain through the consecutive-pair
+    /// conjunction on the [`PartialEq`] axis.
+    ///
+    /// The EQUALITY-arm peer of [`Lattice::is_ascending`] /
+    /// [`Lattice::is_descending`] one COMPARATOR axis over on the
+    /// (`<`, `≤`, `=`, `≥`, `>`) sequence-shape monotonicity grid at
+    /// the consecutive-pair face — where the non-strict arms walk the
+    /// REFLEXIVE [`Lattice::leq`] / [`Lattice::geq`] pair-level primitives
+    /// (accepting every reflexive `(a, a)` step AND every non-reflexive
+    /// directional step), and the strict arms walk the IRREFLEXIVE
+    /// [`Lattice::strictly_below`] / [`Lattice::strictly_above`] pair-
+    /// level primitives (rejecting every reflexive step), this walks
+    /// the SYMMETRIC [`PartialEq`] equality relation (accepting ONLY
+    /// the reflexive `(a, a)` step; rejecting every non-reflexive
+    /// directional step in either direction). Together with the four
+    /// existing sequence-shape monotonicity predicates this closes the
+    /// (`<`, `≤`, `=`, `≥`, `>`) 5-arm sequence-shape monotonicity face
+    /// at ONE substrate default per cell — every consumer that wants
+    /// the "flat-consecutive-pair" reading picks up the predicate
+    /// mechanically without a hand-authored [`slice::windows`] walk.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_constant(std::iter::
+    /// empty()) == true` on every lattice — [`slice::windows`] on a
+    /// zero-length slice yields no pair, so [`Iterator::all`] on the
+    /// empty iterator is `true`. Shared vacuous-truth arm with all
+    /// five sequence-shape predicates ([`Lattice::is_ascending`],
+    /// [`Lattice::is_descending`], [`Lattice::is_strictly_ascending`],
+    /// [`Lattice::is_strictly_descending`], [`Lattice::is_constant`])
+    /// at the empty case.
+    ///
+    /// **Singleton vacuous truth**: `T::is_constant([&a]) == true` for
+    /// every `a` — a singleton has no consecutive pair, same vacuous-
+    /// conjunction reasoning as the empty case. Shared with all five
+    /// sequence-shape predicates at every singleton.
+    ///
+    /// **Consecutive-duplicate acceptance**: `T::is_constant([&a, &a])
+    /// == true` for every `a` — [`PartialEq`] is REFLEXIVE by the
+    /// `Sized + Clone + PartialEq` supertrait bound the [`Lattice`]
+    /// trait itself demands, so the consecutive-duplicate pair `(a,
+    /// a)` passes the walk. Shared reflexive-diagonal arm with
+    /// [`Lattice::is_ascending`] / [`Lattice::is_descending`] on the
+    /// non-strict monotonicity pair (all three fire true on every
+    /// all-duplicate slice); DIVERGES from
+    /// [`Lattice::is_strictly_ascending`] /
+    /// [`Lattice::is_strictly_descending`] which reject every
+    /// all-duplicate slice by irreflexivity of the strict comparators.
+    ///
+    /// **Pair-identity**: `T::is_constant([&a, &b]) == (a == b)` — the
+    /// 2-input equality-arm sequence-shape predicate reduces to the
+    /// [`PartialEq`] primitive directly, one arity axis down from the
+    /// N-ary walk. Peer of [`Lattice::is_ascending`]'s pair-identity
+    /// (`a.leq(&b)`) and [`Lattice::is_descending`]'s pair-identity
+    /// (`a.geq(&b)`) on the equality arm of the (`≤`, `=`, `≥`)
+    /// trichotomy — where the two non-strict monotonicity predicates
+    /// project onto the DIRECTIONAL half-arms of the reflexive
+    /// pairwise order and this predicate projects onto the
+    /// REFLEXIVE-DIAGONAL arm.
+    ///
+    /// **Ascending-descending conjunction**: for every slice,
+    /// `T::is_constant(iter) == T::is_ascending(iter) &&
+    /// T::is_descending(iter)`. Follows from the `leq`-agreement axiom
+    /// `a ≤ b ∧ b ≤ a ⇔ a = b` applied to every consecutive pair.
+    /// **This is the load-bearing theorem of the widening** — it pins
+    /// the equality-arm predicate as the pointwise intersection of the
+    /// two non-strict directional arms on the consecutive-pair face,
+    /// closing the (`≤`, `=`, `≥`) trichotomy on the trait's
+    /// combinator surface. Pinned exhaustively over
+    /// `DataClassification::ALL^3` (216 triples) below.
+    ///
+    /// **Refines [`Lattice::is_chain`] via transitivity of equality**:
+    /// for every slice, `T::is_constant(iter) ⇒ T::is_chain(iter)` —
+    /// composes the ascending-descending conjunction above with
+    /// [`Lattice::is_ascending`]'s existing ascending-implies-chain
+    /// pin. A constant sequence is trivially a chain (every element
+    /// is comparable to every other via the reflexive [`Lattice::leq`]
+    /// witnessed by [`PartialEq`] equality). Peer of
+    /// [`Lattice::is_ascending`] and [`Lattice::is_descending`]'s
+    /// refines-chain arms on the equality axis.
+    ///
+    /// **Refines [`Lattice::is_antichain`] on distinct-pair filter**:
+    /// for every slice, `T::is_constant(iter) ⇒ T::is_antichain(iter)`
+    /// — the antichain predicate applies a [`PartialEq`] distinct-pair
+    /// filter that drops every reflexive pair, so a constant sequence
+    /// (all reflexive pairs) has NO distinct pair to check and the
+    /// antichain predicate fires vacuously true. This closes the
+    /// (chain, antichain) overlap at the constant-sequence corner:
+    /// every constant sequence is BOTH a chain (via reflexive leq)
+    /// AND an antichain (via distinct-pair filter). Pinned
+    /// exhaustively over `DataClassification::ALL^3` below.
+    ///
+    /// **Sequence-order independence**: `T::is_constant(iter) ==
+    /// T::is_constant(iter.rev())` on every collection — the
+    /// symmetric [`PartialEq`] relation makes every consecutive-pair
+    /// window's verdict invariant under reversal (`a == b ⇔ b == a`),
+    /// so a permutation of the input yields the same verdict. Peer of
+    /// [`Lattice::is_chain`] / [`Lattice::is_antichain`]'s sequence-
+    /// order independence on the STRUCTURAL face; DIVERGES from
+    /// [`Lattice::is_ascending`] / [`Lattice::is_descending`] and
+    /// their strict arms, which are all sequence-order DEPENDENT.
+    /// This is what marks the equality-arm predicate as SYMMETRIC on
+    /// the (`≤`, `=`, `≥`) trichotomy — the directional monotonicity
+    /// predicates depend on the emission order (they distinguish
+    /// forward from reverse); the equality arm does not.
+    ///
+    /// **Any-distinct-consecutive-pair rejection**: if any consecutive
+    /// pair `(vs[i], vs[i + 1])` satisfies `vs[i] != vs[i + 1]`, then
+    /// `T::is_constant(iter) == false` — [`Iterator::all`] on
+    /// [`slice::windows`] short-circuits at the first non-equal pair,
+    /// so a single distinct-value step anywhere in the sequence
+    /// rejects the whole predicate.
+    ///
+    /// **Antichain projection**: on the pointed-top antichain (e.g.
+    /// [`SubstrateType`]), the predicate accepts a consecutive pair
+    /// iff both elements are equal — same acceptance shape as on any
+    /// totally-ordered lattice, because the predicate depends only on
+    /// [`PartialEq`] equality and not on the lattice's partial order.
+    /// This is the CLEANEST projection of any sequence-shape
+    /// predicate onto the antichain: the equality-arm predicate is
+    /// UNIVERSALLY well-behaved on every lattice impl because
+    /// [`PartialEq`] is a supertrait bound that every impl satisfies
+    /// natively; the directional arms depend on `leq` / `geq` /
+    /// `strictly_below` / `strictly_above` behavior that varies across
+    /// impls (e.g. the antichain's [`Lattice::leq`] admits only the
+    /// pointed-top absorbing edge).
+    ///
+    /// Default routes through `iter.into_iter().collect::<Vec<&Self>>()`
+    /// followed by `.windows(2).all(|w| w[0] == w[1])` — one
+    /// [`PartialEq::eq`] delegation per consecutive pair on the
+    /// collected buffer, mirroring [`Lattice::is_ascending`]'s walk
+    /// with the pair-level primitive swapped from [`Lattice::leq`] to
+    /// [`PartialEq::eq`]. The collect materializes the iterator once
+    /// so the walk operates on a stable slice. Because [`PartialEq`]
+    /// is a supertrait bound on [`Lattice`] itself, the default
+    /// inherits universally on every impl without any per-impl
+    /// override.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the equality-arm sequence-shape predicate
+    /// is itself a typed named `bool` composing [`PartialEq::eq`] via
+    /// [`slice::windows`] plus [`Iterator::all`]; every downstream
+    /// lattice-law consumer inherits the predicate through the default
+    /// mechanically) + THEORY.md §III (typescape — the equality-arm
+    /// sequence-shape monotonicity predicate on every classification-
+    /// axis lattice binds at ONE substrate owner on the [`Lattice`]
+    /// algebra rather than at each consumer's hand-rolled
+    /// `vs.windows(2).all(|w| w[0] == w[1])` walk). The pattern already
+    /// exists in-tree at `tatara_lisp::closed_set::ClosedSet::is_constant`
+    /// — a per-domain trait method on the equality-arm sequence
+    /// predicate for closed sets, defined as the conjunction of
+    /// `is_ascending && is_descending` on the closed-set trait; this
+    /// widening lifts the SAME shape from the closed-set trait to the
+    /// [`Lattice`] trait's default-method surface (routing through the
+    /// [`PartialEq`] supertrait rather than through the two directional
+    /// arms so the equality-arm predicate stays valid on every lattice
+    /// impl — including antichains whose directional arms are not
+    /// closed under transitivity — without demanding lattice-side
+    /// axioms the underlying equality relation does not need).
+    ///
+    /// Frontier inspiration: [`slice::is_sorted`] on Rust's stdlib
+    /// with a strict comparator returns TRUE on the constant slice
+    /// iff the comparator's reflexive arm fires — the standard-library
+    /// sorted primitive folds the equality arm into the non-strict
+    /// monotone reading. Haskell's `Data.List` `all (uncurry (==)) .
+    /// (zip <*> tail)` idiom composes `zip`, `tail`, and the equality
+    /// predicate to produce the same consecutive-pair equality walk.
+    /// Coq's `Sorted` inductive on lists over the reflexive relation
+    /// `eq` gives the same predicate as a first-class order-theoretic
+    /// primitive. Translated: threaded the same consecutive-pair
+    /// equality-arm shape through the [`Lattice`] trait's default-
+    /// method surface, generalizing from `Ord::cmp` on a totally-
+    /// ordered carrier to [`PartialEq::eq`] on any lattice — so every
+    /// closed-set impl picks up the equality-arm sequence-shape
+    /// monotonicity predicate mechanically, closing the (`<`, `≤`,
+    /// `=`, `≥`, `>`) 5-arm sequence-shape monotonicity face at ONE
+    /// substrate default per cell.
+    fn is_constant<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).all(|w| w[0] == w[1])
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -6999,6 +7188,367 @@ mod tests {
                      a != b — the strict top-emitted half-edge",
                 );
             }
+        }
+    }
+
+    // ── is_constant — equality-arm sequence-shape peer of is_ascending / is_descending
+
+    /// [`Lattice::is_constant`] is vacuously true at the empty iterator
+    /// on every closed-set impl — [`slice::windows`] on a zero-length
+    /// slice yields no pair, so [`Iterator::all`] on the empty iterator
+    /// returns `true`. Shared vacuous-truth arm with all five sequence-
+    /// shape predicates ([`Lattice::is_ascending`],
+    /// [`Lattice::is_descending`], [`Lattice::is_strictly_ascending`],
+    /// [`Lattice::is_strictly_descending`], [`Lattice::is_constant`])
+    /// at the empty case. Pinned on all three shipped closed-set
+    /// impls. Fail-before-pass-after: pre-lift the equality-arm
+    /// sequence-shape predicate was empty on the trait, so this
+    /// vacuous-truth arm did not exist as a substrate primitive.
+    #[test]
+    fn is_constant_is_vacuously_true_at_the_empty_iterator() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        assert!(DataClassification::is_constant(std::iter::empty()));
+        assert!(CalmClassification::is_constant(std::iter::empty()));
+        assert!(SubstrateType::is_constant(std::iter::empty()));
+    }
+
+    /// [`Lattice::is_constant`] is vacuously true at every singleton
+    /// — a singleton contains no consecutive pair, same empty-
+    /// conjunction identity as the empty arm. Pinned exhaustively over
+    /// every variant of every closed-set impl.
+    #[test]
+    fn is_constant_is_vacuously_true_at_every_singleton() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_constant([&a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_constant([&a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_constant([&a]));
+        }
+    }
+
+    /// [`Lattice::is_constant`] fires TRUE on every all-duplicate
+    /// collection — [`PartialEq`] is REFLEXIVE by the supertrait bound
+    /// on [`Lattice`] itself, so the consecutive-duplicate pair `(a,
+    /// a)` passes the walk. Shared reflexive-diagonal arm with
+    /// [`Lattice::is_ascending`] / [`Lattice::is_descending`] at the
+    /// non-trivial (non-empty, non-singleton) length; DIVERGES from
+    /// [`Lattice::is_strictly_ascending`] /
+    /// [`Lattice::is_strictly_descending`] which reject every all-
+    /// duplicate collection by irreflexivity of the strict comparators.
+    /// Pinned on every closed-set impl at arity 3 to catch a regression
+    /// that swapped the [`PartialEq::eq`] delegation to a strict
+    /// comparator.
+    #[test]
+    fn is_constant_fires_true_on_consecutive_duplicate_collections() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_constant([&a, &a, &a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_constant([&a, &a, &a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_constant([&a, &a, &a]));
+        }
+    }
+
+    /// [`Lattice::is_constant`] at arity 2 REDUCES to `a == b` on every
+    /// [`DataClassification`] pair — the 2-input equality-arm sequence-
+    /// shape predicate collapses to the [`PartialEq`] primitive
+    /// directly. Pinned exhaustively over `ALL^2` (36 pairs). Fail-
+    /// before-pass-after: pre-lift the equality-arm sequence-shape arm
+    /// was empty on the trait, so this reduction did not exist as a
+    /// substrate primitive; post-lift the reduction pins the equality-
+    /// arm sequence-shape predicate to the [`PartialEq`] primitive at
+    /// the primitive-cardinality boundary.
+    #[test]
+    fn is_constant_arity_2_reduces_to_partial_eq_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::is_constant([&a, &b]),
+                    a == b,
+                    "is_constant([{a:?}, {b:?}]) must reduce to a == b — \
+                     the 2-input equality-arm sequence-shape predicate \
+                     collapses to the PartialEq primitive directly",
+                );
+            }
+        }
+    }
+
+    /// **Load-bearing theorem**: [`Lattice::is_constant`] AGREES with
+    /// the conjunction `is_ascending && is_descending` on every
+    /// [`DataClassification`] triple. Follows from the `leq`-agreement
+    /// axiom `a ≤ b ∧ b ≤ a ⇔ a = b` applied to every consecutive
+    /// pair — the equality-arm predicate is the pointwise intersection
+    /// of the two non-strict directional arms on the consecutive-pair
+    /// face. This is the theorem that closes the (`≤`, `=`, `≥`)
+    /// trichotomy on the trait's combinator surface. Pinned
+    /// exhaustively over `DataClassification::ALL^3` (216 triples).
+    /// Peer of the closed-set trait's `is_constant` definition in
+    /// `tatara_lisp::closed_set::ClosedSet::is_constant` which routes
+    /// the equality-arm predicate through the SAME conjunction —
+    /// this seal pins the [`Lattice`]-level default (routing through
+    /// [`PartialEq::eq`] directly) to agree with the closed-set-level
+    /// conjunction-routed definition on every totally-ordered lattice.
+    #[test]
+    fn is_constant_agrees_with_ascending_and_descending_conjunction_over_data_classification_all_triples(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let constant = DataClassification::is_constant([&a, &b, &c]);
+                    let both_directions = DataClassification::is_ascending([&a, &b, &c])
+                        && DataClassification::is_descending([&a, &b, &c]);
+                    assert_eq!(
+                        constant, both_directions,
+                        "is_constant([{a:?}, {b:?}, {c:?}]) must agree with \
+                         is_ascending && is_descending — the equality arm is \
+                         the pointwise intersection of the two non-strict \
+                         directional arms by leq-agreement `a ≤ b ∧ b ≤ a ⇔ \
+                         a = b` on every consecutive pair",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_constant`] REFINES [`Lattice::is_chain`] on every
+    /// [`DataClassification`] triple — a constant sequence is trivially
+    /// a chain (every element is comparable to every other via the
+    /// reflexive [`Lattice::leq`] witnessed by [`PartialEq`] equality).
+    /// Composes the ascending-descending conjunction seal above with
+    /// [`Lattice::is_ascending`]'s existing ascending-implies-chain
+    /// pin. Peer of the two non-strict monotonicity arms' refines-
+    /// chain seals on the equality axis. Pinned exhaustively over
+    /// `DataClassification::ALL^3` (216 triples).
+    #[test]
+    fn is_constant_implies_is_chain_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if DataClassification::is_constant([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_chain([&a, &b, &c]),
+                            "is_constant([{a:?}, {b:?}, {c:?}]) must imply is_chain \
+                             — a constant sequence is trivially a chain via reflexive \
+                             leq witnessed by PartialEq equality",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_constant`] REFINES [`Lattice::is_antichain`] on
+    /// every [`DataClassification`] triple — the antichain predicate
+    /// applies a [`PartialEq`] distinct-pair filter that drops every
+    /// reflexive pair, so a constant sequence (all reflexive pairs)
+    /// has NO distinct pair to check and the antichain predicate fires
+    /// vacuously true. This closes the (chain, antichain) overlap at
+    /// the constant-sequence corner: every constant sequence is BOTH
+    /// a chain (via reflexive leq) AND an antichain (via distinct-pair
+    /// filter). Pinned exhaustively over `DataClassification::ALL^3`
+    /// (216 triples).
+    #[test]
+    fn is_constant_implies_is_antichain_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if DataClassification::is_constant([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_antichain([&a, &b, &c]),
+                            "is_constant([{a:?}, {b:?}, {c:?}]) must imply is_antichain \
+                             — a constant sequence has no distinct pair to check, so \
+                             the antichain predicate fires vacuously true",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_constant`] is SEQUENCE-ORDER INDEPENDENT on every
+    /// [`DataClassification`] triple — the symmetric [`PartialEq`]
+    /// relation makes every consecutive-pair window's verdict invariant
+    /// under reversal (`a == b ⇔ b == a`), so a permutation of the
+    /// input yields the same verdict. Peer of [`Lattice::is_chain`] /
+    /// [`Lattice::is_antichain`]'s sequence-order independence on the
+    /// STRUCTURAL face; DIVERGES from [`Lattice::is_ascending`] /
+    /// [`Lattice::is_descending`] and their strict arms, which are all
+    /// sequence-order DEPENDENT. This is what marks the equality-arm
+    /// predicate as SYMMETRIC on the (`≤`, `=`, `≥`) trichotomy — the
+    /// directional monotonicity predicates depend on emission order;
+    /// the equality arm does not.
+    #[test]
+    fn is_constant_is_sequence_order_independent_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    assert_eq!(
+                        DataClassification::is_constant([&a, &b, &c]),
+                        DataClassification::is_constant([&c, &b, &a]),
+                        "is_constant([{a:?}, {b:?}, {c:?}]) must agree with \
+                         is_constant([{c:?}, {b:?}, {a:?}]) — the equality-arm \
+                         predicate is sequence-order independent via the symmetric \
+                         PartialEq relation",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_constant`] REJECTS every strict-ascent and every
+    /// strict-descent on [`DataClassification`] — a strict monotone
+    /// step in either direction fails the reflexive-only [`PartialEq`]
+    /// walk. Pinned on the {Public, Internal, Confidential} strict
+    /// ascent AND its reverse strict descent. This is the CROSS-ARM
+    /// rejection seal that distinguishes the equality arm from the
+    /// non-strict directional arms: the ascending arm accepts the
+    /// forward ascent (and the descending arm accepts the reverse
+    /// descent); the constant arm rejects BOTH.
+    #[test]
+    fn is_constant_rejects_strict_ascent_and_strict_descent_over_data_classification() {
+        use tatara_process::classification::DataClassification;
+        let a = DataClassification::Public;
+        let b = DataClassification::Internal;
+        let c = DataClassification::Confidential;
+        // Strict ascent: ascending true, descending false, constant FALSE.
+        assert!(DataClassification::is_ascending([&a, &b, &c]));
+        assert!(!DataClassification::is_descending([&a, &b, &c]));
+        assert!(!DataClassification::is_constant([&a, &b, &c]));
+        // Strict descent: ascending false, descending true, constant FALSE.
+        assert!(!DataClassification::is_ascending([&c, &b, &a]));
+        assert!(DataClassification::is_descending([&c, &b, &a]));
+        assert!(!DataClassification::is_constant([&c, &b, &a]));
+        // All-duplicate: all three non-strict arms fire TRUE
+        // (ascending, descending, AND constant on the reflexive
+        // diagonal).
+        assert!(DataClassification::is_ascending([&a, &a, &a]));
+        assert!(DataClassification::is_ascending([&b, &b, &b]));
+        assert!(DataClassification::is_ascending([&c, &c, &c]));
+        assert!(DataClassification::is_descending([&a, &a, &a]));
+        assert!(DataClassification::is_descending([&b, &b, &b]));
+        assert!(DataClassification::is_descending([&c, &c, &c]));
+        assert!(DataClassification::is_constant([&a, &a, &a]));
+        assert!(DataClassification::is_constant([&b, &b, &b]));
+        assert!(DataClassification::is_constant([&c, &c, &c]));
+    }
+
+    /// [`Lattice::is_constant`] projects the pointed-top antichain
+    /// [`SubstrateType`] onto the reflexive-diagonal — accepts a
+    /// consecutive pair iff both elements are equal. Same acceptance
+    /// shape as on any totally-ordered lattice, because the predicate
+    /// depends only on [`PartialEq`] equality and NOT on the lattice's
+    /// partial order. This is the CLEANEST projection of any sequence-
+    /// shape predicate onto the antichain: the equality-arm predicate
+    /// is UNIVERSALLY well-behaved on every lattice impl because
+    /// [`PartialEq`] is a supertrait bound that every impl satisfies
+    /// natively. DIVERGES from
+    /// `is_ascending_projects_the_pointed_top_antichain_over_substrate_type_all_pairs`
+    /// (which accepts the top-directed reflexive-plus-half-edge shape)
+    /// and from the strict-arm projections (which reject the entire
+    /// reflexive diagonal). Pinned exhaustively over
+    /// `SubstrateType::ALL^2` (64 pairs).
+    #[test]
+    fn is_constant_projects_the_pointed_top_antichain_over_substrate_type_all_pairs() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                // Constant accepts iff a == b — the reflexive-diagonal
+                // arm on any lattice, independent of the partial order
+                // (whether antichain, total, or general).
+                let expected = a == b;
+                assert_eq!(
+                    SubstrateType::is_constant([&a, &b]),
+                    expected,
+                    "is_constant([{a:?}, {b:?}]) on the pointed-top antichain \
+                     must fire true iff a == b — the reflexive-diagonal arm \
+                     via PartialEq is independent of the lattice's partial order",
+                );
+            }
+        }
+    }
+
+    proptest! {
+        /// [`Lattice::is_constant`] AGREES with the conjunction
+        /// `is_ascending && is_descending` on random
+        /// [`DataClassification`] sequences of length 0..8 — proptest
+        /// peer of the exhaustive triple seal above at extended arity.
+        #[test]
+        fn is_constant_agrees_with_ascending_and_descending_conjunction_over_data_classification_random_sequences(
+            vs in proptest::collection::vec(prop_oneof![
+                Just(DataClassification::Public),
+                Just(DataClassification::Internal),
+                Just(DataClassification::Confidential),
+                Just(DataClassification::Pii),
+                Just(DataClassification::Phi),
+                Just(DataClassification::Pci),
+            ], 0..8usize),
+        ) {
+            let refs: Vec<&DataClassification> = vs.iter().collect();
+            let constant = DataClassification::is_constant(refs.iter().copied());
+            let both_directions = DataClassification::is_ascending(refs.iter().copied())
+                && DataClassification::is_descending(refs.iter().copied());
+            prop_assert_eq!(constant, both_directions);
+        }
+
+        /// [`Lattice::is_constant`] is SEQUENCE-ORDER INDEPENDENT on
+        /// random [`DataClassification`] sequences of length 0..8 —
+        /// proptest peer of the exhaustive triple seal above at
+        /// extended arity.
+        #[test]
+        fn is_constant_is_sequence_order_independent_over_data_classification_random_sequences(
+            vs in proptest::collection::vec(prop_oneof![
+                Just(DataClassification::Public),
+                Just(DataClassification::Internal),
+                Just(DataClassification::Confidential),
+                Just(DataClassification::Pii),
+                Just(DataClassification::Phi),
+                Just(DataClassification::Pci),
+            ], 0..8usize),
+        ) {
+            let forward: Vec<&DataClassification> = vs.iter().collect();
+            let reversed: Vec<&DataClassification> = vs.iter().rev().collect();
+            prop_assert_eq!(
+                DataClassification::is_constant(forward.iter().copied()),
+                DataClassification::is_constant(reversed.iter().copied()),
+            );
+        }
+
+        /// [`Lattice::is_constant`] is SEQUENCE-ORDER INDEPENDENT on
+        /// random [`CalmClassification`] sequences of length 0..8 —
+        /// second-axis proptest peer widening the coverage from the
+        /// data-classification axis to the CALM axis on the same
+        /// order-independence theorem.
+        #[test]
+        fn is_constant_is_sequence_order_independent_over_calm_classification_random_sequences(
+            vs in proptest::collection::vec(prop_oneof![
+                Just(CalmClassification::Monotone),
+                Just(CalmClassification::NonMonotone),
+            ], 0..8usize),
+        ) {
+            let forward: Vec<&CalmClassification> = vs.iter().collect();
+            let reversed: Vec<&CalmClassification> = vs.iter().rev().collect();
+            prop_assert_eq!(
+                CalmClassification::is_constant(forward.iter().copied()),
+                CalmClassification::is_constant(reversed.iter().copied()),
+            );
         }
     }
 }

@@ -867,6 +867,182 @@ pub trait Lattice: Sized + Clone + PartialEq {
     fn is_strictly_between(&self, low: &Self, high: &Self) -> bool {
         low.strictly_below(self) && self.strictly_below(high)
     }
+    /// Interval-PROJECTION combinator peer of the interval-CONTAINMENT
+    /// predicate [`Lattice::is_between`] — pin `self` into the closed
+    /// bracket `[low, high]` on the lattice's partial order.
+    /// `a.clamped_between(&low, &high)` returns `(a ⊔ low) ⊓ high`: the element
+    /// obtained by first RAISING `a` to at-least `low` (join with the
+    /// floor) and then LOWERING the result to at-most `high` (meet
+    /// with the ceiling).
+    ///
+    /// The 3-ary interval-PROJECTION peer of [`Lattice::is_between`]
+    /// one PRIMITIVE-KIND axis over on the (predicate, combinator) ×
+    /// (interval) 2×1 grid — where [`Lattice::is_between`] DECIDES
+    /// bracket membership (does `self` sit within `[low, high]`),
+    /// this PROJECTS `self` INTO the bracket (produces the nearest
+    /// point of `[low, high]` reachable through the lattice's
+    /// (meet, join) combinators). Together with [`Lattice::is_between`]
+    /// on the predicate arm this closes the (predicate, combinator) ×
+    /// (interval) 2×1 grid on the 3-ary interval face of the algebra's
+    /// combinator surface — exactly the way the pairwise face is
+    /// closed at the 2-ary level by ([`Lattice::leq`],
+    /// [`Lattice::meet`]) / ([`Lattice::geq`], [`Lattice::join`]) and
+    /// the N-ary face is closed at the N-input level by
+    /// ([`Lattice::is_lower_bound_of`], [`Lattice::meet_all`]) /
+    /// ([`Lattice::is_upper_bound_of`], [`Lattice::join_all`]).
+    ///
+    /// **Clamp fixed-point theorem** on WELL-FORMED brackets: on
+    /// `low.leq(&high)`, `a.is_between(&low, &high) ⇔
+    /// a.clamped_between(&low, &high) == a`. `a` sits within the
+    /// bracket iff clamp is the identity on it. The forward
+    /// direction: if `low.leq(&a) && a.leq(&high)`, then
+    /// `a.join(low) == a` (by join-agreement with `low.leq(&a)`) and
+    /// then `a.meet(high) == a` (by meet-agreement with `a.leq(&high)`),
+    /// so the composed clamp returns `a` verbatim. The reverse: from
+    /// `a = a.join(low).meet(high)` on `low.leq(&high)`, the two
+    /// absorption arms below give `low ≤ a ≤ high`. The CANONICAL
+    /// cross-check axiom binding the predicate to the combinator,
+    /// analogous to the meet-agreement (`a.leq(&b) ⇔ a.meet(&b) ==
+    /// a`) and join-agreement (`a.leq(&b) ⇔ a.join(&b) == b`)
+    /// axioms binding [`Lattice::leq`] to its combinator peers one
+    /// arity down. The `low.leq(&high)` premise is load-bearing on
+    /// two counts: on an INVERTED bracket (`high.strictly_below(&low)`),
+    /// `is_between` universally rejects while the clamp may still
+    /// coincidentally reproduce `a`, and on a lattice impl that
+    /// violates meet-agreement or join-agreement (e.g. the pointed-
+    /// top antichain [`SubstrateType`] under its "distinct pairs meet
+    /// to top / join to bottom" impl, which the trait's core
+    /// `leq_agrees_with_meet` / `leq_agrees_with_join` proptests
+    /// already opt out of) the fixed-point identity does not extend.
+    /// Peer of the same theorem pinned in-tree on
+    /// [`tatara_lisp::macro_expand::ResourceLimits`]
+    /// (`resource_limits_within_agrees_with_clamp_fixed_point`); this
+    /// widening lifts the SAME shape from a per-domain `const fn` to
+    /// the trait's default-method surface so every closed-set lattice
+    /// impl satisfying meet-agreement + join-agreement inherits the
+    /// predicate/combinator bridge for free.
+    ///
+    /// **Below-floor pin**: on any well-formed bracket
+    /// (`low.leq(&high)`), if `a.leq(&low)` — `a` sits at-or-below the
+    /// floor — then `a.clamped_between(&low, &high) == low`. The floor absorbs
+    /// the input: `a.join(low) == low` (by join-agreement with
+    /// `a.leq(&low)`) and then `low.meet(high) == low` (by
+    /// meet-agreement with the caller's `low.leq(&high)` premise), so
+    /// the composed clamp returns `low`.
+    ///
+    /// **Above-ceiling pin**: on any well-formed bracket
+    /// (`low.leq(&high)`), if `high.leq(&a)` — `a` sits at-or-above
+    /// the ceiling — then `a.clamped_between(&low, &high) == high`. The ceiling
+    /// absorbs the input: `a.join(low) == a` (join with a lesser
+    /// element is the receiver) and then `a.meet(high) == high` (by
+    /// meet-agreement with `high.leq(&a)`), so the composed clamp
+    /// returns `high`.
+    ///
+    /// **Bracket-membership contract**: on any well-formed bracket
+    /// (`low.leq(&high)`), `a.clamped_between(&low, &high).is_between(&low,
+    /// &high)` holds for EVERY `a` — the clamp result always sits
+    /// within the bracket. Follows from the two absorption arms plus
+    /// the in-range identity: the clamp lands on one of `{low, a,
+    /// high}` (or a lattice combination of them on a non-totally-
+    /// ordered order), and each of those three sits within `[low,
+    /// high]` under the well-formed premise. The clamp is a
+    /// RETRACTION of the lattice onto the bracket — idempotent
+    /// (`a.clamped_between(&low, &high).clamped_between(&low, &high)
+    /// == a.clamped_between(&low, &high)` follows from the fixed-point theorem
+    /// applied to the clamp result, which is in the bracket).
+    ///
+    /// **Degenerate-bracket collapse**: on every lattice satisfying
+    /// meet-agreement + join-agreement (in particular every totally-
+    /// ordered lattice — [`DataClassification`], [`CalmClassification`],
+    /// [`baseline::Baseline`]), `a.clamped_between(&x, &x) == x` for
+    /// every `a` — a zero-width bracket forces the projection to the
+    /// single point `x`. Peer of [`Lattice::is_between`]'s degenerate-
+    /// bracket collapse (`a.is_between(&x, &x) ⇔ a == x`) on the
+    /// projection arm: the predicate reads "only `x` is in the
+    /// bracket"; the combinator says "every input becomes `x` after
+    /// clamping to the bracket". Follows from the fixed-point
+    /// theorem at the well-formed `low.leq(&high)` case `x.leq(&x)`
+    /// (reflexive), plus the below-floor / above-ceiling pins on the
+    /// two cases `a.leq(&x)` and `x.leq(&a)` (one of which always
+    /// holds on a totally-ordered lattice), both routing to `x`.
+    ///
+    /// **Reflexive-bracket identity**: `a.clamped_between(&a, &a) == a` on
+    /// every element — the zero-width bracket at `a` is trivially the
+    /// identity on `a`. Follows from the degenerate-bracket collapse
+    /// at `x = a`; peer of the analogous reflexive
+    /// [`Lattice::is_between`] identity (`a.is_between(&a, &a) ==
+    /// true`).
+    ///
+    /// **Extrema-bracket identity**: `a.clamped_between(&T::bottom(), &T::top())
+    /// == a` for EVERY element on EVERY lattice — clamping to the
+    /// widest possible bracket is the identity. `a.join(&T::bottom())
+    /// == a` (join with bottom is the receiver by the lattice-bottom
+    /// axiom) and then `a.meet(&T::top()) == a` (meet with top is the
+    /// receiver by the lattice-top axiom), so the composed clamp
+    /// returns `a`. Peer of [`Lattice::is_between`]'s extrema-bracket
+    /// universal-truth (`a.is_between(&T::bottom(), &T::top()) ==
+    /// true` for every element) on the projection arm.
+    ///
+    /// **Idempotence**: `a.clamped_between(&low, &high)
+    /// .clamped_between(&low, &high) == a.clamped_between(&low, &high)`
+    /// on any bracket — clamping a clamped
+    /// value is the identity on the clamped value. Direct consequence
+    /// of the fixed-point theorem: the clamp result sits within the
+    /// bracket (by the bracket-membership contract), so re-clamping
+    /// it returns it verbatim.
+    ///
+    /// Default routes through `self.join(low).meet(high)` — the
+    /// two-primitive lattice-algebra composition of a join with the
+    /// floor followed by a meet with the ceiling on any bounded
+    /// lattice. A future normalization at either [`Lattice::meet`] or
+    /// [`Lattice::join`] lands at ONE site and this default inherits
+    /// mechanically. The `(low, high)` parameter order is baked in so
+    /// consumers cannot accidentally swap the bracket bounds — a
+    /// copy-paste that transposed the two would compute
+    /// `self.join(high).meet(low)` (the WRONG projection, pinning
+    /// every input to the interval `[high, low]` which is the empty
+    /// set on a well-formed `low.leq(&high)` bracket), a silent
+    /// distortion the type system did not gate pre-lift and now does
+    /// through the method's parameter order.
+    ///
+    /// Peer of the same shape pinned in-tree on
+    /// [`tatara_lisp::macro_expand::ResourceLimits::clamp`]
+    /// (`self.most_permissive(lower).strictest(upper)` — the pointwise
+    /// resource-posture bracket-projection combinator whose own
+    /// docstring notes the frontier-inspiration link to [`Ord::clamp`]
+    /// on total orders); this widening lifts the SAME shape from a
+    /// per-domain `const fn` to the trait's default-method surface so
+    /// every closed-set lattice impl inherits the bracket-projection
+    /// combinator for free.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the 3-ary interval-projection combinator is
+    /// itself a typed named `Self` composing one [`Lattice::join`] and
+    /// one [`Lattice::meet`] call. Every downstream lattice-law
+    /// consumer inherits the combinator through the default
+    /// mechanically. THEORY.md §III — typescape; the interval-
+    /// projection combinator on every classification-axis lattice
+    /// binds at ONE substrate owner on the [`Lattice`] algebra rather
+    /// than at each consumer's hand-rolled `self.join(low).meet(high)`
+    /// composition.
+    ///
+    /// Frontier inspiration: [`Ord::clamp`] on total orders — the
+    /// stdlib exposes a first-class named bracket combinator alongside
+    /// the pairwise `min` / `max`, and the bounded-lattice extension
+    /// of the pattern is straightforward on any partial order via
+    /// `(a ⊔ low) ⊓ high`. Translated through pleme-io primitives:
+    /// threaded the same 3-ary bracket-projection shape through the
+    /// [`Lattice`] trait's default-method surface, so every closed-set
+    /// impl (total order, pointed-top antichain, boolean lattice)
+    /// picks it up mechanically — generalizing the `const fn`
+    /// [`tatara_lisp::macro_expand::ResourceLimits::clamp`] one
+    /// abstraction level up, and pairing it with the previously-lifted
+    /// [`Lattice::is_between`] predicate to close the (predicate,
+    /// combinator) × (interval) 2×1 grid on the 3-ary interval face
+    /// at ONE substrate primitive per cell.
+    fn clamped_between(&self, low: &Self, high: &Self) -> Self {
+        self.join(low).meet(high)
+    }
     /// Structural (collection-level) peer of [`Lattice::is_comparable`]
     /// — the iterated set forms a CHAIN on the lattice's partial order:
     /// every DISTINCT pair of elements the iterator yields is comparable.
@@ -4329,6 +4505,361 @@ mod tests {
             if a.is_strictly_between(&low, &high) {
                 prop_assert!(a.is_between(&low, &high));
             }
+        }
+    }
+
+    // ── Lattice::clamped_between — 3-ary interval-projection combinator peer
+    //    of Lattice::is_between ───────────────────────────────────────
+    //
+    // Bind [`Lattice::clamped_between`] at fail-before-pass-after granularity.
+    // Pre-lift the [`Lattice`] trait's 3-ary interval face was
+    // `{is_between, is_strictly_between}` on the predicate arm only —
+    // a consumer that wanted the COMBINATOR reading (project `a` into
+    // `[low, high]`) hand-authored `a.join(low).meet(high)` at each
+    // callsite (surfaces exactly at
+    // `tatara_lisp::macro_expand::ResourceLimits::clamp` as
+    // `self.most_permissive(lower).strictest(upper)`, a per-domain
+    // `const fn` composition of the pointwise resource-posture
+    // lattice's join and meet). Post-lift the whole projection
+    // combinator binds at ONE substrate primitive on the [`Lattice`]
+    // algebra, and every downstream impl inherits `clamp` for free
+    // through the default. The 3-ary interval face's (predicate,
+    // combinator) × (interval) 2×1 grid is now closed at ONE
+    // substrate default per cell (`is_between` on the predicate arm,
+    // `clamp` on the combinator arm), and the canonical CROSS-CHECK
+    // (`a.is_between(&low, &high) ⇔ a.clamped_between(&low, &high) == a`) binds
+    // the two through a lattice-law theorem the tests below pin
+    // exhaustively.
+
+    /// [`Lattice::clamped_between`] satisfies the FIXED-POINT theorem with
+    /// [`Lattice::is_between`] over every WELL-FORMED [`DataClassification`]
+    /// bracket: on `low.leq(&high)`, `a.is_between(&low, &high) ⇔
+    /// a.clamped_between(&low, &high) == a`. Pinned exhaustively over
+    /// `DataClassification::ALL^3` restricted to well-formed brackets
+    /// so the substrate primitive matches the predicate/combinator
+    /// bridge at every valid triple. The CANONICAL cross-check axiom
+    /// binding the 3-ary interval predicate to its projection
+    /// combinator, analogous to the pairwise meet-agreement
+    /// (`a.leq(&b) ⇔ a.meet(&b) == a`) and join-agreement (`a.leq(&b)
+    /// ⇔ a.join(&b) == b`) axioms one arity down.
+    ///
+    /// The `low.leq(&high)` premise is load-bearing: on an INVERTED
+    /// bracket (`high.strictly_below(&low)`), `is_between` universally
+    /// rejects while `clamped_between` still returns a well-defined
+    /// element (which may coincidentally equal `a` on a totally-
+    /// ordered lattice when `a == high == meet(low, high)`); the
+    /// biconditional is meaningful only on well-formed brackets where
+    /// the (meet, join) combinators route through their agreement
+    /// laws to reproduce `a`.
+    #[test]
+    fn clamped_between_agrees_with_is_between_fixed_point_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                if low.leq(&high) {
+                    for a in DataClassification::ALL {
+                        let clamped = a.clamped_between(&low, &high);
+                        assert_eq!(
+                            a.is_between(&low, &high),
+                            clamped == a,
+                            "clamp fixed-point theorem drifted at ({a:?}, {low:?}, \
+                             {high:?}): is_between = {}, clamped == a = {}, clamped = {clamped:?}",
+                            a.is_between(&low, &high),
+                            clamped == a,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_between`] PINS to the floor on inputs at-or-below the
+    /// floor over every well-formed [`DataClassification`] bracket:
+    /// on `low.leq(&high)`, `a.leq(&low) ⇒ a.clamped_between(&low, &high) ==
+    /// low`. Pinned exhaustively over `DataClassification::ALL^3`.
+    #[test]
+    fn clamped_between_pins_below_floor_inputs_to_floor_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                if low.leq(&high) {
+                    for a in DataClassification::ALL {
+                        if a.leq(&low) {
+                            assert_eq!(
+                                a.clamped_between(&low, &high),
+                                low,
+                                "clamp({a:?}, {low:?}, {high:?}) must pin to \
+                                 floor when a ≤ low on a well-formed bracket",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_between`] PINS to the ceiling on inputs at-or-above
+    /// the ceiling over every well-formed [`DataClassification`]
+    /// bracket: on `low.leq(&high)`, `high.leq(&a) ⇒ a.clamped_between(&low,
+    /// &high) == high`. Dual of the below-floor pin.
+    #[test]
+    fn clamped_between_pins_above_ceiling_inputs_to_ceiling_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                if low.leq(&high) {
+                    for a in DataClassification::ALL {
+                        if high.leq(&a) {
+                            assert_eq!(
+                                a.clamped_between(&low, &high),
+                                high,
+                                "clamp({a:?}, {low:?}, {high:?}) must pin to \
+                                 ceiling when high ≤ a on a well-formed bracket",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_between`] satisfies the BRACKET-MEMBERSHIP CONTRACT
+    /// over every well-formed [`DataClassification`] bracket: on
+    /// `low.leq(&high)`, `a.clamped_between(&low, &high).is_between(&low,
+    /// &high)` for EVERY `a`. The clamp is a RETRACTION onto the
+    /// bracket — its image lives entirely inside the bracket.
+    #[test]
+    fn clamped_between_result_is_always_in_bracket_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                if low.leq(&high) {
+                    for a in DataClassification::ALL {
+                        let clamped = a.clamped_between(&low, &high);
+                        assert!(
+                            clamped.is_between(&low, &high),
+                            "clamp({a:?}, {low:?}, {high:?}) = {clamped:?} must sit \
+                             inside its own bracket by the retraction contract",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_between`] is IDEMPOTENT over every
+    /// [`DataClassification`] triple: `a.clamped_between(&low, &high)
+    /// .clamped_between(&low, &high) == a.clamped_between(&low, &high)`. Direct
+    /// consequence of the fixed-point theorem applied to the clamp
+    /// result (which is in the bracket by the retraction contract),
+    /// pinned as a first-class law over every triple to catch a
+    /// future override that broke the retraction.
+    #[test]
+    fn clamped_between_is_idempotent_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                for a in DataClassification::ALL {
+                    let once = a.clamped_between(&low, &high);
+                    let twice = once.clamped_between(&low, &high);
+                    assert_eq!(
+                        once, twice,
+                        "clamp is not idempotent at ({a:?}, {low:?}, \
+                         {high:?}) — clamp once = {once:?}, clamp twice = {twice:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_between`] on a DEGENERATE bracket collapses to the
+    /// bracket point over every [`DataClassification`] pair:
+    /// `a.clamped_between(&x, &x) == x` — a zero-width bracket forces the
+    /// projection to the single point `x`. Peer of
+    /// [`Lattice::is_between`]'s degenerate-bracket collapse
+    /// (`a.is_between(&x, &x) ⇔ a == x`) on the combinator arm.
+    #[test]
+    fn clamped_between_of_equal_bounds_collapses_to_the_bound_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for x in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                assert_eq!(
+                    a.clamped_between(&x, &x),
+                    x,
+                    "clamp({a:?}, {x:?}, {x:?}) must collapse to the \
+                     bracket point on a zero-width bracket",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_between`] with the LATTICE EXTREMA is the IDENTITY
+    /// over every [`DataClassification`]: `a.clamped_between(&bottom, &top) ==
+    /// a`. Peer of [`Lattice::is_between`]'s extrema-bracket
+    /// universal-truth on the combinator arm — the widest possible
+    /// bracket admits every element AND leaves it unchanged.
+    #[test]
+    fn clamped_between_with_lattice_extrema_is_the_identity_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        let bottom = <DataClassification as crate::Lattice>::bottom();
+        let top = <DataClassification as crate::Lattice>::top();
+        for a in DataClassification::ALL {
+            assert_eq!(
+                a.clamped_between(&bottom, &top),
+                a,
+                "clamp({a:?}, bottom, top) must be the identity — \
+                 the widest bracket leaves every element unchanged",
+            );
+        }
+    }
+
+    /// [`Lattice::clamped_between`] AGREES with the pairwise `self.join(low)
+    /// .meet(high)` two-primitive lattice-algebra composition on
+    /// every [`DataClassification`] triple. Byte-identical to the
+    /// default's routing; pinned exhaustively so a future override
+    /// (a per-impl `clamp` that departed from the default) that
+    /// broke agreement is caught.
+    #[test]
+    fn clamped_between_agrees_with_join_meet_composition_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                for high in DataClassification::ALL {
+                    assert_eq!(
+                        a.clamped_between(&low, &high),
+                        a.join(&low).meet(&high),
+                        "clamp({a:?}, {low:?}, {high:?}) drifted from \
+                         (a ⊔ low) ⊓ high — default routing broken",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_between`] on the pointed-top antichain
+    /// [`SubstrateType`] does NOT satisfy the fixed-point theorem or
+    /// the bracket-membership retraction contract in general — the
+    /// pointed-top antichain's `Lattice` impl violates meet-agreement
+    /// (`a.leq(&b) ⇒ a.meet(&b) == a`) on the top-directed edge
+    /// (a non-top `x` has `x.leq(&top) == true` but `x.meet(&top) ==
+    /// top != x` under the impl's "distinct pairs meet to top"
+    /// arm), so the well-formed premise the theorem relies on does
+    /// not extend to it — a discipline the trait's core proptest
+    /// cohort already reflects by NOT running `leq_agrees_with_meet`
+    /// / `leq_agrees_with_join` over any `any_substrate()` strategy.
+    /// The one substrate-shape identity the retraction still binds:
+    /// the DEGENERATE self-bracket `a.clamped_between(&a, &a) == a`
+    /// on every element via the `x.join(x) == x` / `x.meet(x) == x`
+    /// idempotence axioms that DO hold on the pointed-top antichain,
+    /// pinned as the substrate-carried arm of
+    /// `clamped_between_of_equal_bounds_collapses_to_the_bound_over_data_classification_all_pairs`
+    /// one closed-set axis over.
+    #[test]
+    fn clamped_between_of_reflexive_self_bracket_is_identity_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            assert_eq!(
+                a.clamped_between(&a, &a),
+                a,
+                "clamped_between({a:?}, {a:?}, {a:?}) must be the \
+                 identity on the reflexive self-bracket via meet/join \
+                 idempotence, even on the pointed-top antichain",
+            );
+        }
+    }
+
+    proptest! {
+        /// [`Lattice::clamped_between`] satisfies the FIXED-POINT theorem with
+        /// [`Lattice::is_between`] on every random well-formed
+        /// [`DataClassification`] bracket — proptest peer of the
+        /// exhaustive
+        /// `clamped_between_agrees_with_is_between_fixed_point_over_data_classification_all_triples`
+        /// seal. The `low.leq(&high)` guard matches the well-formed
+        /// premise the seal restricts to.
+        #[test]
+        fn data_class_clamped_between_agrees_with_is_between_fixed_point(
+            low in any_data_class(),
+            a in any_data_class(),
+            high in any_data_class(),
+        ) {
+            if low.leq(&high) {
+                let clamped = a.clamped_between(&low, &high);
+                prop_assert_eq!(a.is_between(&low, &high), clamped == a);
+            }
+        }
+
+        /// [`Lattice::clamped_between`] BRACKET-MEMBERSHIP CONTRACT on every
+        /// well-formed random [`DataClassification`] bracket —
+        /// proptest peer of the exhaustive
+        /// `clamped_between_result_is_always_in_bracket_over_data_classification_all_triples`
+        /// seal.
+        #[test]
+        fn data_class_clamped_between_result_is_always_in_bracket(
+            low in any_data_class(),
+            a in any_data_class(),
+            high in any_data_class(),
+        ) {
+            if low.leq(&high) {
+                let clamped = a.clamped_between(&low, &high);
+                prop_assert!(clamped.is_between(&low, &high));
+            }
+        }
+
+        /// [`Lattice::clamped_between`] IDEMPOTENCE on every random
+        /// [`DataClassification`] triple — proptest peer of the
+        /// exhaustive `clamped_between_is_idempotent_over_data_classification_all_triples`
+        /// seal.
+        #[test]
+        fn data_class_clamped_between_is_idempotent(
+            low in any_data_class(),
+            a in any_data_class(),
+            high in any_data_class(),
+        ) {
+            let once = a.clamped_between(&low, &high);
+            let twice = once.clamped_between(&low, &high);
+            prop_assert_eq!(once, twice);
+        }
+
+        /// Peer of the DataClassification clamped_between fixed-point proptest
+        /// on the CALM boolean-lattice axis — same shape, different
+        /// closed set. Same well-formed `low.leq(&high)` guard.
+        #[test]
+        fn calm_clamped_between_agrees_with_is_between_fixed_point(
+            low in any_calm(),
+            a in any_calm(),
+            high in any_calm(),
+        ) {
+            if low.leq(&high) {
+                let clamped = a.clamped_between(&low, &high);
+                prop_assert_eq!(a.is_between(&low, &high), clamped == a);
+            }
+        }
+
+        /// Peer of the DataClassification clamped_between bracket-membership
+        /// proptest on the CALM axis.
+        #[test]
+        fn calm_clamped_between_result_is_always_in_bracket(
+            low in any_calm(),
+            a in any_calm(),
+            high in any_calm(),
+        ) {
+            if low.leq(&high) {
+                let clamped = a.clamped_between(&low, &high);
+                prop_assert!(clamped.is_between(&low, &high));
+            }
+        }
+
+        /// Peer of the DataClassification clamped_between idempotence proptest
+        /// on the CALM axis.
+        #[test]
+        fn calm_clamped_between_is_idempotent(
+            low in any_calm(),
+            a in any_calm(),
+            high in any_calm(),
+        ) {
+            let once = a.clamped_between(&low, &high);
+            let twice = once.clamped_between(&low, &high);
+            prop_assert_eq!(once, twice);
         }
     }
 

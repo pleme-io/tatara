@@ -372,6 +372,152 @@ pub trait Lattice: Sized + Clone + PartialEq {
     {
         iter.into_iter().fold(Self::bottom(), |acc, x| acc.join(x))
     }
+    /// N-ary Boolean-conjunction peer of [`Lattice::leq`] on the
+    /// (2-ary, N-ary) × (predicate, combinator) grid — `self` sits at-
+    /// or-below EVERY element the iterator yields. `a.is_lower_bound_of(
+    /// [&b, &c, &d])` holds iff `a.leq(&b) && a.leq(&c) && a.leq(&d)`:
+    /// `self` is a common lower bound for the iterated set.
+    ///
+    /// The N-ary Boolean-PREDICATE peer of [`Lattice::meet_all`] one
+    /// PRIMITIVE-KIND axis over on the N-ary-aggregation face of the
+    /// (predicate, combinator) × (2-ary, N-ary) primitive surface: where
+    /// [`Lattice::meet_all`] COMPUTES the meet (the greatest lower bound
+    /// of the iterated set), this DECIDES whether `self` is a lower
+    /// bound of the iterated set (member of the lower-bound set the
+    /// meet is the largest element of). Together
+    /// ([`Lattice::meet_all`], [`Lattice::is_lower_bound_of`]) close the
+    /// meet arm of the (predicate, combinator) × (meet, join) 2×2
+    /// N-ary-aggregation grid; the dual ([`Lattice::join_all`],
+    /// [`Lattice::is_upper_bound_of`]) closes the join arm.
+    ///
+    /// **Empty-iterator vacuous truth**: `a.is_lower_bound_of(std::iter
+    /// ::empty()) == true` for every element — the empty conjunction is
+    /// vacuously true because [`Iterator::all`] on the empty iterator is
+    /// `true`, and every element is trivially a lower bound of the empty
+    /// set. Peer of `T::meet_all(std::iter::empty()) == T::top()`'s
+    /// identity-on-empty behaviour: the empty aggregate binds to the
+    /// identity of the underlying operation (`true` for Boolean
+    /// conjunction; [`Lattice::top`] for meet), so the empty case never
+    /// rejects.
+    ///
+    /// **Singleton-identity**: `a.is_lower_bound_of([&b]) == a.leq(&b)`
+    /// — the 1-input predicate reduces to the pairwise relation, the
+    /// same way `meet_all([&a]) == a` reduces the 1-input N-ary
+    /// combinator to the operand verbatim.
+    ///
+    /// **Meet witness**: `T::meet_all(iter).is_lower_bound_of(iter) ==
+    /// true` for every iterable — the N-ary meet is always a lower bound
+    /// of the set it aggregates (definitionally, meet is the GREATEST
+    /// lower bound, so it IS a lower bound). The definitional link
+    /// between the N-ary COMBINATOR and the N-ary PREDICATE: the
+    /// aggregate [`Lattice::meet_all`] produces is a member of the
+    /// lower-bound set [`Lattice::is_lower_bound_of`] characterizes.
+    ///
+    /// **Universal-bottom witness**: `T::bottom().is_lower_bound_of(iter)
+    /// == true` for every iterable — the lattice bottom is a common
+    /// lower bound of every set, since `T::bottom().leq(x) == true` for
+    /// every `x` by the lattice-bottom axiom.
+    ///
+    /// **Any-violating-element rejection**: if any `x` in the iterator
+    /// has `!self.leq(x)`, then `self.is_lower_bound_of(iter) == false`
+    /// — [`Iterator::all`] short-circuits on the first violating element.
+    ///
+    /// **Peer** — [`Lattice::is_upper_bound_of`] one MEET/JOIN axis
+    /// over: the two close the (lower, upper) N-ary Boolean-conjunction
+    /// pair the pairwise `leq` / `geq` extend from 2-ary to N-ary, and
+    /// bind ONE substrate primitive on the [`Lattice`] algebra rather
+    /// than at each consumer's hand-rolled `iter.all(|x| self.leq(x))`
+    /// conjunction. The pattern already exists in-tree at
+    /// `tatara_lisp::macro_expand::ResourceLimits::is_lower_bound_of` /
+    /// `is_upper_bound_of` — a per-domain `const fn` pair on the
+    /// pointwise resource-posture partial order whose own doc explicitly
+    /// notes "the pairwise `leq` combinator already lifted one arity
+    /// down… the N-ary predicate binds at ONE typed method whose
+    /// signature carries the containment direction into the type
+    /// system"; this widening lifts the SAME shape from a per-domain
+    /// `const fn` pair to the trait's default-method surface so every
+    /// future closed-set lattice impl inherits the N-ary bound predicates
+    /// for free.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the N-ary containment-from-below predicate is
+    /// itself a typed named `bool` composing the pairwise partial-order
+    /// relation via [`Iterator::all`]) + THEORY.md §III (typescape — the
+    /// N-ary Boolean-bound predicate on every classification-axis
+    /// lattice binds at ONE substrate owner on the [`Lattice`] algebra
+    /// rather than at each consumer's hand-rolled `iter.all(|x|
+    /// self.leq(x))`).
+    ///
+    /// Frontier inspiration: Haskell's `Foldable` typeclass exposing
+    /// `all` / `Data.Foldable.all` alongside the pairwise relation — the
+    /// N-ary traversal of a collection through a Boolean-conjunction
+    /// seed is a first-class named method the typeclass carries. This
+    /// widening threads the same N-ary-traversal shape through the
+    /// [`Lattice`] trait's default-method surface, so every downstream
+    /// classification-axis consumer picks it up mechanically.
+    fn is_lower_bound_of<'a, I>(&self, iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().all(|x| self.leq(x))
+    }
+    /// Dual of [`Lattice::is_lower_bound_of`] on the MEET/JOIN axis —
+    /// `self` sits at-or-ABOVE EVERY element the iterator yields.
+    /// `a.is_upper_bound_of([&b, &c, &d])` holds iff `b.leq(&a) &&
+    /// c.leq(&a) && d.leq(&a)`: `self` is a common upper bound for the
+    /// iterated set.
+    ///
+    /// The N-ary Boolean-PREDICATE peer of [`Lattice::join_all`] one
+    /// PRIMITIVE-KIND axis over: where [`Lattice::join_all`] COMPUTES
+    /// the join (the least upper bound of the iterated set), this
+    /// DECIDES whether `self` is an upper bound of the iterated set
+    /// (member of the upper-bound set the join is the smallest element
+    /// of). Together with [`Lattice::is_lower_bound_of`] closes the
+    /// (predicate, combinator) × (meet, join) 2×2 N-ary-aggregation
+    /// grid on the algebra's combinator surface.
+    ///
+    /// **Empty-iterator vacuous truth**: `a.is_upper_bound_of(std::iter
+    /// ::empty()) == true` for every element — the empty conjunction is
+    /// vacuously true. Peer of `T::join_all(std::iter::empty()) ==
+    /// T::bottom()`'s identity-on-empty behaviour.
+    ///
+    /// **Singleton-identity**: `a.is_upper_bound_of([&b]) == b.leq(&a)`
+    /// — the 1-input predicate reduces to the pairwise relation with
+    /// the direction flipped (since `self` sits ABOVE the operand
+    /// rather than BELOW it), the dual of
+    /// [`Lattice::is_lower_bound_of`]'s singleton reduction.
+    ///
+    /// **Join witness**: `T::join_all(iter).is_upper_bound_of(iter) ==
+    /// true` for every iterable — the N-ary join is always an upper
+    /// bound of the set it aggregates (definitionally, join is the LEAST
+    /// upper bound, so it IS an upper bound). Dual definitional link on
+    /// the join arm.
+    ///
+    /// **Universal-top witness**: `T::top().is_upper_bound_of(iter) ==
+    /// true` for every iterable — the lattice top is a common upper
+    /// bound of every set, since `x.leq(&T::top()) == true` for every
+    /// `x` by the lattice-top axiom.
+    ///
+    /// **Any-violating-element rejection**: if any `x` in the iterator
+    /// has `!x.leq(self)`, then `self.is_upper_bound_of(iter) == false`
+    /// — [`Iterator::all`] short-circuits on the first violating element.
+    ///
+    /// Default routes through `iter.into_iter().all(|x| x.leq(self))`
+    /// so every impl inherits the direction-flipped N-ary Boolean
+    /// conjunction mechanically. A future override at the underlying
+    /// [`Lattice::leq`] lands at ONE site and this dual inherits
+    /// through the default.
+    ///
+    /// Theory anchor: same as [`Lattice::is_lower_bound_of`] on the
+    /// dual arm — THEORY.md §II.1 invariant 5 + §III.
+    fn is_upper_bound_of<'a, I>(&self, iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().all(|x| x.leq(self))
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -2080,6 +2226,319 @@ mod tests {
         fn calm_meet_all_and_join_all_on_singleton_are_identity(a in any_calm()) {
             prop_assert_eq!(CalmClassification::meet_all([&a]), a);
             prop_assert_eq!(CalmClassification::join_all([&a]), a);
+        }
+    }
+
+    // ── Lattice::is_lower_bound_of / is_upper_bound_of — N-ary
+    //    Boolean-conjunction default peers ─────────────────────────
+    //
+    // Bind [`Lattice::is_lower_bound_of`] + [`Lattice::is_upper_bound_of`]
+    // at fail-before-pass-after granularity. Pre-lift the [`Lattice`]
+    // trait's predicate surface carried the pairwise arm (`leq` / `geq`
+    // / `strictly_below` / `strictly_above` / `is_comparable` /
+    // `is_incomparable`) and the endpoint-singleton arm (`is_bottom` /
+    // `is_top`), but a consumer wanting to decide whether `self` was a
+    // COMMON bound for an iterated set (a
+    // `Vec<Classification>`-carrying cohort, a slice of ephemeral-env
+    // classifications) hand-authored `iter.all(|x| self.leq(x))` (or the
+    // dual `iter.all(|x| x.leq(self))`) at each callsite. The pattern
+    // already exists in-tree at
+    // [`tatara_lisp::macro_expand::ResourceLimits::is_lower_bound_of`] /
+    // [`ResourceLimits::is_upper_bound_of`] — a per-domain `const fn`
+    // pair on the pointwise resource-posture partial order — which
+    // seeds the ★★ PRIME-DIRECTIVE `≥ 2`-consumer lift with a first
+    // consumer, and every future closed-set lattice with an iterated-
+    // bound consumer would cross the duplication threshold on the SAME
+    // conjunction shape.
+    //
+    // Post-lift the whole N-ary bound-predicate pair binds at ONE
+    // substrate primitive on the [`Lattice`] algebra, and every
+    // downstream impl (the six existing in-tree ones + `Baseline` via
+    // the `crate::Lattice` trait AND any future closed-set lift)
+    // inherits `is_lower_bound_of` / `is_upper_bound_of` for free
+    // through the default. Together with the prior widening (`geq` /
+    // `is_bottom` / `is_top` / `is_comparable` / `is_incomparable` /
+    // `strictly_below` / `strictly_above` / `meet_all` / `join_all`)
+    // the trait now closes the (predicate, combinator) × (meet, join)
+    // 2×2 N-ary-aggregation grid on the algebra's combinator surface:
+    // ([`meet_all`], [`is_lower_bound_of`]) close the meet arm, and
+    // ([`join_all`], [`is_upper_bound_of`]) close the join arm.
+    //
+    // Coverage below spans:
+    //
+    //   • empty-iterator vacuous truth (both directions return `true`
+    //     on the empty iterator — the empty-conjunction identity);
+    //   • singleton-identity (1-input reduces to the pairwise relation,
+    //     with the direction flipped on the upper-bound arm);
+    //   • meet-witness / join-witness (the N-ary aggregate is always a
+    //     bound of the iterated set — the definitional link between the
+    //     N-ary COMBINATOR and the N-ary PREDICATE);
+    //   • universal-endpoint witness (`bottom()` is a lower bound of
+    //     every set; `top()` is an upper bound of every set);
+    //   • any-violating-element rejection (short-circuits `false` when
+    //     any element violates the direction);
+    //   • closed-set exhaustive sweeps on `DataClassification::ALL^2`
+    //     (a is a lower bound of {&b} iff a.leq(&b), and every rank-
+    //     shape of the sensitivity axis holds byte-for-byte) and
+    //     `SubstrateType::ALL^2` (antichain-shape — only `Regulatory`
+    //     is an upper bound of any distinct element, only every
+    //     substrate is a lower bound of `Regulatory`).
+
+    /// [`Lattice::is_lower_bound_of`] on the empty iterator returns
+    /// `true` at every variant of [`DataClassification::ALL`] — the
+    /// empty conjunction is vacuously true. Peer of `meet_all` on the
+    /// empty iterator collapsing to `top()`: the empty aggregate binds
+    /// to the identity of the underlying operation (`true` for Boolean
+    /// conjunction; [`Lattice::top`] for meet), so the empty case
+    /// never rejects. Fail-before-pass-after: pre-lift
+    /// `is_lower_bound_of` is not exposed as a trait method, so the
+    /// empty case had no typed answer — a consumer that hand-rolled
+    /// `iter.all(|x| self.leq(x))` inherited `Iterator::all`'s empty
+    /// semantics per callsite; post-lift the vacuous-true is fixed at
+    /// ONE primitive on the [`Lattice`] algebra.
+    #[test]
+    fn is_lower_and_upper_bound_of_empty_iterator_are_vacuously_true_over_data_classification_all()
+    {
+        use tatara_process::classification::DataClassification;
+        let empty: [&DataClassification; 0] = [];
+        for a in DataClassification::ALL {
+            assert!(
+                a.is_lower_bound_of(empty),
+                "is_lower_bound_of on empty iterator must be true at {a:?} — the empty \
+                 conjunction is vacuously true",
+            );
+            assert!(
+                a.is_upper_bound_of(empty),
+                "is_upper_bound_of on empty iterator must be true at {a:?} — the empty \
+                 conjunction is vacuously true",
+            );
+        }
+    }
+
+    /// [`Lattice::is_lower_bound_of`] on a singleton reduces to the
+    /// pairwise `leq` relation over `DataClassification::ALL^2` — i.e.
+    /// `a.is_lower_bound_of([&b]) == a.leq(&b)` at every pair. Dually,
+    /// [`Lattice::is_upper_bound_of`] on a singleton reduces to the
+    /// direction-flipped `b.leq(&a)`. Pinned exhaustively on the 6×6
+    /// pair space so a regression that flipped the direction on either
+    /// predicate would surface at the pair it broke.
+    #[test]
+    fn is_lower_and_upper_bound_of_singleton_reduce_to_leq_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    a.is_lower_bound_of([&b]),
+                    a.leq(&b),
+                    "is_lower_bound_of({a:?}, [&{b:?}]) drifted from leq({a:?}, {b:?}) — \
+                     the 1-input predicate must reduce to the pairwise relation",
+                );
+                assert_eq!(
+                    a.is_upper_bound_of([&b]),
+                    b.leq(&a),
+                    "is_upper_bound_of({a:?}, [&{b:?}]) drifted from the direction-flipped \
+                     leq({b:?}, {a:?}) — the upper-bound singleton flips the direction",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::meet_all`] is always a lower bound of the iterated
+    /// set — `T::meet_all(iter).is_lower_bound_of(iter) == true` for
+    /// every iterable. Dually, [`Lattice::join_all`] is always an upper
+    /// bound. Pinned over every non-empty subset of
+    /// `DataClassification::ALL` via the 2-arm and 3-arm folds — the
+    /// definitional link between the N-ary COMBINATOR and the N-ary
+    /// PREDICATE (the aggregate the combinator produces is always a
+    /// member of the bound set the predicate characterizes).
+    #[test]
+    fn meet_all_and_join_all_witness_the_bounds_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        // 2-arm sweep.
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                let iter2 = [&a, &b];
+                let meet = DataClassification::meet_all(iter2);
+                let join = DataClassification::join_all(iter2);
+                assert!(
+                    meet.is_lower_bound_of(iter2),
+                    "meet_all({a:?}, {b:?}) = {meet:?} must be a lower bound of \
+                     [&{a:?}, &{b:?}] — the definitional link",
+                );
+                assert!(
+                    join.is_upper_bound_of(iter2),
+                    "join_all({a:?}, {b:?}) = {join:?} must be an upper bound of \
+                     [&{a:?}, &{b:?}] — the dual definitional link",
+                );
+            }
+        }
+        // 3-arm sweep.
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let iter3 = [&a, &b, &c];
+                    let meet = DataClassification::meet_all(iter3);
+                    let join = DataClassification::join_all(iter3);
+                    assert!(meet.is_lower_bound_of(iter3));
+                    assert!(join.is_upper_bound_of(iter3));
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::bottom`] is a common lower bound of every iterated
+    /// set over [`DataClassification`] — `T::bottom().is_lower_bound_of(
+    /// iter) == true` for every iterable, since `T::bottom().leq(x) ==
+    /// true` for every `x` by the lattice-bottom axiom. Dually,
+    /// [`Lattice::top`] is a common upper bound. Pinned on the full
+    /// closed set as the iterable so both endpoint witnesses hold at
+    /// the widest possible iterated set. Peer seal to
+    /// `meet_all_and_join_all_over_full_data_classification_all_reach_bottom_and_top`
+    /// on the PREDICATE arm of the (combinator, predicate) grid.
+    #[test]
+    fn bottom_is_lower_bound_and_top_is_upper_bound_of_full_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        let all: Vec<&DataClassification> = DataClassification::ALL.iter().collect();
+        assert!(
+            DataClassification::bottom().is_lower_bound_of(all.iter().copied()),
+            "bottom() (Public) must be a lower bound of the full closed set — \
+             the lattice-bottom axiom",
+        );
+        assert!(
+            DataClassification::top().is_upper_bound_of(all.iter().copied()),
+            "top() (Pci) must be an upper bound of the full closed set — \
+             the lattice-top axiom",
+        );
+    }
+
+    /// [`Lattice::is_upper_bound_of`] projects the pointed-top antichain
+    /// on [`SubstrateType`] to its distinguishing shape: only
+    /// [`SubstrateType::top`] (Regulatory) is an upper bound of the full
+    /// closed set, and only [`SubstrateType::bottom`] (Financial) fails
+    /// to be a lower bound only-of-itself — a non-Regulatory `self` is
+    /// an upper bound of a slice iff the slice is `[]` or `[self]` (or
+    /// a repetition of `self`), and Regulatory is an upper bound of any
+    /// slice by the pointed-top axiom. Peer seal to
+    /// `substrate_type_is_incomparable_matches_the_antichain_shape`
+    /// and
+    /// `substrate_type_strictly_below_and_strictly_above_project_the_antichain_to_the_top_directed_strict_edge`
+    /// on the N-ary Boolean-predicate arm — the antichain SHAPE is now
+    /// bound through FOUR algebra predicates (`leq`, `is_incomparable`,
+    /// `strictly_below`, `is_upper_bound_of`) via ONE substrate owner
+    /// on the [`Lattice`] trait.
+    #[test]
+    fn is_upper_bound_of_projects_the_pointed_top_antichain_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        // The full closed set: only Regulatory is an upper bound of it.
+        let all: Vec<&SubstrateType> = SubstrateType::ALL.iter().collect();
+        for s in SubstrateType::ALL {
+            let is_upper = s.is_upper_bound_of(all.iter().copied());
+            if s == SubstrateType::top() {
+                assert!(
+                    is_upper,
+                    "top() (Regulatory) must be an upper bound of the full closed set — \
+                     the pointed-top axiom",
+                );
+            } else {
+                assert!(
+                    !is_upper,
+                    "non-top substrate {s:?} must NOT be an upper bound of the full closed \
+                     set — the antichain rejects any upper-bound claim that isn't the top",
+                );
+            }
+            // Every substrate is a lower bound of Regulatory (the pointed-top).
+            assert!(
+                s.is_lower_bound_of([&SubstrateType::top()]),
+                "every substrate {s:?} must be a lower bound of [Regulatory] — the \
+                 pointed-top strict-leq half-edge",
+            );
+        }
+    }
+
+    /// [`Lattice::is_lower_bound_of`] short-circuits `false` when any
+    /// element in the iterator violates the containment direction over
+    /// [`DataClassification`]: given a slice `[&low, &high]` where
+    /// `low < self < high`, `self.is_lower_bound_of([&low, &high])` is
+    /// `false` because `self.leq(&low)` fails at the first element.
+    /// Pinned on a specific violating configuration and its dual so
+    /// both short-circuit arms bind at the substrate.
+    #[test]
+    fn is_lower_and_upper_bound_of_reject_when_any_element_violates_over_data_classification() {
+        use tatara_process::classification::DataClassification::{
+            Confidential, Internal, Pci, Phi, Pii, Public,
+        };
+        // `Confidential` is NOT a lower bound of `[Internal, Pii]` —
+        // fails at `Confidential.leq(Internal)`.
+        assert!(!Confidential.is_lower_bound_of([&Internal, &Pii]));
+        // `Confidential` IS a lower bound of `[Pii, Phi, Pci]` — every
+        // element sits at-or-above.
+        assert!(Confidential.is_lower_bound_of([&Pii, &Phi, &Pci]));
+        // `Pii` is NOT an upper bound of `[Public, Pci]` — fails at
+        // `Pci.leq(Pii)`.
+        assert!(!Pii.is_upper_bound_of([&Public, &Pci]));
+        // `Pii` IS an upper bound of `[Public, Internal, Confidential]`
+        // — every element sits at-or-below.
+        assert!(Pii.is_upper_bound_of([&Public, &Internal, &Confidential]));
+    }
+
+    proptest! {
+        /// [`Lattice::is_lower_bound_of`] on a singleton reduces to the
+        /// pairwise `leq` relation over any [`DataClassification`]
+        /// pair — proptest peer of the exhaustive
+        /// `is_lower_and_upper_bound_of_singleton_reduce_to_leq_over_data_classification_all_pairs`
+        /// seal above. Randomized draws via [`any_data_class`] catch
+        /// the same drift the exhaustive form does; peers on the CALM
+        /// axis via `calm_is_lower_bound_of_singleton_reduces_to_leq`.
+        #[test]
+        fn data_class_is_lower_and_upper_bound_of_singleton_reduce_to_leq(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            prop_assert_eq!(a.is_lower_bound_of([&b]), a.leq(&b));
+            prop_assert_eq!(a.is_upper_bound_of([&b]), b.leq(&a));
+        }
+
+        /// [`Lattice::meet_all`] is always a lower bound of the iterated
+        /// pair — proptest peer of the exhaustive
+        /// `meet_all_and_join_all_witness_the_bounds_over_data_classification_all_triples`
+        /// seal's 2-arm sweep. The definitional link between the N-ary
+        /// COMBINATOR and the N-ary PREDICATE, pinned on random pairs.
+        #[test]
+        fn data_class_meet_witnesses_lower_bound_and_join_witnesses_upper_bound_on_pair(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            let iter = [&a, &b];
+            let meet = DataClassification::meet_all(iter);
+            let join = DataClassification::join_all(iter);
+            prop_assert!(meet.is_lower_bound_of(iter));
+            prop_assert!(join.is_upper_bound_of(iter));
+        }
+
+        /// Peer of the DataClassification singleton-reduction proptest
+        /// on the CALM boolean-lattice axis — same shape, different
+        /// closed set.
+        #[test]
+        fn calm_is_lower_and_upper_bound_of_singleton_reduce_to_leq(
+            a in any_calm(),
+            b in any_calm(),
+        ) {
+            prop_assert_eq!(a.is_lower_bound_of([&b]), a.leq(&b));
+            prop_assert_eq!(a.is_upper_bound_of([&b]), b.leq(&a));
+        }
+
+        /// Peer of the DataClassification meet-witness / join-witness
+        /// proptest on the CALM axis.
+        #[test]
+        fn calm_meet_witnesses_lower_bound_and_join_witnesses_upper_bound_on_pair(
+            a in any_calm(),
+            b in any_calm(),
+        ) {
+            let iter = [&a, &b];
+            let meet = CalmClassification::meet_all(iter);
+            let join = CalmClassification::join_all(iter);
+            prop_assert!(meet.is_lower_bound_of(iter));
+            prop_assert!(join.is_upper_bound_of(iter));
         }
     }
 }

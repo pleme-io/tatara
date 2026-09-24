@@ -164,6 +164,97 @@ pub trait Lattice: Sized + Clone + PartialEq {
     fn is_incomparable(&self, other: &Self) -> bool {
         !self.is_comparable(other)
     }
+    /// N-ary [`Lattice::meet`] fold — the strongest common refinement
+    /// of every element the iterator yields. The empty iterator
+    /// collapses to [`Lattice::top`] because top is the algebraic
+    /// identity for meet: `x.meet(&T::top()) == x` for every `x` by
+    /// the lattice's absorption law (`⊤` is the greatest element, so
+    /// meeting with it never tightens further). A one-element iterator
+    /// collapses to that element by identity-absorption; a two-element
+    /// iterator matches [`Lattice::meet`] directly; three or more
+    /// elements fold left-to-right through the associative combinator.
+    ///
+    /// Peer of [`Lattice::join_all`] one MEET/JOIN axis over, closing
+    /// the (2-ary, N-ary) × (meet, join) grid on the algebra's
+    /// combinator surface. Together the two default methods lift the
+    /// FOLD arm of the algebra from the caller's hand-rolled
+    /// `iter.fold(T::top(), |a, b| a.meet(&b))` composition to ONE
+    /// substrate primitive — a consumer with a `Vec<Classification>`
+    /// that wants "the common refinement of these ephemeral env
+    /// classifications" collapses at ONE call rather than a per-site
+    /// fold, and the identity-element choice (top for meet, bottom for
+    /// join) binds on the trait rather than on the consumer's guess.
+    ///
+    /// **Identity-on-empty**: `T::meet_all(std::iter::empty()) ==
+    /// T::top()`. The fold's initial value IS the algebraic identity
+    /// for meet, so the empty case is a first-class arm — consumers
+    /// who probe "what refinement does this (possibly-empty) set
+    /// require?" get the well-typed "no constraint" answer without a
+    /// per-site `if iter.next().is_none() { T::top() } else { ... }`
+    /// branch.
+    ///
+    /// **Singleton-idempotence**: `T::meet_all([&a]) == a` by the
+    /// initial-fold step `T::top().meet(&a) == a`. Every lattice's
+    /// `top` obeys `⊤ ⊓ x = x`, so the singleton case bypasses the
+    /// consumer's `if len == 1 { return v.clone(); }` short-circuit.
+    ///
+    /// **Associativity + commutativity**: inherited from [`Lattice::meet`]'s
+    /// associativity and commutativity, so a caller can reorder the
+    /// iterator without changing the result. Pinned via proptest on
+    /// the DataClassification and CalmClassification axes below.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — every downstream N-ary meet consumer inherits
+    /// the fold through the default) + THEORY.md §III (typescape — the
+    /// N-ary refinement-composition arm on every classification axis
+    /// binds at ONE substrate owner on the [`Lattice`] algebra).
+    fn meet_all<'a, I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().fold(Self::top(), |acc, x| acc.meet(x))
+    }
+    /// N-ary [`Lattice::join`] fold — the weakest common relaxation
+    /// covering every element the iterator yields. Dual of
+    /// [`Lattice::meet_all`] on the join arm: the empty iterator
+    /// collapses to [`Lattice::bottom`] because bottom is the algebraic
+    /// identity for join (`x.join(&T::bottom()) == x` for every `x`
+    /// via the absorption law — `⊥` is the least element, so joining
+    /// with it never relaxes further). A one-element iterator collapses
+    /// to that element by identity-absorption; a two-element iterator
+    /// matches [`Lattice::join`] directly; three or more elements fold
+    /// left-to-right through the associative combinator.
+    ///
+    /// Together with [`Lattice::meet_all`] closes the (2-ary, N-ary) ×
+    /// (meet, join) grid on the algebra's combinator surface. A
+    /// consumer with `Vec<Classification>` that wants "the smallest
+    /// classification covering every entity in this workload" folds
+    /// through this default rather than hand-rolling `iter.fold(
+    /// T::bottom(), |a, b| a.join(&b))`.
+    ///
+    /// **Identity-on-empty**: `T::join_all(std::iter::empty()) ==
+    /// T::bottom()`. The fold's initial value IS the algebraic
+    /// identity for join, so the empty case yields the well-typed "no
+    /// coverage yet" answer without a per-site branch.
+    ///
+    /// **Singleton-idempotence**: `T::join_all([&a]) == a` by the
+    /// initial-fold step `T::bottom().join(&a) == a`.
+    ///
+    /// **Associativity + commutativity**: inherited from [`Lattice::join`]'s
+    /// laws, so a caller can reorder the iterator without changing the
+    /// result. Pinned via proptest on the DataClassification and
+    /// CalmClassification axes below.
+    ///
+    /// Theory anchor: same as [`Lattice::meet_all`] on the dual arm —
+    /// THEORY.md §II.1 invariant 5 + §III.
+    fn join_all<'a, I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().fold(Self::bottom(), |acc, x| acc.join(x))
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -1238,6 +1329,300 @@ mod tests {
         fn calm_is_comparable_is_universally_true(a in any_calm(), b in any_calm()) {
             prop_assert!(a.is_comparable(&b));
             prop_assert!(!a.is_incomparable(&b));
+        }
+    }
+
+    // ── Lattice::meet_all / join_all — N-ary fold defaults ─────────
+    //
+    // Bind [`Lattice::meet_all`] + [`Lattice::join_all`] at fail-
+    // before-pass-after granularity. Pre-lift consumers wanting the
+    // strongest common refinement (or the weakest common relaxation)
+    // of a `Vec<T>` (or any iterable) hand-rolled `iter.fold(T::top(),
+    // |a, b| a.meet(&b))` at each callsite, which:
+    //
+    //   1. duplicated the identity-element choice at every consumer
+    //      (some sites picked `T::top()` correctly; a drift to
+    //      `T::bottom()` on the meet arm would silently pass every
+    //      lattice-law test but break the empty-fold semantic);
+    //   2. crossed the ★★ PRIME-DIRECTIVE `≥ 2` duplication threshold
+    //      once a second N-ary consumer (a shared-classification
+    //      unifier for ephemeral env cohorts, a compliance-baseline
+    //      unifier for a multi-tenant fleet) landed;
+    //   3. recurred the fold body's associative-reduction shape at each
+    //      callsite instead of composing through the algebra's own
+    //      combinator.
+    //
+    // Post-lift both fold arms bind at ONE substrate primitive on the
+    // [`Lattice`] algebra and every downstream N-ary consumer picks
+    // them up through the default. Coverage below spans:
+    //
+    //   • empty-fold identity (meet_all → top, join_all → bottom);
+    //   • singleton-idempotence (fold on `[&a]` collapses to `a` for
+    //     every `a` in the closed set);
+    //   • 2-ary agreement with direct `meet` / `join`;
+    //   • 3-ary associativity (folding order doesn't matter, pinned via
+    //     [1, 2, 3] vs. reversed input);
+    //   • closed-set exhaustive routing on `DataClassification::ALL`
+    //     (both 1-ary and 2-ary sweeps) and `CalmClassification::ALL`.
+
+    /// [`Lattice::meet_all`] on an empty iterator collapses to
+    /// [`Lattice::top`] — the algebraic identity for meet. Fail-before-
+    /// pass-after: pre-lift `meet_all` is not exposed as a trait method,
+    /// so the empty case had no typed answer — a consumer that hand-
+    /// rolled `iter.fold(T::top(), |a, b| a.meet(&b))` chose the
+    /// identity at the callsite, and a drift to `T::bottom()` (the
+    /// dual identity) would have silently returned the wrong empty-
+    /// case answer at every callsite without any lattice-law test
+    /// signaling the drift. Post-lift the identity is fixed at ONE
+    /// primitive on the [`Lattice`] algebra.
+    #[test]
+    fn meet_all_on_empty_iterator_returns_top_over_data_classification() {
+        let empty: [&DataClassification; 0] = [];
+        assert_eq!(
+            DataClassification::meet_all(empty),
+            DataClassification::top(),
+            "meet_all on an empty iterator must return top (the meet identity)",
+        );
+    }
+
+    /// [`Lattice::join_all`] on an empty iterator collapses to
+    /// [`Lattice::bottom`] — the algebraic identity for join. Dual of
+    /// [`meet_all_on_empty_iterator_returns_top_over_data_classification`]
+    /// on the join arm. Same fail-before-pass-after reasoning: the
+    /// identity is fixed at ONE primitive rather than at each caller's
+    /// hand-rolled fold.
+    #[test]
+    fn join_all_on_empty_iterator_returns_bottom_over_data_classification() {
+        let empty: [&DataClassification; 0] = [];
+        assert_eq!(
+            DataClassification::join_all(empty),
+            DataClassification::bottom(),
+            "join_all on an empty iterator must return bottom (the join identity)",
+        );
+    }
+
+    /// [`Lattice::meet_all`] + [`Lattice::join_all`] on a singleton
+    /// iterator return the sole element — the identity-absorption law
+    /// (`⊤ ⊓ x = x` AND `⊥ ⊔ x = x`) at the initial fold step. Pinned
+    /// exhaustively over `DataClassification::ALL` so a regression that
+    /// silently changed either identity element (e.g. an override of
+    /// `bottom()` / `top()` that drifted off the closed-set endpoints)
+    /// would surface at the variant it broke.
+    #[test]
+    fn meet_all_and_join_all_on_singleton_return_the_element_over_data_classification_all() {
+        for v in DataClassification::ALL {
+            assert_eq!(
+                DataClassification::meet_all([&v]),
+                v,
+                "meet_all([&{v:?}]) must return {v:?} by identity-absorption",
+            );
+            assert_eq!(
+                DataClassification::join_all([&v]),
+                v,
+                "join_all([&{v:?}]) must return {v:?} by identity-absorption",
+            );
+        }
+    }
+
+    /// [`Lattice::meet_all`] on a two-element iterator matches the
+    /// direct binary [`Lattice::meet`] over every pair in
+    /// `DataClassification::ALL^2`. Pinned as a SEAL against a
+    /// regression that reverted the fold body to a hand-rolled
+    /// composition drifted off the trait's `meet` (e.g. a private
+    /// per-consumer `min` that consulted declaration order rather
+    /// than [`DataClassification::sensitivity_rank`] — the SAME drift
+    /// `data_classification_leq_uses_typed_rank` seals for the pairwise
+    /// `leq`).
+    #[test]
+    fn meet_all_and_join_all_on_pair_match_direct_meet_and_join_over_data_classification_all() {
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::meet_all([&a, &b]),
+                    a.meet(&b),
+                    "meet_all([&{a:?}, &{b:?}]) must match direct \
+                     meet({a:?}, {b:?})",
+                );
+                assert_eq!(
+                    DataClassification::join_all([&a, &b]),
+                    a.join(&b),
+                    "join_all([&{a:?}, &{b:?}]) must match direct \
+                     join({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::meet_all`] + [`Lattice::join_all`] fold associatively
+    /// over `DataClassification::ALL^3` — the N-ary fold's result
+    /// matches the left-associated pairwise composition
+    /// `a.meet(&b).meet(&c)`. Pinned on the full 6^3 = 216-triple cube.
+    /// The N-ary form's associativity is inherited from the binary
+    /// `meet`'s associativity (proven by proptest above via
+    /// `data_class_associative`), so this seal confirms the fold body
+    /// preserves that inheritance — a regression that reversed the fold
+    /// direction or drifted the accumulator's initial value would
+    /// surface at the triple it broke.
+    #[test]
+    fn meet_all_and_join_all_associate_over_data_classification_all_triples() {
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    assert_eq!(
+                        DataClassification::meet_all([&a, &b, &c]),
+                        a.meet(&b).meet(&c),
+                        "meet_all on ({a:?}, {b:?}, {c:?}) must match \
+                         left-associated meet",
+                    );
+                    assert_eq!(
+                        DataClassification::join_all([&a, &b, &c]),
+                        a.join(&b).join(&c),
+                        "join_all on ({a:?}, {b:?}, {c:?}) must match \
+                         left-associated join",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::meet_all`] on the entire `DataClassification::ALL`
+    /// slice collapses to [`Lattice::bottom`] (Public) — the closed
+    /// set is a total order, and the strongest common refinement of
+    /// every variant is the smallest one on the sensitivity axis.
+    /// Dually, [`Lattice::join_all`] on the entire slice collapses to
+    /// [`Lattice::top`] (Pci) — the weakest common relaxation covering
+    /// every variant is the largest one. Together the two seals bind
+    /// the N-ary fold's endpoint behavior at ONE identity on each arm.
+    #[test]
+    fn meet_all_and_join_all_over_full_data_classification_all_reach_bottom_and_top() {
+        let all: Vec<&DataClassification> = DataClassification::ALL.iter().collect();
+        assert_eq!(
+            DataClassification::meet_all(all.iter().copied()),
+            DataClassification::bottom(),
+            "meet_all over the full closed set must reach bottom (Public) — \
+             the total-order refinement of every variant",
+        );
+        assert_eq!(
+            DataClassification::join_all(all.iter().copied()),
+            DataClassification::top(),
+            "join_all over the full closed set must reach top (Pci) — \
+             the total-order relaxation covering every variant",
+        );
+    }
+
+    /// [`Lattice::meet_all`] + [`Lattice::join_all`] closed-set seals
+    /// on the sibling boolean axis — every arm holds byte-for-byte with
+    /// the DataClassification seals on the 2-arm CALM lattice. Together
+    /// with the sibling seals above, the fold-identity primitives bind
+    /// at BOTH classification-axis consumers via ONE default pair.
+    #[test]
+    fn meet_all_and_join_all_closed_set_seals_over_calm_classification_all() {
+        // Empty-fold identity on each arm.
+        let empty: [&CalmClassification; 0] = [];
+        assert_eq!(
+            CalmClassification::meet_all(empty),
+            CalmClassification::top(),
+        );
+        assert_eq!(
+            CalmClassification::join_all(empty),
+            CalmClassification::bottom(),
+        );
+        // Singleton absorption at every variant.
+        for v in CalmClassification::ALL {
+            assert_eq!(CalmClassification::meet_all([&v]), v);
+            assert_eq!(CalmClassification::join_all([&v]), v);
+        }
+        // 2-ary agreement with direct `meet` / `join` on the full 2^2
+        // pair space.
+        for a in CalmClassification::ALL {
+            for b in CalmClassification::ALL {
+                assert_eq!(CalmClassification::meet_all([&a, &b]), a.meet(&b));
+                assert_eq!(CalmClassification::join_all([&a, &b]), a.join(&b));
+            }
+        }
+        // Full-slice fold reaches the two endpoints — Monotone is the
+        // meet identity outcome, NonMonotone is the join identity
+        // outcome on a two-arm boolean lattice.
+        let all: Vec<&CalmClassification> = CalmClassification::ALL.iter().collect();
+        assert_eq!(
+            CalmClassification::meet_all(all.iter().copied()),
+            CalmClassification::Monotone,
+        );
+        assert_eq!(
+            CalmClassification::join_all(all.iter().copied()),
+            CalmClassification::NonMonotone,
+        );
+    }
+
+    proptest! {
+        /// [`Lattice::meet_all`] on any two-element iterator matches
+        /// direct binary [`Lattice::meet`] — proptest peer of the
+        /// exhaustive
+        /// `meet_all_and_join_all_on_pair_match_direct_meet_and_join_over_data_classification_all`
+        /// seal above. Randomized draws via [`any_data_class`] catch
+        /// the same drift the exhaustive form does; peers on the CALM
+        /// axis via `calm_meet_all_matches_direct_meet_on_pair`.
+        #[test]
+        fn data_class_meet_all_matches_direct_meet_on_pair(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            prop_assert_eq!(DataClassification::meet_all([&a, &b]), a.meet(&b));
+            prop_assert_eq!(DataClassification::join_all([&a, &b]), a.join(&b));
+        }
+
+        /// [`Lattice::meet_all`] commutes over any two-element iterator
+        /// — reversing the input yields the same result. Inherited
+        /// from [`Lattice::meet`]'s commutativity (proven by
+        /// `data_class_commutative` above); the fold's left-to-right
+        /// composition doesn't disturb the property because the pair
+        /// is folded as `top.meet(&a).meet(&b) == top.meet(&b).meet(&a)`
+        /// via meet-commutativity + associativity.
+        #[test]
+        fn data_class_meet_all_and_join_all_commute_on_pair(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            prop_assert_eq!(
+                DataClassification::meet_all([&a, &b]),
+                DataClassification::meet_all([&b, &a]),
+            );
+            prop_assert_eq!(
+                DataClassification::join_all([&a, &b]),
+                DataClassification::join_all([&b, &a]),
+            );
+        }
+
+        /// [`Lattice::meet_all`] on a singleton returns the element —
+        /// proptest peer of the exhaustive
+        /// `meet_all_and_join_all_on_singleton_return_the_element_over_data_classification_all`
+        /// seal above.
+        #[test]
+        fn data_class_meet_all_and_join_all_on_singleton_are_identity(
+            a in any_data_class(),
+        ) {
+            prop_assert_eq!(DataClassification::meet_all([&a]), a);
+            prop_assert_eq!(DataClassification::join_all([&a]), a);
+        }
+
+        /// Peer of the DataClassification pair-agreement proptest on
+        /// the CALM boolean-lattice axis — same shape, different
+        /// closed set.
+        #[test]
+        fn calm_meet_all_matches_direct_meet_on_pair(
+            a in any_calm(),
+            b in any_calm(),
+        ) {
+            prop_assert_eq!(CalmClassification::meet_all([&a, &b]), a.meet(&b));
+            prop_assert_eq!(CalmClassification::join_all([&a, &b]), a.join(&b));
+        }
+
+        /// Peer of the DataClassification singleton-identity proptest
+        /// on the CALM axis.
+        #[test]
+        fn calm_meet_all_and_join_all_on_singleton_are_identity(a in any_calm()) {
+            prop_assert_eq!(CalmClassification::meet_all([&a]), a);
+            prop_assert_eq!(CalmClassification::join_all([&a]), a);
         }
     }
 }

@@ -3452,6 +3452,187 @@ pub trait Lattice: Sized + Clone + PartialEq {
         let vs: Vec<&'a Self> = iter.into_iter().collect();
         vs.windows(2).all(|w| w[0].is_incomparable(w[1]))
     }
+    /// N-ary interval-containment predicate — EVERY element the iterator
+    /// yields sits inside the closed bracket `[low, high]` on the
+    /// lattice's partial order. `T::all_between(&low, &high, [&a, &b,
+    /// &c])` holds iff `a.is_between(&low, &high) &&
+    /// b.is_between(&low, &high) && c.is_between(&low, &high)`: every
+    /// element of the iterated set is at-or-above `low` AND at-or-below
+    /// `high` in the refinement order.
+    ///
+    /// The N-ary Boolean-CONJUNCTION peer of the pairwise 3-ary
+    /// [`Lattice::is_between`] one ARITY axis up on the (pairwise,
+    /// N-ary) × (interval-containment) 2×1 grid — where
+    /// [`Lattice::is_between`] decides the 3-input BRACKET membership
+    /// (does `self` sit within `[low, high]`) on a SINGLE element, this
+    /// decides the SAME bracket membership on EVERY element the
+    /// iterator yields via [`Iterator::all`] over per-element
+    /// [`Lattice::is_between`] delegations. Together with
+    /// [`Lattice::is_between`] on the single-element arm closes the
+    /// (single, N-ary) × (interval-containment) 2×1 face at the N-ary
+    /// arm of the algebra's bracket-membership predicate surface,
+    /// exactly one ARITY axis up from the [`Lattice::is_between`] pin
+    /// and exactly one BRACKET-VS-HALF-PLANE axis over from the N-ary
+    /// half-plane [`Lattice::is_lower_bound_of`] /
+    /// [`Lattice::is_upper_bound_of`] pair. Sits at the closed corner
+    /// of the (half-plane, bracket) × (N-ary) grid — the two half-plane
+    /// N-ary predicates decompose this bracket-N-ary predicate via
+    /// `T::all_between(&low, &high, iter) ==
+    /// low.is_lower_bound_of(iter) && high.is_upper_bound_of(iter)` on
+    /// every non-inverted bracket.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::all_between(&low, &high,
+    /// std::iter::empty()) == true` on every bracket, INCLUDING every
+    /// inverted bracket where `high.strictly_below(&low)` — the empty
+    /// conjunction is vacuously true because [`Iterator::all`] on the
+    /// empty iterator is `true`, and the empty set is trivially
+    /// contained in every bracket including the empty one. Same
+    /// empty-conjunction identity as [`Lattice::is_lower_bound_of`]'s
+    /// vacuous-true / [`Lattice::is_upper_bound_of`]'s vacuous-true /
+    /// [`Lattice::is_chain`]'s vacuous-true / [`Lattice::is_antichain`]'s
+    /// vacuous-true / [`Lattice::is_ascending`]'s vacuous-true across
+    /// the whole N-ary Boolean-conjunction predicate surface — every
+    /// N-ary predicate on the [`Lattice`] trait fires true on the
+    /// empty iterator.
+    ///
+    /// **Singleton-identity**: `T::all_between(&low, &high, [&a]) ==
+    /// a.is_between(&low, &high)` — the 1-input N-ary interval
+    /// predicate reduces to the pairwise 3-ary interval-containment
+    /// primitive on the sole element. Peer of
+    /// [`Lattice::is_lower_bound_of`]'s singleton reduction
+    /// (`self.is_lower_bound_of([&b]) == self.leq(&b)`) on the
+    /// bracket-face — where the half-plane predicate reduces to
+    /// [`Lattice::leq`], this reduces to [`Lattice::is_between`]
+    /// (which itself decomposes into the [`Lattice::leq`] conjunction
+    /// `low.leq(&a) && a.leq(&high)`).
+    ///
+    /// **Half-plane decomposition**: `T::all_between(&low, &high, iter)
+    /// == low.is_lower_bound_of(iter) && high.is_upper_bound_of(iter)`
+    /// on every iterable — the bracket-containment predicate at the
+    /// N-ary arm factors through the two half-plane N-ary predicates on
+    /// the (below, above) arms, exactly as [`Lattice::is_between`]
+    /// factors into `low.leq(&self) && self.leq(&high)` at the
+    /// pairwise arm. Peer of the same factoring pinned in-tree at
+    /// [`Lattice::is_between`]'s two-primitive rewriting on the
+    /// pairwise face — this widening lifts the SAME shape to the N-ary
+    /// arm at ONE substrate default rather than at each consumer's
+    /// hand-authored conjunction of two `iter.all` sweeps over the same
+    /// buffer.
+    ///
+    /// **Degenerate-bracket collapse**: `T::all_between(&x, &x, iter)`
+    /// holds iff every element `a` the iterator yields satisfies
+    /// `a == x` — a zero-width bracket admits only the single point
+    /// `x`, so the N-ary predicate reduces to "every element equals
+    /// `x`". Follows from [`Lattice::is_between`]'s degenerate collapse
+    /// (`a.is_between(&x, &x) ⇔ a == x`) composed through
+    /// [`Iterator::all`]. Peer of [`Lattice::is_between`]'s
+    /// degenerate-bracket collapse on the N-ary arm.
+    ///
+    /// **Inverted-bracket rejection at arity ≥ 1**: if
+    /// `high.strictly_below(&low)` (the bracket is empty because its
+    /// upper endpoint sits strictly below its lower one), then
+    /// `T::all_between(&low, &high, iter) == false` for EVERY
+    /// non-empty iterable — no lattice element can simultaneously be
+    /// at-or-above `low` and at-or-below a `high` that sits strictly
+    /// below `low`, so the first element the iterator yields fails
+    /// [`Lattice::is_between`] and [`Iterator::all`] short-circuits.
+    /// Peer of [`Lattice::is_between`]'s inverted-bracket rejection on
+    /// the N-ary arm (with the empty-iterator exception the empty
+    /// conjunction admits).
+    ///
+    /// **Extrema-bracket universal-truth**: `T::all_between(&T::bottom(),
+    /// &T::top(), iter) == true` for EVERY iterable on EVERY lattice —
+    /// [`Lattice::bottom`] / [`Lattice::top`] bracket admits every
+    /// element via [`Lattice::is_between`]'s extrema-bracket
+    /// universal-truth, so [`Iterator::all`] over every-element-accepting
+    /// per-element predicate collapses to universal acceptance. Peer of
+    /// [`Lattice::is_between`]'s extrema-bracket identity on the N-ary
+    /// arm — the widest possible bracket admits every element of every
+    /// iterable at ONE substrate primitive rather than at each
+    /// consumer's hand-authored bounded-lattice cross-check per
+    /// element.
+    ///
+    /// **Any-out-of-bracket element rejection**: if any `x` in the
+    /// iterator has `!x.is_between(&low, &high)` (either
+    /// `!low.leq(&x)` or `!x.leq(&high)`), then
+    /// `T::all_between(&low, &high, iter) == false` — [`Iterator::all`]
+    /// short-circuits on the first violating element. Peer of
+    /// [`Lattice::is_lower_bound_of`]'s / [`Lattice::is_upper_bound_of`]'s
+    /// any-violating-element rejection on the bracket-face.
+    ///
+    /// **Antichain rejection**: on an antichain lattice (e.g.
+    /// [`SubstrateType`]), the predicate rejects most brackets that
+    /// contain distinct incomparable elements — a `[low, high]` with
+    /// incomparable endpoints admits only elements that are
+    /// simultaneously at-or-above `low` AND at-or-below `high`, and on
+    /// the pointed-top antichain that is either the top itself (when
+    /// high == top) or nothing. The predicate does NOT promote
+    /// incomparable brackets to spurious containment on the N-ary arm.
+    /// Peer of [`Lattice::is_between`]'s antichain-rejection identity
+    /// at the N-ary arm.
+    ///
+    /// **Refines [`Lattice::is_lower_bound_of`] AND
+    /// [`Lattice::is_upper_bound_of`]**: `T::all_between(&low, &high,
+    /// iter) ⇒ low.is_lower_bound_of(iter) && high.is_upper_bound_of(
+    /// iter)` on every iterable — the bracket predicate is the
+    /// conjunction of the two half-plane predicates by the half-plane
+    /// decomposition identity above, so it refines EACH half-plane
+    /// predicate. Together the three N-ary Boolean predicates
+    /// ([`Lattice::is_lower_bound_of`], [`Lattice::is_upper_bound_of`],
+    /// [`Lattice::all_between`]) close the (below, above, both) 3-arm
+    /// bracket-face at the N-ary arm on the algebra's combinator
+    /// surface.
+    ///
+    /// Default routes through `iter.into_iter().all(|x|
+    /// x.is_between(low, high))` — the N-ary Boolean-conjunction
+    /// composition of [`Lattice::is_between`] (which itself decomposes
+    /// into `low.leq(&x) && x.leq(&high)`) with [`Iterator::all`] on
+    /// any partial order. A future normalization at either primitive
+    /// ([`Lattice::is_between`] gaining an override, [`Lattice::leq`]
+    /// tightening on the strict-arm dual, [`Iterator::all`]
+    /// short-circuit tweak in the standard library) lands at ONE site
+    /// and this default inherits mechanically. The `(low, high, iter)`
+    /// parameter order matches [`Lattice::is_between`]'s `(self, low,
+    /// high)` order with the sole element position replaced by the
+    /// N-ary iterator arm — a copy-paste that transposed `low` and
+    /// `high` would test the inverted-bracket path (universally false
+    /// on any non-empty iterable), a silent distortion the type system
+    /// did not gate pre-lift and now does through the method's
+    /// parameter order.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the N-ary interval-containment predicate is
+    /// itself a typed named `bool` composing [`Lattice::is_between`]
+    /// via [`Iterator::all`]; every downstream lattice-law consumer
+    /// inherits the predicate through the default mechanically) +
+    /// THEORY.md §III (typescape — the N-ary interval-containment arm
+    /// on every classification-axis lattice binds at ONE substrate
+    /// owner on the [`Lattice`] algebra rather than at each consumer's
+    /// hand-rolled `iter.all(|x| low.leq(x) && x.leq(high))`
+    /// conjunction — the two-primitive rewriting a pre-lift consumer
+    /// might have reached for at the callsite).
+    ///
+    /// Frontier inspiration: the N-ary interval-containment predicate
+    /// is the natural bounded-lattice extension of stdlib's per-element
+    /// `Ord::clamp` and the pairwise-membership predicate at the N-ary
+    /// arm. Rust's stdlib does not carry an `iter.all_in_range(min,
+    /// max)` primitive on [`PartialOrd`] (interval-containment is
+    /// itself a partial-order predicate rather than a total-order one).
+    /// Translated: threaded the same N-ary interval-containment shape
+    /// through the [`Lattice`] trait's default-method surface so every
+    /// closed-set impl (total order, pointed-top antichain, boolean
+    /// lattice) picks up the whole N-ary bracket-membership predicate
+    /// mechanically — the N-ary arm of what [`Lattice::is_between`]
+    /// carries at the pairwise face and the bracket-face closure of
+    /// what [`Lattice::is_lower_bound_of`] / [`Lattice::is_upper_bound_of`]
+    /// carry at the half-plane N-ary face.
+    fn all_between<'a, I>(low: &Self, high: &Self, iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().all(|x| x.is_between(low, high))
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -10922,6 +11103,313 @@ mod tests {
         }
     }
 
+    /// [`Lattice::all_between`] fires vacuously TRUE on the empty
+    /// iterator at EVERY bracket on EVERY lattice — INCLUDING every
+    /// inverted bracket (`high.strictly_below(&low)`), where the
+    /// single-element [`Lattice::is_between`] universally rejects.
+    /// The empty-iterator vacuous-truth arm is the ONE cell where the
+    /// N-ary Boolean predicate diverges from the single-element
+    /// [`Lattice::is_between`] rejection identity at the inverted-
+    /// bracket case: [`Iterator::all`] on the empty iterator is `true`
+    /// by [`Iterator::all`]'s empty-conjunction convention regardless
+    /// of the per-element predicate the caller passed. Pinned over
+    /// BOTH the total-order axis (`DataClassification::ALL^2` — 36
+    /// brackets, including 15 inverted ones) AND the antichain axis
+    /// (`SubstrateType::ALL^2` — 64 brackets, most of them inverted or
+    /// incomparable) so BOTH shape flavors bind the vacuous-truth
+    /// identity via ONE substrate primitive.
+    #[test]
+    fn all_between_is_vacuously_true_at_the_empty_iterator_over_every_bracket() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        let empty: [&DataClassification; 0] = [];
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                assert!(
+                    DataClassification::all_between(&low, &high, empty.iter().copied()),
+                    "all_between({low:?}, {high:?}, []) must be true — the empty \
+                     conjunction is vacuously true at every bracket, including \
+                     inverted ones",
+                );
+            }
+        }
+        let empty_subs: [&SubstrateType; 0] = [];
+        for low in SubstrateType::ALL {
+            for high in SubstrateType::ALL {
+                assert!(
+                    SubstrateType::all_between(&low, &high, empty_subs.iter().copied()),
+                    "all_between({low:?}, {high:?}, []) must be true on the \
+                     pointed-top antichain — the empty conjunction is vacuously true \
+                     at every bracket, including incomparable-endpoint ones",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::all_between`] at arity 1 reduces to the pairwise
+    /// [`Lattice::is_between`] on the sole element — the 1-input N-ary
+    /// interval predicate is the pairwise 3-ary interval-containment
+    /// primitive with the iterator arm degenerated to a singleton.
+    /// Peer of [`Lattice::is_lower_bound_of`]'s singleton reduction
+    /// (`self.is_lower_bound_of([&b]) == self.leq(&b)`) on the
+    /// bracket-face. Pinned exhaustively over
+    /// `DataClassification::ALL^3` (216 triples).
+    #[test]
+    fn all_between_arity_1_reduces_to_is_between_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                for high in DataClassification::ALL {
+                    assert_eq!(
+                        DataClassification::all_between(&low, &high, [&a]),
+                        a.is_between(&low, &high),
+                        "all_between({low:?}, {high:?}, [{a:?}]) drifted from \
+                         is_between({a:?}, {low:?}, {high:?}) — the arity-1 N-ary \
+                         predicate must reduce to the pairwise 3-ary primitive on \
+                         the sole element",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::all_between`] AGREES with the two-primitive
+    /// half-plane decomposition on every bracket AND every iterable —
+    /// `T::all_between(&low, &high, iter) ==
+    /// low.is_lower_bound_of(iter) && high.is_upper_bound_of(iter)` on
+    /// every triple. The bracket-containment predicate at the N-ary
+    /// arm factors through the two half-plane N-ary predicates on the
+    /// (below, above) arms, exactly as [`Lattice::is_between`] factors
+    /// into `low.leq(&self) && self.leq(&high)` at the pairwise arm.
+    /// Pinned exhaustively over `DataClassification::ALL^2` brackets
+    /// (36) × `DataClassification::ALL^2` iterables (36 pairs) = 1296
+    /// (bracket, iterable) combinations, so the whole N-ary factoring
+    /// binds via ONE substrate primitive.
+    #[test]
+    fn all_between_agrees_with_lower_and_upper_bound_conjunction_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                for a in DataClassification::ALL {
+                    for b in DataClassification::ALL {
+                        let iter_slice: [&DataClassification; 2] = [&a, &b];
+                        let bracket = DataClassification::all_between(&low, &high, iter_slice);
+                        let half_plane =
+                            low.is_lower_bound_of(iter_slice) && high.is_upper_bound_of(iter_slice);
+                        assert_eq!(
+                            bracket, half_plane,
+                            "all_between({low:?}, {high:?}, [{a:?}, {b:?}]) drifted \
+                             from is_lower_bound_of({low:?}, [{a:?}, {b:?}]) && \
+                             is_upper_bound_of({high:?}, [{a:?}, {b:?}]) — the N-ary \
+                             bracket predicate must factor through the two \
+                             half-plane N-ary predicates",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::all_between`] on a degenerate bracket `(&x, &x)`
+    /// reduces to universal equality-with-`x` on every element the
+    /// iterator yields — `T::all_between(&x, &x, iter) == iter.all(|a|
+    /// a == x)`. Peer of [`Lattice::is_between`]'s degenerate-bracket
+    /// collapse (`a.is_between(&x, &x) ⇔ a == x`) on the N-ary arm.
+    /// Pinned exhaustively over `DataClassification::ALL` bracket
+    /// points (6) × `DataClassification::ALL^2` iterables (36 pairs) =
+    /// 216 (bracket-point, iterable) combinations.
+    #[test]
+    fn all_between_of_equal_bounds_reduces_to_universal_equality_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for x in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                for b in DataClassification::ALL {
+                    let iter_slice: [&DataClassification; 2] = [&a, &b];
+                    assert_eq!(
+                        DataClassification::all_between(&x, &x, iter_slice),
+                        a == x && b == x,
+                        "all_between({x:?}, {x:?}, [{a:?}, {b:?}]) drifted from \
+                         `a == {x:?} && b == {x:?}` — a zero-width bracket admits \
+                         only the single point x, so the N-ary predicate reduces to \
+                         universal equality-with-x by antisymmetry of leq composed \
+                         through Iterator::all",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::all_between`] REJECTS every non-empty iterable when
+    /// the bracket is inverted (`high.strictly_below(&low)`) over
+    /// [`DataClassification`] — the N-ary interval-containment
+    /// predicate returns `false` for EVERY non-empty iterable when the
+    /// upper endpoint sits strictly below the lower one. The
+    /// inverted-bracket-plus-empty-iter cell is where the N-ary
+    /// predicate DIVERGES from [`Lattice::is_between`]'s universal
+    /// rejection at inverted brackets — see the empty-iterator
+    /// vacuous-truth test above for that cell.
+    #[test]
+    fn all_between_rejects_every_nonempty_iterable_when_bracket_is_inverted_over_data_classification(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                if high.strictly_below(&low) {
+                    for a in DataClassification::ALL {
+                        assert!(
+                            !DataClassification::all_between(&low, &high, [&a]),
+                            "all_between({low:?}, {high:?}, [{a:?}]) must be false — \
+                             the bracket is inverted ({high:?} strictly below {low:?}) \
+                             so no element can satisfy the pairwise is_between",
+                        );
+                        for b in DataClassification::ALL {
+                            assert!(
+                                !DataClassification::all_between(&low, &high, [&a, &b]),
+                                "all_between({low:?}, {high:?}, [{a:?}, {b:?}]) must be \
+                                 false — the bracket is inverted so Iterator::all \
+                                 short-circuits on the first element",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::all_between`] on the extrema bracket
+    /// `(&T::bottom(), &T::top())` admits EVERY iterable of
+    /// [`DataClassification`] — the widest possible bracket admits
+    /// every element via [`Lattice::is_between`]'s extrema-bracket
+    /// universal truth, so [`Iterator::all`] over every-element-
+    /// accepting per-element predicate collapses to universal
+    /// acceptance. Peer of `is_between_with_lattice_extrema_admits_
+    /// every_element_over_data_classification_all` on the N-ary arm.
+    /// Pinned over `DataClassification::ALL^3` (216 triples).
+    #[test]
+    fn all_between_with_lattice_extrema_admits_every_iterable_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        let bot = DataClassification::bottom();
+        let top = DataClassification::top();
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    assert!(
+                        DataClassification::all_between(&bot, &top, [&a, &b, &c]),
+                        "all_between(bottom, top, [{a:?}, {b:?}, {c:?}]) must be true \
+                         — the widest possible bracket admits every iterable by the \
+                         lattice's bottom/top axioms",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::all_between`] REFINES both
+    /// [`Lattice::is_lower_bound_of`] and [`Lattice::is_upper_bound_of`]
+    /// on every bracket AND every iterable — the bracket predicate is
+    /// the conjunction of the two half-plane predicates by the
+    /// half-plane decomposition identity, so it refines EACH
+    /// half-plane predicate individually. Together the three N-ary
+    /// Boolean predicates ([`Lattice::is_lower_bound_of`],
+    /// [`Lattice::is_upper_bound_of`], [`Lattice::all_between`]) close
+    /// the (below, above, both) 3-arm bracket-face at the N-ary arm on
+    /// the algebra's combinator surface. Pinned over
+    /// `DataClassification::ALL^4` (1296 combinations).
+    #[test]
+    fn all_between_refines_lower_and_upper_bound_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                for a in DataClassification::ALL {
+                    for b in DataClassification::ALL {
+                        let iter_slice: [&DataClassification; 2] = [&a, &b];
+                        if DataClassification::all_between(&low, &high, iter_slice) {
+                            assert!(
+                                low.is_lower_bound_of(iter_slice),
+                                "all_between({low:?}, {high:?}, [{a:?}, {b:?}]) implies \
+                                 low.is_lower_bound_of(iter) — the bracket predicate \
+                                 must refine each half-plane predicate individually",
+                            );
+                            assert!(
+                                high.is_upper_bound_of(iter_slice),
+                                "all_between({low:?}, {high:?}, [{a:?}, {b:?}]) implies \
+                                 high.is_upper_bound_of(iter) — the bracket predicate \
+                                 must refine each half-plane predicate individually",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::all_between`] projects the pointed-top antichain to
+    /// the bracket-endpoint-admission rule — on [`SubstrateType`] the
+    /// N-ary interval-containment predicate accepts an iterable
+    /// iff every element `x` it yields satisfies
+    /// `low.leq(&x) && x.leq(&high)`, which on the antichain shape
+    /// (`leq` fires only on the reflexive diagonal AND on the
+    /// `x.leq(&top)` half-edge to the pointed top) rejects most
+    /// brackets that contain distinct incomparable elements. Peer of
+    /// `is_between_projects_the_pointed_top_antichain_over_substrate_
+    /// type_all` on the N-ary arm — the antichain SHAPE is now bound
+    /// through both the pairwise `is_between` and the N-ary
+    /// `all_between` at ONE substrate owner on the [`Lattice`] trait.
+    #[test]
+    fn all_between_projects_the_pointed_top_antichain_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        // Distinct-non-top singleton in the top-touching bracket:
+        // `Compute.is_between(&Compute, &top)` is true because
+        // reflexive leq holds on the low side and `Compute.leq(&top)`
+        // holds on the antichain's pointed-top half-edge.
+        let compute = SubstrateType::Compute;
+        assert!(
+            SubstrateType::all_between(&compute, &top, [&compute]),
+            "all_between({compute:?}, top, [{compute:?}]) must be true — the arity-1 \
+             singleton reduces to is_between which admits reflexive on the low side \
+             and top on the high side",
+        );
+        // Distinct-non-top singleton in a distinct-non-top bracket:
+        // `Compute.is_between(&Storage, &top)` fails because
+        // `Storage.leq(&Compute)` is false on the antichain (distinct
+        // non-top substrates are incomparable).
+        let storage = SubstrateType::Storage;
+        assert!(
+            !SubstrateType::all_between(&storage, &top, [&compute]),
+            "all_between({storage:?}, top, [{compute:?}]) must be false — Storage and \
+             Compute are incomparable on the antichain so the low-side is_between \
+             conjunct fails",
+        );
+        // Full-top bracket admits every iterable on the antichain via
+        // the pointed-top half-edge on the high side and reflexive on
+        // the low side is false for any distinct-non-top element, so
+        // even the widest antichain bracket does not admit arbitrary
+        // iterables — only iterables whose elements are all `leq` the
+        // low endpoint AND `leq` the high endpoint. The
+        // top-bounded-below-by-top bracket admits only the top itself:
+        assert!(
+            SubstrateType::all_between(&top, &top, [&top]),
+            "all_between(top, top, [top]) must be true — degenerate bracket at the \
+             top point admits only the top itself",
+        );
+        assert!(
+            !SubstrateType::all_between(&top, &top, [&compute]),
+            "all_between(top, top, [{compute:?}]) must be false — degenerate bracket \
+             at top rejects any non-top element",
+        );
+        // Half-plane decomposition witness on the antichain:
+        // all_between(&low, &high, iter) == low.is_lower_bound_of(iter)
+        //     && high.is_upper_bound_of(iter)
+        // pinned over one non-trivial antichain triple.
+        let iter_slice: [&SubstrateType; 2] = [&compute, &top];
+        assert_eq!(
+            SubstrateType::all_between(&compute, &top, iter_slice),
+            compute.is_lower_bound_of(iter_slice) && top.is_upper_bound_of(iter_slice),
+            "all_between({compute:?}, top, [{compute:?}, top]) drifted from the \
+             half-plane decomposition on the antichain",
+        );
+    }
+
     proptest! {
         /// [`Lattice::is_constant`] AGREES with the conjunction
         /// `is_ascending && is_descending` on random
@@ -11259,6 +11747,65 @@ mod tests {
             a in any_data_class(),
         ) {
             prop_assert!(!a.is_strictly_comparable(&a));
+        }
+
+        /// [`Lattice::all_between`] AGREES with the two-primitive
+        /// half-plane decomposition `low.is_lower_bound_of(iter) &&
+        /// high.is_upper_bound_of(iter)` on random
+        /// [`DataClassification`] brackets and random sequences of
+        /// length 0..6 — proptest peer of the exhaustive-quadruple
+        /// factoring seal above at extended arity. A regression that
+        /// broke the half-plane decomposition would surface here on
+        /// the first bracket+iterable where the N-ary predicate
+        /// diverges from the two-primitive conjunction.
+        #[test]
+        fn all_between_agrees_with_lower_and_upper_bound_conjunction_over_data_classification_random_sequences(
+            low in any_data_class(),
+            high in any_data_class(),
+            vs in proptest::collection::vec(any_data_class(), 0..6usize),
+        ) {
+            let refs: Vec<&DataClassification> = vs.iter().collect();
+            let bracket = DataClassification::all_between(&low, &high, refs.iter().copied());
+            let half_plane = low.is_lower_bound_of(refs.iter().copied())
+                && high.is_upper_bound_of(refs.iter().copied());
+            prop_assert_eq!(bracket, half_plane);
+        }
+
+        /// [`Lattice::all_between`] on the extrema bracket
+        /// `(&T::bottom(), &T::top())` UNIVERSALLY ACCEPTS every random
+        /// [`DataClassification`] sequence of length 0..8 — the widest
+        /// possible bracket admits every element by the lattice's
+        /// bottom/top axioms, so [`Iterator::all`] over the
+        /// every-element-accepting per-element predicate collapses to
+        /// universal acceptance. Proptest peer of the exhaustive-
+        /// triple universal-truth seal at extended arity.
+        #[test]
+        fn all_between_with_lattice_extrema_universally_accepts_over_data_classification_random_sequences(
+            vs in proptest::collection::vec(any_data_class(), 0..8usize),
+        ) {
+            let refs: Vec<&DataClassification> = vs.iter().collect();
+            let bot = DataClassification::bottom();
+            let top = DataClassification::top();
+            prop_assert!(DataClassification::all_between(&bot, &top, refs.iter().copied()));
+        }
+
+        /// [`Lattice::all_between`] at arity 1 REDUCES to the pairwise
+        /// [`Lattice::is_between`] on the sole element on random
+        /// [`DataClassification`] triples — the 1-input N-ary
+        /// interval predicate collapses to the pairwise 3-ary
+        /// interval-containment primitive with the iterator arm
+        /// degenerated to a singleton. Proptest peer of the
+        /// exhaustive-triple arity-1 identity seal at extended arity.
+        #[test]
+        fn all_between_arity_1_reduces_to_is_between_over_data_classification_random_triples(
+            low in any_data_class(),
+            a in any_data_class(),
+            high in any_data_class(),
+        ) {
+            prop_assert_eq!(
+                DataClassification::all_between(&low, &high, [&a]),
+                a.is_between(&low, &high),
+            );
         }
     }
 }

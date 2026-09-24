@@ -1367,6 +1367,242 @@ pub trait Lattice: Sized + Clone + PartialEq {
         let vs: Vec<&'a Self> = iter.into_iter().collect();
         vs.windows(2).all(|w| w[0].geq(w[1]))
     }
+    /// Strict-arm peer of [`Lattice::is_ascending`] on the STRICTNESS
+    /// axis — the iterated set is STRICTLY ASCENDING (a
+    /// [`Lattice::strictly_below`]-monotone strictly-increasing sequence
+    /// on the lattice's partial order) iff every CONSECUTIVE pair
+    /// `(vs[i], vs[i + 1])` satisfies `vs[i].strictly_below(&vs[i + 1])`.
+    /// `T::is_strictly_ascending([&a, &b, &c])` holds iff
+    /// `a.strictly_below(&b) && b.strictly_below(&c)`; three or more
+    /// elements chain through the consecutive-pair conjunction.
+    ///
+    /// The STRICT-ARM peer of [`Lattice::is_ascending`] one STRICTNESS
+    /// axis over on the (strict, non-strict) × (leq, geq) sequence-
+    /// level 2×2 monotonicity grid — where [`Lattice::is_ascending`]
+    /// walks the REFLEXIVE non-strict [`Lattice::leq`] arm (accepting
+    /// consecutive-duplicate pairs on the reflexive diagonal), this
+    /// walks the IRREFLEXIVE strict [`Lattice::strictly_below`] arm
+    /// (rejecting every consecutive-duplicate pair by irreflexivity of
+    /// the strict comparator). Together with [`Lattice::is_strictly_descending`]
+    /// on the dual strict arm this closes the whole (strict, non-strict)
+    /// × (leq, geq) 2×2 sequence-monotonicity grid on the trait's
+    /// combinator surface at the consecutive-pair face.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_strictly_ascending(std::
+    /// iter::empty()) == true` on every lattice — [`slice::windows`] on
+    /// a zero-length slice yields no pair, so [`Iterator::all`] on the
+    /// empty iterator is `true`. Shared vacuous-truth arm with all four
+    /// sequence-monotonicity predicates ([`Lattice::is_ascending`],
+    /// [`Lattice::is_descending`], [`Lattice::is_strictly_ascending`],
+    /// [`Lattice::is_strictly_descending`]) at the empty case.
+    ///
+    /// **Singleton vacuous truth**: `T::is_strictly_ascending([&a]) ==
+    /// true` for every `a` — a singleton has no consecutive pair, same
+    /// vacuous-conjunction reasoning as the empty case. Shared with all
+    /// four sequence-monotonicity predicates at every singleton.
+    ///
+    /// **Consecutive-duplicate rejection**: `T::is_strictly_ascending(
+    /// [&a, &a]) == false` for every `a` — [`Lattice::strictly_below`]
+    /// is IRREFLEXIVE (its default routes through `self.leq(other) &&
+    /// self != other`, so the second conjunct fails on the self-pair),
+    /// so the consecutive-duplicate pair `(a, a)` rejects the walk.
+    /// DIVERGES from [`Lattice::is_ascending`]'s consecutive-duplicate
+    /// acceptance arm — this is the primary distinguishing consequence
+    /// of moving from the reflexive [`Lattice::leq`] arm to the
+    /// irreflexive [`Lattice::strictly_below`] arm. Any slice with a
+    /// consecutive-duplicate pair anywhere in it fails BOTH strict
+    /// sequence-monotonicity predicates by short-circuit.
+    ///
+    /// **Pair-identity**: `T::is_strictly_ascending([&a, &b]) ==
+    /// a.strictly_below(&b)` — the 2-input strict-ascending predicate
+    /// reduces to the pairwise strict primitive directly. Peer of
+    /// [`Lattice::is_ascending`]'s pair-identity one STRICTNESS axis
+    /// over on the same consecutive-pair face.
+    ///
+    /// **Strict-implies-non-strict**: for every slice,
+    /// `T::is_strictly_ascending(iter) ⇒ T::is_ascending(iter)` — the
+    /// strict pairwise-primitive [`Lattice::strictly_below`] implies
+    /// the non-strict pairwise-primitive [`Lattice::leq`] at every
+    /// pair (`self.leq(other) && self != other ⇒ self.leq(other)` by
+    /// projection onto the first conjunct), so the conjunctive fold
+    /// through [`Iterator::all`] propagates the implication across
+    /// every adjacent-pair window. Pinned on the DataClassification
+    /// axis below via exhaustive triples.
+    ///
+    /// **Refines [`Lattice::is_chain`] via transitivity**: for every
+    /// slice, `T::is_strictly_ascending(iter) ⇒ T::is_chain(iter)` —
+    /// composes the strict-implies-non-strict arm above with
+    /// [`Lattice::is_ascending`]'s existing ascending-implies-chain
+    /// pin. Peer of [`Lattice::is_ascending`]'s
+    /// ascending-implies-chain arm on the strict pair-level primitive.
+    ///
+    /// **Strict-ascending-strict-descending duality on total orders**:
+    /// on any totally-ordered lattice (e.g. [`baseline::Baseline`],
+    /// [`DataClassification`], [`CalmClassification`]), reversing a
+    /// strictly-ascending slice yields a strictly-descending slice —
+    /// `T::is_strictly_ascending(vs) ⇔ T::is_strictly_descending(vs.
+    /// rev())` on the consecutive-pair walk when the order is total.
+    ///
+    /// **Any-violating-consecutive-pair rejection**: if any consecutive
+    /// pair `(vs[i], vs[i + 1])` fails `vs[i].strictly_below(&vs[i +
+    /// 1])`, then `T::is_strictly_ascending(iter) == false` —
+    /// [`Iterator::all`] on [`slice::windows`] short-circuits at the
+    /// first violating pair, so a single non-strictly-monotone step
+    /// anywhere in the sequence (whether from a consecutive duplicate,
+    /// a strictly-descending pair, or an incomparable pair) rejects
+    /// the whole predicate.
+    ///
+    /// **Antichain rejection**: on an antichain lattice (e.g.
+    /// [`SubstrateType`]), the predicate rejects EVERY consecutive
+    /// pair — the strict [`Lattice::strictly_below`] arm requires both
+    /// `a.leq(&b)` (which fails on incomparable non-top pairs, and
+    /// which fails on the top-emitted `(top, x)` half-edge) AND `a !=
+    /// b` (which fails on every reflexive pair), so the only accepted
+    /// pair on the pointed-top antichain is `(x, top)` for `x != top`
+    /// (the top-directed strict half-edge). Peer of
+    /// [`Lattice::is_ascending`]'s antichain-rejection arm with the
+    /// reflexive-diagonal acceptance stripped out.
+    ///
+    /// Default routes through `iter.into_iter().collect::<Vec<&Self>>()`
+    /// followed by `.windows(2).all(|w| w[0].strictly_below(w[1]))` —
+    /// one [`Lattice::strictly_below`] delegation per consecutive pair
+    /// on the collected `Vec<&Self>` buffer, mirroring
+    /// [`Lattice::is_ascending`]'s walk with the pair-level primitive
+    /// swapped from [`Lattice::leq`] to [`Lattice::strictly_below`]. The
+    /// collect materializes the iterator once so the walk operates on a
+    /// stable slice. A future normalization at [`Lattice::strictly_below`]
+    /// (or at the underlying [`Lattice::leq`] the strict default routes
+    /// through) lands at ONE site and this default inherits the strict
+    /// sequence-shape peer mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the strict sequence-shape ascending predicate
+    /// is itself a typed named `bool` composing [`Lattice::strictly_below`]
+    /// via [`slice::windows`] plus [`Iterator::all`]; every downstream
+    /// lattice-law consumer inherits the strict predicate through the
+    /// default mechanically) + THEORY.md §III (typescape — the strict
+    /// sequence-shape monotonicity predicate on every classification-
+    /// axis lattice binds at ONE substrate owner on the [`Lattice`]
+    /// algebra rather than at each consumer's hand-rolled
+    /// `vs.windows(2).all(|w| w[0].leq(&w[1]) && w[0] != w[1])` walk).
+    /// The pattern already exists in-tree at
+    /// `tatara_lisp::closed_set::ClosedSet::is_strictly_ascending` — a
+    /// per-domain trait method on the declaration-order strict-ascent
+    /// predicate for closed sets; this widening lifts the SAME shape
+    /// from the closed-set trait to the [`Lattice`] trait's default-
+    /// method surface so every future closed-set lattice impl inherits
+    /// the strict sequence-monotonicity predicate for free.
+    ///
+    /// Frontier inspiration: [`slice::is_sorted_by`] on Rust's stdlib
+    /// with a strict comparator — the strict sequence-shape
+    /// monotonicity predicate is a first-class named method downstream
+    /// of the non-strict sorted-by primitive. Translated: threaded the
+    /// same consecutive-pair strict-monotonicity shape through the
+    /// [`Lattice`] trait's default-method surface, generalizing from
+    /// `Ord::cmp` on a totally-ordered carrier to
+    /// [`Lattice::strictly_below`] on any partial-order lattice —
+    /// Haskell's `Data.List` `and . zipWith (<) xs . tail xs` idiom on
+    /// a partial-order carrier; Coq's `StronglySorted` inductive on
+    /// lists over a `Relation`.
+    fn is_strictly_ascending<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).all(|w| w[0].strictly_below(w[1]))
+    }
+    /// Dual of [`Lattice::is_strictly_ascending`] on the PAIR-LEVEL-
+    /// PRIMITIVE axis — the iterated set is STRICTLY DESCENDING (a
+    /// [`Lattice::strictly_above`]-monotone strictly-decreasing sequence
+    /// on the lattice's partial order) iff every CONSECUTIVE pair
+    /// `(vs[i], vs[i + 1])` satisfies `vs[i].strictly_above(&vs[i +
+    /// 1])`. `T::is_strictly_descending([&a, &b, &c])` holds iff
+    /// `a.strictly_above(&b) && b.strictly_above(&c)`; three or more
+    /// elements chain through the consecutive-pair conjunction.
+    ///
+    /// The STRICT-ARM peer of [`Lattice::is_descending`] one STRICTNESS
+    /// axis over, AND the PAIR-LEVEL-PRIMITIVE dual of
+    /// [`Lattice::is_strictly_ascending`]. Together with
+    /// [`Lattice::is_strictly_ascending`] closes the (strict, non-
+    /// strict) × (leq, geq) 2×2 sequence-monotonicity grid on the
+    /// trait's combinator surface at the consecutive-pair face.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_strictly_descending(
+    /// std::iter::empty()) == true` — shared vacuous-truth arm with
+    /// all four sequence-monotonicity predicates.
+    ///
+    /// **Singleton vacuous truth**: `T::is_strictly_descending([&a])
+    /// == true` for every `a` — a singleton has no consecutive pair.
+    ///
+    /// **Consecutive-duplicate rejection**: `T::is_strictly_descending(
+    /// [&a, &a]) == false` for every `a` — [`Lattice::strictly_above`]
+    /// is IRREFLEXIVE (routes through `other.strictly_below(self)`,
+    /// which inherits irreflexivity from
+    /// [`Lattice::strictly_below`]'s `self != other` conjunct), so the
+    /// consecutive-duplicate pair rejects the walk. Shared irreflexive-
+    /// rejection arm with [`Lattice::is_strictly_ascending`] at every
+    /// all-duplicate slice — BOTH strict sequence-monotonicity
+    /// predicates fire false on any slice with at least two consecutive
+    /// equal elements.
+    ///
+    /// **Pair-identity**: `T::is_strictly_descending([&a, &b]) ==
+    /// a.strictly_above(&b)` — dual to
+    /// [`Lattice::is_strictly_ascending`]'s pair-identity on the
+    /// [`Lattice::strictly_above`] arm.
+    ///
+    /// **Strict-implies-non-strict**: for every slice,
+    /// `T::is_strictly_descending(iter) ⇒ T::is_descending(iter)` —
+    /// dual of the ascending arm's implication via
+    /// [`Lattice::strictly_above`] ⇒ [`Lattice::geq`].
+    ///
+    /// **Refines [`Lattice::is_chain`] via transitivity**: for every
+    /// slice, `T::is_strictly_descending(iter) ⇒ T::is_chain(iter)` —
+    /// composes strict-implies-non-strict-descending with
+    /// [`Lattice::is_descending`]'s descending-implies-chain pin.
+    ///
+    /// **Strict-ascending-strict-descending duality on total orders**:
+    /// reversing a strictly-ascending slice on a totally-ordered
+    /// lattice yields a strictly-descending slice —
+    /// `T::is_strictly_ascending(vs) ⇔ T::is_strictly_descending(vs.
+    /// rev())` on the consecutive-pair walk when the order is total.
+    ///
+    /// **Any-violating-consecutive-pair rejection**: if any consecutive
+    /// pair `(vs[i], vs[i + 1])` fails `vs[i].strictly_above(&vs[i +
+    /// 1])`, then `T::is_strictly_descending(iter) == false` — short-
+    /// circuits at the first violating pair.
+    ///
+    /// **Antichain rejection**: dual of
+    /// [`Lattice::is_strictly_ascending`]'s antichain-rejection arm —
+    /// on the pointed-top antichain, the predicate rejects every
+    /// consecutive pair except `(top, x)` for `x != top` (the top-
+    /// emitted strict half-edge, reading strictly from top to a lower
+    /// element).
+    ///
+    /// Default routes through `iter.into_iter().collect::<Vec<&Self>>()`
+    /// followed by `.windows(2).all(|w| w[0].strictly_above(w[1]))` —
+    /// one [`Lattice::strictly_above`] delegation per consecutive pair
+    /// on the collected buffer, mirroring
+    /// [`Lattice::is_strictly_ascending`]'s walk with the pair-level
+    /// primitive swapped from [`Lattice::strictly_below`] to
+    /// [`Lattice::strictly_above`].
+    ///
+    /// Theory anchor: same as [`Lattice::is_strictly_ascending`] on the
+    /// dual pair-level primitive — THEORY.md §II.1 invariant 5 + §III.
+    /// The consecutive-pair face on every classification-axis lattice
+    /// now binds through FOUR substrate defaults ([`Lattice::is_ascending`],
+    /// [`Lattice::is_descending`], [`Lattice::is_strictly_ascending`],
+    /// [`Lattice::is_strictly_descending`]) closing the (strict, non-
+    /// strict) × (leq, geq) 2×2 sequence-monotonicity grid at ONE
+    /// algebra owner.
+    fn is_strictly_descending<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).all(|w| w[0].strictly_above(w[1]))
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -4967,6 +5203,376 @@ mod tests {
         ) {
             prop_assert_eq!(CalmClassification::is_ascending([&a, &b]), a.leq(&b));
             prop_assert_eq!(CalmClassification::is_descending([&a, &b]), a.geq(&b));
+        }
+
+        /// [`Lattice::is_strictly_ascending`] at arity 2 REDUCES to
+        /// `a.strictly_below(&b)` on every random
+        /// [`DataClassification`] pair, and
+        /// [`Lattice::is_strictly_descending`] at arity 2 REDUCES to
+        /// `a.strictly_above(&b)` — proptest peer of the exhaustive
+        /// `is_strictly_ascending_and_is_strictly_descending_arity_2_reduces_to_pairwise_over_data_classification_all`
+        /// seal below.
+        #[test]
+        fn data_class_is_strictly_ascending_and_is_strictly_descending_arity_2_reduce_to_pairwise(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            prop_assert_eq!(
+                DataClassification::is_strictly_ascending([&a, &b]),
+                a.strictly_below(&b),
+            );
+            prop_assert_eq!(
+                DataClassification::is_strictly_descending([&a, &b]),
+                a.strictly_above(&b),
+            );
+        }
+
+        /// [`Lattice::is_strictly_ascending`] and
+        /// [`Lattice::is_strictly_descending`] BOTH fire FALSE on any
+        /// consecutive-duplicate [`DataClassification`] pair via the
+        /// irreflexivity axiom of the strict pairwise-primitive — proptest
+        /// peer of the exhaustive
+        /// `is_strictly_ascending_and_is_strictly_descending_reject_consecutive_duplicate_collections`
+        /// seal below.
+        #[test]
+        fn data_class_is_strictly_ascending_and_is_strictly_descending_reject_consecutive_duplicate(
+            a in any_data_class(),
+        ) {
+            prop_assert!(!DataClassification::is_strictly_ascending([&a, &a]));
+            prop_assert!(!DataClassification::is_strictly_descending([&a, &a]));
+        }
+
+        /// [`Lattice::is_strictly_ascending`] IMPLIES
+        /// [`Lattice::is_ascending`] on every random
+        /// [`DataClassification`] triple via
+        /// `Lattice::strictly_below ⇒ Lattice::leq`, and dually
+        /// [`Lattice::is_strictly_descending`] IMPLIES
+        /// [`Lattice::is_descending`] via
+        /// `Lattice::strictly_above ⇒ Lattice::geq`. The strictness-
+        /// complement implication propagates through the conjunctive
+        /// `Iterator::all` fold. Proptest peer of the exhaustive
+        /// `is_strictly_ascending_and_is_strictly_descending_imply_non_strict_arms_over_data_classification_all_triples`
+        /// seal below.
+        #[test]
+        fn data_class_is_strictly_ascending_and_is_strictly_descending_imply_non_strict(
+            a in any_data_class(),
+            b in any_data_class(),
+            c in any_data_class(),
+        ) {
+            if DataClassification::is_strictly_ascending([&a, &b, &c]) {
+                prop_assert!(DataClassification::is_ascending([&a, &b, &c]));
+            }
+            if DataClassification::is_strictly_descending([&a, &b, &c]) {
+                prop_assert!(DataClassification::is_descending([&a, &b, &c]));
+            }
+        }
+
+        /// Peer of the DataClassification is_strictly_ascending /
+        /// is_strictly_descending arity-2 pair-identity on the CALM
+        /// boolean-lattice axis — same shape, different closed set.
+        /// Together with the DataClassification sibling above the two
+        /// proptest cases bind BOTH total-order classification axes'
+        /// strict sequence-shape pair-identity to ONE substrate default.
+        #[test]
+        fn calm_is_strictly_ascending_and_is_strictly_descending_arity_2_reduce_to_pairwise(
+            a in any_calm(),
+            b in any_calm(),
+        ) {
+            prop_assert_eq!(
+                CalmClassification::is_strictly_ascending([&a, &b]),
+                a.strictly_below(&b),
+            );
+            prop_assert_eq!(
+                CalmClassification::is_strictly_descending([&a, &b]),
+                a.strictly_above(&b),
+            );
+        }
+    }
+
+    // ── Lattice::is_strictly_ascending / Lattice::is_strictly_descending —
+    //    strict-arm sequence-shape consecutive-pair default peers ─────────
+    //
+    // Bind [`Lattice::is_strictly_ascending`] +
+    // [`Lattice::is_strictly_descending`] at fail-before-pass-after
+    // granularity. Pre-lift the [`Lattice`] trait's collection-level
+    // sequence-monotonicity surface had only the NON-STRICT
+    // ([`Lattice::is_ascending`] / [`Lattice::is_descending`]) arm bound
+    // through the reflexive [`Lattice::leq`] / [`Lattice::geq`] primitives;
+    // a consumer that wanted the STRICT irreflexive sequence-shape
+    // reading composed `vs.windows(2).all(|w| w[0].leq(&w[1]) && w[0]
+    // != w[1])` at each callsite. Post-lift the whole strict-arm pair
+    // binds at ONE substrate primitive on the [`Lattice`] algebra via
+    // [`Lattice::strictly_below`] / [`Lattice::strictly_above`], and
+    // every downstream impl inherits the strict sequence-monotonicity
+    // pair for free through the default. Together with the prior
+    // widenings ([`Lattice::is_ascending`] / [`Lattice::is_descending`]
+    // on the non-strict arm; [`Lattice::strictly_below`] /
+    // [`Lattice::strictly_above`] on the pairwise strict arm) the trait
+    // now closes the whole (strict, non-strict) × (leq, geq) ×
+    // (pairwise, sequence) 2×2×2 monotonicity cube on the algebra's
+    // combinator surface: the pairwise face carries FOUR pair-level
+    // primitives; the sequence face carries FOUR consecutive-pair
+    // predicates each routing through its own pairwise primitive.
+    //
+    // Coverage below spans:
+    //
+    //   • empty / singleton vacuous truth on BOTH strict-arm predicates
+    //     shared with the non-strict arms;
+    //   • consecutive-duplicate REJECTION at arity 2 (the primary
+    //     DIVERGENCE from the non-strict arm's reflexive acceptance)
+    //     on every closed-set impl;
+    //   • pair-identity `T::is_strictly_ascending([&a, &b]) ==
+    //     a.strictly_below(&b)` (dual on the descending arm) at every
+    //     pair of every closed-set impl;
+    //   • total-order strict-ascending witness over
+    //     `DataClassification::ALL` sorted by sensitivity rank AND
+    //     strict-descending witness over the reversed enumeration —
+    //     dual pins on the SAME strict-total-ordered chain;
+    //   • strict-implies-non-strict on every triple of every closed-set
+    //     impl (strict-ascending implies ascending; strict-descending
+    //     implies descending);
+    //   • strict-ascending-implies-chain (dual on strict-descending) via
+    //     composition with the existing ascending-implies-chain pin;
+    //   • antichain-lattice rejection over `SubstrateType::ALL^2` on
+    //     every consecutive pair except the strict half-edge into/out
+    //     of the pointed top;
+    //   • proptest peers on the DataClassification + CALM axes for the
+    //     pair-identity, consecutive-duplicate rejection, and strict-
+    //     implies-non-strict arms.
+
+    /// [`Lattice::is_strictly_ascending`] and
+    /// [`Lattice::is_strictly_descending`] are BOTH vacuously true at
+    /// the empty iterator on every classification-axis lattice — the
+    /// empty conjunction has no consecutive pair to check, so both
+    /// universally-quantified predicates fire true on the empty case.
+    /// Shared with all four sequence-monotonicity predicates at the
+    /// empty case. Fail-before-pass-after: pre-lift this pin cannot
+    /// compile because neither `is_strictly_ascending` nor
+    /// `is_strictly_descending` is exposed as a trait method.
+    #[test]
+    fn is_strictly_ascending_and_is_strictly_descending_are_vacuously_true_at_the_empty_iterator() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        assert!(DataClassification::is_strictly_ascending(std::iter::empty()));
+        assert!(DataClassification::is_strictly_descending(
+            std::iter::empty()
+        ));
+        assert!(CalmClassification::is_strictly_ascending(std::iter::empty()));
+        assert!(CalmClassification::is_strictly_descending(
+            std::iter::empty()
+        ));
+        assert!(SubstrateType::is_strictly_ascending(std::iter::empty()));
+        assert!(SubstrateType::is_strictly_descending(std::iter::empty()));
+    }
+
+    /// [`Lattice::is_strictly_ascending`] and
+    /// [`Lattice::is_strictly_descending`] are BOTH vacuously true at
+    /// every singleton — a singleton contains no consecutive pair, same
+    /// empty-conjunction identity as the empty arm. Pinned exhaustively
+    /// over every variant of every closed-set impl. Shared with all
+    /// four sequence-monotonicity predicates at every singleton.
+    #[test]
+    fn is_strictly_ascending_and_is_strictly_descending_are_vacuously_true_at_every_singleton() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_strictly_ascending([&a]));
+            assert!(DataClassification::is_strictly_descending([&a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_strictly_ascending([&a]));
+            assert!(CalmClassification::is_strictly_descending([&a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_strictly_ascending([&a]));
+            assert!(SubstrateType::is_strictly_descending([&a]));
+        }
+    }
+
+    /// [`Lattice::is_strictly_ascending`] and
+    /// [`Lattice::is_strictly_descending`] BOTH fire FALSE on any
+    /// all-duplicate collection — [`Lattice::strictly_below`] and
+    /// [`Lattice::strictly_above`] are BOTH IRREFLEXIVE, so the
+    /// consecutive duplicate pair `(a, a)` rejects both walks. DIVERGES
+    /// from [`Lattice::is_ascending`] / [`Lattice::is_descending`]
+    /// which accept every all-duplicate collection via the reflexive
+    /// arms of [`Lattice::leq`] / [`Lattice::geq`] — this is the primary
+    /// distinguishing consequence of moving from the reflexive to the
+    /// irreflexive pair-level primitive on the sequence-shape face.
+    /// Pinned on every closed-set impl at arity 3 to catch a regression
+    /// that dropped the irreflexivity axiom of the strict comparator.
+    #[test]
+    fn is_strictly_ascending_and_is_strictly_descending_reject_consecutive_duplicate_collections() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(!DataClassification::is_strictly_ascending([&a, &a, &a]));
+            assert!(!DataClassification::is_strictly_descending([&a, &a, &a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(!CalmClassification::is_strictly_ascending([&a, &a, &a]));
+            assert!(!CalmClassification::is_strictly_descending([&a, &a, &a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(!SubstrateType::is_strictly_ascending([&a, &a, &a]));
+            assert!(!SubstrateType::is_strictly_descending([&a, &a, &a]));
+        }
+    }
+
+    /// [`Lattice::is_strictly_ascending`] at arity 2 REDUCES to
+    /// `a.strictly_below(&b)` on every [`DataClassification`] pair, and
+    /// [`Lattice::is_strictly_descending`] at arity 2 REDUCES to
+    /// `a.strictly_above(&b)` — the 2-input strict sequence-shape
+    /// predicates collapse to the strict pairwise primitive directly.
+    /// Pinned exhaustively over `ALL^2` (36 pairs). Fail-before-pass-after:
+    /// pre-lift the strict sequence-shape arm was empty on the trait,
+    /// so this reduction did not exist as a substrate primitive; post-
+    /// lift the reduction pins the strict sequence-shape predicate to
+    /// the strict pairwise primitive at the primitive-cardinality
+    /// boundary.
+    #[test]
+    fn is_strictly_ascending_and_is_strictly_descending_arity_2_reduces_to_pairwise_over_data_classification_all(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::is_strictly_ascending([&a, &b]),
+                    a.strictly_below(&b),
+                    "is_strictly_ascending([{a:?}, {b:?}]) must reduce to \
+                     a.strictly_below(&b) — the 2-input strict sequence-shape \
+                     predicate collapses to the strict pairwise primitive directly",
+                );
+                assert_eq!(
+                    DataClassification::is_strictly_descending([&a, &b]),
+                    a.strictly_above(&b),
+                    "is_strictly_descending([{a:?}, {b:?}]) must reduce to \
+                     a.strictly_above(&b) — dual strict pair-identity on the \
+                     strictly_above arm",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_strictly_ascending`] fires TRUE on the sensitivity-
+    /// rank-sorted enumeration of [`DataClassification::ALL`] (which is
+    /// strictly monotone by construction — every consecutive pair
+    /// satisfies `strictly_below`), and
+    /// [`Lattice::is_strictly_descending`] fires TRUE on the REVERSED
+    /// enumeration — dual pins on the SAME strict-total-ordered chain
+    /// in reversed orderings closing the (strict-ascending, strict-
+    /// descending) sequence-level pair on the shipped strictly-total-
+    /// ordered chain.
+    #[test]
+    fn is_strictly_ascending_holds_on_data_classification_all_and_is_strictly_descending_on_reversed(
+    ) {
+        use tatara_process::classification::DataClassification;
+        let sorted: Vec<&DataClassification> = DataClassification::ALL.iter().collect();
+        let reversed: Vec<&DataClassification> = DataClassification::ALL.iter().rev().collect();
+        assert!(
+            DataClassification::is_strictly_ascending(sorted.iter().copied()),
+            "DataClassification::ALL is emitted in strictly-monotone \
+             sensitivity-rank order — the strict sequence-shape ascending \
+             predicate must fire true on the shipped enumeration",
+        );
+        assert!(
+            DataClassification::is_strictly_descending(reversed.iter().copied()),
+            "reversing DataClassification::ALL yields a strictly-monotone \
+             strictly_above-descending sequence — the strict sequence-shape \
+             descending predicate must fire true on the reversed enumeration",
+        );
+    }
+
+    /// [`Lattice::is_strictly_ascending`] IMPLIES [`Lattice::is_ascending`]
+    /// on every [`DataClassification`] triple via the strict-implies-
+    /// non-strict projection `strictly_below ⇒ leq`, and dually
+    /// [`Lattice::is_strictly_descending`] IMPLIES
+    /// [`Lattice::is_descending`] via `strictly_above ⇒ geq`. The
+    /// strictness-complement implication propagates through the
+    /// conjunctive `Iterator::all` fold on every consecutive pair.
+    /// Pinned exhaustively over `DataClassification::ALL^3` (216
+    /// triples). Composed with the existing ascending-implies-chain /
+    /// descending-implies-chain pins yields the strict-ascending-
+    /// implies-chain / strict-descending-implies-chain refinements as a
+    /// corollary.
+    #[test]
+    fn is_strictly_ascending_and_is_strictly_descending_imply_non_strict_arms_over_data_classification_all_triples(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if DataClassification::is_strictly_ascending([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_ascending([&a, &b, &c]),
+                            "is_strictly_ascending([{a:?}, {b:?}, {c:?}]) must \
+                             imply is_ascending — strictly_below implies leq",
+                        );
+                        assert!(
+                            DataClassification::is_chain([&a, &b, &c]),
+                            "is_strictly_ascending([{a:?}, {b:?}, {c:?}]) must \
+                             imply is_chain via composition with ascending-implies-chain",
+                        );
+                    }
+                    if DataClassification::is_strictly_descending([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_descending([&a, &b, &c]),
+                            "is_strictly_descending([{a:?}, {b:?}, {c:?}]) must \
+                             imply is_descending — strictly_above implies geq",
+                        );
+                        assert!(
+                            DataClassification::is_chain([&a, &b, &c]),
+                            "is_strictly_descending([{a:?}, {b:?}, {c:?}]) must \
+                             imply is_chain via composition with descending-implies-chain",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strictly_ascending`] REJECTS every consecutive
+    /// pair on the pointed-top antichain [`SubstrateType`] except the
+    /// strict top-directed half-edge `(x, top)` for `x != top` — two
+    /// distinct non-top substrates are incomparable, so
+    /// [`Lattice::strictly_below`] fails on the consecutive pair, and
+    /// every reflexive pair `(a, a)` fails by irreflexivity of the
+    /// strict comparator. Dual behavior on
+    /// [`Lattice::is_strictly_descending`]: accepts only the strict
+    /// top-emitted half-edge `(top, x)` for `x != top`. Pinned
+    /// exhaustively over `SubstrateType::ALL^2` (64 pairs). Peer of
+    /// `is_ascending_projects_the_pointed_top_antichain_over_substrate_type_all_pairs`
+    /// with the reflexive-diagonal acceptance stripped out.
+    #[test]
+    fn is_strictly_ascending_projects_the_pointed_top_antichain_over_substrate_type_all_pairs() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                // Strict-ascending accepts iff a.strictly_below(&b) —
+                // top-directed strict half-edge `b == top && a != top`.
+                let expected_asc = a != b && b == top;
+                assert_eq!(
+                    SubstrateType::is_strictly_ascending([&a, &b]),
+                    expected_asc,
+                    "is_strictly_ascending([{a:?}, {b:?}]) on the pointed-top \
+                     antichain must fire true iff b is the pointed top AND \
+                     a != b — the strict top-directed half-edge",
+                );
+                // Strict-descending accepts iff a.strictly_above(&b) —
+                // top-emitted strict half-edge `a == top && b != top`.
+                let expected_desc = a != b && a == top;
+                assert_eq!(
+                    SubstrateType::is_strictly_descending([&a, &b]),
+                    expected_desc,
+                    "is_strictly_descending([{a:?}, {b:?}]) on the pointed-top \
+                     antichain must fire true iff a is the pointed top AND \
+                     a != b — the strict top-emitted half-edge",
+                );
+            }
         }
     }
 }

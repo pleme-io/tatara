@@ -4233,6 +4233,227 @@ pub trait Lattice: Sized + Clone + PartialEq {
     {
         iter.into_iter().any(|x| x.is_between(low, high))
     }
+    /// Strict-arm existential N-ary interval-containment predicate — AT
+    /// LEAST ONE element the iterator yields sits STRICTLY inside the
+    /// OPEN bracket `(low, high)` on the lattice's partial order.
+    /// `T::any_strictly_between(&low, &high, [&a, &b, &c])` holds iff
+    /// `a.is_strictly_between(&low, &high) || b.is_strictly_between(
+    /// &low, &high) || c.is_strictly_between(&low, &high)`: some element
+    /// of the iterated set is STRICTLY above `low` AND STRICTLY below
+    /// `high` in the refinement order.
+    ///
+    /// Sits at the strict-∃ corner of the (strict, non-strict) × (∀, ∃)
+    /// 2×2 face on the N-ary interval-containment predicate surface —
+    /// where [`Lattice::any_between`] carries the (non-strict, ∃) cell
+    /// via [`Iterator::any`] over per-element [`Lattice::is_between`]
+    /// delegations, this carries the (strict, ∃) cell via the SAME
+    /// [`Iterator::any`] over per-element [`Lattice::is_strictly_between`]
+    /// delegations — the ONLY axis of variation from [`Lattice::
+    /// any_between`] is the per-element predicate's strictness. Closes
+    /// the (strict, non-strict) × (∀, ∃) × (N-ary interval-containment)
+    /// 2×2×1 face at the last unpinned corner: [`Lattice::all_between`]
+    /// at (non-strict, ∀), [`Lattice::all_strictly_between`] at (strict,
+    /// ∀), [`Lattice::any_between`] at (non-strict, ∃), THIS at (strict,
+    /// ∃). The (pairwise, N-ary) × (strict, non-strict) × (∀, ∃) 2×2×2
+    /// interval-containment predicate cube on every classification-axis
+    /// lattice now binds through SIX substrate defaults on the pairwise
+    /// arm ([`Lattice::is_between`], [`Lattice::is_strictly_between`])
+    /// AND the four N-ary arms ([`Lattice::all_between`], [`Lattice::
+    /// all_strictly_between`], [`Lattice::any_between`], THIS) at ONE
+    /// algebra owner per cell — with the pairwise (∀, ∃) axis
+    /// mechanically collapsed at arity 1 where every element is the
+    /// witness.
+    ///
+    /// Equivalently the strict-arm existential peer of [`Lattice::
+    /// any_between`] one STRICTNESS axis over on the (strict, non-
+    /// strict) × (N-ary existential interval-containment) 2×1 grid —
+    /// walks [`Iterator::any`] over per-element [`Lattice::
+    /// is_strictly_between`] delegations, exactly as [`Lattice::
+    /// any_between`] walks per-element [`Lattice::is_between`]
+    /// delegations one strictness axis over. Peer of [`Lattice::
+    /// all_strictly_between`]'s strict-arm N-ary universal predicate one
+    /// QUANTIFIER axis over on the (∀, ∃) × (strict N-ary interval-
+    /// containment) 2×1 grid.
+    ///
+    /// **Empty-iterator vacuous falsehood**: `T::any_strictly_between(
+    /// &low, &high, std::iter::empty()) == false` on every bracket —
+    /// INCLUDING every extrema bracket `(&T::bottom(), &T::top())`
+    /// where the universal-strict peer [`Lattice::all_strictly_between`]
+    /// fires vacuously TRUE. The empty-iterator vacuous-falsehood arm
+    /// is the ONE cell where the strict-∃ predicate DIVERGES from the
+    /// strict-∀ predicate on the (∀, ∃) axis at the strict N-ary arm:
+    /// [`Iterator::any`] on the empty iterator is `false` by the
+    /// empty-disjunction convention regardless of the per-element
+    /// predicate the caller passed. AGREES with [`Lattice::any_between`]'s
+    /// empty-iterator vacuous-falsehood one strictness axis over —
+    /// both existential N-ary predicates fire false on the empty
+    /// iterator by [`Iterator::any`]'s empty-disjunction convention.
+    ///
+    /// **Singleton-strict-identity**: `T::any_strictly_between(&low,
+    /// &high, [&a]) == a.is_strictly_between(&low, &high)` — the
+    /// 1-input strict-arm N-ary existential predicate reduces to the
+    /// pairwise 3-ary strict-interval-containment primitive on the sole
+    /// element. AGREES with [`Lattice::all_strictly_between`]'s
+    /// singleton reduction at arity 1 — both quantifiers collapse to
+    /// the same per-element strict-interval predicate when the iterator
+    /// yields exactly one element (there is exactly one witness so ∀
+    /// and ∃ coincide).
+    ///
+    /// **Any-in-strict-bracket element acceptance**: if any `x` in the
+    /// iterator has `x.is_strictly_between(&low, &high)` (both `low.
+    /// strictly_below(&x)` and `x.strictly_below(&high)`), then
+    /// `T::any_strictly_between(&low, &high, iter) == true` — [`Iterator::
+    /// any`] short-circuits on the first strictly-accepting element.
+    /// Peer of [`Lattice::any_between`]'s any-in-bracket element
+    /// acceptance on the strict arm — the strict-∃ short-circuit-on-
+    /// first-strict-accept dual to the strict-∀ short-circuit-on-first-
+    /// strict-reject at [`Lattice::all_strictly_between`].
+    ///
+    /// **Endpoint-strict-rejection ON THE PER-ELEMENT PREDICATE**: on
+    /// any iterator element `x` where `x == low` or `x == high` (either
+    /// endpoint) the per-element [`Lattice::is_strictly_between`] fires
+    /// false by strict-arm irreflexivity, so [`Iterator::any`] does not
+    /// admit that element as a witness. This DIVERGES from [`Lattice::
+    /// any_between`]'s per-element endpoint-admission (where the
+    /// non-strict pairwise predicate admits both endpoints of a
+    /// non-inverted bracket) — the strict-minus-non-strict gap at the
+    /// N-ary ∃ arm is exactly iterables all of whose ∃-witnesses under
+    /// the non-strict predicate ARE endpoints (which the strict-∃ arm
+    /// rejects) versus iterables where at least one witness sits
+    /// strictly inside the bracket (which both arms admit).
+    ///
+    /// **Inverted-bracket rejection**: if `high.leq(&low)` (the strict
+    /// open bracket is empty in the strict sense — its upper endpoint
+    /// sits at-or-below its lower one), then `T::any_strictly_between(
+    /// &low, &high, iter) == false` for EVERY iterable INCLUDING the
+    /// empty one — no lattice element can simultaneously be strictly
+    /// above `low` and strictly below a `high` that itself sits
+    /// at-or-below `low`, so every element the iterator yields fails
+    /// [`Lattice::is_strictly_between`] and [`Iterator::any`] never
+    /// fires. AGREES with [`Lattice::any_between`]'s inverted-bracket
+    /// rejection AT NON-EMPTY iterables and AGREES at the empty
+    /// iterable (where both fire vacuously false by the empty-
+    /// disjunction convention); AGREES with [`Lattice::
+    /// all_strictly_between`]'s inverted-bracket rejection AT NON-
+    /// EMPTY iterables and DIVERGES at the empty iterable (where
+    /// [`Lattice::all_strictly_between`] fires vacuously true and this
+    /// fires vacuously false). The strict-arm rejection surface is
+    /// WIDER than the non-strict arm's (which admits equal-bound
+    /// brackets on the reflexive diagonal) by exactly the equal-bound
+    /// diagonal.
+    ///
+    /// **Degenerate-bracket universal-rejection**: `T::
+    /// any_strictly_between(&x, &x, iter) == false` for EVERY iterable
+    /// INCLUDING the empty one AND every non-empty one — a zero-width
+    /// strict-open bracket admits NO points because [`Lattice::
+    /// is_strictly_between`] rejects every element at the degenerate
+    /// bracket by strict-arm irreflexivity, so [`Iterator::any`] never
+    /// fires. DIVERGES from [`Lattice::any_between`]'s degenerate-
+    /// bracket existential-equality identity (`T::any_between(&x, &x,
+    /// iter) == iter.any(|a| a == x)`) — the strict version rejects
+    /// even the singleton iterable containing `x` itself. AGREES with
+    /// [`Lattice::all_strictly_between`]'s degenerate-bracket
+    /// universal-rejection at non-empty iterables and DIVERGES at the
+    /// empty iterable (∀ vacuous-true vs ∃ vacuous-false split).
+    ///
+    /// **[`Lattice::any_between`] refinement**: `T::any_strictly_between(
+    /// &low, &high, iter) ⇒ T::any_between(&low, &high, iter)` on every
+    /// iterable — the strict per-element predicate refines the non-
+    /// strict one via [`Lattice::is_strictly_between`]'s refines-
+    /// [`Lattice::is_between`] identity, so the [`Iterator::any`]
+    /// composition inherits the refinement mechanically (a strict
+    /// witness is also a non-strict witness). The strict-minus-non-
+    /// strict gap on the N-ary ∃ interval arm is exactly the iterables
+    /// whose only witnesses under the non-strict predicate are
+    /// endpoints of the bracket.
+    ///
+    /// **[`Lattice::all_strictly_between`] refinement on non-empty
+    /// iterables**: `T::all_strictly_between(&low, &high, iter) && iter
+    /// is non-empty ⇒ T::any_strictly_between(&low, &high, iter)` —
+    /// the strict universal quantifier refines the strict existential
+    /// one at every non-empty iterable via the standard `∀x P(x) ∧ ∃x
+    /// ⇒ ∃x P(x)` inference, so ∀-strict acceptance implies ∃-strict
+    /// acceptance when there is at least one witness to quantify over.
+    /// The refinement DOES NOT hold at the empty iterable (∀ vacuous-
+    /// true vs ∃ vacuous-false split, exactly as at the non-strict
+    /// arm). Peer of the [`Lattice::all_between`] / [`Lattice::
+    /// any_between`] refinement one STRICTNESS axis over.
+    ///
+    /// **Antichain projection**: on a pointed-top antichain lattice
+    /// (e.g. [`SubstrateType`]) the strict-arm existential N-ary
+    /// interval-containment predicate rejects EVERY iterable on EVERY
+    /// bracket — [`Lattice::is_strictly_between`] fires false on every
+    /// element pair on the antichain shape (strict-arm irreflexivity
+    /// rejects the endpoints and antichain incomparability rejects the
+    /// interior on distinct-non-top brackets), so [`Iterator::any`]
+    /// over the universally-false per-element predicate is universally
+    /// false. Peer of [`Lattice::all_strictly_between`]'s antichain-
+    /// projection universal-rejection on the ∃ arm — the antichain
+    /// shape now binds through the full strict-arm interval-containment
+    /// surface (pairwise `is_strictly_between`, N-ary universal
+    /// `all_strictly_between`, N-ary existential `any_strictly_between`)
+    /// at ONE substrate owner on the [`Lattice`] trait.
+    ///
+    /// Default routes through `iter.into_iter().any(|x| x.
+    /// is_strictly_between(low, high))` — the N-ary Boolean-DISJUNCTION
+    /// composition of [`Lattice::is_strictly_between`] (which itself
+    /// decomposes into `low.strictly_below(&x) && x.strictly_below(
+    /// &high)`) with [`Iterator::any`] on any partial order. Mirrors
+    /// [`Lattice::any_between`]'s default with the per-element
+    /// predicate swapped from [`Lattice::is_between`] to [`Lattice::
+    /// is_strictly_between`] — the ONLY axis of variation between the
+    /// two on the (strict, non-strict) grid at the interval-containment
+    /// N-ary ∃ face. Same `(low, high, iter)` parameter order as
+    /// [`Lattice::any_between`] / [`Lattice::all_strictly_between`] — a
+    /// copy-paste that transposed `low` and `high` would test the
+    /// inverted-bracket path (universally false on any iterable
+    /// including the empty one), a silent distortion the type system
+    /// did not gate pre-lift and now does through the method's
+    /// parameter order. A future normalization at either primitive
+    /// ([`Lattice::is_strictly_between`] gaining an override, [`Lattice::
+    /// strictly_below`] tightening, [`Iterator::any`] short-circuit
+    /// tweak in the standard library) lands at ONE site and this
+    /// default inherits mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the strict-arm existential N-ary interval-
+    /// containment predicate is itself a typed named `bool` composing
+    /// [`Lattice::is_strictly_between`] via [`Iterator::any`]; every
+    /// downstream lattice-law consumer inherits the predicate through
+    /// the default mechanically) + THEORY.md §III (typescape — the
+    /// strict-arm existential N-ary interval-containment predicate on
+    /// every classification-axis lattice binds at ONE substrate owner
+    /// on the [`Lattice`] algebra rather than at each consumer's hand-
+    /// rolled `iter.any(|x| low.strictly_below(x) && x.strictly_below(
+    /// high))` disjunction — the two-primitive rewriting a pre-lift
+    /// consumer might have reached for at the callsite). The (pairwise,
+    /// N-ary) × (strict, non-strict) × (∀, ∃) 2×2×2 interval-
+    /// containment predicate cube on every classification-axis lattice
+    /// is now closed at ONE substrate primitive per cell.
+    ///
+    /// Frontier inspiration: the strict-arm existential N-ary interval-
+    /// containment predicate is the natural bounded-lattice extension
+    /// of stdlib's [`Iterator::any`] over the pairwise-strict-
+    /// membership predicate at the N-ary arm. Rust's stdlib does not
+    /// carry an `iter.any_strictly_in_range(min, max)` primitive on
+    /// [`PartialOrd`] (strict-interval-containment is itself a
+    /// partial-order predicate rather than a total-order one).
+    /// Translated: threaded the same strict-arm existential N-ary
+    /// interval-containment shape through the [`Lattice`] trait's
+    /// default-method surface as the STRICTNESS-AXIS peer of what
+    /// [`Lattice::any_between`] carries at the non-strict arm and the
+    /// QUANTIFIER-AXIS peer of what [`Lattice::all_strictly_between`]
+    /// carries at the strict-∀ arm — a first-class algebra method
+    /// every closed-set impl picks up mechanically. Closes the (strict,
+    /// non-strict) × (∀, ∃) × (N-ary interval-containment) 2×2×1 face
+    /// at the last unpinned strict-∃ corner.
+    fn any_strictly_between<'a, I>(low: &Self, high: &Self, iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().any(|x| x.is_strictly_between(low, high))
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -13104,6 +13325,443 @@ mod tests {
         );
     }
 
+    /// [`Lattice::any_strictly_between`] fires vacuously FALSE on the
+    /// empty iterator at EVERY bracket on EVERY lattice — INCLUDING
+    /// every extrema bracket `(&T::bottom(), &T::top())` where the
+    /// universal-strict peer [`Lattice::all_strictly_between`] fires
+    /// vacuously TRUE. The empty-iterator vacuous-falsehood arm is the
+    /// ONE cell where the strict-∃ N-ary Boolean-disjunction predicate
+    /// DIVERGES from the strict-∀ N-ary Boolean-conjunction predicate
+    /// on the (∀, ∃) axis at the strict N-ary arm: [`Iterator::any`]
+    /// on the empty iterator is `false` by the empty-disjunction
+    /// convention regardless of the per-element predicate. Pinned
+    /// over BOTH the total-order axis (`DataClassification::ALL^2` —
+    /// 36 brackets) AND the antichain axis (`SubstrateType::ALL^2` —
+    /// 64 brackets) so BOTH shape flavors bind the vacuous-falsehood
+    /// identity via ONE substrate primitive.
+    #[test]
+    fn any_strictly_between_is_vacuously_false_at_the_empty_iterator_over_every_bracket() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        let empty: [&DataClassification; 0] = [];
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                assert!(
+                    !DataClassification::any_strictly_between(&low, &high, empty.iter().copied()),
+                    "any_strictly_between({low:?}, {high:?}, []) must be false — the empty \
+                     disjunction is vacuously false at every bracket, including the \
+                     extrema bracket where all_strictly_between fires vacuously true",
+                );
+            }
+        }
+        let empty_subs: [&SubstrateType; 0] = [];
+        for low in SubstrateType::ALL {
+            for high in SubstrateType::ALL {
+                assert!(
+                    !SubstrateType::any_strictly_between(&low, &high, empty_subs.iter().copied()),
+                    "any_strictly_between({low:?}, {high:?}, []) must be false on the \
+                     pointed-top antichain — the empty disjunction is vacuously false \
+                     at every bracket",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::any_strictly_between`] at arity 1 reduces to the
+    /// pairwise [`Lattice::is_strictly_between`] on the sole element —
+    /// the 1-input strict-arm N-ary existential interval predicate is
+    /// the pairwise 3-ary strict-interval-containment primitive with
+    /// the iterator arm degenerated to a singleton. AGREES with
+    /// [`Lattice::all_strictly_between`]'s singleton reduction at arity
+    /// 1 — both strict-arm quantifiers collapse to the same
+    /// per-element strict predicate when the iterator yields exactly
+    /// one element (there is exactly one witness so ∀-strict and
+    /// ∃-strict coincide). Pinned exhaustively over
+    /// `DataClassification::ALL^3` (216 triples).
+    #[test]
+    fn any_strictly_between_arity_1_reduces_to_is_strictly_between_over_data_classification_all_triples(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                for high in DataClassification::ALL {
+                    assert_eq!(
+                        DataClassification::any_strictly_between(&low, &high, [&a]),
+                        a.is_strictly_between(&low, &high),
+                        "any_strictly_between({low:?}, {high:?}, [{a:?}]) drifted from \
+                         is_strictly_between({a:?}, {low:?}, {high:?}) — the arity-1 \
+                         strict-∃ N-ary predicate must reduce to the pairwise 3-ary \
+                         strict primitive on the sole element (both strict quantifiers \
+                         collapse at arity 1)",
+                    );
+                    assert_eq!(
+                        DataClassification::any_strictly_between(&low, &high, [&a]),
+                        DataClassification::all_strictly_between(&low, &high, [&a]),
+                        "any_strictly_between({low:?}, {high:?}, [{a:?}]) drifted from \
+                         all_strictly_between({low:?}, {high:?}, [{a:?}]) — the two \
+                         strict-arm quantifiers must agree at arity 1 by collapsing to \
+                         the same per-element is_strictly_between",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strictly_between`] on a degenerate bracket
+    /// `(&x, &x)` REJECTS every non-empty iterable AND the empty one
+    /// over [`DataClassification`] — a zero-width strict-open bracket
+    /// admits NO points because [`Lattice::is_strictly_between`]
+    /// rejects every element at the degenerate bracket by strict-arm
+    /// irreflexivity, so [`Iterator::any`] never fires. DIVERGES from
+    /// [`Lattice::any_between`]'s degenerate-bracket existential-
+    /// equality identity — the strict version rejects even the
+    /// singleton iterable containing `x` itself. Pinned exhaustively
+    /// over `DataClassification::ALL` bracket points (6) ×
+    /// `DataClassification::ALL^2` iterables (36 pairs) = 216
+    /// (bracket-point, iterable) combinations.
+    #[test]
+    fn any_strictly_between_of_equal_bounds_rejects_every_iterable_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        let empty: [&DataClassification; 0] = [];
+        for x in DataClassification::ALL {
+            assert!(
+                !DataClassification::any_strictly_between(&x, &x, empty.iter().copied()),
+                "any_strictly_between({x:?}, {x:?}, []) must be false — degenerate strict \
+                 bracket rejects every element AND the empty disjunction fires false",
+            );
+            for a in DataClassification::ALL {
+                assert!(
+                    !DataClassification::any_strictly_between(&x, &x, [&a]),
+                    "any_strictly_between({x:?}, {x:?}, [{a:?}]) must be false — degenerate \
+                     strict bracket admits NO points by strict-arm irreflexivity",
+                );
+                for b in DataClassification::ALL {
+                    assert!(
+                        !DataClassification::any_strictly_between(&x, &x, [&a, &b]),
+                        "any_strictly_between({x:?}, {x:?}, [{a:?}, {b:?}]) must be false \
+                         — degenerate strict bracket admits no point via any witness",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strictly_between`] REJECTS every iterable
+    /// (INCLUDING the empty one) when the bracket is inverted-or-
+    /// degenerate (`high.leq(&low)`) over [`DataClassification`] — no
+    /// lattice element can simultaneously be strictly above `low` and
+    /// strictly below a `high` that itself sits at-or-below `low`, so
+    /// every element the iterator yields fails [`Lattice::
+    /// is_strictly_between`] and [`Iterator::any`] never fires. The
+    /// strict-arm rejection surface is WIDER than [`Lattice::
+    /// any_between`]'s inverted-only surface by exactly the equal-
+    /// bound diagonal (which the non-strict ∃ arm admits when the
+    /// iterable contains the equal bound). Peer of `any_between_
+    /// rejects_every_iterable_when_bracket_is_inverted_over_data_
+    /// classification` on the strict arm.
+    #[test]
+    fn any_strictly_between_rejects_every_iterable_when_bracket_is_inverted_or_degenerate_over_data_classification(
+    ) {
+        use tatara_process::classification::DataClassification;
+        let empty: [&DataClassification; 0] = [];
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                if high.leq(&low) {
+                    assert!(
+                        !DataClassification::any_strictly_between(
+                            &low,
+                            &high,
+                            empty.iter().copied()
+                        ),
+                        "any_strictly_between({low:?}, {high:?}, []) must be false — the \
+                         bracket is inverted-or-degenerate AND the disjunction is empty",
+                    );
+                    for a in DataClassification::ALL {
+                        assert!(
+                            !DataClassification::any_strictly_between(&low, &high, [&a]),
+                            "any_strictly_between({low:?}, {high:?}, [{a:?}]) must be false \
+                             — the bracket is inverted-or-degenerate ({high:?} leq \
+                             {low:?}) so no element can satisfy the pairwise \
+                             is_strictly_between",
+                        );
+                        for b in DataClassification::ALL {
+                            assert!(
+                                !DataClassification::any_strictly_between(&low, &high, [&a, &b]),
+                                "any_strictly_between({low:?}, {high:?}, [{a:?}, {b:?}]) \
+                                 must be false — the bracket is inverted-or-degenerate so \
+                                 every element the iterator yields fails \
+                                 is_strictly_between",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strictly_between`] REJECTS every iterable
+    /// containing an endpoint over [`DataClassification`] — the
+    /// per-element [`Lattice::is_strictly_between`] rejects both
+    /// endpoints by strict-arm irreflexivity, so an iterable whose
+    /// ONLY witness under the non-strict predicate is an endpoint
+    /// finds NO witness under the strict predicate. Peer of the
+    /// `all_strictly_between_rejects_every_iterable_containing_an_
+    /// endpoint` seal on the ∃ arm. Restricted to strict-arm-non-
+    /// vacuous brackets (`low.strictly_below(&high)`) where interior
+    /// points exist — for any endpoint-only iterable of a
+    /// non-degenerate bracket the strict-∃ predicate must reject.
+    #[test]
+    fn any_strictly_between_rejects_every_iterable_of_only_endpoints_over_data_classification_all()
+    {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                if low.strictly_below(&high) {
+                    // singleton at each endpoint
+                    assert!(
+                        !DataClassification::any_strictly_between(&low, &high, [&low]),
+                        "any_strictly_between({low:?}, {high:?}, [{low:?}]) must be false \
+                         — the sole witness is the low endpoint which strict-∃ rejects \
+                         by irreflexivity",
+                    );
+                    assert!(
+                        !DataClassification::any_strictly_between(&low, &high, [&high]),
+                        "any_strictly_between({low:?}, {high:?}, [{high:?}]) must be false \
+                         — the sole witness is the high endpoint which strict-∃ rejects \
+                         by irreflexivity",
+                    );
+                    // pair of endpoints — both witnesses rejected
+                    assert!(
+                        !DataClassification::any_strictly_between(&low, &high, [&low, &high]),
+                        "any_strictly_between({low:?}, {high:?}, [{low:?}, {high:?}]) must \
+                         be false — both witnesses are endpoints which strict-∃ rejects",
+                    );
+                    assert!(
+                        !DataClassification::any_strictly_between(&low, &high, [&high, &low]),
+                        "any_strictly_between({low:?}, {high:?}, [{high:?}, {low:?}]) must \
+                         be false regardless of iteration order — strict-∃ is symmetric \
+                         over the iterator",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strictly_between`] on the extrema bracket
+    /// `(&T::bottom(), &T::top())` admits every NON-EMPTY iterable
+    /// whose iterator yields at least one strict-interior element
+    /// AND rejects the empty iterable over [`DataClassification`] —
+    /// the widest possible strict-open bracket rejects both endpoints
+    /// (by strict-arm irreflexivity) and admits every interior
+    /// element via the lattice's strict `bottom < x < top` for any
+    /// non-endpoint `x`. This is the ONE cell where the strict-∃ arm
+    /// and the strict-∀ arm split on the (∀, ∃) axis (the empty-
+    /// iterator vacuous-truth vs vacuous-falsehood split, pinned at
+    /// [`Lattice::all_strictly_between`]'s / [`Lattice::
+    /// any_strictly_between`]'s empty-iterator seals). Peer of
+    /// `any_between_with_lattice_extrema_admits_every_nonempty_
+    /// iterable_over_data_classification_all` on the strict arm — the
+    /// extrema bracket accepts fewer iterables here (only those with
+    /// a strict-interior witness rather than every non-empty one) by
+    /// exactly the endpoint-exclusion gap.
+    #[test]
+    fn any_strictly_between_with_lattice_extrema_admits_every_nonempty_iterable_with_interior_witness_over_data_classification_all(
+    ) {
+        use tatara_process::classification::DataClassification;
+        let bot = DataClassification::bottom();
+        let top = DataClassification::top();
+        let empty: [&DataClassification; 0] = [];
+        assert!(
+            !DataClassification::any_strictly_between(&bot, &top, empty.iter().copied()),
+            "any_strictly_between(bottom, top, []) must be false — the empty disjunction \
+             is vacuously false EVEN on the widest possible strict bracket",
+        );
+        for a in DataClassification::ALL {
+            let a_is_interior = a.is_strictly_between(&bot, &top);
+            assert_eq!(
+                DataClassification::any_strictly_between(&bot, &top, [&a]),
+                a_is_interior,
+                "any_strictly_between(bottom, top, [{a:?}]) must equal \
+                 is_strictly_between({a:?}, bottom, top) — the arity-1 strict-∃ predicate \
+                 must reduce to the pairwise strict primitive on the sole element",
+            );
+        }
+        // Two DataClassification elements guaranteed to sit strictly
+        // between bottom and top: Internal and Confidential.
+        let interior = DataClassification::Internal;
+        assert!(
+            DataClassification::any_strictly_between(&bot, &top, [&interior]),
+            "any_strictly_between(bottom, top, [{interior:?}]) must be true — \
+             {interior:?} is strictly between bottom and top on the total order",
+        );
+        // Pair of endpoints — strict-∃ rejects even on the widest bracket.
+        assert!(
+            !DataClassification::any_strictly_between(&bot, &top, [&bot, &top]),
+            "any_strictly_between(bottom, top, [bottom, top]) must be false — both \
+             witnesses are endpoints which strict-∃ rejects by irreflexivity",
+        );
+    }
+
+    /// [`Lattice::any_strictly_between`] REFINES [`Lattice::
+    /// any_between`] on every bracket AND every iterable over
+    /// [`DataClassification`] — the strict per-element predicate
+    /// refines the non-strict one via [`Lattice::is_strictly_between`]'s
+    /// refines-[`Lattice::is_between`] identity, so the [`Iterator::
+    /// any`] composition inherits the refinement mechanically (a
+    /// strict-∃ witness is also a non-strict-∃ witness). The strict-
+    /// minus-non-strict gap on the N-ary ∃ interval arm is exactly the
+    /// iterables whose only witnesses under the non-strict predicate
+    /// are endpoints of the bracket. Pinned exhaustively over
+    /// `DataClassification::ALL^4` (1296 combinations at pair-length
+    /// iterables).
+    #[test]
+    fn any_strictly_between_refines_any_between_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                for a in DataClassification::ALL {
+                    for b in DataClassification::ALL {
+                        let iter_slice: [&DataClassification; 2] = [&a, &b];
+                        if DataClassification::any_strictly_between(&low, &high, iter_slice) {
+                            assert!(
+                                DataClassification::any_between(&low, &high, iter_slice),
+                                "any_strictly_between({low:?}, {high:?}, [{a:?}, {b:?}]) \
+                                 implies any_between({low:?}, {high:?}, [{a:?}, {b:?}]) \
+                                 — the strict-∃ predicate must refine the non-strict-∃ \
+                                 one iterable-wise (a strict witness is also a non-strict \
+                                 witness)",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::all_strictly_between`] REFINES [`Lattice::
+    /// any_strictly_between`] on every bracket AND every NON-EMPTY
+    /// iterable over [`DataClassification`] — the strict-∀ quantifier
+    /// refines the strict-∃ one at every non-empty iterable via the
+    /// standard `∀x P(x) ∧ ∃x ⇒ ∃x P(x)` inference. The refinement
+    /// DOES NOT hold at the empty iterable (∀ fires true vacuously
+    /// but ∃ fires false vacuously — the ONE cell where the (∀, ∃)
+    /// axis splits at the strict N-ary arm). Pinned exhaustively
+    /// over `DataClassification::ALL^4` (1296 combinations at pair-
+    /// length iterables), which are all non-empty by construction so
+    /// the refinement holds pointwise. Peer of `all_between_refines_
+    /// any_between_on_nonempty_iterables_over_data_classification_all`
+    /// on the strict arm.
+    #[test]
+    fn all_strictly_between_refines_any_strictly_between_on_nonempty_iterables_over_data_classification_all(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for high in DataClassification::ALL {
+                for a in DataClassification::ALL {
+                    for b in DataClassification::ALL {
+                        let iter_slice: [&DataClassification; 2] = [&a, &b];
+                        if DataClassification::all_strictly_between(&low, &high, iter_slice) {
+                            assert!(
+                                DataClassification::any_strictly_between(&low, &high, iter_slice),
+                                "all_strictly_between({low:?}, {high:?}, [{a:?}, {b:?}]) \
+                                 implies any_strictly_between({low:?}, {high:?}, [{a:?}, \
+                                 {b:?}]) on the non-empty iterable — the strict-∀ \
+                                 quantifier must refine the strict-∃ one whenever there \
+                                 is at least one witness to quantify over",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strictly_between`] projects the pointed-top
+    /// antichain to UNIVERSAL REJECTION on every iterable over every
+    /// bracket — on [`SubstrateType`] the per-element [`Lattice::
+    /// is_strictly_between`] fires false universally (strict-arm
+    /// irreflexivity rejects the endpoints and antichain
+    /// incomparability rejects the interior on distinct-non-top
+    /// brackets), so [`Iterator::any`] over the universally-false
+    /// per-element predicate is universally false. Peer of
+    /// `all_strictly_between_projects_the_pointed_top_antichain_over_
+    /// substrate_type_all` on the ∃ arm — the antichain SHAPE is now
+    /// bound through the full strict-arm interval-containment surface
+    /// (pairwise `is_strictly_between`, N-ary universal
+    /// `all_strictly_between`, N-ary existential `any_strictly_between`)
+    /// at ONE substrate owner on the [`Lattice`] trait.
+    #[test]
+    fn any_strictly_between_projects_the_pointed_top_antichain_to_universal_rejection_over_substrate_type_all(
+    ) {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        let compute = SubstrateType::Compute;
+        let storage = SubstrateType::Storage;
+        // Distinct-non-top singleton in the top-touching bracket —
+        // rejected because strict-arm irreflexivity rejects the low
+        // endpoint on the reflexive diagonal.
+        assert!(
+            !SubstrateType::any_strictly_between(&compute, &top, [&compute]),
+            "any_strictly_between({compute:?}, top, [{compute:?}]) must be false — \
+             strict-arm irreflexivity rejects the low endpoint on the reflexive diagonal",
+        );
+        // Distinct-non-top singleton in a distinct-non-top bracket —
+        // rejected because storage/compute are incomparable on the
+        // antichain.
+        assert!(
+            !SubstrateType::any_strictly_between(&storage, &top, [&compute]),
+            "any_strictly_between({storage:?}, top, [{compute:?}]) must be false — \
+             {storage:?} and {compute:?} are incomparable on the antichain so the \
+             low-side strictly_below conjunct fails",
+        );
+        // Mixed iterable — no strict-interior witness exists on the
+        // antichain: top is the high endpoint (rejected), compute is
+        // low-side-blocked from the storage bracket. Universal
+        // rejection on the ∃ arm.
+        let iter_slice: [&SubstrateType; 2] = [&compute, &top];
+        assert!(
+            !SubstrateType::any_strictly_between(&compute, &top, iter_slice),
+            "any_strictly_between({compute:?}, top, [{compute:?}, top]) must be false — \
+             both witnesses are endpoints of the {compute:?}..top bracket which \
+             strict-∃ rejects by irreflexivity",
+        );
+        // Degenerate bracket at the top rejects every element on the
+        // antichain — including the top itself.
+        assert!(
+            !SubstrateType::any_strictly_between(&top, &top, [&top]),
+            "any_strictly_between(top, top, [top]) must be false — degenerate strict \
+             bracket rejects every element via strict-arm irreflexivity",
+        );
+        assert!(
+            !SubstrateType::any_strictly_between(&top, &top, [&compute]),
+            "any_strictly_between(top, top, [{compute:?}]) must be false — degenerate \
+             strict bracket admits NO points",
+        );
+        // Empty iterator vacuous falsehood on the antichain — pinned
+        // once more here at the antichain shape to complete the
+        // shape-flavor sweep for the strict-∃ arm.
+        let empty: [&SubstrateType; 0] = [];
+        assert!(
+            !SubstrateType::any_strictly_between(&top, &top, empty.iter().copied()),
+            "any_strictly_between(top, top, []) must be false on the antichain — the \
+             empty disjunction is vacuously false at every bracket",
+        );
+        // Exhaustive sweep over `SubstrateType::ALL^3` at arity 1:
+        // every singleton on every bracket must fail the strict-∃
+        // predicate.
+        for low in SubstrateType::ALL {
+            for high in SubstrateType::ALL {
+                for a in SubstrateType::ALL {
+                    assert!(
+                        !SubstrateType::any_strictly_between(&low, &high, [&a]),
+                        "any_strictly_between({low:?}, {high:?}, [{a:?}]) must be false \
+                         on the antichain — the strict interior is empty on every \
+                         bracket the pointed-top antichain admits",
+                    );
+                }
+            }
+        }
+    }
+
     proptest! {
         /// [`Lattice::is_constant`] AGREES with the conjunction
         /// `is_ascending && is_descending` on random
@@ -13641,6 +14299,101 @@ mod tests {
                 DataClassification::any_between(&low, &high, [&a]),
                 DataClassification::all_between(&low, &high, [&a]),
             );
+        }
+
+        /// [`Lattice::any_strictly_between`] fires vacuously FALSE on
+        /// the empty iterator at EVERY bracket on random
+        /// [`DataClassification`] brackets — proptest peer of the
+        /// exhaustive empty-iterator seal above at random bracket
+        /// coverage. The empty-disjunction identity holds
+        /// unconditionally on the strict arm exactly as on the non-
+        /// strict arm — both existential N-ary predicates fire false
+        /// on the empty iterator by [`Iterator::any`]'s empty-
+        /// disjunction convention.
+        #[test]
+        fn any_strictly_between_is_vacuously_false_at_the_empty_iterator_over_data_classification_random_brackets(
+            low in any_data_class(),
+            high in any_data_class(),
+        ) {
+            let empty: [&DataClassification; 0] = [];
+            prop_assert!(
+                !DataClassification::any_strictly_between(&low, &high, empty.iter().copied())
+            );
+        }
+
+        /// [`Lattice::any_strictly_between`] at arity 1 REDUCES to the
+        /// pairwise [`Lattice::is_strictly_between`] on the sole
+        /// element on random [`DataClassification`] triples — the
+        /// 1-input strict-∃ N-ary interval predicate collapses to the
+        /// pairwise 3-ary strict-interval-containment primitive with
+        /// the iterator arm degenerated to a singleton (both strict
+        /// quantifiers collapse at arity 1). Proptest peer of the
+        /// exhaustive-triple arity-1 identity seal at extended arity.
+        #[test]
+        fn any_strictly_between_arity_1_reduces_to_is_strictly_between_over_data_classification_random_triples(
+            low in any_data_class(),
+            a in any_data_class(),
+            high in any_data_class(),
+        ) {
+            prop_assert_eq!(
+                DataClassification::any_strictly_between(&low, &high, [&a]),
+                a.is_strictly_between(&low, &high),
+            );
+            prop_assert_eq!(
+                DataClassification::any_strictly_between(&low, &high, [&a]),
+                DataClassification::all_strictly_between(&low, &high, [&a]),
+            );
+        }
+
+        /// [`Lattice::any_strictly_between`] REFINES [`Lattice::
+        /// any_between`] on random [`DataClassification`] brackets and
+        /// random sequences of length 0..6 — the strict per-element
+        /// predicate refines the non-strict one via [`Lattice::
+        /// is_strictly_between`]'s refines-[`Lattice::is_between`]
+        /// identity, so the [`Iterator::any`] composition inherits the
+        /// refinement mechanically (a strict witness is also a non-
+        /// strict witness). Proptest peer of the exhaustive-quadruple
+        /// refinement seal at extended arity.
+        #[test]
+        fn any_strictly_between_refines_any_between_over_data_classification_random_sequences(
+            low in any_data_class(),
+            high in any_data_class(),
+            vs in proptest::collection::vec(any_data_class(), 0..6usize),
+        ) {
+            let refs: Vec<&DataClassification> = vs.iter().collect();
+            if DataClassification::any_strictly_between(&low, &high, refs.iter().copied()) {
+                prop_assert!(DataClassification::any_between(
+                    &low,
+                    &high,
+                    refs.iter().copied(),
+                ));
+            }
+        }
+
+        /// [`Lattice::all_strictly_between`] REFINES [`Lattice::
+        /// any_strictly_between`] on random [`DataClassification`]
+        /// brackets and random NON-EMPTY sequences of length 1..6 —
+        /// the strict-∀ quantifier refines the strict-∃ one at every
+        /// non-empty iterable via `∀x P(x) ∧ ∃x ⇒ ∃x P(x)`. Proptest
+        /// peer of the exhaustive-quadruple refinement seal at
+        /// extended arity, restricted to non-empty iterables because
+        /// the refinement provably fails at the empty iterable (∀
+        /// vacuous-true vs ∃ vacuous-false split, pinned in the
+        /// exhaustive empty-iterator tests above).
+        #[test]
+        fn all_strictly_between_refines_any_strictly_between_on_nonempty_random_sequences_over_data_classification(
+            low in any_data_class(),
+            high in any_data_class(),
+            vs in proptest::collection::vec(any_data_class(), 1..6usize),
+        ) {
+            let refs: Vec<&DataClassification> = vs.iter().collect();
+            if DataClassification::all_strictly_between(&low, &high, refs.iter().copied()) {
+                prop_assert!(DataClassification::any_strictly_between(
+                    &low,
+                    &high,
+                    refs.iter().copied(),
+                ));
+            }
         }
     }
 }

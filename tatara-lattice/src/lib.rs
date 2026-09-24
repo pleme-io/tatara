@@ -46,7 +46,7 @@ use tatara_process::classification::{
 /// routes here through
 /// [`tatara_process::classification::DataClassification::sensitivity_rank`]
 /// (strictly monotone over `DataClassification::ALL`, pinned by
-/// `data_classification_rank_is_strictly_monotone_over_all`
+/// `data_classification_rank_is_strictly_monotone_sequence_over_all`
 /// upstream). A future total-order-projected axis lands at ONE call
 /// to this primitive AND inherits the commutativity + idempotence
 /// invariants it carries.
@@ -2208,6 +2208,275 @@ pub trait Lattice: Sized + Clone + PartialEq {
         let vs: Vec<&'a Self> = iter.into_iter().collect();
         vs.windows(2).all(|w| w[0] == w[1])
     }
+    /// Direction-collapsed peer of [`Lattice::is_ascending`] /
+    /// [`Lattice::is_descending`] on the consecutive-pair face — the
+    /// iterated set is MONOTONE (a [`Lattice::leq`]- OR
+    /// [`Lattice::geq`]-monotone sequence on the lattice's partial order)
+    /// iff EITHER every consecutive pair `(vs[i], vs[i + 1])` satisfies
+    /// `vs[i].leq(&vs[i + 1])` OR every consecutive pair satisfies
+    /// `vs[i].geq(&vs[i + 1])`. `T::is_monotone_sequence([&a, &b, &c])` holds iff
+    /// `(a ≤ b ∧ b ≤ c) ∨ (a ≥ b ∧ b ≥ c)` — the direction-collapsed
+    /// disjunction of the two non-strict directional walks.
+    ///
+    /// The DIRECTION-COLLAPSED peer of [`Lattice::is_ascending`] /
+    /// [`Lattice::is_descending`] one DIRECTION-AXIS-COLLAPSE step
+    /// over on the (leq, geq, either) 3-arm direction-projection grid at
+    /// the consecutive-pair face — where the two non-strict directional
+    /// arms walk one specific direction ([`Lattice::leq`] or
+    /// [`Lattice::geq`]) and this predicate accepts the union of both.
+    /// Together with [`Lattice::is_strictly_monotone_sequence`] closes the
+    /// (strict, non-strict) × (direction-collapsed) 2×1 direction-
+    /// collapsed sequence-monotonicity grid on the trait's combinator
+    /// surface at the consecutive-pair face.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_monotone_sequence(std::iter::
+    /// empty()) == true` on every lattice — [`slice::windows`] on a
+    /// zero-length slice yields no pair, so BOTH directional walks
+    /// vacuously succeed and the disjunction fires true. Shared vacuous-
+    /// truth arm with all seven sequence-shape predicates at the empty
+    /// case.
+    ///
+    /// **Singleton vacuous truth**: `T::is_monotone_sequence([&a]) == true` for
+    /// every `a` — a singleton has no consecutive pair, same empty-
+    /// conjunction identity as the empty case on both directional arms.
+    ///
+    /// **Consecutive-duplicate acceptance**: `T::is_monotone_sequence([&a, &a])
+    /// == true` for every `a` — both [`Lattice::leq`] and
+    /// [`Lattice::geq`] are REFLEXIVE (each routes through the meet-
+    /// idempotence axiom `a ⊓ a = a`), so BOTH directional walks accept
+    /// the consecutive-duplicate pair, and the disjunction fires true.
+    /// Shared reflexive-diagonal arm with all three non-strict sequence-
+    /// shape predicates ([`Lattice::is_ascending`],
+    /// [`Lattice::is_descending`], [`Lattice::is_constant`]).
+    ///
+    /// **Pair-identity**: `T::is_monotone_sequence([&a, &b]) ==
+    /// T::is_comparable(a, &b)` — the 2-input direction-collapsed
+    /// sequence-shape predicate reduces to [`Lattice::is_comparable`]
+    /// directly, one arity axis down from the N-ary walk. This is the
+    /// LOAD-BEARING BRIDGE from the sequence-shape face to the pairwise
+    /// comparability face: at arity 2 the direction-collapsed
+    /// consecutive-pair walk collapses to the primitive pairwise
+    /// comparability predicate. Pinned exhaustively over
+    /// `DataClassification::ALL^2` and `SubstrateType::ALL^2` below.
+    ///
+    /// **Direction-collapse disjunction seal**: for every slice,
+    /// `T::is_monotone_sequence(iter) == T::is_ascending(iter) ||
+    /// T::is_descending(iter)`. Follows from the definition — the
+    /// direction-collapsed predicate is the pointwise UNION of the two
+    /// non-strict directional arms on the consecutive-pair face. **This
+    /// is the load-bearing theorem of the widening** — it pins the
+    /// direction-collapsed predicate as the pointwise disjunction of the
+    /// two non-strict directional arms, closing the (leq, geq, either)
+    /// direction-projection grid on the trait's combinator surface.
+    /// Pinned exhaustively over `DataClassification::ALL^3` (216
+    /// triples) below.
+    ///
+    /// **Refines [`Lattice::is_chain`]**: for every slice,
+    /// `T::is_monotone_sequence(iter) ⇒ T::is_chain(iter)` — composes the
+    /// direction-collapse seal above with both
+    /// [`Lattice::is_ascending`]'s and [`Lattice::is_descending`]'s
+    /// existing refines-chain pins. A monotone sequence in either
+    /// direction traces a chain in the underlying partial order.
+    ///
+    /// **Constant refines monotone**: for every slice,
+    /// `T::is_constant(iter) ⇒ T::is_monotone_sequence(iter)` — a constant
+    /// sequence is trivially both ascending AND descending, so the
+    /// direction-collapsed disjunction fires true. Peer of the
+    /// constant-refines-chain seal one direction-axis-collapse step
+    /// over.
+    ///
+    /// **Sequence-order independence**: `T::is_monotone_sequence(iter) ==
+    /// T::is_monotone_sequence(iter.rev())` on every collection — reversing a
+    /// slice swaps [`Lattice::is_ascending`] with
+    /// [`Lattice::is_descending`] (each direction's walk on the
+    /// forward slice equals the OTHER direction's walk on the reversed
+    /// slice), so the disjunction is INVARIANT under reversal.
+    /// DIVERGES from [`Lattice::is_ascending`] /
+    /// [`Lattice::is_descending`] (both sequence-order dependent) and
+    /// AGREES with [`Lattice::is_constant`] on the sequence-order
+    /// independence arm — the DIRECTION-COLLAPSED predicate inherits
+    /// order independence from the SYMMETRIC disjunction over the two
+    /// directional arms, even though each arm alone is order dependent.
+    ///
+    /// **Any-comparable-consecutive-pair-in-a-consistent-direction
+    /// rejection**: if the slice contains one strict ascent AND one
+    /// strict descent (a "peak" or "valley"), then
+    /// `T::is_monotone_sequence(iter) == false` — the ascending walk rejects
+    /// the descent step AND the descending walk rejects the ascent
+    /// step, so both directional walks fail and the disjunction fires
+    /// false. This is the DEFINING failure mode: the direction-
+    /// collapsed predicate rejects EXACTLY the sequences that fail
+    /// BOTH directional walks.
+    ///
+    /// **Antichain projection**: on the pointed-top antichain (e.g.
+    /// [`SubstrateType`]), the predicate accepts a consecutive pair
+    /// iff `a == b || a == top || b == top` — the union of the
+    /// [`Lattice::is_ascending`] projection (accepts `a == b || b ==
+    /// top`) with the [`Lattice::is_descending`] projection (accepts
+    /// `a == b || a == top`) collapses to the top-touching diagonal.
+    /// The direction-collapse effectively DOUBLES the acceptance
+    /// footprint on the antichain: every top-touching pair is accepted
+    /// (in either direction), and only the two-non-top-distinct pairs
+    /// are rejected. Pinned exhaustively over `SubstrateType::ALL^2`
+    /// (64 pairs) below.
+    ///
+    /// Default routes through `iter.into_iter().collect::<Vec<&Self>>()`
+    /// followed by `vs.windows(2).all(|w| w[0].leq(w[1])) || vs.
+    /// windows(2).all(|w| w[0].geq(w[1]))` — two [`Iterator::all`]
+    /// walks on the collected buffer (short-circuits at the first
+    /// non-monotone step, then short-circuits again at the first non-
+    /// descending step; the ascending walk runs to completion only on
+    /// non-ascending inputs). The collect materializes the iterator
+    /// once so BOTH walks operate on a stable slice; the ordering of
+    /// the two walks (ascending first, descending second) is
+    /// deterministic but semantically symmetric via the disjunction.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the direction-collapsed sequence-shape
+    /// predicate is itself a typed named `bool` composing
+    /// [`Lattice::leq`] / [`Lattice::geq`] via [`slice::windows`] plus
+    /// [`Iterator::all`] plus disjunction; every downstream lattice-
+    /// law consumer inherits the predicate through the default
+    /// mechanically) + THEORY.md §III (typescape — the direction-
+    /// collapsed sequence-shape monotonicity predicate on every
+    /// classification-axis lattice binds at ONE substrate owner on
+    /// the [`Lattice`] algebra rather than at each consumer's hand-
+    /// rolled `is_ascending(vs) || is_descending(vs)` disjunction).
+    /// Convergence primitive: a converging distance sequence is
+    /// MONOTONE in the [`Lattice::leq`] direction — the predicate
+    /// pins "the sequence heads in ONE consistent direction" without
+    /// picking WHICH direction upfront, which is the shape convergence
+    /// analysis wants (the direction is data-dependent, not fixed).
+    ///
+    /// Frontier inspiration: [`slice::is_sorted_by`] on Rust's stdlib
+    /// only projects the SPECIFIC-DIRECTION arm (ascending under the
+    /// caller-supplied comparator); the stdlib has no direction-
+    /// collapsed peer. Haskell's `Data.List.sort` primitive is the
+    /// specific-direction ascending arm; a direction-collapsed peer
+    /// would compose as `isSorted xs || isSorted (reverse xs)`. Coq's
+    /// `Sorted` inductive on lists is specific-direction; a
+    /// direction-collapsed peer would compose the same disjunction.
+    /// Translated: threaded the direction-collapse disjunction through
+    /// the [`Lattice`] trait's default-method surface as a first-class
+    /// named predicate — the direction-collapsed sequence-monotonicity
+    /// shape on every classification-axis lattice binds through ONE
+    /// substrate default per cell, closing the (leq, geq, either) 3-
+    /// arm direction-projection grid at the consecutive-pair face.
+    fn is_monotone_sequence<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).all(|w| w[0].leq(w[1])) || vs.windows(2).all(|w| w[0].geq(w[1]))
+    }
+    /// Strict-arm peer of [`Lattice::is_monotone_sequence`] on the STRICTNESS
+    /// axis, AND direction-collapsed peer of
+    /// [`Lattice::is_strictly_ascending`] /
+    /// [`Lattice::is_strictly_descending`] on the DIRECTION-COLLAPSE
+    /// axis — the iterated set is STRICTLY MONOTONE (a
+    /// [`Lattice::strictly_below`]- OR
+    /// [`Lattice::strictly_above`]-monotone strictly-directed sequence
+    /// on the lattice's partial order) iff EITHER every consecutive
+    /// pair `(vs[i], vs[i + 1])` satisfies `vs[i].strictly_below(&vs[i
+    /// + 1])` OR every consecutive pair satisfies
+    /// `vs[i].strictly_above(&vs[i + 1])`. Together with
+    /// [`Lattice::is_monotone_sequence`] closes the (strict, non-strict) ×
+    /// (direction-collapsed) 2×1 direction-collapsed sequence-
+    /// monotonicity grid on the trait's combinator surface at the
+    /// consecutive-pair face.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_strictly_monotone_sequence(std::
+    /// iter::empty()) == true` — shared vacuous-truth arm with all
+    /// seven sequence-shape predicates.
+    ///
+    /// **Singleton vacuous truth**: `T::is_strictly_monotone_sequence([&a]) ==
+    /// true` — a singleton has no consecutive pair.
+    ///
+    /// **Consecutive-duplicate rejection**: `T::is_strictly_monotone_sequence(
+    /// [&a, &a]) == false` for every `a` — BOTH strict comparators
+    /// are IRREFLEXIVE ([`Lattice::strictly_below`] and
+    /// [`Lattice::strictly_above`] both reject the `self != other`
+    /// conjunct at the reflexive diagonal), so BOTH strict directional
+    /// walks reject the consecutive-duplicate pair and the disjunction
+    /// fires false. Shared irreflexive-rejection arm with
+    /// [`Lattice::is_strictly_ascending`] and
+    /// [`Lattice::is_strictly_descending`] on every all-duplicate
+    /// slice.
+    ///
+    /// **Pair-identity**: `T::is_strictly_monotone_sequence([&a, &b]) ==
+    /// (T::is_comparable(a, &b) && a != b)` — the 2-input direction-
+    /// collapsed strict-arm predicate reduces to the STRICT
+    /// comparability primitive (comparable AND not equal). Peer of
+    /// [`Lattice::is_monotone_sequence`]'s pair-identity on the strictness
+    /// axis (with the reflexive diagonal excised).
+    ///
+    /// **Direction-collapse disjunction seal**: for every slice,
+    /// `T::is_strictly_monotone_sequence(iter) == T::is_strictly_ascending(iter)
+    /// || T::is_strictly_descending(iter)`. Peer of
+    /// [`Lattice::is_monotone_sequence`]'s direction-collapse seal one
+    /// strictness axis over.
+    ///
+    /// **Strict-implies-non-strict**: for every slice,
+    /// `T::is_strictly_monotone_sequence(iter) ⇒ T::is_monotone_sequence(iter)` —
+    /// composes strict-implies-non-strict on both directional arms
+    /// with the direction-collapse seal on both strictness arms. The
+    /// stronger strict-arm predicate refines the weaker non-strict
+    /// direction-collapsed predicate.
+    ///
+    /// **Refines [`Lattice::is_chain`]**: for every slice,
+    /// `T::is_strictly_monotone_sequence(iter) ⇒ T::is_chain(iter)` — composes
+    /// strict-implies-non-strict with [`Lattice::is_monotone_sequence`]'s
+    /// refines-chain seal.
+    ///
+    /// **Sequence-order independence**: `T::is_strictly_monotone_sequence(iter)
+    /// == T::is_strictly_monotone_sequence(iter.rev())` — dual of
+    /// [`Lattice::is_monotone_sequence`]'s order-independence arm on the strict
+    /// pair-level primitives (reversing swaps
+    /// [`Lattice::is_strictly_ascending`] with
+    /// [`Lattice::is_strictly_descending`], and the disjunction is
+    /// symmetric).
+    ///
+    /// **Constant rejection**: for every non-empty non-singleton
+    /// all-duplicate slice, `T::is_strictly_monotone_sequence(iter) == false`
+    /// — direct consequence of the consecutive-duplicate rejection
+    /// arm. DIVERGES from [`Lattice::is_monotone_sequence`] (which accepts
+    /// every all-duplicate slice via reflexivity of both non-strict
+    /// arms).
+    ///
+    /// **Antichain projection**: on the pointed-top antichain (e.g.
+    /// [`SubstrateType`]), the predicate accepts a consecutive pair
+    /// iff `(a == top) XOR (b == top)` — one and only one of the
+    /// two elements is the top absorber. This is the STRICTEST
+    /// projection of any sequence-shape predicate onto the antichain:
+    /// the strict half-edge fires in EITHER direction (top→x or
+    /// x→top) but rejects every non-top-touching pair AND every top-
+    /// to-top pair. Pinned exhaustively over `SubstrateType::ALL^2`
+    /// (64 pairs) below.
+    ///
+    /// Default routes through `iter.into_iter().collect::<Vec<&Self>>()`
+    /// followed by the strict-arm dual of [`Lattice::is_monotone_sequence`]'s
+    /// walk: two [`Iterator::all`] walks with pair-level primitives
+    /// swapped from [`Lattice::leq`] / [`Lattice::geq`] to
+    /// [`Lattice::strictly_below`] / [`Lattice::strictly_above`].
+    ///
+    /// Theory anchor: same as [`Lattice::is_monotone_sequence`] on the strict
+    /// pair-level primitives — THEORY.md §II.1 invariant 5 + §III.
+    /// The direction-collapsed face on every classification-axis
+    /// lattice now binds through TWO substrate defaults
+    /// ([`Lattice::is_monotone_sequence`], [`Lattice::is_strictly_monotone_sequence`])
+    /// closing the (strict, non-strict) × (direction-collapsed) 2×1
+    /// direction-collapsed sequence-monotonicity grid at ONE algebra
+    /// owner.
+    fn is_strictly_monotone_sequence<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).all(|w| w[0].strictly_below(w[1]))
+            || vs.windows(2).all(|w| w[0].strictly_above(w[1]))
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -2221,7 +2490,7 @@ pub trait Lattice: Sized + Clone + PartialEq {
 // insertion would have moved every later variant's lattice slot
 // without any compile error or test signal. Post-lift the rank is
 // declared per-variant on the typed projection, pinned by
-// `data_classification_rank_is_strictly_monotone_over_all` and
+// `data_classification_rank_is_strictly_monotone_sequence_over_all` and
 // `data_classification_rank_agrees_with_partial_ord` in the source
 // crate, and `data_classification_leq_uses_typed_rank` below pins
 // THIS impl to the typed projection (not the silent cast).
@@ -2849,7 +3118,7 @@ mod tests {
         }
 
         #[test]
-        fn calm_bottom_is_monotone(a in any_calm()) {
+        fn calm_bottom_is_monotone_sequence(a in any_calm()) {
             prop_assert!(CalmClassification::bottom().leq(&a));
             prop_assert_eq!(CalmClassification::bottom(), CalmClassification::Monotone);
         }
@@ -2873,7 +3142,7 @@ mod tests {
     // `calm_*` proptest cases above (`calm_idempotent`,
     // `calm_commutative`, `calm_associative`, `calm_absorption`,
     // `calm_leq_agrees_with_meet`, `calm_leq_agrees_with_join`,
-    // `calm_bottom_is_monotone`, `calm_top_is_nonmonotone`).
+    // `calm_bottom_is_monotone_sequence`, `calm_top_is_nonmonotone`).
     //
     // Both strategies (`any_calm` + `any_data_class`) route through
     // ONE substrate primitive post-lift, so the pins below cover
@@ -2939,7 +3208,7 @@ mod tests {
     /// The 6-variant expected set matches the closed set's
     /// declaration order (Public / Internal / Confidential / Pii /
     /// Phi / Pci) pinned by
-    /// `data_classification_rank_is_strictly_monotone_over_all`
+    /// `data_classification_rank_is_strictly_monotone_sequence_over_all`
     /// upstream — a regression that reordered `ALL` would surface
     /// there first, and this pin would then catch a downstream drift
     /// where the sweep failed to reach a valid variant.
@@ -7485,6 +7754,411 @@ mod tests {
         }
     }
 
+    /// [`Lattice::is_monotone_sequence`] and [`Lattice::is_strictly_monotone_sequence`]
+    /// are vacuously true at the empty iterator — [`slice::windows`]
+    /// on a zero-length slice yields no pair, so BOTH directional
+    /// walks on both strictness arms vacuously succeed and both
+    /// disjunctions fire true. Shared vacuous-truth arm with all
+    /// seven sequence-shape predicates at the empty case.
+    #[test]
+    fn is_monotone_sequence_and_is_strictly_monotone_sequence_are_vacuously_true_at_the_empty_iterator(
+    ) {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        assert!(DataClassification::is_monotone_sequence(std::iter::empty()));
+        assert!(CalmClassification::is_monotone_sequence(std::iter::empty()));
+        assert!(SubstrateType::is_monotone_sequence(std::iter::empty()));
+        assert!(DataClassification::is_strictly_monotone_sequence(
+            std::iter::empty()
+        ));
+        assert!(CalmClassification::is_strictly_monotone_sequence(
+            std::iter::empty()
+        ));
+        assert!(SubstrateType::is_strictly_monotone_sequence(
+            std::iter::empty()
+        ));
+    }
+
+    /// [`Lattice::is_monotone_sequence`] and [`Lattice::is_strictly_monotone_sequence`]
+    /// are vacuously true at every singleton — a singleton has no
+    /// consecutive pair, same empty-conjunction identity as the empty
+    /// case on both directional arms of both strictness arms. Pinned
+    /// exhaustively over every variant of every closed-set impl.
+    #[test]
+    fn is_monotone_sequence_and_is_strictly_monotone_sequence_are_vacuously_true_at_every_singleton(
+    ) {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_monotone_sequence([&a]));
+            assert!(DataClassification::is_strictly_monotone_sequence([&a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_monotone_sequence([&a]));
+            assert!(CalmClassification::is_strictly_monotone_sequence([&a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_monotone_sequence([&a]));
+            assert!(SubstrateType::is_strictly_monotone_sequence([&a]));
+        }
+    }
+
+    /// [`Lattice::is_monotone_sequence`] fires TRUE on every all-duplicate
+    /// collection ([`Lattice::leq`] and [`Lattice::geq`] are both
+    /// reflexive, so both directional walks accept the consecutive-
+    /// duplicate pair); [`Lattice::is_strictly_monotone_sequence`] fires FALSE
+    /// on every non-singleton all-duplicate collection (both strict
+    /// comparators are irreflexive, so both strict walks reject).
+    /// This is the STRICTNESS-AXIS CROSS-ARM seal at the reflexive
+    /// diagonal that distinguishes the two direction-collapsed
+    /// predicates.
+    #[test]
+    fn is_monotone_sequence_accepts_and_is_strictly_monotone_sequence_rejects_all_duplicate_collections(
+    ) {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_monotone_sequence([&a, &a, &a]));
+            assert!(!DataClassification::is_strictly_monotone_sequence([&a, &a]));
+            assert!(!DataClassification::is_strictly_monotone_sequence([
+                &a, &a, &a
+            ]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_monotone_sequence([&a, &a, &a]));
+            assert!(!CalmClassification::is_strictly_monotone_sequence([&a, &a]));
+            assert!(!CalmClassification::is_strictly_monotone_sequence([
+                &a, &a, &a
+            ]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_monotone_sequence([&a, &a, &a]));
+            assert!(!SubstrateType::is_strictly_monotone_sequence([&a, &a]));
+            assert!(!SubstrateType::is_strictly_monotone_sequence([&a, &a, &a]));
+        }
+    }
+
+    /// [`Lattice::is_monotone_sequence`] at arity 2 REDUCES to
+    /// [`Lattice::is_comparable`] on every [`DataClassification`] pair
+    /// — the 2-input direction-collapsed sequence-shape predicate
+    /// collapses to the pairwise comparability primitive directly.
+    /// Pinned exhaustively over `ALL^2` (36 pairs). Since
+    /// [`DataClassification`] is totally ordered, every pair is
+    /// comparable, so the predicate fires TRUE on every pair. Peer of
+    /// [`Lattice::is_constant`]'s arity-2-reduces-to-PartialEq seal
+    /// on the direction-collapsed axis.
+    #[test]
+    fn is_monotone_sequence_arity_2_reduces_to_is_comparable_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::is_monotone_sequence([&a, &b]),
+                    a.is_comparable(&b),
+                    "is_monotone_sequence([{a:?}, {b:?}]) must reduce to a.is_comparable(&b) — \
+                     the 2-input direction-collapsed sequence-shape predicate \
+                     collapses to the pairwise comparability primitive directly",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_strictly_monotone_sequence`] at arity 2 REDUCES to
+    /// `a.is_comparable(&b) && a != b` on every [`DataClassification`]
+    /// pair — the 2-input direction-collapsed strict-arm predicate
+    /// collapses to the STRICT pairwise comparability primitive
+    /// (comparable AND not equal). Pinned exhaustively over `ALL^2`
+    /// (36 pairs). Peer of [`Lattice::is_monotone_sequence`]'s arity-2 seal
+    /// on the strictness axis.
+    #[test]
+    fn is_strictly_monotone_sequence_arity_2_reduces_to_strict_comparability_over_data_classification_all(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::is_strictly_monotone_sequence([&a, &b]),
+                    a.is_comparable(&b) && a != b,
+                    "is_strictly_monotone_sequence([{a:?}, {b:?}]) must reduce to \
+                     a.is_comparable(&b) && a != b — the 2-input direction-\
+                     collapsed strict-arm predicate collapses to the strict \
+                     pairwise comparability primitive",
+                );
+            }
+        }
+    }
+
+    /// **Load-bearing theorem**: [`Lattice::is_monotone_sequence`] AGREES with
+    /// the disjunction `is_ascending || is_descending` on every
+    /// [`DataClassification`] triple. Follows from the definition —
+    /// the direction-collapsed predicate is the pointwise UNION of
+    /// the two non-strict directional arms on the consecutive-pair
+    /// face. This is the theorem that closes the (leq, geq, either)
+    /// 3-arm direction-projection grid on the trait's combinator
+    /// surface. Pinned exhaustively over `DataClassification::ALL^3`
+    /// (216 triples).
+    #[test]
+    fn is_monotone_sequence_agrees_with_ascending_or_descending_disjunction_over_data_classification_all_triples(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let monotone = DataClassification::is_monotone_sequence([&a, &b, &c]);
+                    let either_direction = DataClassification::is_ascending([&a, &b, &c])
+                        || DataClassification::is_descending([&a, &b, &c]);
+                    assert_eq!(
+                        monotone, either_direction,
+                        "is_monotone_sequence([{a:?}, {b:?}, {c:?}]) must agree with \
+                         is_ascending || is_descending — the direction-collapsed \
+                         predicate is the pointwise union of the two non-strict \
+                         directional arms on the consecutive-pair face",
+                    );
+                }
+            }
+        }
+    }
+
+    /// **Load-bearing theorem**: [`Lattice::is_strictly_monotone_sequence`]
+    /// AGREES with the disjunction `is_strictly_ascending ||
+    /// is_strictly_descending` on every [`DataClassification`] triple
+    /// — strict-arm peer of [`Lattice::is_monotone_sequence`]'s direction-
+    /// collapse seal one strictness axis over. Pinned exhaustively
+    /// over `DataClassification::ALL^3` (216 triples).
+    #[test]
+    fn is_strictly_monotone_sequence_agrees_with_strict_ascending_or_descending_disjunction_over_data_classification_all_triples(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let strict_monotone =
+                        DataClassification::is_strictly_monotone_sequence([&a, &b, &c]);
+                    let either_strict_direction =
+                        DataClassification::is_strictly_ascending([&a, &b, &c])
+                            || DataClassification::is_strictly_descending([&a, &b, &c]);
+                    assert_eq!(
+                        strict_monotone, either_strict_direction,
+                        "is_strictly_monotone_sequence([{a:?}, {b:?}, {c:?}]) must agree \
+                         with is_strictly_ascending || is_strictly_descending — \
+                         the direction-collapsed strict-arm predicate is the \
+                         pointwise union of the two strict directional arms",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strictly_monotone_sequence`] REFINES [`Lattice::is_monotone_sequence`]
+    /// on every [`DataClassification`] triple — composes strict-implies-
+    /// non-strict on both directional arms with the direction-collapse
+    /// seals on both strictness arms. Every strictly-monotone sequence
+    /// (in either direction) is also non-strictly monotone. Pinned
+    /// exhaustively over `DataClassification::ALL^3` (216 triples).
+    #[test]
+    fn is_strictly_monotone_sequence_implies_is_monotone_sequence_over_data_classification_all_triples(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if DataClassification::is_strictly_monotone_sequence([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_monotone_sequence([&a, &b, &c]),
+                            "is_strictly_monotone_sequence([{a:?}, {b:?}, {c:?}]) must imply \
+                             is_monotone_sequence — every strictly-monotone sequence is \
+                             also non-strictly monotone via strict-implies-non-strict",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_constant`] REFINES [`Lattice::is_monotone_sequence`] on
+    /// every [`DataClassification`] triple — a constant sequence is
+    /// trivially both ascending AND descending, so the direction-
+    /// collapsed disjunction fires true. Peer of the constant-
+    /// refines-chain seal one direction-axis-collapse step over.
+    /// Pinned exhaustively over `DataClassification::ALL^3` (216
+    /// triples).
+    #[test]
+    fn is_constant_implies_is_monotone_sequence_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if DataClassification::is_constant([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_monotone_sequence([&a, &b, &c]),
+                            "is_constant([{a:?}, {b:?}, {c:?}]) must imply \
+                             is_monotone_sequence — a constant sequence is trivially both \
+                             ascending AND descending",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_monotone_sequence`] REFINES [`Lattice::is_chain`] on every
+    /// [`DataClassification`] triple — composes the direction-collapse
+    /// seal with both [`Lattice::is_ascending`]'s and
+    /// [`Lattice::is_descending`]'s refines-chain pins. A monotone
+    /// sequence in either direction traces a chain in the underlying
+    /// partial order. Pinned exhaustively over
+    /// `DataClassification::ALL^3` (216 triples).
+    #[test]
+    fn is_monotone_sequence_implies_is_chain_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if DataClassification::is_monotone_sequence([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_chain([&a, &b, &c]),
+                            "is_monotone_sequence([{a:?}, {b:?}, {c:?}]) must imply is_chain \
+                             — a monotone sequence in either direction traces a \
+                             chain in the underlying partial order",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_monotone_sequence`] and [`Lattice::is_strictly_monotone_sequence`]
+    /// are SEQUENCE-ORDER INDEPENDENT on every [`DataClassification`]
+    /// triple — reversing a slice swaps the ascending walk with the
+    /// descending walk on each strictness arm, and the disjunction is
+    /// symmetric. AGREES with [`Lattice::is_constant`] on the sequence-
+    /// order independence arm; DIVERGES from the four specific-direction
+    /// arms (all sequence-order dependent). The DIRECTION-COLLAPSED
+    /// predicates inherit order independence from the SYMMETRIC
+    /// disjunction over the two directional arms, even though each arm
+    /// alone is order dependent.
+    #[test]
+    fn is_monotone_sequence_and_is_strictly_monotone_sequence_are_sequence_order_independent_over_data_classification_all_triples(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    assert_eq!(
+                        DataClassification::is_monotone_sequence([&a, &b, &c]),
+                        DataClassification::is_monotone_sequence([&c, &b, &a]),
+                        "is_monotone_sequence([{a:?}, {b:?}, {c:?}]) must agree with \
+                         is_monotone_sequence([{c:?}, {b:?}, {a:?}]) — the direction-\
+                         collapsed non-strict predicate is sequence-order \
+                         independent via the symmetric disjunction over both \
+                         directional arms",
+                    );
+                    assert_eq!(
+                        DataClassification::is_strictly_monotone_sequence([&a, &b, &c]),
+                        DataClassification::is_strictly_monotone_sequence([&c, &b, &a]),
+                        "is_strictly_monotone_sequence([{a:?}, {b:?}, {c:?}]) must agree \
+                         with is_strictly_monotone_sequence([{c:?}, {b:?}, {a:?}]) — the \
+                         direction-collapsed strict predicate is sequence-order \
+                         independent via the symmetric disjunction over both \
+                         strict directional arms",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_monotone_sequence`] REJECTS every peak (rise-then-fall) and
+    /// every valley (fall-then-rise) on [`DataClassification`] — the
+    /// defining failure mode of the direction-collapsed predicate. A
+    /// strict ascent followed by a strict descent (or vice versa) fails
+    /// BOTH directional walks: the ascending walk rejects the descent
+    /// step, and the descending walk rejects the ascent step, so the
+    /// disjunction fires false. This is the SIGNAL cell — the direction-
+    /// collapsed predicate carries strictly more information than the
+    /// (ascending, descending) pair because it rejects sequences that
+    /// neither directional arm alone rejects distinctively.
+    #[test]
+    fn is_monotone_sequence_rejects_peak_and_valley_over_data_classification() {
+        use tatara_process::classification::DataClassification;
+        let a = DataClassification::Public;
+        let b = DataClassification::Internal;
+        let c = DataClassification::Confidential;
+        // Peak: [Public, Confidential, Internal] rises then falls —
+        // neither ascending nor descending, so not monotone.
+        assert!(!DataClassification::is_ascending([&a, &c, &b]));
+        assert!(!DataClassification::is_descending([&a, &c, &b]));
+        assert!(!DataClassification::is_monotone_sequence([&a, &c, &b]));
+        assert!(!DataClassification::is_strictly_monotone_sequence([
+            &a, &c, &b
+        ]));
+        // Valley: [Internal, Public, Confidential] falls then rises —
+        // neither ascending nor descending, so not monotone.
+        assert!(!DataClassification::is_ascending([&b, &a, &c]));
+        assert!(!DataClassification::is_descending([&b, &a, &c]));
+        assert!(!DataClassification::is_monotone_sequence([&b, &a, &c]));
+        assert!(!DataClassification::is_strictly_monotone_sequence([
+            &b, &a, &c
+        ]));
+        // Strict ascent: monotone in ascending direction.
+        assert!(DataClassification::is_ascending([&a, &b, &c]));
+        assert!(DataClassification::is_monotone_sequence([&a, &b, &c]));
+        assert!(DataClassification::is_strictly_monotone_sequence([
+            &a, &b, &c
+        ]));
+        // Strict descent: monotone in descending direction.
+        assert!(DataClassification::is_descending([&c, &b, &a]));
+        assert!(DataClassification::is_monotone_sequence([&c, &b, &a]));
+        assert!(DataClassification::is_strictly_monotone_sequence([
+            &c, &b, &a
+        ]));
+    }
+
+    /// [`Lattice::is_monotone_sequence`] projects the pointed-top antichain
+    /// [`SubstrateType`] onto the top-touching-diagonal — accepts a
+    /// consecutive pair iff `a == b || a == top || b == top`. The
+    /// union of [`Lattice::is_ascending`]'s projection (accepts `a
+    /// == b || b == top`) with [`Lattice::is_descending`]'s projection
+    /// (accepts `a == b || a == top`) collapses to the top-touching
+    /// diagonal. [`Lattice::is_strictly_monotone_sequence`] projects onto the
+    /// STRICT top-touching half-edge — accepts iff `(a == top) XOR (b
+    /// == top)` — the strictest sequence-shape projection onto the
+    /// antichain. Pinned exhaustively over `SubstrateType::ALL^2` (64
+    /// pairs).
+    #[test]
+    fn is_monotone_sequence_and_is_strictly_monotone_sequence_project_the_pointed_top_antichain_over_substrate_type_all_pairs(
+    ) {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                // Non-strict direction-collapsed: accepts iff any of the
+                // three top-touching-diagonal arms fires.
+                let expected_monotone = a == b || a == top || b == top;
+                assert_eq!(
+                    SubstrateType::is_monotone_sequence([&a, &b]),
+                    expected_monotone,
+                    "is_monotone_sequence([{a:?}, {b:?}]) on the pointed-top antichain \
+                     must fire true iff a == b || a == top || b == top — \
+                     the union of the two directional antichain projections",
+                );
+                // Strict direction-collapsed: accepts iff exactly one
+                // side is the top absorber.
+                let expected_strict = (a == top) ^ (b == top);
+                assert_eq!(
+                    SubstrateType::is_strictly_monotone_sequence([&a, &b]),
+                    expected_strict,
+                    "is_strictly_monotone_sequence([{a:?}, {b:?}]) on the pointed-top \
+                     antichain must fire true iff (a == top) XOR (b == top) — \
+                     the strict half-edge fires in either direction but rejects \
+                     every non-top-touching pair and every top-to-top pair",
+                );
+            }
+        }
+    }
+
     proptest! {
         /// [`Lattice::is_constant`] AGREES with the conjunction
         /// `is_ascending && is_descending` on random
@@ -7548,6 +8222,80 @@ mod tests {
             prop_assert_eq!(
                 CalmClassification::is_constant(forward.iter().copied()),
                 CalmClassification::is_constant(reversed.iter().copied()),
+            );
+        }
+
+        /// [`Lattice::is_monotone_sequence`] AGREES with the disjunction
+        /// `is_ascending || is_descending` on random
+        /// [`DataClassification`] sequences of length 0..8 — proptest
+        /// peer of the exhaustive triple seal at extended arity on the
+        /// direction-collapse theorem.
+        #[test]
+        fn is_monotone_sequence_agrees_with_ascending_or_descending_disjunction_over_data_classification_random_sequences(
+            vs in proptest::collection::vec(prop_oneof![
+                Just(DataClassification::Public),
+                Just(DataClassification::Internal),
+                Just(DataClassification::Confidential),
+                Just(DataClassification::Pii),
+                Just(DataClassification::Phi),
+                Just(DataClassification::Pci),
+            ], 0..8usize),
+        ) {
+            let refs: Vec<&DataClassification> = vs.iter().collect();
+            let monotone = DataClassification::is_monotone_sequence(refs.iter().copied());
+            let either_direction = DataClassification::is_ascending(refs.iter().copied())
+                || DataClassification::is_descending(refs.iter().copied());
+            prop_assert_eq!(monotone, either_direction);
+        }
+
+        /// [`Lattice::is_strictly_monotone_sequence`] AGREES with the disjunction
+        /// `is_strictly_ascending || is_strictly_descending` on random
+        /// [`DataClassification`] sequences of length 0..8 — strict-arm
+        /// proptest peer of the direction-collapse theorem at extended
+        /// arity.
+        #[test]
+        fn is_strictly_monotone_sequence_agrees_with_strict_ascending_or_descending_disjunction_over_data_classification_random_sequences(
+            vs in proptest::collection::vec(prop_oneof![
+                Just(DataClassification::Public),
+                Just(DataClassification::Internal),
+                Just(DataClassification::Confidential),
+                Just(DataClassification::Pii),
+                Just(DataClassification::Phi),
+                Just(DataClassification::Pci),
+            ], 0..8usize),
+        ) {
+            let refs: Vec<&DataClassification> = vs.iter().collect();
+            let strict_monotone = DataClassification::is_strictly_monotone_sequence(refs.iter().copied());
+            let either_strict_direction =
+                DataClassification::is_strictly_ascending(refs.iter().copied())
+                    || DataClassification::is_strictly_descending(refs.iter().copied());
+            prop_assert_eq!(strict_monotone, either_strict_direction);
+        }
+
+        /// [`Lattice::is_monotone_sequence`] and [`Lattice::is_strictly_monotone_sequence`]
+        /// are SEQUENCE-ORDER INDEPENDENT on random
+        /// [`DataClassification`] sequences of length 0..8 — proptest
+        /// peer of the exhaustive triple seal at extended arity.
+        #[test]
+        fn is_monotone_sequence_and_is_strictly_monotone_sequence_are_sequence_order_independent_over_data_classification_random_sequences(
+            vs in proptest::collection::vec(prop_oneof![
+                Just(DataClassification::Public),
+                Just(DataClassification::Internal),
+                Just(DataClassification::Confidential),
+                Just(DataClassification::Pii),
+                Just(DataClassification::Phi),
+                Just(DataClassification::Pci),
+            ], 0..8usize),
+        ) {
+            let forward: Vec<&DataClassification> = vs.iter().collect();
+            let reversed: Vec<&DataClassification> = vs.iter().rev().collect();
+            prop_assert_eq!(
+                DataClassification::is_monotone_sequence(forward.iter().copied()),
+                DataClassification::is_monotone_sequence(reversed.iter().copied()),
+            );
+            prop_assert_eq!(
+                DataClassification::is_strictly_monotone_sequence(forward.iter().copied()),
+                DataClassification::is_strictly_monotone_sequence(reversed.iter().copied()),
             );
         }
     }

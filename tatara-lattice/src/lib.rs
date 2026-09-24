@@ -518,6 +518,158 @@ pub trait Lattice: Sized + Clone + PartialEq {
     {
         iter.into_iter().all(|x| x.leq(self))
     }
+    /// Strict-order N-ary Boolean-conjunction peer of
+    /// [`Lattice::is_lower_bound_of`] on the STRICT arm — `self` sits
+    /// STRICTLY BELOW EVERY element the iterator yields.
+    /// `a.is_strict_lower_bound_of([&b, &c, &d])` holds iff
+    /// `a.strictly_below(&b) && a.strictly_below(&c) && a.strictly_below(&d)`:
+    /// `self` is a common STRICT lower bound for the iterated set.
+    ///
+    /// The strict-arm N-ary Boolean-PREDICATE peer of
+    /// [`Lattice::is_lower_bound_of`] one STRICTNESS axis over on the
+    /// (strict, non-strict) × (lower, upper) 2×2 N-ary Boolean-
+    /// conjunction predicate grid: where [`Lattice::is_lower_bound_of`]
+    /// DECIDES whether `self` is a NON-STRICT lower bound (member of
+    /// the `≤`-bound set), this decides whether `self` is a STRICT
+    /// lower bound (member of the `<`-bound set). Together with
+    /// [`Lattice::is_strict_upper_bound_of`] on the dual strict arm
+    /// this closes the (strict, non-strict) × (lower, upper) 2×2 grid
+    /// on the N-ary Boolean-conjunction predicate face of the
+    /// combinator surface: the pairwise (strict, non-strict) × (leq,
+    /// geq) 2×2 grid is closed at the pairwise level by [`Lattice::leq`]
+    /// / [`Lattice::geq`] / [`Lattice::strictly_below`] /
+    /// [`Lattice::strictly_above`], and this widening threads the
+    /// SAME strictness axis through the N-ary-aggregation surface so
+    /// every future closed-set lattice impl inherits BOTH strict AND
+    /// non-strict N-ary bound predicates for free.
+    ///
+    /// **Empty-iterator vacuous truth**: `a.is_strict_lower_bound_of(
+    /// std::iter::empty()) == true` for every element — the empty
+    /// conjunction is vacuously true because [`Iterator::all`] on the
+    /// empty iterator is `true`, and every element is trivially a
+    /// strict lower bound of the empty set. Same empty-conjunction
+    /// identity as [`Lattice::is_lower_bound_of`]'s vacuous-true.
+    ///
+    /// **Singleton-strict-identity**: `a.is_strict_lower_bound_of([&b])
+    /// == a.strictly_below(&b)` — the 1-input strict predicate reduces
+    /// to the pairwise STRICT relation, dual to
+    /// [`Lattice::is_lower_bound_of`]'s singleton reduction on the
+    /// non-strict arm.
+    ///
+    /// **Refines [`Lattice::is_lower_bound_of`]**:
+    /// `a.is_strict_lower_bound_of(iter) ⇒ a.is_lower_bound_of(iter)`
+    /// — the strict conjunction refines the non-strict one at every
+    /// element position via [`Lattice::strictly_below`]'s
+    /// refines-[`Lattice::leq`] identity. The strict-minus-non-strict
+    /// gap on the N-ary aggregate is exactly the set of iterables that
+    /// contain some element equal to `self`.
+    ///
+    /// **Irreflexivity on any inclusive iterable**: if the iterator
+    /// yields `self`, then `self.is_strict_lower_bound_of(iter) ==
+    /// false` — [`Iterator::all`] short-circuits at the first `x ==
+    /// self` element because [`Lattice::strictly_below`]'s irreflexive
+    /// arm rejects `self.strictly_below(&self)`. In particular
+    /// `a.is_strict_lower_bound_of([&a]) == false` at every element,
+    /// and `T::bottom().is_strict_lower_bound_of(iter)` is false
+    /// whenever `bottom` appears in `iter` — the strict-lower-bound
+    /// predicate does NOT inherit the non-strict universal-bottom
+    /// witness on iterables that include the bottom endpoint.
+    ///
+    /// **Any-violating-element rejection**: if any `x` in the iterator
+    /// has `!self.strictly_below(x)` (either `x == self` OR
+    /// `!self.leq(x)`), then `self.is_strict_lower_bound_of(iter) ==
+    /// false` — [`Iterator::all`] short-circuits on the first violating
+    /// element.
+    ///
+    /// **Antichain rejection**: on an antichain lattice
+    /// (e.g. [`SubstrateType`]), the strict predicate rejects most
+    /// pairs the non-strict one accepts — a non-Regulatory `self` fails
+    /// `self.strictly_below(x)` for every distinct non-Regulatory `x`
+    /// (they are incomparable, so `leq` fails, so `strictly_below`
+    /// fails), leaving only the strict half-edge into
+    /// [`SubstrateType::top`] as a passing case. The predicate does
+    /// NOT promote incomparable pairs to a strict-order verdict.
+    ///
+    /// Default routes through `iter.into_iter().all(|x|
+    /// self.strictly_below(x))` — the two-primitive antisymmetric
+    /// composition of [`Lattice::strictly_below`] and
+    /// [`Iterator::all`] on any partial order. A future normalization
+    /// at either primitive (a strictly_below override, an Iterator::all
+    /// short-circuit tweak in the standard library) lands at ONE site
+    /// and this default inherits mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the strict N-ary containment-from-below
+    /// predicate is itself a typed named `bool` composing the pairwise
+    /// strict partial-order relation via [`Iterator::all`]) + THEORY.md
+    /// §III (typescape — the strict N-ary Boolean-bound predicate on
+    /// every classification-axis lattice binds at ONE substrate owner
+    /// on the [`Lattice`] algebra rather than at each consumer's hand-
+    /// rolled `iter.all(|x| self.strictly_below(x))`).
+    fn is_strict_lower_bound_of<'a, I>(&self, iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().all(|x| self.strictly_below(x))
+    }
+    /// Dual of [`Lattice::is_strict_lower_bound_of`] on the MEET/JOIN
+    /// axis — `self` sits STRICTLY ABOVE EVERY element the iterator
+    /// yields. `a.is_strict_upper_bound_of([&b, &c, &d])` holds iff
+    /// `b.strictly_below(&a) && c.strictly_below(&a) &&
+    /// d.strictly_below(&a)`: `self` is a common STRICT upper bound
+    /// for the iterated set.
+    ///
+    /// The strict-arm N-ary Boolean-PREDICATE peer of
+    /// [`Lattice::is_upper_bound_of`] one STRICTNESS axis over on the
+    /// (strict, non-strict) × (lower, upper) 2×2 N-ary Boolean-
+    /// conjunction predicate grid. Together with
+    /// [`Lattice::is_strict_lower_bound_of`] closes the strict arm of
+    /// the grid on the algebra's combinator surface.
+    ///
+    /// **Empty-iterator vacuous truth**: `a.is_strict_upper_bound_of(
+    /// std::iter::empty()) == true` for every element — the empty
+    /// conjunction is vacuously true.
+    ///
+    /// **Singleton-strict-identity**:
+    /// `a.is_strict_upper_bound_of([&b]) == b.strictly_below(&a)` —
+    /// the 1-input strict predicate reduces to the pairwise STRICT
+    /// relation with the direction flipped (since `self` sits ABOVE
+    /// the operand rather than BELOW it), dual of
+    /// [`Lattice::is_strict_lower_bound_of`]'s singleton reduction.
+    ///
+    /// **Refines [`Lattice::is_upper_bound_of`]**:
+    /// `a.is_strict_upper_bound_of(iter) ⇒ a.is_upper_bound_of(iter)`
+    /// — the strict conjunction refines the non-strict one at every
+    /// element position via [`Lattice::strictly_below`]'s
+    /// refines-[`Lattice::leq`] identity on the dual direction.
+    ///
+    /// **Irreflexivity on any inclusive iterable**: if the iterator
+    /// yields `self`, then `self.is_strict_upper_bound_of(iter) ==
+    /// false` — the strict-upper-bound predicate does NOT inherit
+    /// the non-strict universal-top witness on iterables that include
+    /// the top endpoint.
+    ///
+    /// **Any-violating-element rejection**: if any `x` in the iterator
+    /// has `!x.strictly_below(self)`, then
+    /// `self.is_strict_upper_bound_of(iter) == false`.
+    ///
+    /// Default routes through `iter.into_iter().all(|x|
+    /// x.strictly_below(self))` so every impl inherits the direction-
+    /// flipped strict N-ary Boolean conjunction mechanically. A future
+    /// override at the underlying [`Lattice::strictly_below`] (or at
+    /// [`Lattice::leq`] which `strictly_below` composes from) lands
+    /// at ONE site and this dual inherits through the default.
+    ///
+    /// Theory anchor: same as [`Lattice::is_strict_lower_bound_of`]
+    /// on the dual arm — THEORY.md §II.1 invariant 5 + §III.
+    fn is_strict_upper_bound_of<'a, I>(&self, iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().all(|x| x.strictly_below(self))
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -2539,6 +2691,383 @@ mod tests {
             let join = CalmClassification::join_all(iter);
             prop_assert!(meet.is_lower_bound_of(iter));
             prop_assert!(join.is_upper_bound_of(iter));
+        }
+    }
+
+    // ── Lattice::is_strict_lower_bound_of / is_strict_upper_bound_of —
+    //    strict-arm N-ary Boolean-conjunction default peers ─────────
+    //
+    // Bind [`Lattice::is_strict_lower_bound_of`] +
+    // [`Lattice::is_strict_upper_bound_of`] at fail-before-pass-after
+    // granularity. Pre-lift the [`Lattice`] trait's N-ary Boolean-
+    // conjunction surface carried the NON-STRICT arm (`is_lower_bound_of`
+    // / `is_upper_bound_of` via `iter.all(|x| self.leq(x))`), but a
+    // consumer wanting to decide whether `self` was a STRICT common
+    // bound for an iterated set (a compliance-baseline strict-refinement
+    // probe over a cohort, an ephemeral-env strict-tightening check
+    // over a `Vec<Classification>`) hand-authored
+    // `iter.all(|x| self.strictly_below(x))` (or the dual
+    // `iter.all(|x| x.strictly_below(self))`) at each callsite. The
+    // pattern already exists in-tree — the pairwise strict comparator
+    // pair (`strictly_below` / `strictly_above`) landed as a lift from
+    // [`tatara_lisp::macro_expand::ResourceLimits::lt`], and the N-ary
+    // non-strict pair (`is_lower_bound_of` / `is_upper_bound_of`)
+    // landed as a lift from
+    // [`tatara_lisp::macro_expand::ResourceLimits::is_lower_bound_of`]
+    // / `is_upper_bound_of`. The STRICT N-ary arm is the missing corner
+    // of the (strict, non-strict) × (lower, upper) 2×2 N-ary Boolean-
+    // conjunction predicate grid — it composes the STRICT pairwise
+    // arm with the N-ARY Boolean-conjunction aggregator via ONE
+    // substrate default rather than at each consumer's hand-rolled
+    // `iter.all(|x| self.strictly_below(x))`.
+    //
+    // Post-lift the whole strict N-ary bound-predicate pair binds at
+    // ONE substrate primitive on the [`Lattice`] algebra, and every
+    // downstream impl (the six existing in-tree ones + `Baseline` via
+    // the `crate::Lattice` trait AND any future closed-set lift)
+    // inherits `is_strict_lower_bound_of` / `is_strict_upper_bound_of`
+    // for free through the default. Together with the prior widening
+    // (`geq` / `is_bottom` / `is_top` / `is_comparable` /
+    // `is_incomparable` / `strictly_below` / `strictly_above` /
+    // `meet_all` / `join_all` / `is_lower_bound_of` /
+    // `is_upper_bound_of`) the trait now closes the (strict, non-strict)
+    // × (lower, upper) 2×2 N-ary Boolean-conjunction predicate grid on
+    // the algebra's combinator surface: ([`is_lower_bound_of`],
+    // [`is_upper_bound_of`]) close the non-strict arm, and
+    // ([`is_strict_lower_bound_of`], [`is_strict_upper_bound_of`])
+    // close the strict arm.
+    //
+    // Coverage below spans:
+    //
+    //   • empty-iterator vacuous truth (both directions return `true`
+    //     on the empty iterator — the empty-conjunction identity);
+    //   • singleton-strict-identity (1-input reduces to the pairwise
+    //     STRICT relation, with the direction flipped on the upper-
+    //     bound arm);
+    //   • refines-non-strict (strict predicate ⇒ non-strict predicate
+    //     at every iterable, and the strict-minus-non-strict gap on
+    //     the aggregate is exactly the iterables containing `self`);
+    //   • irreflexivity-on-inclusive-iterable (inserting `self` into
+    //     the iterable flips the strict verdict to `false` while the
+    //     non-strict verdict stays `true`);
+    //   • closed-set exhaustive sweeps on `DataClassification::ALL^2`
+    //     (a is a strict lower bound of {&b} iff a.strictly_below(&b))
+    //     and `SubstrateType::ALL^2` (antichain-shape — the pointed-
+    //     top strict edge is the only passing case).
+
+    /// [`Lattice::is_strict_lower_bound_of`] on the empty iterator
+    /// returns `true` at every variant of [`DataClassification::ALL`]
+    /// — the empty conjunction is vacuously true. Peer of
+    /// `is_lower_and_upper_bound_of_empty_iterator_are_vacuously_true_over_data_classification_all`
+    /// on the strict arm: both strict AND non-strict N-ary Boolean-
+    /// conjunction predicates carry the same empty-conjunction
+    /// identity because [`Iterator::all`] on the empty iterator is
+    /// `true` regardless of the per-element predicate. Fail-before-
+    /// pass-after: pre-lift `is_strict_lower_bound_of` is not exposed
+    /// as a trait method — consumers who wanted the strict N-ary
+    /// reading hand-authored `iter.all(|x| self.strictly_below(x))`
+    /// inline at each callsite; post-lift the vacuous-true is fixed
+    /// at ONE primitive on the [`Lattice`] algebra.
+    #[test]
+    fn is_strict_lower_and_upper_bound_of_empty_iterator_are_vacuously_true_over_data_classification_all(
+    ) {
+        use tatara_process::classification::DataClassification;
+        let empty: [&DataClassification; 0] = [];
+        for a in DataClassification::ALL {
+            assert!(
+                a.is_strict_lower_bound_of(empty),
+                "is_strict_lower_bound_of on empty iterator must be true at {a:?} — the \
+                 empty conjunction is vacuously true",
+            );
+            assert!(
+                a.is_strict_upper_bound_of(empty),
+                "is_strict_upper_bound_of on empty iterator must be true at {a:?} — the \
+                 empty conjunction is vacuously true",
+            );
+        }
+    }
+
+    /// [`Lattice::is_strict_lower_bound_of`] on a singleton reduces to
+    /// the pairwise `strictly_below` relation over
+    /// `DataClassification::ALL^2` — i.e.
+    /// `a.is_strict_lower_bound_of([&b]) == a.strictly_below(&b)` at
+    /// every pair. Dually, [`Lattice::is_strict_upper_bound_of`] on a
+    /// singleton reduces to the direction-flipped
+    /// `b.strictly_below(&a)`. Pinned exhaustively on the 6×6 pair
+    /// space so a regression that flipped the direction on either
+    /// predicate OR drifted the composition off `strictly_below`
+    /// (e.g. dropped the `!=` conjunct back to `leq`) would surface
+    /// at the pair it broke. Peer of
+    /// `is_lower_and_upper_bound_of_singleton_reduce_to_leq_over_data_classification_all_pairs`
+    /// on the strict arm.
+    #[test]
+    fn is_strict_lower_and_upper_bound_of_singleton_reduce_to_strictly_below_over_data_classification_all_pairs(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    a.is_strict_lower_bound_of([&b]),
+                    a.strictly_below(&b),
+                    "is_strict_lower_bound_of({a:?}, [&{b:?}]) drifted from \
+                     strictly_below({a:?}, {b:?}) — the 1-input predicate must reduce to \
+                     the pairwise strict relation",
+                );
+                assert_eq!(
+                    a.is_strict_upper_bound_of([&b]),
+                    b.strictly_below(&a),
+                    "is_strict_upper_bound_of({a:?}, [&{b:?}]) drifted from the direction-\
+                     flipped strictly_below({b:?}, {a:?}) — the upper-bound singleton \
+                     flips the direction",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_lower_bound_of`] REFINES
+    /// [`Lattice::is_lower_bound_of`] at every iterable over
+    /// [`DataClassification`] — `a.is_strict_lower_bound_of(iter) ⇒
+    /// a.is_lower_bound_of(iter)` because
+    /// `strictly_below(x) ⇒ leq(x)` at every element position.
+    /// Dually [`Lattice::is_strict_upper_bound_of`] refines
+    /// [`Lattice::is_upper_bound_of`]. Pinned exhaustively on the 2-
+    /// and 3-arm sweeps of `DataClassification::ALL`. The strict-
+    /// minus-non-strict gap is exactly the iterables containing
+    /// `self` — this pin surfaces at the specific pair where the
+    /// strict verdict flips false while the non-strict verdict
+    /// stays true.
+    #[test]
+    fn is_strict_bound_of_refines_is_bound_of_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        // Exhaustive 2-arm sweep with a varying probe element — the
+        // refinement holds at every closed-set position, not just at
+        // the endpoints. The proptest peer
+        // `data_class_is_strict_lower_bound_of_refines_is_lower_bound_of_on_pair`
+        // below extends the pin to random pairs; the 3-arm case
+        // inherits from that peer's random-triple coverage.
+        for probe in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                for b in DataClassification::ALL {
+                    let iter = [&a, &b];
+                    if probe.is_strict_lower_bound_of(iter) {
+                        assert!(
+                            probe.is_lower_bound_of(iter),
+                            "is_strict_lower_bound_of({probe:?}, [{a:?}, {b:?}]) implies \
+                             is_lower_bound_of — strict refines non-strict",
+                        );
+                    }
+                    if probe.is_strict_upper_bound_of(iter) {
+                        assert!(
+                            probe.is_upper_bound_of(iter),
+                            "is_strict_upper_bound_of({probe:?}, [{a:?}, {b:?}]) implies \
+                             is_upper_bound_of — dual strict refines non-strict",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_lower_bound_of`] REJECTS an iterable that
+    /// contains `self` over [`DataClassification`] — the strict-
+    /// minus-non-strict gap. `self.is_strict_lower_bound_of([&self,
+    /// &other]) == false` at every element because
+    /// `self.strictly_below(&self)` short-circuits on the reflexive
+    /// diagonal. Same rejection on the dual arm for
+    /// [`Lattice::is_strict_upper_bound_of`]. Pinned as a specific
+    /// contrast against the non-strict version where the presence of
+    /// `self` in the iterable is compatible with the bound holding
+    /// (since `self.leq(&self)` is reflexive-true).
+    #[test]
+    fn is_strict_lower_and_upper_bound_of_reject_self_inclusive_iterable_over_data_classification_all(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            // Self-only singleton — the strict predicate rejects both
+            // directions because `strictly_below` is irreflexive.
+            assert!(
+                !a.is_strict_lower_bound_of([&a]),
+                "is_strict_lower_bound_of([&{a:?}]) at {a:?} must be false — the strict \
+                 predicate is irreflexive on its self-inclusive input",
+            );
+            assert!(
+                !a.is_strict_upper_bound_of([&a]),
+                "is_strict_upper_bound_of([&{a:?}]) at {a:?} must be false — the dual \
+                 strict predicate is irreflexive on its self-inclusive input",
+            );
+            // Meanwhile the non-strict version accepts the self-only
+            // singleton — the reflexive-diagonal is compatible with
+            // the `≤` bound.
+            assert!(a.is_lower_bound_of([&a]));
+            assert!(a.is_upper_bound_of([&a]));
+        }
+    }
+
+    /// [`Lattice::is_strict_lower_bound_of`] projects the pointed-top
+    /// antichain on [`SubstrateType`] to its strict-half-edge shape:
+    /// every non-[`SubstrateType::top`] substrate is a strict lower
+    /// bound of `[Regulatory]` (the pointed-top strict half-edge),
+    /// but ONLY [`SubstrateType::top`] itself is NOT a strict lower
+    /// bound of `[Regulatory]` (since `Regulatory.strictly_below(
+    /// &Regulatory)` fails on the reflexive diagonal). Peer seal to
+    /// `is_upper_bound_of_projects_the_pointed_top_antichain_over_substrate_type_all`
+    /// on the STRICT arm — the antichain SHAPE is now bound through
+    /// FIVE algebra predicates (`leq`, `is_incomparable`,
+    /// `strictly_below`, `is_upper_bound_of`,
+    /// `is_strict_lower_bound_of`) via ONE substrate owner on the
+    /// [`Lattice`] trait.
+    #[test]
+    fn is_strict_lower_bound_of_projects_the_pointed_top_antichain_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        // Every non-top substrate is a STRICT lower bound of
+        // [Regulatory] — the pointed-top strict half-edge.
+        for s in SubstrateType::ALL {
+            let is_strict_lower = s.is_strict_lower_bound_of([&SubstrateType::top()]);
+            if s == SubstrateType::top() {
+                assert!(
+                    !is_strict_lower,
+                    "top() (Regulatory) must NOT be a strict lower bound of [Regulatory] — \
+                     strictly_below is irreflexive at the top-diagonal",
+                );
+            } else {
+                assert!(
+                    is_strict_lower,
+                    "non-top substrate {s:?} must be a strict lower bound of [Regulatory] \
+                     — the antichain's pointed-top strict half-edge",
+                );
+            }
+        }
+        // Every distinct non-Regulatory pair fails the strict N-ary
+        // predicate in both directions — the antichain rejects any
+        // strict-order verdict on incomparable pairs.
+        for s in SubstrateType::ALL {
+            for t in SubstrateType::ALL {
+                if s != t && s != SubstrateType::top() && t != SubstrateType::top() {
+                    assert!(
+                        !s.is_strict_lower_bound_of([&t]),
+                        "distinct non-Regulatory substrates ({s:?}, {t:?}) must fail the \
+                         strict N-ary lower-bound predicate — the antichain does not \
+                         promote incomparable pairs to a strict-order verdict",
+                    );
+                    assert!(!s.is_strict_upper_bound_of([&t]));
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_lower_bound_of`] short-circuits `false`
+    /// when any element in the iterator violates the STRICT
+    /// containment direction over [`DataClassification`]: given a
+    /// slice `[&strict, &equal]` where `self.strictly_below(&strict)`
+    /// holds but `self.strictly_below(&equal)` fails on the reflexive
+    /// diagonal (equal == self), the strict predicate rejects the
+    /// whole slice while the non-strict predicate accepts it.
+    /// Pinned on a specific self-equal-in-tail configuration and its
+    /// dual so both short-circuit arms bind at the substrate.
+    #[test]
+    fn is_strict_lower_and_upper_bound_of_reject_when_any_element_violates_over_data_classification(
+    ) {
+        use tatara_process::classification::DataClassification::{
+            Confidential, Internal, Pci, Phi, Pii, Public,
+        };
+        // `Public` is a strict lower bound of `[Internal, Pii]` —
+        // both elements sit strictly above.
+        assert!(Public.is_strict_lower_bound_of([&Internal, &Pii]));
+        // `Public` is NOT a strict lower bound of `[Internal, Public]`
+        // — fails at `Public.strictly_below(&Public)` on the reflexive
+        // diagonal. Contrast against `Public.is_lower_bound_of([&
+        // Internal, &Public])` which succeeds (reflexive `leq`).
+        assert!(!Public.is_strict_lower_bound_of([&Internal, &Public]));
+        assert!(Public.is_lower_bound_of([&Internal, &Public]));
+        // `Pci` is NOT a strict upper bound of `[Internal, Pci]` —
+        // fails at `Pci.strictly_below(&Pci)` on the diagonal.
+        assert!(!Pci.is_strict_upper_bound_of([&Internal, &Pci]));
+        assert!(Pci.is_upper_bound_of([&Internal, &Pci]));
+        // `Confidential` is NOT a strict lower bound of `[Pii, Pci,
+        // Phi, Internal]` — fails at `Confidential.strictly_below(
+        // &Internal)` (leq fails; Internal < Confidential).
+        assert!(!Confidential.is_strict_lower_bound_of([&Pii, &Pci, &Phi, &Internal]));
+    }
+
+    proptest! {
+        /// [`Lattice::is_strict_lower_bound_of`] on a singleton reduces
+        /// to the pairwise `strictly_below` relation over any
+        /// [`DataClassification`] pair — proptest peer of the
+        /// exhaustive
+        /// `is_strict_lower_and_upper_bound_of_singleton_reduce_to_strictly_below_over_data_classification_all_pairs`
+        /// seal above. Peers on the CALM axis via
+        /// `calm_is_strict_lower_bound_of_singleton_reduces_to_strictly_below`.
+        #[test]
+        fn data_class_is_strict_lower_and_upper_bound_of_singleton_reduce_to_strictly_below(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            prop_assert_eq!(a.is_strict_lower_bound_of([&b]), a.strictly_below(&b));
+            prop_assert_eq!(a.is_strict_upper_bound_of([&b]), b.strictly_below(&a));
+        }
+
+        /// [`Lattice::is_strict_lower_bound_of`] REFINES
+        /// [`Lattice::is_lower_bound_of`] on any pair over
+        /// [`DataClassification`] — pinned in the strict-implies-non-
+        /// strict direction. Proptest peer of the exhaustive
+        /// `is_strict_bound_of_refines_is_bound_of_over_data_classification_all`
+        /// seal's 2-arm sweep.
+        #[test]
+        fn data_class_is_strict_lower_bound_of_refines_is_lower_bound_of_on_pair(
+            probe in any_data_class(),
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            let iter = [&a, &b];
+            if probe.is_strict_lower_bound_of(iter) {
+                prop_assert!(probe.is_lower_bound_of(iter));
+            }
+            if probe.is_strict_upper_bound_of(iter) {
+                prop_assert!(probe.is_upper_bound_of(iter));
+            }
+        }
+
+        /// [`Lattice::is_strict_lower_bound_of`] REJECTS an iterable
+        /// that contains `self` on the DataClassification axis —
+        /// proptest peer of the exhaustive
+        /// `is_strict_lower_and_upper_bound_of_reject_self_inclusive_iterable_over_data_classification_all`
+        /// seal.
+        #[test]
+        fn data_class_is_strict_lower_and_upper_bound_of_reject_self_inclusive_iterable(
+            a in any_data_class(),
+            other in any_data_class(),
+        ) {
+            prop_assert!(!a.is_strict_lower_bound_of([&other, &a]));
+            prop_assert!(!a.is_strict_upper_bound_of([&other, &a]));
+        }
+
+        /// Peer of the DataClassification singleton-reduction proptest
+        /// on the CALM boolean-lattice axis — same shape, different
+        /// closed set.
+        #[test]
+        fn calm_is_strict_lower_bound_of_singleton_reduces_to_strictly_below(
+            a in any_calm(),
+            b in any_calm(),
+        ) {
+            prop_assert_eq!(a.is_strict_lower_bound_of([&b]), a.strictly_below(&b));
+            prop_assert_eq!(a.is_strict_upper_bound_of([&b]), b.strictly_below(&a));
+        }
+
+        /// Peer of the DataClassification refinement proptest on the
+        /// CALM axis.
+        #[test]
+        fn calm_is_strict_lower_bound_of_refines_is_lower_bound_of_on_pair(
+            probe in any_calm(),
+            a in any_calm(),
+            b in any_calm(),
+        ) {
+            let iter = [&a, &b];
+            if probe.is_strict_lower_bound_of(iter) {
+                prop_assert!(probe.is_lower_bound_of(iter));
+            }
+            if probe.is_strict_upper_bound_of(iter) {
+                prop_assert!(probe.is_upper_bound_of(iter));
+            }
         }
     }
 }

@@ -1126,6 +1126,247 @@ pub trait Lattice: Sized + Clone + PartialEq {
         }
         true
     }
+    /// Sequence-shape (consecutive-pair) peer of [`Lattice::is_chain`]
+    /// on the CONSECUTIVE-VS-ALL-PAIRS axis — the iterated set is
+    /// ASCENDING (a [`Lattice::leq`]-monotone non-decreasing sequence
+    /// on the lattice's partial order) iff every CONSECUTIVE pair
+    /// `(vs[i], vs[i + 1])` satisfies `vs[i].leq(&vs[i + 1])`.
+    /// `T::is_ascending([&a, &b, &c])` holds iff `a.leq(&b) &&
+    /// b.leq(&c)`; three or more elements chain through the
+    /// consecutive-pair conjunction. Empty and singleton collections
+    /// are vacuously true because they contain no consecutive pair to
+    /// check.
+    ///
+    /// The SEQUENCE-SHAPE peer of [`Lattice::is_chain`] one
+    /// CONSECUTIVE-VS-ALL-PAIRS axis over on the collection-level
+    /// combinator surface — where [`Lattice::is_chain`] decides
+    /// STRUCTURAL comparability on the full O(N²) all-pairs symmetric
+    /// nested-loop over the multiset (order-independent), this decides
+    /// SEQUENTIAL monotonicity on the O(N) consecutive-pair walk over
+    /// the yielded sequence (order-DEPENDENT). Together with
+    /// [`Lattice::is_descending`] on the dual pair-level primitive arm
+    /// this closes the (leq, geq) 2×1 sequence-monotonicity pair on
+    /// the consecutive-pair face of the algebra's combinator surface —
+    /// exactly one CONSECUTIVE-VS-ALL-PAIRS axis over from the
+    /// structural (chain, antichain) pair [`Lattice::is_chain`] /
+    /// [`Lattice::is_antichain`] pin, and exactly one CARDINALITY axis
+    /// up from the pairwise (leq, geq) pair [`Lattice::leq`] /
+    /// [`Lattice::geq`] pin.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_ascending(std::iter::
+    /// empty()) == true` on every lattice — [`slice::windows`] on a
+    /// zero-length slice yields no pair, so [`Iterator::all`] on the
+    /// empty iterator is `true`. Peer of [`Lattice::is_chain`]'s
+    /// empty-iterator vacuous-truth identity on the empty-conjunction
+    /// arm.
+    ///
+    /// **Singleton vacuous truth**: `T::is_ascending([&a]) == true` for
+    /// every `a` — a singleton has no consecutive pair, same
+    /// vacuous-conjunction reasoning as the empty case. On the
+    /// (T, T) corner shared with [`Lattice::is_descending`] at every
+    /// singleton, both sequence-monotonicity predicates agree.
+    ///
+    /// **Consecutive-duplicate identity**: `T::is_ascending([&a, &a])
+    /// == true` for every `a` — [`Lattice::leq`] is REFLEXIVE, so
+    /// `a.leq(&a)` fires true on the single consecutive pair. AGREES
+    /// with [`Lattice::is_descending`]'s consecutive-duplicate verdict
+    /// via the dual [`Lattice::geq`] reflexivity, so at every all-
+    /// duplicate slice BOTH sequence-monotonicity predicates fire true.
+    /// This is the shared reflexive-diagonal arm and the exact overlap
+    /// where the two sequence-shape verdicts collapse.
+    ///
+    /// **Pair-identity**: `T::is_ascending([&a, &b]) == a.leq(&b)` —
+    /// the 2-input sequence-monotonicity predicate reduces to the
+    /// pairwise primitive without a duplicate filter (consecutive
+    /// duplicates are load-bearing on the reflexive arm, unlike
+    /// [`Lattice::is_chain`]'s all-pairs distinct-only convention).
+    ///
+    /// **Refines [`Lattice::is_chain`] via transitivity**: for every
+    /// slice, `T::is_ascending(iter) ⇒ T::is_chain(iter)` — the
+    /// pointwise partial order is transitive under [`Lattice::leq`], so
+    /// a consecutive-pair leq-chain closes under transitive composition
+    /// into an all-pairs leq-chain, and every leq-related pair is
+    /// [`Lattice::is_comparable`]. Pinned on the DataClassification and
+    /// CalmClassification axes below via a "sorted-by-rank ⇒ is_chain"
+    /// witness.
+    ///
+    /// **Sequence-order DEPENDENCE** (contrasts with
+    /// [`Lattice::is_chain`]'s sequence-order INDEPENDENCE): a
+    /// permutation of an ascending slice with strictly-monotone
+    /// distinct elements is NOT ascending in general — reversing
+    /// `[Public, Internal, Confidential]` gives `[Confidential,
+    /// Internal, Public]`, whose first consecutive pair fails
+    /// `Confidential.leq(&Internal)`. This is what distinguishes the
+    /// sequence-shape from the structural-shape predicate at the same
+    /// arity: the structural predicate is a property of the underlying
+    /// multiset, the sequence-shape predicate is a property of the
+    /// emission ORDER.
+    ///
+    /// **Ascending-descending duality on total orders**: on any
+    /// totally-ordered lattice (e.g. [`baseline::Baseline`],
+    /// [`DataClassification`], [`CalmClassification`]), reversing an
+    /// ascending slice yields a descending slice —
+    /// `T::is_ascending(vs) ⇔ T::is_descending(vs.rev())` on the
+    /// consecutive-pair walk when the order is total. On a
+    /// partially-ordered lattice the equivalence weakens because a
+    /// reversed slice on an incomparable consecutive pair rejects
+    /// both predicates.
+    ///
+    /// **Any-violating-consecutive-pair rejection**: if any consecutive
+    /// pair `(vs[i], vs[i + 1])` fails `vs[i].leq(&vs[i + 1])`, then
+    /// `T::is_ascending(iter) == false` — [`Iterator::all`] on
+    /// [`slice::windows`] short-circuits at the first violating pair,
+    /// so a single non-monotone step anywhere in the sequence rejects
+    /// the whole predicate. The rejection includes any consecutive
+    /// pair that is incomparable on the partial order —
+    /// [`Lattice::leq`] fails on incomparable elements, so a slice
+    /// containing an incomparable consecutive pair fails
+    /// `is_ascending` (and, by the dual walk, `is_descending`), which
+    /// is exactly what distinguishes an antichain-containing slice
+    /// from a chain-containing one at the sequence level.
+    ///
+    /// **Antichain rejection**: on an antichain lattice (e.g.
+    /// [`SubstrateType`]), the predicate rejects any consecutive pair
+    /// of DISTINCT non-top elements — the two are incomparable, so
+    /// [`Lattice::leq`] fails, so the consecutive-pair walk fails. It
+    /// accepts consecutive pairs where the second element is the
+    /// pointed-top [`SubstrateType::Regulatory`] (the top-directed
+    /// half-edge) or both elements are equal (the reflexive arm).
+    ///
+    /// Default routes through `iter.into_iter().collect::<Vec<&Self>>()`
+    /// followed by `.windows(2).all(|w| w[0].leq(w[1]))` — one
+    /// [`Lattice::leq`] delegation per consecutive pair on the
+    /// collected `Vec<&Self>` buffer. The collect materializes the
+    /// iterator once so the walk operates on a stable slice — an
+    /// [`IntoIterator`] that yields distinct values on distinct calls
+    /// would otherwise break the walk's determinism. A future
+    /// normalization at [`Lattice::leq`] lands at ONE site and this
+    /// default inherits the sequence-shape peer mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the sequence-shape ascending predicate is
+    /// itself a typed named `bool` composing [`Lattice::leq`] via
+    /// [`slice::windows`] plus [`Iterator::all`]; every downstream
+    /// lattice-law consumer inherits the predicate through the default
+    /// mechanically) + THEORY.md §III (typescape — the sequence-shape
+    /// monotonicity predicate on every classification-axis lattice
+    /// binds at ONE substrate owner on the [`Lattice`] algebra rather
+    /// than at each consumer's hand-rolled
+    /// `vs.windows(2).all(|w| w[0].leq(&w[1]))` walk). The pattern
+    /// already exists in-tree at
+    /// `tatara_lisp::macro_expand::ResourceLimits::is_ascending` — a
+    /// per-domain `const fn` on the pointwise resource-posture partial
+    /// order whose own doc explicitly names this widening: "the
+    /// (ascending, descending) sequence-level pair opens the door to
+    /// `is_strictly_ascending` / `is_strictly_descending` via
+    /// `Self::lt` / `Self::gt` one STRICTNESS axis over"; this
+    /// widening lifts the SAME shape from a per-domain `const fn` to
+    /// the trait's default-method surface so every future closed-set
+    /// lattice impl inherits the sequence-monotonicity predicate for
+    /// free.
+    ///
+    /// Frontier inspiration: [`Iterator::is_sorted`] and
+    /// [`slice::is_sorted_by`] on Rust's stdlib total-order surface —
+    /// the sequence-shape monotonicity predicate is a first-class named
+    /// method the standard library exposes rather than leaving each
+    /// consumer to compose `slice.windows(2).all(|w| w[0] <= w[1])` at
+    /// its callsite. Translated: threaded the same consecutive-pair
+    /// monotonicity shape through the [`Lattice`] trait's default-
+    /// method surface, generalizing from `Ord::cmp` on a totally-
+    /// ordered carrier to [`Lattice::leq`] on any partial-order
+    /// lattice — Haskell's `Data.List` `and . zipWith (<=) xs . tail xs`
+    /// idiom on a partial-order carrier; Coq's `Sorted` inductive on
+    /// lists over a `Relation`.
+    fn is_ascending<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).all(|w| w[0].leq(w[1]))
+    }
+    /// Dual of [`Lattice::is_ascending`] on the PAIR-LEVEL-PRIMITIVE
+    /// axis — the iterated set is DESCENDING (a [`Lattice::geq`]-
+    /// monotone non-increasing sequence on the lattice's partial
+    /// order) iff every CONSECUTIVE pair `(vs[i], vs[i + 1])`
+    /// satisfies `vs[i].geq(&vs[i + 1])`. `T::is_descending([&a, &b,
+    /// &c])` holds iff `a.geq(&b) && b.geq(&c)`; three or more
+    /// elements chain through the consecutive-pair conjunction.
+    ///
+    /// The SEQUENCE-SHAPE peer of [`Lattice::is_antichain`] one AXIS-
+    /// SHAPE reading away — the (ascending, descending) sequence
+    /// pair is the DIRECTIONAL projection of the (leq, geq) pairwise
+    /// pair one CARDINALITY axis up, exactly the way the (chain,
+    /// antichain) structural pair is the (comparable, incomparable)
+    /// projection one arity up. Together with [`Lattice::is_ascending`]
+    /// closes the (leq, geq) 2×1 sequence-monotonicity pair on the
+    /// consecutive-pair face of the algebra's combinator surface.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_descending(std::iter::
+    /// empty()) == true` on every lattice — same vacuous-conjunction
+    /// identity as [`Lattice::is_ascending`]'s empty arm.
+    ///
+    /// **Singleton vacuous truth**: `T::is_descending([&a]) == true`
+    /// for every `a` — a singleton has no consecutive pair.
+    ///
+    /// **Consecutive-duplicate identity**: `T::is_descending([&a, &a])
+    /// == true` for every `a` — [`Lattice::geq`] is REFLEXIVE (its
+    /// default routes through `other.leq(self)`, which reflexively
+    /// fires true on the self-pair). Shared reflexive-diagonal arm
+    /// with [`Lattice::is_ascending`].
+    ///
+    /// **Pair-identity**: `T::is_descending([&a, &b]) == a.geq(&b)` —
+    /// dual to [`Lattice::is_ascending`]'s pair-identity on the
+    /// [`Lattice::geq`] arm.
+    ///
+    /// **Refines [`Lattice::is_chain`] via transitivity**: for every
+    /// slice, `T::is_descending(iter) ⇒ T::is_chain(iter)` — the
+    /// pointwise partial order is transitive under [`Lattice::geq`]
+    /// (via [`Lattice::geq`]'s composition `other.leq(self)` and
+    /// [`Lattice::leq`]'s transitivity), so a consecutive-pair
+    /// geq-chain closes under transitive composition into an all-pairs
+    /// geq-chain, and every geq-related pair is comparable. Peer of
+    /// [`Lattice::is_ascending`]'s ascending-implies-chain arm on the
+    /// dual pair-level primitive.
+    ///
+    /// **Ascending-descending duality on total orders**: reversing an
+    /// ascending slice on a totally-ordered lattice yields a descending
+    /// slice — `T::is_ascending(vs) ⇔ T::is_descending(vs.rev())` on
+    /// the consecutive-pair walk when the order is total.
+    ///
+    /// **Any-violating-consecutive-pair rejection**: if any consecutive
+    /// pair `(vs[i], vs[i + 1])` fails `vs[i].geq(&vs[i + 1])`, then
+    /// `T::is_descending(iter) == false` — short-circuits at the first
+    /// violating pair.
+    ///
+    /// **Antichain rejection**: dual of [`Lattice::is_ascending`]'s
+    /// antichain-rejection arm — on the pointed-top antichain, the
+    /// predicate rejects any consecutive pair of DISTINCT non-top
+    /// elements (incomparable, so [`Lattice::geq`] fails) and accepts
+    /// consecutive pairs where the FIRST element is the pointed-top
+    /// (the top-directed half-edge, reading from top to a lower
+    /// element) or both elements are equal.
+    ///
+    /// Default routes through `iter.into_iter().collect::<Vec<&Self>>()`
+    /// followed by `.windows(2).all(|w| w[0].geq(w[1]))` — one
+    /// [`Lattice::geq`] delegation per consecutive pair on the collected
+    /// buffer, mirroring [`Lattice::is_ascending`]'s walk with the pair-
+    /// level primitive swapped from [`Lattice::leq`] to [`Lattice::geq`].
+    ///
+    /// Theory anchor: same as [`Lattice::is_ascending`] on the dual
+    /// pair-level primitive — THEORY.md §II.1 invariant 5 + §III. The
+    /// consecutive-pair face on every classification-axis lattice now
+    /// binds through TWO substrate defaults ([`Lattice::is_ascending`],
+    /// [`Lattice::is_descending`]) closing the (leq, geq) direction
+    /// axis at ONE algebra owner.
+    fn is_descending<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).all(|w| w[0].geq(w[1]))
+    }
 }
 
 // ── DataClassification — total order ────────────────────────────────────
@@ -4276,6 +4517,317 @@ mod tests {
         }
     }
 
+    // ── Lattice::is_ascending / Lattice::is_descending — sequence-shape
+    //    consecutive-pair default peers ─────────────────────────────────
+    //
+    // Bind [`Lattice::is_ascending`] + [`Lattice::is_descending`] at
+    // fail-before-pass-after granularity. Pre-lift the [`Lattice`]
+    // trait's collection-level monotonicity surface was empty at the
+    // sequence-shape level — [`Lattice::is_chain`] / [`Lattice::is_antichain`]
+    // cover the STRUCTURAL all-pairs comparability face, and a consumer
+    // that wanted the CONSECUTIVE-PAIR monotonicity reading hand-authored
+    // `vs.windows(2).all(|w| w[0].leq(&w[1]))` (or the dual `geq`) at
+    // each callsite (surfaced in-tree at
+    // `tatara_lisp::macro_expand::ResourceLimits::is_ascending` and
+    // its `Self::is_descending` peer — a per-domain `const fn` pair on
+    // the pointwise resource-posture partial order whose own doc names
+    // this widening as the natural next lift). Post-lift the whole
+    // sequence-shape monotonicity pair binds at ONE substrate primitive
+    // on the [`Lattice`] algebra, and every downstream impl (the four
+    // in-tree ones + `Baseline` via the `crate::Lattice` trait AND any
+    // future closed-set lift) inherits `is_ascending` / `is_descending`
+    // for free through the default. Together with the prior widening
+    // (`is_chain` / `is_antichain` on the structural all-pairs arm) the
+    // trait now closes the (structural, sequential) × (leq-comparable,
+    // geq-comparable) 2×2 grid on the collection-level combinator
+    // surface: the structural arm reads all-pairs comparability
+    // symmetrically via `is_comparable` / `is_incomparable`; the
+    // sequential arm reads consecutive-pair monotonicity directionally
+    // via `leq` / `geq`.
+    //
+    // The dedup convention DIVERGES between the two collection-level
+    // pairs — the structural predicates filter `vs[i] == vs[j]` pairs
+    // on the standard-mathematical distinct-pair convention (an empty
+    // multiset is a chain and an antichain), but the sequence-shape
+    // predicates do NOT filter consecutive duplicates on the standard-
+    // mathematical reflexive-order convention (both [`Lattice::leq`]
+    // and [`Lattice::geq`] are reflexive, so a consecutive-duplicate
+    // pair is BOTH ascending and descending, and filtering it would
+    // change the sequence-order semantics on the (T, T) reflexive-
+    // diagonal arm).
+    //
+    // Coverage below spans:
+    //
+    //   • empty / singleton / consecutive-duplicate vacuous truth on
+    //     the reflexive-diagonal arm (BOTH ascending and descending);
+    //   • pair-identity `T::is_ascending([&a, &b]) == a.leq(&b)` (dual
+    //     on the descending arm) at every pair of every closed-set impl;
+    //   • total-order ascending witness over `DataClassification::ALL`
+    //     sorted by sensitivity rank AND descending witness over the
+    //     reversed enumeration — dual pins on the SAME chain in
+    //     REVERSED orderings closing the (ascending, descending)
+    //     sequence-level pair on the shipped chain;
+    //   • ascending-implies-chain (dual on descending) via transitivity
+    //     of [`Lattice::leq`] / [`Lattice::geq`] on every triple of
+    //     every closed-set impl;
+    //   • sequence-order DEPENDENCE (contrasts with is_chain's
+    //     INDEPENDENCE) — the pair-reversal on a strictly-monotone
+    //     distinct triple flips ascending to descending;
+    //   • antichain-lattice rejection over `SubstrateType::ALL^2` on
+    //     distinct-non-top consecutive pairs;
+    //   • proptest peers on the DataClassification + CALM axes for
+    //     the pair-identity and reflexive-diagonal arms.
+
+    /// [`Lattice::is_ascending`] and [`Lattice::is_descending`] are
+    /// BOTH vacuously true at the empty iterator on every classification-
+    /// axis lattice — the empty conjunction has no consecutive pair to
+    /// check, so both universally-quantified predicates fire true on
+    /// the empty case. Peer of [`Lattice::is_chain`]'s empty-iterator
+    /// vacuous truth one CONSECUTIVE-VS-ALL-PAIRS axis over. Fail-
+    /// before-pass-after: pre-lift this pin cannot compile because
+    /// neither `is_ascending` nor `is_descending` is exposed as a trait
+    /// method — consumers who wanted the sequence-shape reading wrote
+    /// the consecutive-pair walk inline at each callsite.
+    #[test]
+    fn is_ascending_and_is_descending_are_vacuously_true_at_the_empty_iterator() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        assert!(DataClassification::is_ascending(std::iter::empty()));
+        assert!(DataClassification::is_descending(std::iter::empty()));
+        assert!(CalmClassification::is_ascending(std::iter::empty()));
+        assert!(CalmClassification::is_descending(std::iter::empty()));
+        assert!(SubstrateType::is_ascending(std::iter::empty()));
+        assert!(SubstrateType::is_descending(std::iter::empty()));
+    }
+
+    /// [`Lattice::is_ascending`] and [`Lattice::is_descending`] are
+    /// BOTH vacuously true at every singleton — a singleton contains
+    /// no consecutive pair, same empty-conjunction identity as the
+    /// empty arm. Pinned exhaustively over every variant of every
+    /// closed-set impl.
+    #[test]
+    fn is_ascending_and_is_descending_are_vacuously_true_at_every_singleton() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_ascending([&a]));
+            assert!(DataClassification::is_descending([&a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_ascending([&a]));
+            assert!(CalmClassification::is_descending([&a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_ascending([&a]));
+            assert!(SubstrateType::is_descending([&a]));
+        }
+    }
+
+    /// [`Lattice::is_ascending`] and [`Lattice::is_descending`] BOTH
+    /// fire true on any all-duplicate collection — [`Lattice::leq`]
+    /// and [`Lattice::geq`] are both REFLEXIVE, so the consecutive
+    /// duplicate pair `(a, a)` passes both walks. Shared reflexive-
+    /// diagonal arm at the non-trivial (non-empty, non-singleton)
+    /// length; DIVERGES from [`Lattice::is_chain`] /
+    /// [`Lattice::is_antichain`] which apply a distinct-pair filter —
+    /// the sequence-shape predicates do NOT filter consecutive
+    /// duplicates on the standard-mathematical reflexive-order
+    /// convention. Pinned on every closed-set impl at arity 3 to catch
+    /// a regression that added a spurious distinct-pair filter (which
+    /// would flip both predicates to `true` vacuously by dropping the
+    /// consecutive-duplicate reflexive-witness arm).
+    #[test]
+    fn is_ascending_and_is_descending_fire_true_on_consecutive_duplicate_collections() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_ascending([&a, &a, &a]));
+            assert!(DataClassification::is_descending([&a, &a, &a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_ascending([&a, &a, &a]));
+            assert!(CalmClassification::is_descending([&a, &a, &a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_ascending([&a, &a, &a]));
+            assert!(SubstrateType::is_descending([&a, &a, &a]));
+        }
+    }
+
+    /// [`Lattice::is_ascending`] at arity 2 REDUCES to `a.leq(&b)` on
+    /// every [`DataClassification`] pair, and [`Lattice::is_descending`]
+    /// at arity 2 REDUCES to `a.geq(&b)` — the 2-input sequence-shape
+    /// predicates collapse to the pairwise primitive without a
+    /// duplicate filter (consecutive duplicates are load-bearing on
+    /// the reflexive arm, unlike [`Lattice::is_chain`]'s all-pairs
+    /// distinct-only convention). Pinned exhaustively over `ALL^2`
+    /// (36 pairs). Fail-before-pass-after: pre-lift the sequence-shape
+    /// arm was empty on the trait, so this reduction did not exist as
+    /// a substrate primitive; post-lift the reduction pins the
+    /// sequence-shape predicate to the pairwise primitive at the
+    /// primitive-cardinality boundary.
+    #[test]
+    fn is_ascending_and_is_descending_arity_2_reduces_to_pairwise_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::is_ascending([&a, &b]),
+                    a.leq(&b),
+                    "is_ascending([{a:?}, {b:?}]) must reduce to a.leq(&b) — \
+                     the 2-input sequence-shape predicate collapses to the \
+                     pairwise primitive without a duplicate filter",
+                );
+                assert_eq!(
+                    DataClassification::is_descending([&a, &b]),
+                    a.geq(&b),
+                    "is_descending([{a:?}, {b:?}]) must reduce to a.geq(&b) — \
+                     dual pair-identity on the geq arm",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_ascending`] fires TRUE on the sensitivity-rank-
+    /// sorted enumeration of [`DataClassification::ALL`], and
+    /// [`Lattice::is_descending`] fires TRUE on the REVERSED
+    /// enumeration — dual pins on the SAME chain in reversed
+    /// orderings closing the (ascending, descending) sequence-level
+    /// pair on the shipped total-order chain. Peer of
+    /// `is_chain_is_universally_true_over_data_classification_all_triples`
+    /// one CONSECUTIVE-VS-ALL-PAIRS axis over: where `is_chain` fires
+    /// universally on the total order (every triple is a chain), the
+    /// sequence-shape predicates DEPEND on the emission order (they
+    /// fire true iff the sequence is sorted by the underlying rank
+    /// projection).
+    #[test]
+    fn is_ascending_holds_on_data_classification_all_and_is_descending_on_reversed() {
+        use tatara_process::classification::DataClassification;
+        let sorted: Vec<&DataClassification> = DataClassification::ALL.iter().collect();
+        let reversed: Vec<&DataClassification> = DataClassification::ALL.iter().rev().collect();
+        assert!(
+            DataClassification::is_ascending(sorted.iter().copied()),
+            "DataClassification::ALL is emitted in sensitivity-rank order — \
+             the sequence-shape ascending predicate must fire true on the \
+             shipped enumeration",
+        );
+        assert!(
+            DataClassification::is_descending(reversed.iter().copied()),
+            "reversing DataClassification::ALL yields a geq-monotone \
+             descending sequence — the sequence-shape descending predicate \
+             must fire true on the reversed enumeration",
+        );
+    }
+
+    /// [`Lattice::is_ascending`] REFINES [`Lattice::is_chain`] via
+    /// transitivity of [`Lattice::leq`] — every ascending triple on
+    /// [`DataClassification`] is a chain, and dually every descending
+    /// triple is a chain. Refines-monotone witness: the pointwise
+    /// partial order is transitive, so a consecutive-pair leq-chain
+    /// closes under transitive composition into an all-pairs leq-chain,
+    /// and every leq-related pair is [`Lattice::is_comparable`]. Peer
+    /// of `strictly_monotone_triples_over_data_classification_all_are_chains`
+    /// on the non-strict arm at the sequence-shape level. Pinned
+    /// exhaustively over `DataClassification::ALL^3` (216 triples).
+    #[test]
+    fn is_ascending_and_is_descending_imply_is_chain_on_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    if DataClassification::is_ascending([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_chain([&a, &b, &c]),
+                            "is_ascending([{a:?}, {b:?}, {c:?}]) must imply is_chain \
+                             — transitivity of leq extends the consecutive-pair \
+                             chain to every distinct pair",
+                        );
+                    }
+                    if DataClassification::is_descending([&a, &b, &c]) {
+                        assert!(
+                            DataClassification::is_chain([&a, &b, &c]),
+                            "is_descending([{a:?}, {b:?}, {c:?}]) must imply is_chain \
+                             — transitivity of geq on the dual arm",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_ascending`] is SEQUENCE-ORDER DEPENDENT
+    /// (contrasts with [`Lattice::is_chain`]'s SEQUENCE-ORDER
+    /// INDEPENDENCE) — reversing a strictly-monotone distinct
+    /// ascending triple yields a strictly-monotone distinct descending
+    /// triple, which the ascending predicate REJECTS. Pinned on the
+    /// {Public, Internal, Confidential} strict ascent from
+    /// [`DataClassification`]: the forward walk is ascending (all leq
+    /// pairs) and NOT descending; the reversed walk is descending and
+    /// NOT ascending. This is what distinguishes the sequence-shape
+    /// from the structural-shape predicate at the same arity:
+    /// [`Lattice::is_chain`] accepts BOTH orderings (order-independent);
+    /// [`Lattice::is_ascending`] / [`Lattice::is_descending`] accept
+    /// exactly ONE (order-dependent).
+    #[test]
+    fn is_ascending_is_sequence_order_dependent_on_a_strict_ascent() {
+        use tatara_process::classification::DataClassification;
+        let a = DataClassification::Public;
+        let b = DataClassification::Internal;
+        let c = DataClassification::Confidential;
+        // Forward strict ascent: ascending true, descending false.
+        assert!(DataClassification::is_ascending([&a, &b, &c]));
+        assert!(!DataClassification::is_descending([&a, &b, &c]));
+        // Reversed strict ascent = strict descent: ascending false, descending true.
+        assert!(!DataClassification::is_ascending([&c, &b, &a]));
+        assert!(DataClassification::is_descending([&c, &b, &a]));
+        // Structural predicate accepts BOTH orderings (order-independent).
+        assert!(DataClassification::is_chain([&a, &b, &c]));
+        assert!(DataClassification::is_chain([&c, &b, &a]));
+    }
+
+    /// [`Lattice::is_ascending`] REJECTS distinct-non-top consecutive
+    /// pairs on the pointed-top antichain [`SubstrateType`] — two
+    /// distinct non-top substrates are incomparable, so
+    /// [`Lattice::leq`] fails on the consecutive pair, so the walk
+    /// rejects. The predicate ACCEPTS pairs `(x, top)` (the top-
+    /// directed half-edge from any non-top substrate into
+    /// [`SubstrateType::Regulatory`]) and REJECTS pairs `(top, x)`
+    /// for `x != top` (the top does NOT `leq` any non-top element).
+    /// Dual behavior on [`Lattice::is_descending`]: rejects `(x, top)`
+    /// for `x != top` (top does NOT sit at-or-below any non-top),
+    /// accepts `(top, x)` (top sits at-or-above any non-top). Pinned
+    /// exhaustively over `SubstrateType::ALL^2` (64 pairs).
+    #[test]
+    fn is_ascending_projects_the_pointed_top_antichain_over_substrate_type_all_pairs() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                // Ascending accepts iff a.leq(&b) — reflexive `a == b`
+                // OR top-directed `b == top`.
+                let expected_asc = a == b || b == top;
+                assert_eq!(
+                    SubstrateType::is_ascending([&a, &b]),
+                    expected_asc,
+                    "is_ascending([{a:?}, {b:?}]) on the pointed-top antichain \
+                     must fire true iff a == b OR b is the pointed top",
+                );
+                // Descending accepts iff a.geq(&b) — reflexive `a == b`
+                // OR top-emitted `a == top`.
+                let expected_desc = a == b || a == top;
+                assert_eq!(
+                    SubstrateType::is_descending([&a, &b]),
+                    expected_desc,
+                    "is_descending([{a:?}, {b:?}]) on the pointed-top antichain \
+                     must fire true iff a == b OR a is the pointed top",
+                );
+            }
+        }
+    }
+
     proptest! {
         /// [`Lattice::is_chain`] at arity 2 REDUCES to the pairwise
         /// comparability primitive with the duplicate filter on every
@@ -4349,6 +4901,72 @@ mod tests {
         #[test]
         fn calm_is_chain_is_universally_true(a in any_calm(), b in any_calm()) {
             prop_assert!(CalmClassification::is_chain([&a, &b]));
+        }
+
+        /// [`Lattice::is_ascending`] at arity 2 REDUCES to `a.leq(&b)`
+        /// on every random [`DataClassification`] pair — proptest peer
+        /// of the exhaustive
+        /// `is_ascending_and_is_descending_arity_2_reduces_to_pairwise_over_data_classification_all`
+        /// seal above. Dual on the descending arm reduces to
+        /// `a.geq(&b)`.
+        #[test]
+        fn data_class_is_ascending_and_is_descending_arity_2_reduce_to_pairwise(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            prop_assert_eq!(DataClassification::is_ascending([&a, &b]), a.leq(&b));
+            prop_assert_eq!(DataClassification::is_descending([&a, &b]), a.geq(&b));
+        }
+
+        /// [`Lattice::is_ascending`] on any consecutive-duplicate
+        /// [`DataClassification`] pair fires TRUE via the reflexive
+        /// arm of [`Lattice::leq`], and dually
+        /// [`Lattice::is_descending`] fires TRUE via the reflexive arm
+        /// of [`Lattice::geq`] — proptest peer of the exhaustive
+        /// `is_ascending_and_is_descending_fire_true_on_consecutive_duplicate_collections`
+        /// seal above.
+        #[test]
+        fn data_class_is_ascending_and_is_descending_on_consecutive_duplicate(
+            a in any_data_class(),
+        ) {
+            prop_assert!(DataClassification::is_ascending([&a, &a]));
+            prop_assert!(DataClassification::is_descending([&a, &a]));
+        }
+
+        /// [`Lattice::is_ascending`] REFINES [`Lattice::is_chain`] via
+        /// transitivity of [`Lattice::leq`] on every random
+        /// [`DataClassification`] triple — proptest peer of the
+        /// exhaustive
+        /// `is_ascending_and_is_descending_imply_is_chain_on_data_classification_all_triples`
+        /// seal above. Dual on the descending arm via
+        /// [`Lattice::geq`] transitivity.
+        #[test]
+        fn data_class_is_ascending_and_is_descending_imply_is_chain(
+            a in any_data_class(),
+            b in any_data_class(),
+            c in any_data_class(),
+        ) {
+            if DataClassification::is_ascending([&a, &b, &c]) {
+                prop_assert!(DataClassification::is_chain([&a, &b, &c]));
+            }
+            if DataClassification::is_descending([&a, &b, &c]) {
+                prop_assert!(DataClassification::is_chain([&a, &b, &c]));
+            }
+        }
+
+        /// Peer of the DataClassification is_ascending / is_descending
+        /// arity-2 pair-identity on the CALM boolean-lattice axis —
+        /// same shape, different closed set. Together with the
+        /// DataClassification sibling above the two proptest cases
+        /// bind BOTH total-order classification axes' sequence-shape
+        /// pair-identity to ONE substrate default.
+        #[test]
+        fn calm_is_ascending_and_is_descending_arity_2_reduce_to_pairwise(
+            a in any_calm(),
+            b in any_calm(),
+        ) {
+            prop_assert_eq!(CalmClassification::is_ascending([&a, &b]), a.leq(&b));
+            prop_assert_eq!(CalmClassification::is_descending([&a, &b]), a.geq(&b));
         }
     }
 }

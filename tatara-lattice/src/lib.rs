@@ -164,6 +164,161 @@ pub trait Lattice: Sized + Clone + PartialEq {
     fn is_incomparable(&self, other: &Self) -> bool {
         !self.is_comparable(other)
     }
+    /// Strict-arm direction-collapsed peer of [`Lattice::is_comparable`]
+    /// on the STRICTNESS axis — the partial order relates `self` and
+    /// `other` STRICTLY in either direction, i.e.
+    /// `self.strictly_below(other) || self.strictly_above(other)`,
+    /// equivalent by two-primitive rewriting to `self.is_comparable(
+    /// other) && self != other`. The IRREFLEXIVE strict `<-or->` peer
+    /// of [`Lattice::is_comparable`]'s REFLEXIVE non-strict `≤-or-≥`
+    /// one STRICTNESS axis over on the (strict, non-strict) ×
+    /// (direction-collapsed comparability) 2×1 direction-collapsed
+    /// comparability grid at the pair level, closing the strict cell
+    /// of that face on the trait's combinator surface.
+    ///
+    /// Sits between the pair-level directional strict peers
+    /// ([`Lattice::strictly_below`] / [`Lattice::strictly_above`]) and
+    /// the sequence-level direction-collapsed strict peer
+    /// ([`Lattice::is_strictly_monotone_sequence`]): the two 2-ary
+    /// strict-direction primitives compose disjunctively at the pair
+    /// level here; the N-ary sequence-shape predicate then walks this
+    /// pair-level primitive over every consecutive pair (each
+    /// consecutive pair in a strictly-monotone sequence is exactly a
+    /// strictly-comparable pair whose direction is consistent across
+    /// the walk). Consumers that want to probe "does the partial order
+    /// relate these two in EITHER strict direction, without caring
+    /// which?" write `a.is_strictly_comparable(&b)` instead of
+    /// composing `a.strictly_below(&b) || a.strictly_above(&b)` or
+    /// `a.is_comparable(&b) && a != b` at their callsite — the SAME
+    /// direction-collapsed strict-comparability shape [`Lattice::
+    /// is_strictly_monotone_sequence`] walks over consecutive pairs,
+    /// lifted to a first-class named predicate at the 2-ary face.
+    ///
+    /// **Naming**: matches the trait's `is_bottom` / `is_top` /
+    /// `is_comparable` / `is_incomparable` / `is_between` /
+    /// `is_strictly_between` "named predicate" naming discipline —
+    /// receiver on the left of the relation, argument on the right,
+    /// and the `is_strictly_` prefix mirrors [`Lattice::
+    /// is_strictly_between`]'s strict-arm-of-a-named-predicate shape
+    /// one dimensionality axis over (`is_strictly_between` is the
+    /// strict arm of the 3-ary `is_between` interval predicate; this
+    /// is the strict arm of the 2-ary `is_comparable` direction-
+    /// collapsed comparability predicate).
+    ///
+    /// Default routes through `self.strictly_below(other) ||
+    /// self.strictly_above(other)` — the direction-collapse disjunction
+    /// of the two 2-ary directional strict primitives, which matches
+    /// [`Lattice::is_comparable`]'s `self.leq(other) || other.leq(self)`
+    /// direction-collapse disjunction one strictness axis over. A
+    /// future override at either strict-directional arm (or at the
+    /// underlying [`Lattice::leq`]) lands at ONE site and this peer
+    /// inherits mechanically. Equivalent by two-primitive rewriting to
+    /// `self.is_comparable(other) && self != other`; either encoding
+    /// costs at most two `leq` calls plus a `PartialEq::ne`, and the
+    /// disjunction-of-strict encoding matches
+    /// [`Lattice::is_strictly_monotone_sequence`]'s pair-level walk.
+    ///
+    /// **Irreflexivity**: `a.is_strictly_comparable(&a) == false` for
+    /// every element. Follows from both directional strict primitives'
+    /// irreflexivity — [`Lattice::strictly_below`] and [`Lattice::
+    /// strictly_above`] BOTH reject the reflexive diagonal via the
+    /// `self != other` conjunct in [`Lattice::strictly_below`]'s
+    /// default, so the disjunction also rejects. Peer of [`Lattice::
+    /// is_comparable`]'s UNIVERSAL-reflexive-arm truth (every element
+    /// is `is_comparable` to itself via `leq`'s reflexivity) — the
+    /// strict variant flips that arm to universal falsehood.
+    ///
+    /// **Symmetry**: `a.is_strictly_comparable(&b) ==
+    /// b.is_strictly_comparable(&a)` for every pair. Inherits from the
+    /// disjunction's swap symmetry — `strictly_below(a, b) ||
+    /// strictly_above(a, b)` ≡ `strictly_above(b, a) || strictly_below(
+    /// b, a)` via the dual identity `strictly_above(a, b) ⇔
+    /// strictly_below(b, a)` on the routing. Peer of [`Lattice::
+    /// is_comparable`]'s symmetry on the strict axis.
+    ///
+    /// **Refines [`Lattice::is_comparable`]**: for every pair,
+    /// `a.is_strictly_comparable(&b) ⇒ a.is_comparable(&b)`. Follows
+    /// from `strictly_below ⇒ leq` on both arms of the disjunction (the
+    /// `Refines leq` seal in [`Lattice::strictly_below`]'s doc). The
+    /// converse fails exactly on the reflexive diagonal:
+    /// `a.is_comparable(&b) && !a.is_strictly_comparable(&b) ⇒ a == b`
+    /// — the non-strict-minus-strict gap on this face is the reflexive
+    /// diagonal, exactly as it is for the directional face
+    /// ([`Lattice::strictly_below`]'s doc pins the same gap).
+    ///
+    /// **Partition seal on any partial order**: for every pair,
+    /// EXACTLY ONE of `{a == b, a.is_strictly_comparable(&b),
+    /// a.is_incomparable(&b)}` holds. The three predicates partition
+    /// the pair space cleanly — equal (both non-strict comparable and
+    /// NOT strictly comparable), strictly comparable (comparable and
+    /// not equal), incomparable (not comparable). Sibling seal to
+    /// [`Lattice::is_comparable`] + [`Lattice::is_incomparable`]'s
+    /// binary partition, refined one axis over by peeling the reflexive
+    /// diagonal off the comparable side.
+    ///
+    /// **Total-order projection**: on a totally-ordered lattice (e.g.
+    /// [`baseline::Baseline`], `DataClassification`), where every pair
+    /// is comparable, `a.is_strictly_comparable(&b) == (a != b)` for
+    /// every pair — the strict-comparability arm reduces to plain
+    /// inequality since the comparability arm is universally true.
+    ///
+    /// **Antichain projection**: on the pointed-top antichain
+    /// (e.g. `SubstrateType`), `a.is_strictly_comparable(&b)` fires
+    /// iff EXACTLY ONE of the two is the antichain's distinguished top
+    /// — the antichain's pointed-top strict edge in EITHER direction
+    /// (`s → top` or `top → s`), symmetric on the direction-collapsed
+    /// face. Peer of [`Lattice::strictly_below`]'s antichain projection
+    /// with the two directional half-edges collapsed to a single
+    /// symmetric predicate.
+    ///
+    /// **Boolean-lattice projection**: on the 2-arm boolean lattice
+    /// (e.g. [`CalmClassification`]), `a.is_strictly_comparable(&b)`
+    /// fires iff `a != b` — the two-arm chain has exactly one strict
+    /// edge in each direction, so the direction-collapsed strict peer
+    /// covers both non-diagonal cells and rejects the two reflexive
+    /// cells.
+    ///
+    /// **Direction-collapse-of-strict seal on any partial order**: for
+    /// every pair, `a.is_strictly_comparable(&b) == a.strictly_below(&b)
+    /// || a.strictly_above(&b)` — the pair-level direction-collapse
+    /// identity that walks under [`Lattice::is_strictly_monotone_sequence`]
+    /// at every consecutive-pair step. Peer of [`Lattice::is_comparable`]'s
+    /// direction-collapse seal (`self.leq(other) || other.leq(self)`)
+    /// one strictness axis over.
+    ///
+    /// **Strict-comparable-equivalence seal**: for every pair,
+    /// `a.is_strictly_comparable(&b) == a.is_comparable(&b) && a != b`
+    /// — the two-primitive rewriting of the direction-collapsed strict
+    /// arm through the direction-collapsed non-strict arm and the
+    /// equality-negation conjunct. Peer of [`Lattice::strictly_below`]'s
+    /// `strictly_below ⇔ leq && !=` two-primitive seal on the
+    /// direction-collapsed face.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the direction-collapsed strict-comparability
+    /// peer is itself a typed named `bool` predicate composing
+    /// [`Lattice::strictly_below`] and [`Lattice::strictly_above`] via
+    /// the trait's default) + THEORY.md §III (typescape — the strict-
+    /// direction-collapse comparability arm on every classification-
+    /// axis lattice binds at ONE substrate owner on the [`Lattice`]
+    /// algebra rather than at each consumer's hand-rolled `a.leq(&b) &&
+    /// !a.leq(&b) && a != b` or `a.strictly_below(&b) ||
+    /// a.strictly_above(&b)` recomposition).
+    ///
+    /// Frontier inspiration: [`PartialOrd::partial_cmp`]'s `Some(Less
+    /// | Greater)` matching arm on Rust's partial-order trait — the
+    /// stdlib names the direction-collapsed strict-comparability arm as
+    /// two `Ordering` variants under a `Some(_)` wrapper, and consumers
+    /// who want the direction-collapsed strict predicate hand-author
+    /// `matches!(partial_cmp(&other), Some(Less | Greater))` at each
+    /// callsite. Translated: threaded the direction-collapse disjunction
+    /// through the [`Lattice`] trait's default-method surface as a
+    /// first-class named predicate — the pair-level primitive that
+    /// [`Lattice::is_strictly_monotone_sequence`] walks over consecutive
+    /// pairs at the sequence level.
+    fn is_strictly_comparable(&self, other: &Self) -> bool {
+        self.strictly_below(other) || self.strictly_above(other)
+    }
     /// Strict-order peer of [`Lattice::leq`] on the strict arm —
     /// `self` is STRICTLY at least as refined as `other`, i.e.
     /// `self.leq(other)` AND `self != other`. The IRREFLEXIVE strict
@@ -8159,6 +8314,250 @@ mod tests {
         }
     }
 
+    /// [`Lattice::is_strictly_comparable`] on [`DataClassification`]
+    /// projects the total-order lattice to strict inequality: every
+    /// distinct pair fires `true` (comparable via the total order AND
+    /// non-equal), every reflexive pair fires `false` (comparable AND
+    /// equal). Pinned exhaustively over `ALL^2` (36 pairs). Peer seal
+    /// to `is_comparable_is_universally_true_over_data_classification_all_pairs`
+    /// on the strictness-refinement arm — where the non-strict peer
+    /// is universally true, the strict peer is universally-true-off-
+    /// diagonal. Together the two seals bind the WHOLE 6×6 pair truth
+    /// table for the direction-collapsed comparability face at ONE
+    /// substrate primitive, so a future variant insertion that broke
+    /// the total-order property would surface here as some off-
+    /// diagonal pair firing false, forcing the rank projection to
+    /// gain the tie-break BEFORE the variant lands.
+    #[test]
+    fn is_strictly_comparable_matches_strict_inequality_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            // Irreflexivity: no element is strictly comparable to
+            // itself — inherits from both directional strict primitives'
+            // irreflexivity via the disjunction.
+            assert!(
+                !a.is_strictly_comparable(&a),
+                "is_strictly_comparable({a:?}, {a:?}) must be false — reflexive diagonal"
+            );
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    a.is_strictly_comparable(&b),
+                    a != b,
+                    "is_strictly_comparable({a:?}, {b:?}) on the total order must equal \
+                     `a != b` — every distinct pair is strictly comparable via the \
+                     rank's strict `<` in one direction, every reflexive pair fails via \
+                     both directional strict primitives' irreflexivity",
+                );
+                // Direction-collapse seal: the direction-collapsed
+                // strict predicate is the disjunction of the two
+                // directional strict primitives.
+                assert_eq!(
+                    a.is_strictly_comparable(&b),
+                    a.strictly_below(&b) || a.strictly_above(&b),
+                    "is_strictly_comparable({a:?}, {b:?}) drifted from the \
+                     strictly_below-or-strictly_above disjunction — the default should \
+                     route this direction-collapse verbatim",
+                );
+                // Strict-comparable-equivalence seal: the two-primitive
+                // rewriting through the non-strict peer and the
+                // equality-negation conjunct.
+                assert_eq!(
+                    a.is_strictly_comparable(&b),
+                    a.is_comparable(&b) && a != b,
+                    "is_strictly_comparable({a:?}, {b:?}) drifted from the \
+                     is_comparable-and-not-equal two-primitive rewriting — the whole \
+                     face must round-trip through both encodings",
+                );
+                // Symmetry: swap-invariant on the direction-collapse
+                // face.
+                assert_eq!(
+                    a.is_strictly_comparable(&b),
+                    b.is_strictly_comparable(&a),
+                    "is_strictly_comparable({a:?}, {b:?}) must be symmetric",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_strictly_comparable`] on [`SubstrateType`] projects
+    /// the pointed-top antichain to a symmetric strict edge: fires
+    /// `true` iff EXACTLY ONE side is [`SubstrateType::Regulatory`]
+    /// (the antichain's distinguished top), fires `false` otherwise
+    /// (equal pairs, distinct non-top pairs, and both directions of
+    /// the top-to-top reflexive pair). Peer seal to
+    /// `substrate_type_strictly_below_and_strictly_above_project_the_antichain_to_the_top_directed_strict_edge`
+    /// on the direction-collapse arm — the antichain SHAPE is now bound
+    /// through FOUR algebra predicates (`leq`, `is_incomparable`,
+    /// `strictly_below`, `is_strictly_comparable`) via ONE substrate
+    /// owner on the [`Lattice`] trait rather than per-callsite
+    /// hand-authored conjunctions.
+    #[test]
+    fn substrate_type_is_strictly_comparable_projects_the_antichain_to_the_top_touching_symmetric_strict_edge(
+    ) {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        for s in SubstrateType::ALL {
+            for t in SubstrateType::ALL {
+                let strictly_comparable = s.is_strictly_comparable(&t);
+                // The pointed-top antichain: strict-comparable fires
+                // iff exactly one side is the top absorber. The
+                // reflexive top-to-top pair, every non-top-touching
+                // pair, and every reflexive pair fails.
+                let expected = (s == top) ^ (t == top);
+                assert_eq!(
+                    strictly_comparable, expected,
+                    "is_strictly_comparable({s:?}, {t:?}) on the pointed-top antichain \
+                     must fire true iff (s == top) XOR (t == top) — the antichain's \
+                     pointed-top strict edge in either direction, symmetric",
+                );
+                // Direction-collapse seal: matches the disjunction of
+                // the two directional strict primitives on this shape
+                // too.
+                assert_eq!(
+                    strictly_comparable,
+                    s.strictly_below(&t) || s.strictly_above(&t),
+                    "is_strictly_comparable({s:?}, {t:?}) drifted from the \
+                     strictly_below-or-strictly_above disjunction on the antichain \
+                     projection",
+                );
+                // Strict-comparable-equivalence seal on the antichain.
+                assert_eq!(
+                    strictly_comparable,
+                    s.is_comparable(&t) && s != t,
+                    "is_strictly_comparable({s:?}, {t:?}) drifted from the \
+                     is_comparable-and-not-equal two-primitive rewriting on the \
+                     antichain projection",
+                );
+                // Symmetry on the antichain: the XOR is trivially
+                // symmetric, so the peer inherits.
+                assert_eq!(
+                    strictly_comparable,
+                    t.is_strictly_comparable(&s),
+                    "is_strictly_comparable({s:?}, {t:?}) must be symmetric on the \
+                     antichain",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_strictly_comparable`] on [`CalmClassification`]
+    /// projects the 2-arm boolean lattice to strict inequality — every
+    /// distinct pair (both directions of the single strict edge) fires
+    /// `true`, every reflexive pair fires `false`. Peer seal on the
+    /// sibling boolean axis of
+    /// `is_strictly_comparable_matches_strict_inequality_over_data_classification_all_pairs`.
+    #[test]
+    fn is_strictly_comparable_partitions_calm_classification_all_at_the_strict_edge() {
+        use tatara_process::classification::CalmClassification::{Monotone, NonMonotone};
+        // Reflexive diagonal — irreflexivity on both cells.
+        assert!(!Monotone.is_strictly_comparable(&Monotone));
+        assert!(!NonMonotone.is_strictly_comparable(&NonMonotone));
+        // Both directions of the single strict edge — symmetric.
+        assert!(
+            Monotone.is_strictly_comparable(&NonMonotone),
+            "Monotone <-> NonMonotone must be strictly comparable — the single strict \
+             edge in either direction"
+        );
+        assert!(
+            NonMonotone.is_strictly_comparable(&Monotone),
+            "NonMonotone <-> Monotone must be strictly comparable — dual direction of \
+             the single strict edge"
+        );
+    }
+
+    /// [`Lattice::is_strictly_comparable`] refines
+    /// [`Lattice::is_comparable`] and the gap between them is exactly
+    /// the reflexive diagonal — `a.is_strictly_comparable(&b) ⇒
+    /// a.is_comparable(&b)` (strict refines non-strict on the
+    /// direction-collapse face) AND `a.is_comparable(&b) &&
+    /// !a.is_strictly_comparable(&b) ⇒ a == b` (the non-strict-minus-
+    /// strict gap on the direction-collapse face is the reflexive
+    /// diagonal). Pinned exhaustively over `DataClassification::ALL^2`
+    /// (the 6-arm total-order axis) AND `SubstrateType::ALL^2` (the
+    /// pointed antichain) so BOTH shape flavors — total order and
+    /// antichain — bind the same refinement identity via ONE substrate
+    /// primitive. Peer of
+    /// `strictly_below_refines_leq_and_the_gap_is_the_reflexive_diagonal`
+    /// on the direction-collapse arm of the same (strict, non-strict)
+    /// × (direction-collapsed comparability) 2×1 face.
+    #[test]
+    fn is_strictly_comparable_refines_is_comparable_and_the_gap_is_the_reflexive_diagonal() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                if a.is_strictly_comparable(&b) {
+                    assert!(
+                        a.is_comparable(&b),
+                        "is_strictly_comparable({a:?}, {b:?}) implies \
+                         is_comparable({a:?}, {b:?}) — strict refines non-strict on \
+                         the direction-collapse face",
+                    );
+                }
+                if a.is_comparable(&b) && !a.is_strictly_comparable(&b) {
+                    assert_eq!(
+                        a, b,
+                        "is_comparable({a:?}, {b:?}) ∧ ¬is_strictly_comparable({a:?}, \
+                         {b:?}) ⇒ a == b — the non-strict-minus-strict gap on the \
+                         direction-collapse face is exactly the reflexive diagonal",
+                    );
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                if a.is_strictly_comparable(&b) {
+                    assert!(a.is_comparable(&b));
+                }
+                if a.is_comparable(&b) && !a.is_strictly_comparable(&b) {
+                    assert_eq!(a, b);
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strictly_comparable`], [`Lattice::is_incomparable`]
+    /// and equality partition the pair space cleanly on every closed-
+    /// set lattice — for every pair EXACTLY ONE of `{a == b,
+    /// a.is_strictly_comparable(&b), a.is_incomparable(&b)}` holds.
+    /// The three-way partition refines
+    /// `substrate_type_is_incomparable_matches_the_antichain_shape`'s
+    /// two-way `is_comparable` + `is_incomparable` partition by
+    /// splitting the comparable side into (strict, reflexive) cells.
+    /// Pinned exhaustively over BOTH the total-order axis
+    /// (`DataClassification::ALL^2`) AND the antichain axis
+    /// (`SubstrateType::ALL^2`) so the partition holds on BOTH shape
+    /// flavors via ONE substrate primitive.
+    #[test]
+    fn is_strictly_comparable_is_incomparable_and_equality_partition_the_pair_space() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                let strict = a.is_strictly_comparable(&b);
+                let incomp = a.is_incomparable(&b);
+                let eq = a == b;
+                let hits = usize::from(strict) + usize::from(incomp) + usize::from(eq);
+                assert_eq!(
+                    hits, 1,
+                    "exactly one of {{strict, incomparable, equal}} must hold on \
+                     ({a:?}, {b:?}) — got strict={strict}, incomp={incomp}, eq={eq}",
+                );
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                let strict = a.is_strictly_comparable(&b);
+                let incomp = a.is_incomparable(&b);
+                let eq = a == b;
+                let hits = usize::from(strict) + usize::from(incomp) + usize::from(eq);
+                assert_eq!(
+                    hits, 1,
+                    "exactly one of {{strict, incomparable, equal}} must hold on \
+                     ({a:?}, {b:?}) — got strict={strict}, incomp={incomp}, eq={eq}",
+                );
+            }
+        }
+    }
+
     proptest! {
         /// [`Lattice::is_constant`] AGREES with the conjunction
         /// `is_ascending && is_descending` on random
@@ -8297,6 +8696,49 @@ mod tests {
                 DataClassification::is_strictly_monotone_sequence(forward.iter().copied()),
                 DataClassification::is_strictly_monotone_sequence(reversed.iter().copied()),
             );
+        }
+
+        /// [`Lattice::is_strictly_comparable`] AGREES with both
+        /// two-primitive rewritings on random [`DataClassification`]
+        /// pairs — the direction-collapse disjunction
+        /// (`strictly_below || strictly_above`) AND the
+        /// is-comparable-minus-reflexive-diagonal encoding
+        /// (`is_comparable && !=`). Proptest peer of the exhaustive
+        /// pair seal above at extended arity — the two encodings must
+        /// stay byte-identical on every pair.
+        #[test]
+        fn is_strictly_comparable_agrees_with_both_two_primitive_rewritings_over_data_classification_random_pairs(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            let strict = a.is_strictly_comparable(&b);
+            prop_assert_eq!(strict, a.strictly_below(&b) || a.strictly_above(&b));
+            prop_assert_eq!(strict, a.is_comparable(&b) && a != b);
+        }
+
+        /// [`Lattice::is_strictly_comparable`] is SYMMETRIC on random
+        /// [`DataClassification`] pairs — swap-invariance on the
+        /// direction-collapse face. Inherits from the disjunction's
+        /// swap symmetry via the `strictly_above ⇔ strictly_below`-
+        /// dual byte identity.
+        #[test]
+        fn is_strictly_comparable_is_symmetric_over_data_classification_random_pairs(
+            a in any_data_class(),
+            b in any_data_class(),
+        ) {
+            prop_assert_eq!(a.is_strictly_comparable(&b), b.is_strictly_comparable(&a));
+        }
+
+        /// [`Lattice::is_strictly_comparable`] is IRREFLEXIVE on
+        /// random [`DataClassification`] elements. Peer of
+        /// `data_class_strictly_below_is_irreflexive` on the
+        /// direction-collapse arm — the disjunction inherits both
+        /// directional strict primitives' irreflexivity.
+        #[test]
+        fn is_strictly_comparable_is_irreflexive_over_data_classification(
+            a in any_data_class(),
+        ) {
+            prop_assert!(!a.is_strictly_comparable(&a));
         }
     }
 }

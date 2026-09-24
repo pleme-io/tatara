@@ -112,7 +112,30 @@ concepts.
 | **mamorigami** | VPN convergence | WireGuard platform (tunnels, peers, keys) |
 | **kakuremino** | Anonymous transport | Tor/SOCKS5 convergence |
 | **kurayami** | Privacy DNS | DoT/DoH/DoQ convergence |
-| **hanabi** | Traffic convergence | L7 proxy + L4 LB + cache + circuit breaker |
+
+> **★ `hanabi` is deliberately NOT listed here (removed 2026-09-24).**
+>
+> This table carried the row *"hanabi | Traffic convergence | L7 proxy + L4 LB
+> + cache + circuit breaker"*, which was wrong on every axis and is the
+> measured source of a real planning error: an agent read it, concluded hanabi
+> was a small reverse proxy, and designed a fleet front door on that basis
+> before the operator corrected it.
+>
+> What the row got wrong. It filed a **product-facing application service**
+> beside a WireGuard platform, a Tor transport and a DNS layer — hanabi is not
+> tatara network substrate. And it described hanabi entirely by its three
+> **dark** modules: `src/proxy` is compiled in but its config is never read,
+> `src/l4` and `src/mesh` are absent from the shipped binary altogether, and
+> nothing constructs any of them. The row named the 1% that does not run and
+> omitted the 99% that does.
+>
+> What hanabi actually is: Urdume's **L4 BFF** — ~51K lines of
+> Apollo-Federation-v2 GraphQL gateway (HivePlanner, PlanExecutor, two-tier
+> cache, load shedding), OAuth/session auth, live websocket subscriptions,
+> webhooks, image proxy and `X-Product` multi-tenancy. Canonical descriptions:
+> [`theory/URDUME.md`](https://github.com/pleme-io/theory/blob/main/URDUME.md)
+> (L4) and `hanabi/README.md`. If hanabi ever belongs in a tatara map, it is as
+> a *consumer* of this substrate, not a layer of it.
 
 ### Identity & Secrets (Security + Identity Substrates)
 

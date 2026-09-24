@@ -1866,6 +1866,191 @@ pub trait Lattice: Sized + Clone + PartialEq {
         }
         true
     }
+    /// Strict-arm structural peer of [`Lattice::is_antichain`] on the
+    /// STRICTNESS axis — the iterated set forms a STRICT ANTICHAIN (a
+    /// pairwise-incomparable SET with no duplicate elements) on the
+    /// lattice's partial order iff EVERY position pair `(vs[i], vs[j])`
+    /// with `i < j` satisfies [`Lattice::is_incomparable`].
+    /// `T::is_strict_antichain([&a, &b, &c])` holds iff
+    /// `a.is_incomparable(&b) && a.is_incomparable(&c) &&
+    /// b.is_incomparable(&c)`. Because [`Lattice::is_incomparable`] is
+    /// IRREFLEXIVE (a self-pair is comparable by [`Lattice::leq`]
+    /// reflexivity), no distinct-pair filter is needed — the
+    /// irreflexivity of the primitive absorbs the filter arithmetic
+    /// exactly the way [`Lattice::is_strictly_comparable`]'s
+    /// irreflexivity absorbs the filter for [`Lattice::is_strict_chain`].
+    ///
+    /// The STRICT-ARM STRUCTURAL peer of [`Lattice::is_antichain`] one
+    /// STRICTNESS axis over on the (strict, non-strict) × (comparable,
+    /// incomparable) 2×2 structural comparability grid — where
+    /// [`Lattice::is_antichain`] decides NON-STRICT structural
+    /// incomparability on the full O(N²) all-pairs symmetric nested
+    /// loop (accepts duplicates on the standard-mathematical distinct-
+    /// pair convention), this decides STRICT structural incomparability
+    /// on the SAME nested loop (REJECTS duplicates because
+    /// [`Lattice::is_incomparable`] is IRREFLEXIVE). Together with
+    /// [`Lattice::is_antichain`] on the non-strict arm, [`Lattice::is_chain`]
+    /// on the non-strict comparability arm, and [`Lattice::is_strict_chain`]
+    /// on the strict comparability arm, this closes the (strict, non-strict)
+    /// × (comparable, incomparable) 2×2 structural grid at the incomparability-
+    /// strict corner — the fourth substrate default on the structural face,
+    /// closing the whole 2×2.
+    ///
+    /// **Empty-iterator vacuous truth**: `T::is_strict_antichain(std::iter::
+    /// empty()) == true` on every lattice — the empty conjunction has
+    /// no pair to check, so the universally-quantified predicate fires
+    /// true on the empty case. Shared vacuous-truth arm with
+    /// [`Lattice::is_chain`], [`Lattice::is_antichain`], and
+    /// [`Lattice::is_strict_chain`] on the empty-conjunction identity.
+    ///
+    /// **Singleton vacuous truth**: `T::is_strict_antichain([&a]) ==
+    /// true` for every `a` — a singleton contains no pair, same
+    /// vacuous-conjunction reasoning as the empty case. AGREES with
+    /// [`Lattice::is_antichain`]'s singleton verdict on the same shared
+    /// arm.
+    ///
+    /// **Duplicate rejection at arity ≥ 2** (DIVERGES from
+    /// [`Lattice::is_antichain`]'s duplicate-only vacuous truth):
+    /// `T::is_strict_antichain([&a, &a]) == false` for every `a` — the
+    /// nested loop compares `vs[0].is_incomparable(vs[1])` on the
+    /// duplicate pair, which fires false because [`Lattice::is_comparable`]
+    /// is REFLEXIVE (so [`Lattice::is_incomparable`] is IRREFLEXIVE).
+    /// This is the exact overlap where the strict and non-strict
+    /// structural incomparability predicates disagree at the reflexive-
+    /// diagonal arm — a duplicate-only collection at length ≥ 2 is an
+    /// antichain but NOT a strict antichain. Peer distinction to
+    /// [`Lattice::is_strict_chain`]'s duplicate-rejection-at-arity-≥-2
+    /// arm on the strict comparability side.
+    ///
+    /// **Pair-identity**: `T::is_strict_antichain([&a, &b]) ==
+    /// a.is_incomparable(&b)` — the 2-input structural strict-antichain
+    /// predicate reduces to the pairwise-incomparability primitive
+    /// without a duplicate filter (duplicates are rejected by
+    /// [`Lattice::is_incomparable`]'s irreflexivity, so no explicit
+    /// filter is needed). Strict-arm peer of [`Lattice::is_antichain`]'s
+    /// pair-identity `T::is_antichain([&a, &b]) == (a == b ||
+    /// a.is_incomparable(&b))`.
+    ///
+    /// **Refines [`Lattice::is_antichain`]**: for every collection,
+    /// `T::is_strict_antichain(iter) ⇒ T::is_antichain(iter)` — every
+    /// position pair the strict-antichain predicate accepts is
+    /// [`Lattice::is_incomparable`], and the non-strict antichain
+    /// predicate's distinct-pair filter absorbs the reflexive-diagonal
+    /// pairs the strict arm rejects. The converse fails on collections
+    /// with duplicates: any all-duplicate slice at length ≥ 2 is an
+    /// antichain but not a strict antichain.
+    ///
+    /// **Two-primitive rewriting**: `T::is_strict_antichain(iter) ==
+    /// T::is_antichain(iter) && vs are pairwise distinct` — a strict
+    /// antichain is an antichain with no repeats. Equivalent by
+    /// de-Morgan to "for every i < j, vs[i] != vs[j] AND
+    /// vs[i].is_incomparable(&vs[j])", which is byte-identical to the
+    /// definition modulo the filter arithmetic. This gives the strict-
+    /// antichain predicate two interchangeable readings:
+    /// `is_incomparable`-on-every-pair (the primitive route) or
+    /// `is_antichain`-and-pairwise-distinct (the two-primitive
+    /// composition). Peer of [`Lattice::is_strict_chain`]'s
+    /// two-primitive rewriting on the incomparability arm.
+    ///
+    /// **Any-comparable-pair rejection**: if any two positions
+    /// `(i, j)` with `i < j` fail `vs[i].is_incomparable(&vs[j])` —
+    /// either because the values are equal (reflexive-diagonal arm) OR
+    /// because they are comparable on the partial order — then
+    /// `T::is_strict_antichain(iter) == false`. The nested loop short-
+    /// circuits at the first violating pair.
+    ///
+    /// **Total-order rejection-on-any-pair**: on any totally-ordered
+    /// lattice (e.g. [`baseline::Baseline`], [`DataClassification`],
+    /// [`CalmClassification`]), the predicate REJECTS every collection
+    /// at arity ≥ 2 — every pair on a total order is comparable, so
+    /// [`Lattice::is_incomparable`] fires false on every pair,
+    /// including the duplicate pairs (irreflexivity absorbs those
+    /// too). ACCEPTS only the empty and singleton shapes. Contrast
+    /// with [`Lattice::is_antichain`], which accepts every duplicate-
+    /// only collection on the total order (including arity ≥ 2). Peer
+    /// of [`Lattice::is_strict_chain`]'s total-order acceptance-on-
+    /// distinct one axis over.
+    ///
+    /// **Antichain-lattice acceptance-on-distinct-non-top**: on an
+    /// antichain lattice (e.g. [`SubstrateType`]), the predicate
+    /// ACCEPTS every collection whose values are pairwise distinct
+    /// AND all non-top (every distinct non-top pair is incomparable).
+    /// REJECTS any collection containing (a) any duplicate pair, OR
+    /// (b) any pair mixing the pointed-top [`SubstrateType::Regulatory`]
+    /// with a distinct non-top substrate (the top-directed pair is
+    /// comparable). Peer of [`Lattice::is_antichain`]'s antichain-
+    /// lattice universal-truth-on-distinct-non-top one strictness
+    /// axis over.
+    ///
+    /// **Chain-antichain overlap at arity ≥ 2**: at any collection with
+    /// arity ≥ 2, at most ONE of [`Lattice::is_strict_chain`] /
+    /// [`Lattice::is_strict_antichain`] fires — a strict chain has
+    /// every pair strictly-comparable AND distinct; a strict antichain
+    /// has every pair incomparable AND distinct; the two properties
+    /// partition the pair space at the pairwise level and force
+    /// disjoint verdicts on any collection of length ≥ 2. (Both fire
+    /// true on empty and singleton via the shared vacuous-truth arm.)
+    /// Peer of [`Lattice::is_chain`] / [`Lattice::is_antichain`]'s
+    /// chain-antichain overlap on the strict corner.
+    ///
+    /// **Sequence-order independence**: `T::is_strict_antichain(iter)
+    /// == T::is_strict_antichain(iter.rev())` on every collection —
+    /// the nested loop checks EVERY position pair `(i, j)` symmetrically
+    /// via [`Lattice::is_incomparable`]'s symmetry, so a permutation of
+    /// the input yields the same verdict. Same structural-vs-sequence-
+    /// shape reading as [`Lattice::is_antichain`]'s sequence-order
+    /// independence.
+    ///
+    /// Default routes through a nested-loop `for i in 0..vs.len()` /
+    /// `for j in (i + 1)..vs.len()` over the collected `Vec<&Self>`
+    /// buffer, dispatching to [`Lattice::is_incomparable`] (which
+    /// itself decomposes into `!self.is_comparable(other)` on the
+    /// pair-level primitive). Same collect-once discipline as
+    /// [`Lattice::is_antichain`] so an [`IntoIterator`] that yields
+    /// distinct values on distinct calls cannot break the structural
+    /// predicate's determinism.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the strict-arm structural incomparability
+    /// predicate is itself a typed named `bool` composing
+    /// [`Lattice::is_incomparable`] via nested-loop pair iteration;
+    /// every downstream lattice-law consumer inherits the predicate
+    /// through the default mechanically) + THEORY.md §III (typescape
+    /// — the strict-incomparability structural arm on every
+    /// classification-axis lattice binds at ONE substrate owner on
+    /// the [`Lattice`] algebra rather than at each consumer's
+    /// hand-rolled `iter.iter().enumerate().all(|(i, x)|
+    /// iter.iter().skip(i + 1).all(|y| x.is_incomparable(y)))`
+    /// nested traversal).
+    ///
+    /// Frontier inspiration: order-theory's classical "antichain"
+    /// definition is stated over SETS (no duplicates) — the standard
+    /// Sperner-family and Dilworth's-theorem readings both assume
+    /// distinct elements, which makes the strict-antichain predicate
+    /// the natural set-theoretic reading and [`Lattice::is_antichain`]'s
+    /// duplicate-tolerating multiset reading the loosening. Translated:
+    /// threaded the strict-arm structural incomparability predicate
+    /// through the [`Lattice`] trait's default-method surface, so every
+    /// closed-set impl picks up the whole strict-antichain-detection
+    /// primitive mechanically — the duplicate-rejecting refinement of
+    /// what [`Lattice::is_antichain`] already carries at the non-strict
+    /// arm, closing the (strict, non-strict) × (comparable, incomparable)
+    /// 2×2 structural comparability grid at ONE algebra owner.
+    fn is_strict_antichain<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        for i in 0..vs.len() {
+            for j in (i + 1)..vs.len() {
+                if !vs[i].is_incomparable(vs[j]) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
     /// Sequence-shape (consecutive-pair) peer of [`Lattice::is_chain`]
     /// on the CONSECUTIVE-VS-ALL-PAIRS axis — the iterated set is
     /// ASCENDING (a [`Lattice::leq`]-monotone non-decreasing sequence
@@ -7348,6 +7533,382 @@ mod tests {
                              a strict chain — transitivity of strictly_below extends \
                              the pairwise strict relation to every distinct pair, and \
                              strict monotonicity forbids duplicates",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Lattice::is_strict_antichain — strict-arm structural collection-
+    //    level default peer of Lattice::is_antichain ─────────────────────
+    //
+    // Bind [`Lattice::is_strict_antichain`] at fail-before-pass-after
+    // granularity. Pre-lift the [`Lattice`] trait's structural
+    // comparability surface was `{is_chain, is_antichain,
+    // is_strict_chain}` — the (strict, non-strict) × (comparable,
+    // incomparable) 2×2 grid was closed at three corners but OPEN at
+    // the strict-incomparable corner. A consumer that wanted the
+    // STRICT structural incomparability reading ("this collection is
+    // a pairwise-incomparable SET with no duplicates") hand-authored
+    // either a nested-loop composition over [`Lattice::is_incomparable`]
+    // OR a two-primitive `is_antichain(iter) && vs are pairwise
+    // distinct` composition at each callsite. Post-lift the whole
+    // strict-arm structural incomparability predicate binds at ONE
+    // substrate primitive on the [`Lattice`] algebra, and every
+    // downstream impl (the four in-tree ones + `Baseline` via the
+    // `crate::Lattice` trait AND any future closed-set lift) inherits
+    // `is_strict_antichain` for free through the default. Together
+    // with the prior three predicates the trait now closes the
+    // (strict, non-strict) × (comparable, incomparable) 2×2 structural
+    // comparability grid at ALL FOUR CORNERS via ONE new substrate
+    // default — the fourth cell of the 2×2 face, exactly opposite the
+    // just-lifted `is_strict_chain` on the incomparability diagonal.
+    //
+    // The dedup convention DIVERGES from [`Lattice::is_antichain`]'s
+    // duplicate-only vacuous-truth arm — the strict predicate REJECTS
+    // duplicate pairs at arity ≥ 2 because [`Lattice::is_incomparable`]
+    // is IRREFLEXIVE ([`Lattice::is_comparable`] fires true on the
+    // reflexive diagonal via [`Lattice::leq`] reflexivity, so
+    // [`Lattice::is_incomparable`] fires false there). This is the
+    // exact reflexive-diagonal peel-off from the non-strict antichain
+    // predicate and the load-bearing distinction the strict predicate
+    // introduces on the structural axis — peer of [`Lattice::is_strict_chain`]'s
+    // duplicate-rejection distinction one comparability axis over.
+    //
+    // Coverage below spans:
+    //
+    //   • empty / singleton vacuous truth on the shared vacuous-
+    //     conjunction arm with [`Lattice::is_antichain`];
+    //   • duplicate rejection at arity 2 and arity 3 (DIVERGES from
+    //     [`Lattice::is_antichain`]'s duplicate-only vacuous truth) on
+    //     every closed-set impl;
+    //   • pair-identity `T::is_strict_antichain([&a, &b]) ==
+    //     a.is_incomparable(&b)` at every pair of every closed-set impl;
+    //   • refines-[`Lattice::is_antichain`] via
+    //     [`Lattice::is_incomparable`]-irreflexivity absorbing the
+    //     non-strict predicate's distinct-pair filter at every triple
+    //     of every closed-set impl;
+    //   • two-primitive rewriting `T::is_strict_antichain(iter) ==
+    //     T::is_antichain(iter) && vs are pairwise distinct` at every
+    //     triple of every closed-set impl;
+    //   • total-order rejection-on-arity-≥-2 on `DataClassification::ALL^2`
+    //     and `CalmClassification::ALL^2` — the predicate reduces to
+    //     the "impossible at arity ≥ 2" verdict on any total order;
+    //   • antichain-lattice acceptance-on-distinct-non-top on
+    //     `SubstrateType::ALL^3` — the shipped {Compute, Storage,
+    //     Network} triple is the canonical strict-antichain witness;
+    //   • strict-chain / strict-antichain disjointness at arity ≥ 2
+    //     on `SubstrateType::ALL^3` (the two strict predicates
+    //     partition the pair space at arity ≥ 2);
+    //   • sequence-order independence on `DataClassification::ALL^3`
+    //     and `SubstrateType::ALL^3`.
+
+    /// [`Lattice::is_strict_antichain`] is vacuously true at the empty
+    /// iterator on every classification-axis lattice — the empty
+    /// conjunction has no pair to check, so the universally-quantified
+    /// predicate fires true on the empty case. Shared vacuous-truth
+    /// arm with [`Lattice::is_antichain`] at the empty case. Fail-
+    /// before-pass-after: pre-lift this pin cannot compile because
+    /// `is_strict_antichain` is not exposed as a trait method —
+    /// consumers who wanted the strict-arm structural-incomparability
+    /// reading either composed [`Lattice::is_incomparable`] through a
+    /// hand-authored nested loop OR combined [`Lattice::is_antichain`]
+    /// with a hand-authored pairwise-distinct check at each callsite.
+    #[test]
+    fn is_strict_antichain_is_vacuously_true_at_the_empty_iterator() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        assert!(DataClassification::is_strict_antichain(std::iter::empty()));
+        assert!(CalmClassification::is_strict_antichain(std::iter::empty()));
+        assert!(SubstrateType::is_strict_antichain(std::iter::empty()));
+    }
+
+    /// [`Lattice::is_strict_antichain`] is vacuously true at every
+    /// singleton on every classification-axis lattice — a singleton
+    /// contains no pair, so the same vacuous-conjunction identity as
+    /// the empty arm holds. Shared vacuous-truth arm with
+    /// [`Lattice::is_antichain`] at the singleton case. Pinned
+    /// exhaustively over every variant of every closed-set impl.
+    #[test]
+    fn is_strict_antichain_is_vacuously_true_at_every_singleton() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::is_strict_antichain([&a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::is_strict_antichain([&a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::is_strict_antichain([&a]));
+        }
+    }
+
+    /// [`Lattice::is_strict_antichain`] REJECTS every duplicate-only
+    /// collection at arity ≥ 2 on every classification-axis lattice —
+    /// the nested loop compares `vs[0].is_incomparable(vs[1])` on the
+    /// duplicate pair, which fires false because
+    /// [`Lattice::is_incomparable`] is IRREFLEXIVE
+    /// ([`Lattice::is_comparable`] is REFLEXIVE via [`Lattice::leq`]
+    /// reflexivity, so its dual is irreflexive). DIVERGES from
+    /// [`Lattice::is_antichain`]'s duplicate-only vacuous truth — this
+    /// is the exact overlap where the strict and non-strict structural
+    /// incomparability predicates disagree, and the load-bearing
+    /// distinction the strict predicate introduces on the structural
+    /// axis. Peer of the `is_strict_chain_rejects_duplicate_only_
+    /// collections_at_arity_2_and_3` seal one comparability axis over.
+    #[test]
+    fn is_strict_antichain_rejects_duplicate_only_collections_at_arity_2_and_3() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(!DataClassification::is_strict_antichain([&a, &a]));
+            assert!(!DataClassification::is_strict_antichain([&a, &a, &a]));
+            // Peer sanity: is_antichain accepts the same duplicate-only
+            // collection on the shared vacuous-truth arm.
+            assert!(DataClassification::is_antichain([&a, &a]));
+            assert!(DataClassification::is_antichain([&a, &a, &a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(!CalmClassification::is_strict_antichain([&a, &a]));
+            assert!(!CalmClassification::is_strict_antichain([&a, &a, &a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(!SubstrateType::is_strict_antichain([&a, &a]));
+            assert!(!SubstrateType::is_strict_antichain([&a, &a, &a]));
+        }
+    }
+
+    /// [`Lattice::is_strict_antichain`] at arity 2 REDUCES to
+    /// `a.is_incomparable(&b)` on every [`SubstrateType`] pair — the
+    /// 2-input structural strict-antichain predicate collapses to the
+    /// pairwise-incomparability primitive without a duplicate filter
+    /// (duplicates are rejected by [`Lattice::is_incomparable`]'s
+    /// irreflexivity, so no explicit filter is needed). Strict-arm
+    /// peer of the `is_chain_and_is_antichain_arity_2_reduces_to_
+    /// pairwise_over_data_classification_all` pair-identity seal on
+    /// the incomparability arm. Pinned exhaustively over
+    /// `SubstrateType::ALL^2` (64 pairs) — the antichain-shape lattice
+    /// is where the incomparability primitive is non-trivially true,
+    /// so this is the tighter sieve than a total-order pin.
+    #[test]
+    fn is_strict_antichain_arity_2_reduces_to_pairwise_incomparable_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                assert_eq!(
+                    SubstrateType::is_strict_antichain([&a, &b]),
+                    a.is_incomparable(&b),
+                    "is_strict_antichain([{a:?}, {b:?}]) must reduce to \
+                     a.is_incomparable(&b) — the 2-input structural strict predicate \
+                     collapses to the pairwise primitive without a duplicate filter \
+                     (irreflexivity absorbs the filter)",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_antichain`] REFINES [`Lattice::is_antichain`]
+    /// on every [`SubstrateType`] triple — every strict antichain is
+    /// an antichain because [`Lattice::is_incomparable`]'s irreflexivity
+    /// absorbs the reflexive-diagonal pairs that the non-strict
+    /// predicate's distinct-pair filter absorbs by hand. Pinned
+    /// exhaustively over `SubstrateType::ALL^3` (512 triples) so a
+    /// regression that promoted the strict predicate past its non-
+    /// strict superset (accepting a pair that [`Lattice::is_antichain`]
+    /// rejects) would surface here.
+    #[test]
+    fn is_strict_antichain_refines_is_antichain_on_substrate_type_all_triples() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    if SubstrateType::is_strict_antichain([&a, &b, &c]) {
+                        assert!(
+                            SubstrateType::is_antichain([&a, &b, &c]),
+                            "is_strict_antichain([{a:?}, {b:?}, {c:?}]) must imply \
+                             is_antichain — is_incomparable-irreflexivity absorbs \
+                             the reflexive diagonal the non-strict arm's distinct-pair \
+                             filter absorbs by hand",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_antichain`] admits a TWO-PRIMITIVE
+    /// REWRITING on every [`SubstrateType`] triple:
+    /// `T::is_strict_antichain(iter) == T::is_antichain(iter) && vs
+    /// are pairwise distinct`. A strict antichain is an antichain with
+    /// no repeats; equivalent by de-Morgan to "for every i < j,
+    /// vs[i] != vs[j] AND vs[i].is_incomparable(&vs[j])", which is
+    /// byte-identical to the definition modulo the filter arithmetic.
+    /// Pinned exhaustively over `SubstrateType::ALL^3` (512 triples)
+    /// — the mixed-shape antichain lattice is the tightest sieve for
+    /// this rewriting because it stresses BOTH the distinct filter
+    /// (top-duplicated pairs) AND the incomparability filter (top-mixed
+    /// pairs are comparable). Peer of [`Lattice::is_strict_chain`]'s
+    /// two-primitive rewriting on the comparability arm.
+    #[test]
+    fn is_strict_antichain_two_primitive_rewriting_over_substrate_type_all_triples() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    let strict = SubstrateType::is_strict_antichain([&a, &b, &c]);
+                    let antichain = SubstrateType::is_antichain([&a, &b, &c]);
+                    let distinct = a != b && a != c && b != c;
+                    assert_eq!(
+                        strict,
+                        antichain && distinct,
+                        "is_strict_antichain([{a:?}, {b:?}, {c:?}]) must equal \
+                         is_antichain(iter) && (all pairwise distinct) — the \
+                         two-primitive rewriting is byte-identical modulo the filter \
+                         arithmetic",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_antichain`] REJECTS every collection of
+    /// arity ≥ 2 on any totally-ordered lattice — every distinct pair
+    /// is comparable by the total-order property (so
+    /// [`Lattice::is_incomparable`] fires false on every distinct
+    /// pair), and every duplicate pair is comparable by reflexivity
+    /// (so [`Lattice::is_incomparable`] fires false on every reflexive
+    /// pair). Contrast with [`Lattice::is_antichain`], which accepts
+    /// duplicate-only collections on a total order. Pinned
+    /// exhaustively over `DataClassification::ALL^2` (36 pairs) and
+    /// `CalmClassification::ALL^2` (4 pairs) so a regression that
+    /// broke the total-order property would surface at the first
+    /// pair whose strict-antichain verdict disagreed with the
+    /// "impossible at arity ≥ 2" reading.
+    #[test]
+    fn is_strict_antichain_rejects_every_arity_2_collection_on_total_order_lattices() {
+        use tatara_process::classification::{CalmClassification, DataClassification};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert!(
+                    !DataClassification::is_strict_antichain([&a, &b]),
+                    "is_strict_antichain([{a:?}, {b:?}]) on a total order must reject \
+                     — every pair on a total order is comparable (distinct pairs by \
+                     the total-order property, reflexive pairs by leq reflexivity)",
+                );
+            }
+        }
+        for a in CalmClassification::ALL {
+            for b in CalmClassification::ALL {
+                assert!(!CalmClassification::is_strict_antichain([&a, &b]));
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_antichain`] ACCEPTS the {Compute, Storage,
+    /// Network} triple on [`SubstrateType`] — three distinct non-top
+    /// substrates form a 3-element strict antichain: pairwise
+    /// incomparable AND pairwise distinct. Peer of
+    /// `is_chain_rejects_three_distinct_non_top_substrates` on the
+    /// strict arm — the SAME 3-element alphabet that fires
+    /// [`Lattice::is_antichain`] also fires [`Lattice::is_strict_antichain`]
+    /// exactly when the collection is pairwise distinct. Peer non-
+    /// vacuous-truth pin on the antichain-shape lattice, distinguishing
+    /// the strict antichain from the non-strict antichain at the
+    /// duplicate arm (the duplicate-only rejection above pins the
+    /// other side of the divergence).
+    #[test]
+    fn is_strict_antichain_accepts_three_distinct_non_top_substrates() {
+        use tatara_process::classification::SubstrateType;
+        let s = SubstrateType::Compute;
+        let t = SubstrateType::Storage;
+        let u = SubstrateType::Network;
+        // Three distinct non-top substrates: strict antichain.
+        assert!(SubstrateType::is_strict_antichain([&s, &t, &u]));
+        // Peer sanity on the non-strict arm.
+        assert!(SubstrateType::is_antichain([&s, &t, &u]));
+        // Peer sanity on the strict-chain dual: rejects because no
+        // pair of the three is comparable.
+        assert!(!SubstrateType::is_strict_chain([&s, &t, &u]));
+    }
+
+    /// [`Lattice::is_strict_antichain`] REJECTS any mixed-shape triple
+    /// containing the pointed-top on [`SubstrateType`] — {Compute,
+    /// Storage} is pairwise-incomparable, but adding
+    /// [`SubstrateType::Regulatory`] introduces the top-directed pair
+    /// {Compute, Regulatory} (comparable), so [`Lattice::is_incomparable`]
+    /// fires false on that pair. Peer of the
+    /// `neither_chain_nor_antichain_on_the_mixed_shape_substrate_triple`
+    /// pin on the strict arm.
+    #[test]
+    fn is_strict_antichain_rejects_the_mixed_shape_top_containing_substrate_triple() {
+        use tatara_process::classification::SubstrateType;
+        let s = SubstrateType::Compute;
+        let t = SubstrateType::Storage;
+        let top = SubstrateType::Regulatory;
+        assert!(!SubstrateType::is_strict_antichain([&s, &t, &top]));
+    }
+
+    /// [`Lattice::is_strict_chain`] and [`Lattice::is_strict_antichain`]
+    /// are DISJOINT at arity ≥ 2 on every [`SubstrateType`] pair — a
+    /// strict chain requires every pair strictly-comparable, a strict
+    /// antichain requires every pair incomparable, and the two
+    /// properties partition the pair space at the pairwise level and
+    /// force disjoint verdicts on any collection of length ≥ 2. Pinned
+    /// exhaustively over `SubstrateType::ALL^2` (64 pairs) — the
+    /// antichain-shape lattice stresses both arms because it carries
+    /// pairs on both sides of the (comparable, incomparable) partition.
+    /// Peer chain-antichain-overlap seal on the strict corner one
+    /// STRICTNESS axis over from the non-strict pin.
+    #[test]
+    fn strict_chain_and_strict_antichain_are_disjoint_on_substrate_type_all_pairs() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                let strict_chain = SubstrateType::is_strict_chain([&a, &b]);
+                let strict_antichain = SubstrateType::is_strict_antichain([&a, &b]);
+                assert!(
+                    !(strict_chain && strict_antichain),
+                    "is_strict_chain([{a:?}, {b:?}]) && is_strict_antichain([{a:?}, {b:?}]) \
+                     must be false at arity 2 — the two strict structural predicates \
+                     partition the pair space at the pairwise level (strict-comparable \
+                     XOR incomparable) so they cannot both fire on a length-2 collection",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_antichain`] is SEQUENCE-ORDER INDEPENDENT
+    /// — the nested loop checks EVERY position pair `(i, j)`
+    /// symmetrically via [`Lattice::is_incomparable`]'s symmetry, so
+    /// a permutation of the input yields the same verdict. Pinned
+    /// over `SubstrateType::ALL^3` (512 triples, full 6-permutation
+    /// sweep) — the antichain-shape lattice is the axis with the
+    /// most non-trivial incomparability structure, so the sweep is
+    /// tightest here. Matches the sequence-order independence seal on
+    /// [`Lattice::is_antichain`] one STRICTNESS axis over.
+    #[test]
+    fn is_strict_antichain_is_sequence_order_independent() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    let refv = SubstrateType::is_strict_antichain([&a, &b, &c]);
+                    for perm in &[
+                        [&a, &c, &b],
+                        [&b, &a, &c],
+                        [&b, &c, &a],
+                        [&c, &a, &b],
+                        [&c, &b, &a],
+                    ] {
+                        assert_eq!(
+                            SubstrateType::is_strict_antichain(perm.iter().copied()),
+                            refv,
+                            "is_strict_antichain must be sequence-order independent",
                         );
                     }
                 }

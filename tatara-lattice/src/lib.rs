@@ -1043,6 +1043,246 @@ pub trait Lattice: Sized + Clone + PartialEq {
     fn clamped_between(&self, low: &Self, high: &Self) -> Self {
         self.join(low).meet(high)
     }
+    /// Half-bracket peer of [`Lattice::clamped_between`] on the LOWER
+    /// side — pin `self` to at-least `low` on the lattice's partial
+    /// order. `a.clamped_below(&low)` returns `a ⊔ low`: the element
+    /// obtained by RAISING `a` to the floor when it sits below, and
+    /// leaving `a` unchanged when it already sits at-or-above the
+    /// floor.
+    ///
+    /// The 2-ary lower-half peer of [`Lattice::clamped_between`] one
+    /// ARITY axis down on the (2-ary, 3-ary) × (below, above, between)
+    /// projection-combinator grid — where [`Lattice::clamped_between`]
+    /// projects into a two-sided bracket `[low, high]`, this projects
+    /// into the ONE-SIDED bracket `[low, ⊤]`. Together with
+    /// [`Lattice::clamped_above`] on the dual half-bracket arm and
+    /// [`Lattice::clamped_between`] on the two-sided arm this closes
+    /// the (2-ary lower, 2-ary upper, 3-ary interval) × (projection)
+    /// grid on the algebra's bracket-combinator surface at ONE
+    /// substrate default per cell — exactly the way the 2-ary meet /
+    /// join primitives close the pairwise pointwise arm at the
+    /// (`meet`, `join`) pair one abstraction level down.
+    ///
+    /// **Half-bracket composition** to the 3-ary combinator: on any
+    /// lattice, `a.clamped_below(&low).clamped_above(&high) ==
+    /// a.clamped_between(&low, &high)` — byte-identical to the 3-ary
+    /// default's `self.join(low).meet(high)` routing. A caller that
+    /// wants to reach the two-sided bracket through the half-bracket
+    /// arms in either order can compose the two directly, and the
+    /// composition arm binds the ONE canonical order (below then
+    /// above) that reproduces the 3-ary clamp on every lattice; the
+    /// alternate order (`a.clamped_above(&high).clamped_below(&low)`
+    /// == `a.meet(&high).join(&low)`) DIVERGES on non-distributive
+    /// lattices, so the trait binds the canonical arm and consumers
+    /// that want the composed 3-ary combinator call
+    /// [`Lattice::clamped_between`] directly (or `clamped_below`
+    /// followed by `clamped_above`).
+    ///
+    /// **Below-floor pin**: if `a.leq(&low)` — `a` sits at-or-below
+    /// the floor — then `a.clamped_below(&low) == low`. The floor
+    /// absorbs the input: `a.join(low) == low` by the join-agreement
+    /// axiom `a.leq(&low) ⇒ a.join(&low) == low`, so the clamp pins
+    /// to the floor. Peer of [`Lattice::clamped_between`]'s
+    /// below-floor pin one arity axis down.
+    ///
+    /// **Above-floor fixed-point**: on any lattice satisfying
+    /// join-agreement (in particular every totally-ordered lattice —
+    /// [`DataClassification`], [`CalmClassification`],
+    /// [`baseline::Baseline`]), if `low.leq(&a)` — `a` sits at-or-
+    /// above the floor — then `a.clamped_below(&low) == a`. Follows
+    /// from the join-agreement axiom `low.leq(&a) ⇔ a.join(&low) ==
+    /// a`. Peer of [`Lattice::clamped_between`]'s in-bracket fixed
+    /// point one arity axis down, on the lower half-bracket only.
+    ///
+    /// **Half-bracket-membership contract**: `low.leq(&a.clamped_below(
+    /// &low))` holds for EVERY `a` on EVERY lattice — the clamp
+    /// result always sits at-or-above the floor. Follows from the
+    /// lattice's join-is-upper-bound axiom `low.leq(&a.join(&low))`,
+    /// which every well-formed lattice impl satisfies by construction.
+    /// The half-bracket clamp is a RETRACTION of the lattice onto the
+    /// upper half-bracket `[low, ⊤]`. Peer of
+    /// [`Lattice::clamped_between`]'s bracket-membership contract one
+    /// side axis over.
+    ///
+    /// **Reflexive-bracket identity**: `a.clamped_below(&a) == a` on
+    /// every element on every lattice — join is idempotent by the
+    /// lattice's `a.join(&a) == a` axiom (pinned as a first-class law
+    /// via `data_class_idempotent` / `calm_idempotent` and the peer
+    /// impl-level `idempotent_meet` seal), so a zero-width lower
+    /// bracket at `a` is trivially the identity on `a`. Peer of
+    /// [`Lattice::clamped_between`]'s reflexive self-bracket identity
+    /// one arity axis down; identity holds on EVERY lattice impl,
+    /// including the pointed-top antichain [`SubstrateType`] whose
+    /// core `Lattice` impl violates leq/meet agreement on the top-
+    /// directed edge but still upholds meet/join idempotence.
+    ///
+    /// **Bottom-identity**: `a.clamped_below(&T::bottom()) == a` for
+    /// EVERY element on EVERY lattice — join with bottom is the
+    /// receiver by the lattice-bottom axiom `a.join(&T::bottom()) ==
+    /// a`. The widest possible lower half-bracket is the identity.
+    /// Peer of [`Lattice::clamped_between`]'s extrema-bracket identity
+    /// one half-bracket axis over.
+    ///
+    /// **Top-absorbs**: `a.clamped_below(&T::top()) == T::top()` for
+    /// EVERY element on EVERY lattice — join with top pins to top by
+    /// the lattice-top axiom `a.join(&T::top()) == T::top()`. The
+    /// tightest possible lower half-bracket (floor at the top)
+    /// collapses every input to the top. Peer of the below-floor pin
+    /// at the extremal case `low = T::top()` where every element
+    /// satisfies `a.leq(&T::top())` so the pin fires universally.
+    ///
+    /// **Idempotence**: `a.clamped_below(&low).clamped_below(&low) ==
+    /// a.clamped_below(&low)` on any lower bracket, on any lattice —
+    /// direct consequence of the half-bracket-membership contract
+    /// (`low.leq(&a.clamped_below(&low))`) plus the above-floor
+    /// fixed-point on lattices satisfying join-agreement; on lattices
+    /// without join-agreement (the pointed-top antichain) the
+    /// idempotence follows from the join-associativity + join-
+    /// idempotence identities directly (`(a ⊔ low) ⊔ low = a ⊔ (low
+    /// ⊔ low) = a ⊔ low`). Peer of [`Lattice::clamped_between`]'s
+    /// idempotence one arity axis down.
+    ///
+    /// Default routes through `self.join(low)` — the one-primitive
+    /// lattice-algebra join with the floor. A future normalization at
+    /// [`Lattice::join`] lands at ONE site and this default inherits
+    /// mechanically. The single-parameter shape is unambiguous by
+    /// construction (the sole `low` argument names the floor); no
+    /// bound-swap trap surfaces at the callsite the way a
+    /// hand-authored two-bound [`Lattice::clamped_between`] call did
+    /// pre-3-ary-lift.
+    ///
+    /// Peer of the same shape pinned in-tree wherever a consumer
+    /// hand-authored `x.join(low)` at a callsite intending the "raise
+    /// to at least" projection reading (as opposed to the "least upper
+    /// bound of two elements" pointwise reading of [`Lattice::join`]);
+    /// this widening lifts the SAME shape from a per-consumer `join`
+    /// call to an intent-named default-method surface so every
+    /// closed-set lattice impl inherits the half-bracket-projection
+    /// combinator for free.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the 2-ary lower-half interval-projection
+    /// combinator is itself a typed named `Self` composing ONE
+    /// [`Lattice::join`] call. Every downstream lattice-law consumer
+    /// inherits the combinator through the default mechanically.
+    /// THEORY.md §III — typescape; the lower-half interval-projection
+    /// combinator on every classification-axis lattice binds at ONE
+    /// substrate owner on the [`Lattice`] algebra rather than at each
+    /// consumer's hand-rolled `self.join(low)` composition,
+    /// disambiguating the intent (projection into `[low, ⊤]`) from the
+    /// pointwise join reading (least upper bound of two arguments).
+    ///
+    /// Frontier inspiration: [`Ord::max`] on total orders — the
+    /// stdlib exposes the "at least this floor" combinator alongside
+    /// [`Ord::clamp`], and the bounded-lattice extension is
+    /// straightforward on any partial order via `a ⊔ low`. Translated
+    /// through pleme-io primitives: threaded the same 2-ary lower-
+    /// half projection shape through the [`Lattice`] trait's default-
+    /// method surface, so every closed-set impl (total order, pointed-
+    /// top antichain, boolean lattice) picks it up mechanically —
+    /// pairing it with [`Lattice::clamped_above`] on the dual half-
+    /// bracket arm and [`Lattice::clamped_between`] on the two-sided
+    /// arm to close the (2-ary lower, 2-ary upper, 3-ary interval) ×
+    /// (projection) grid at ONE substrate primitive per cell.
+    fn clamped_below(&self, low: &Self) -> Self {
+        self.join(low)
+    }
+    /// Half-bracket peer of [`Lattice::clamped_between`] on the UPPER
+    /// side — pin `self` to at-most `high` on the lattice's partial
+    /// order. `a.clamped_above(&high)` returns `a ⊓ high`: the element
+    /// obtained by LOWERING `a` to the ceiling when it sits above,
+    /// and leaving `a` unchanged when it already sits at-or-below the
+    /// ceiling.
+    ///
+    /// The 2-ary upper-half peer of [`Lattice::clamped_between`] one
+    /// ARITY axis down on the (2-ary, 3-ary) × (below, above, between)
+    /// projection-combinator grid — where [`Lattice::clamped_between`]
+    /// projects into a two-sided bracket `[low, high]`, this projects
+    /// into the ONE-SIDED bracket `[⊥, high]`. Dual of
+    /// [`Lattice::clamped_below`] on the lower half-bracket arm one
+    /// SIDE axis over.
+    ///
+    /// **Half-bracket composition** to the 3-ary combinator: on any
+    /// lattice, `a.clamped_below(&low).clamped_above(&high) ==
+    /// a.clamped_between(&low, &high)` — byte-identical to the 3-ary
+    /// default's `self.join(low).meet(high)` routing. See
+    /// [`Lattice::clamped_below`] for the divergence discipline on
+    /// the ALTERNATE composition order.
+    ///
+    /// **Above-ceiling pin**: if `high.leq(&a)` — `a` sits at-or-
+    /// above the ceiling — then `a.clamped_above(&high) == high`. The
+    /// ceiling absorbs the input: `a.meet(high) == high` by the meet-
+    /// agreement axiom `high.leq(&a) ⇒ a.meet(&high) == high`, so
+    /// the clamp pins to the ceiling. Dual of [`Lattice::clamped_below`]'s
+    /// below-floor pin one side axis over.
+    ///
+    /// **Below-ceiling fixed-point**: on any lattice satisfying meet-
+    /// agreement (in particular every totally-ordered lattice —
+    /// [`DataClassification`], [`CalmClassification`],
+    /// [`baseline::Baseline`]), if `a.leq(&high)` — `a` sits at-or-
+    /// below the ceiling — then `a.clamped_above(&high) == a`.
+    /// Follows from the meet-agreement axiom `a.leq(&high) ⇔
+    /// a.meet(&high) == a`. Dual of [`Lattice::clamped_below`]'s
+    /// above-floor fixed-point one side axis over.
+    ///
+    /// **Half-bracket-membership contract**: `a.clamped_above(&high)
+    /// .leq(&high)` holds for EVERY `a` on EVERY lattice — the clamp
+    /// result always sits at-or-below the ceiling. Follows from the
+    /// lattice's meet-is-lower-bound axiom `a.meet(&high).leq(&high)`,
+    /// which every well-formed lattice impl satisfies by construction.
+    /// The half-bracket clamp is a RETRACTION of the lattice onto the
+    /// lower half-bracket `[⊥, high]`. Dual of
+    /// [`Lattice::clamped_below`]'s half-bracket-membership contract
+    /// one side axis over.
+    ///
+    /// **Reflexive-bracket identity**: `a.clamped_above(&a) == a` on
+    /// every element on every lattice — meet is idempotent by the
+    /// lattice's `a.meet(&a) == a` axiom, so a zero-width upper
+    /// bracket at `a` is trivially the identity on `a`. Dual of
+    /// [`Lattice::clamped_below`]'s reflexive self-bracket identity
+    /// one side axis over; identity holds on EVERY lattice impl,
+    /// including the pointed-top antichain [`SubstrateType`].
+    ///
+    /// **Top-identity**: `a.clamped_above(&T::top()) == a` for EVERY
+    /// element on EVERY lattice — meet with top is the receiver by
+    /// the lattice-top axiom `a.meet(&T::top()) == a`. The widest
+    /// possible upper half-bracket is the identity. Dual of
+    /// [`Lattice::clamped_below`]'s bottom-identity one side axis over.
+    ///
+    /// **Bottom-absorbs**: `a.clamped_above(&T::bottom()) ==
+    /// T::bottom()` for EVERY element on EVERY lattice — meet with
+    /// bottom pins to bottom by the lattice-bottom axiom
+    /// `a.meet(&T::bottom()) == T::bottom()`. The tightest possible
+    /// upper half-bracket (ceiling at the bottom) collapses every
+    /// input to the bottom. Dual of [`Lattice::clamped_below`]'s
+    /// top-absorbs pin one side axis over.
+    ///
+    /// **Idempotence**: `a.clamped_above(&high).clamped_above(&high)
+    /// == a.clamped_above(&high)` on any upper bracket, on any lattice
+    /// — direct consequence of the half-bracket-membership contract
+    /// (`a.clamped_above(&high).leq(&high)`) plus the below-ceiling
+    /// fixed-point on lattices satisfying meet-agreement; on lattices
+    /// without meet-agreement the idempotence follows from meet-
+    /// associativity + meet-idempotence directly (`(a ⊓ high) ⊓ high
+    /// = a ⊓ (high ⊓ high) = a ⊓ high`). Dual of
+    /// [`Lattice::clamped_below`]'s idempotence one side axis over.
+    ///
+    /// Default routes through `self.meet(high)` — the one-primitive
+    /// lattice-algebra meet with the ceiling. A future normalization
+    /// at [`Lattice::meet`] lands at ONE site and this default
+    /// inherits mechanically.
+    ///
+    /// Theory anchor: same as [`Lattice::clamped_below`] on the dual
+    /// side.
+    ///
+    /// Frontier inspiration: [`Ord::min`] on total orders — dual of
+    /// [`Ord::max`] on the upper half-bracket arm; the bounded-lattice
+    /// extension is straightforward on any partial order via `a ⊓
+    /// high`. Same translation story as [`Lattice::clamped_below`] on
+    /// the dual side.
+    fn clamped_above(&self, high: &Self) -> Self {
+        self.meet(high)
+    }
     /// Structural (collection-level) peer of [`Lattice::is_comparable`]
     /// — the iterated set forms a CHAIN on the lattice's partial order:
     /// every DISTINCT pair of elements the iterator yields is comparable.
@@ -4860,6 +5100,661 @@ mod tests {
             let once = a.clamped_between(&low, &high);
             let twice = once.clamped_between(&low, &high);
             prop_assert_eq!(once, twice);
+        }
+    }
+
+    // ── Lattice::clamped_below / Lattice::clamped_above — 2-ary
+    //    half-bracket interval-projection combinator peers of
+    //    Lattice::clamped_between ─────────────────────────────────────
+    //
+    // Bind [`Lattice::clamped_below`] + [`Lattice::clamped_above`] at
+    // fail-before-pass-after granularity. Pre-lift the [`Lattice`]
+    // trait's interval-PROJECTION combinator surface was
+    // `{clamped_between}` on the 3-ary two-sided arm only — a
+    // consumer that wanted the ONE-SIDED reading of the projection
+    // (raise to at-least, or cap at at-most) hand-authored `x.join(
+    // low)` or `x.meet(high)` at each callsite, exposing the callsite
+    // to the pointwise-join / pointwise-meet reading of the primitive
+    // (least upper bound of two elements) instead of the intent-named
+    // projection reading (project into a one-sided bracket). Post-
+    // lift the whole 2-ary half-bracket projection pair binds at
+    // TWO substrate primitives on the [`Lattice`] algebra, and every
+    // downstream impl (the four in-tree ones + `Baseline` via the
+    // `crate::Lattice` trait AND any future closed-set lift) inherits
+    // `clamped_below` / `clamped_above` for free through the default.
+    // Together with the prior widening (`clamped_between` on the
+    // 3-ary two-sided arm) the trait now closes the (2-ary lower,
+    // 2-ary upper, 3-ary interval) × (projection) grid on the
+    // bracket-combinator surface via THREE substrate defaults.
+    //
+    // The composition law binding the two-half arm to the 3-ary arm:
+    // `a.clamped_below(&low).clamped_above(&high) == a.clamped_between(
+    // &low, &high)` on every lattice, by the byte-identical default
+    // routing `self.join(low).meet(high)`. The alternate composition
+    // order `a.clamped_above(&high).clamped_below(&low)` diverges on
+    // non-distributive lattices — the trait binds the ONE canonical
+    // arm and the tests pin the composition-law equality across
+    // every well-formed lattice impl.
+
+    /// [`Lattice::clamped_below`] satisfies the FIXED-POINT theorem
+    /// with [`Lattice::leq`] over every [`DataClassification`] pair:
+    /// `low.leq(&a) ⇔ a.clamped_below(&low) == a`. Pinned exhaustively
+    /// over `DataClassification::ALL^2`. The 2-ary half-bracket peer
+    /// of the 3-ary
+    /// `clamped_between_agrees_with_is_between_fixed_point_over_data_classification_all_triples`
+    /// seal one arity axis down; the join-agreement axiom the
+    /// theorem routes through binds directly at the pair level with
+    /// no well-formed premise (the ordering on a single pair `(low,
+    /// a)` is unrestricted — no `low ≤ high` guard needed at the
+    /// half-bracket arity).
+    #[test]
+    fn clamped_below_agrees_with_leq_fixed_point_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                let clamped = a.clamped_below(&low);
+                assert_eq!(
+                    low.leq(&a),
+                    clamped == a,
+                    "clamped_below fixed-point theorem drifted at \
+                     ({a:?}, {low:?}): low.leq(&a) = {}, clamped == a \
+                     = {}, clamped = {clamped:?}",
+                    low.leq(&a),
+                    clamped == a,
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_above`] satisfies the FIXED-POINT theorem
+    /// with [`Lattice::leq`] over every [`DataClassification`] pair:
+    /// `a.leq(&high) ⇔ a.clamped_above(&high) == a`. Dual of
+    /// [`Lattice::clamped_below`]'s fixed-point seal one side axis
+    /// over.
+    #[test]
+    fn clamped_above_agrees_with_leq_fixed_point_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for high in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                let clamped = a.clamped_above(&high);
+                assert_eq!(
+                    a.leq(&high),
+                    clamped == a,
+                    "clamped_above fixed-point theorem drifted at \
+                     ({a:?}, {high:?}): a.leq(&high) = {}, clamped == a \
+                     = {}, clamped = {clamped:?}",
+                    a.leq(&high),
+                    clamped == a,
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_below`] PINS to the floor on inputs at-or-
+    /// below the floor over every [`DataClassification`] pair:
+    /// `a.leq(&low) ⇒ a.clamped_below(&low) == low`. Peer of
+    /// [`Lattice::clamped_between`]'s below-floor pin one arity axis
+    /// down.
+    #[test]
+    fn clamped_below_pins_below_floor_inputs_to_floor_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                if a.leq(&low) {
+                    assert_eq!(
+                        a.clamped_below(&low),
+                        low,
+                        "clamped_below({a:?}, {low:?}) must pin to \
+                         the floor when a ≤ low",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_above`] PINS to the ceiling on inputs at-
+    /// or-above the ceiling over every [`DataClassification`] pair:
+    /// `high.leq(&a) ⇒ a.clamped_above(&high) == high`. Dual of the
+    /// clamped_below floor pin one side axis over.
+    #[test]
+    fn clamped_above_pins_above_ceiling_inputs_to_ceiling_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for high in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                if high.leq(&a) {
+                    assert_eq!(
+                        a.clamped_above(&high),
+                        high,
+                        "clamped_above({a:?}, {high:?}) must pin to \
+                         the ceiling when high ≤ a",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_below`] satisfies the HALF-BRACKET-
+    /// MEMBERSHIP CONTRACT over every [`DataClassification`] pair:
+    /// `low.leq(&a.clamped_below(&low))` for EVERY `a`. The clamp is
+    /// a RETRACTION onto the upper half-bracket `[low, ⊤]` — its
+    /// image lives entirely inside the bracket.
+    #[test]
+    fn clamped_below_result_is_always_above_floor_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                let clamped = a.clamped_below(&low);
+                assert!(
+                    low.leq(&clamped),
+                    "clamped_below({a:?}, {low:?}) = {clamped:?} must \
+                     sit above the floor by the retraction contract",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_above`] satisfies the HALF-BRACKET-
+    /// MEMBERSHIP CONTRACT over every [`DataClassification`] pair:
+    /// `a.clamped_above(&high).leq(&high)` for EVERY `a`. Dual of
+    /// the clamped_below retraction contract one side axis over.
+    #[test]
+    fn clamped_above_result_is_always_below_ceiling_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for high in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                let clamped = a.clamped_above(&high);
+                assert!(
+                    clamped.leq(&high),
+                    "clamped_above({a:?}, {high:?}) = {clamped:?} must \
+                     sit below the ceiling by the retraction contract",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_below`] is IDEMPOTENT over every
+    /// [`DataClassification`] pair: `a.clamped_below(&low)
+    /// .clamped_below(&low) == a.clamped_below(&low)`. Peer of
+    /// [`Lattice::clamped_between`]'s idempotence one arity axis down.
+    #[test]
+    fn clamped_below_is_idempotent_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                let once = a.clamped_below(&low);
+                let twice = once.clamped_below(&low);
+                assert_eq!(
+                    once, twice,
+                    "clamped_below is not idempotent at ({a:?}, {low:?}) \
+                     — once = {once:?}, twice = {twice:?}",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_above`] is IDEMPOTENT over every
+    /// [`DataClassification`] pair: `a.clamped_above(&high)
+    /// .clamped_above(&high) == a.clamped_above(&high)`. Dual of the
+    /// clamped_below idempotence one side axis over.
+    #[test]
+    fn clamped_above_is_idempotent_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for high in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                let once = a.clamped_above(&high);
+                let twice = once.clamped_above(&high);
+                assert_eq!(
+                    once, twice,
+                    "clamped_above is not idempotent at ({a:?}, {high:?}) \
+                     — once = {once:?}, twice = {twice:?}",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_below`] on a REFLEXIVE self-bracket is the
+    /// IDENTITY over every [`DataClassification`]: `a.clamped_below(&a)
+    /// == a`. Peer of [`Lattice::clamped_between`]'s reflexive
+    /// self-bracket identity one arity axis down; follows from
+    /// join-idempotence.
+    #[test]
+    fn clamped_below_reflexive_self_bracket_is_identity_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            assert_eq!(
+                a.clamped_below(&a),
+                a,
+                "clamped_below({a:?}, {a:?}) must be the identity on \
+                 the reflexive self-bracket via join-idempotence",
+            );
+        }
+    }
+
+    /// [`Lattice::clamped_above`] on a REFLEXIVE self-bracket is the
+    /// IDENTITY over every [`DataClassification`]: `a.clamped_above(&a)
+    /// == a`. Dual of the clamped_below reflexive identity one side
+    /// axis over; follows from meet-idempotence.
+    #[test]
+    fn clamped_above_reflexive_self_bracket_is_identity_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            assert_eq!(
+                a.clamped_above(&a),
+                a,
+                "clamped_above({a:?}, {a:?}) must be the identity on \
+                 the reflexive self-bracket via meet-idempotence",
+            );
+        }
+    }
+
+    /// [`Lattice::clamped_below`] with the LATTICE BOTTOM is the
+    /// IDENTITY over every [`DataClassification`]: `a.clamped_below(
+    /// &bottom) == a` — the widest possible lower half-bracket leaves
+    /// every element unchanged by the lattice-bottom axiom `a.join(
+    /// &bottom) == a`.
+    #[test]
+    fn clamped_below_with_lattice_bottom_is_the_identity_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        let bottom = <DataClassification as crate::Lattice>::bottom();
+        for a in DataClassification::ALL {
+            assert_eq!(
+                a.clamped_below(&bottom),
+                a,
+                "clamped_below({a:?}, bottom) must be the identity — \
+                 the widest lower half-bracket leaves every element \
+                 unchanged",
+            );
+        }
+    }
+
+    /// [`Lattice::clamped_above`] with the LATTICE TOP is the
+    /// IDENTITY over every [`DataClassification`]: `a.clamped_above(
+    /// &top) == a` — the widest possible upper half-bracket leaves
+    /// every element unchanged by the lattice-top axiom `a.meet(&top)
+    /// == a`.
+    #[test]
+    fn clamped_above_with_lattice_top_is_the_identity_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        let top = <DataClassification as crate::Lattice>::top();
+        for a in DataClassification::ALL {
+            assert_eq!(
+                a.clamped_above(&top),
+                a,
+                "clamped_above({a:?}, top) must be the identity — \
+                 the widest upper half-bracket leaves every element \
+                 unchanged",
+            );
+        }
+    }
+
+    /// [`Lattice::clamped_below`] with the LATTICE TOP pins to TOP
+    /// over every [`DataClassification`]: `a.clamped_below(&top) ==
+    /// top` — the tightest possible lower half-bracket collapses
+    /// every input to the top by the lattice-top axiom `a.join(&top)
+    /// == top`. Below-floor pin at the extremal floor `low = top`.
+    #[test]
+    fn clamped_below_with_lattice_top_pins_to_top_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        let top = <DataClassification as crate::Lattice>::top();
+        for a in DataClassification::ALL {
+            assert_eq!(
+                a.clamped_below(&top),
+                top,
+                "clamped_below({a:?}, top) must pin to top — the \
+                 tightest lower half-bracket collapses every input \
+                 to the top",
+            );
+        }
+    }
+
+    /// [`Lattice::clamped_above`] with the LATTICE BOTTOM pins to
+    /// BOTTOM over every [`DataClassification`]: `a.clamped_above(
+    /// &bottom) == bottom` — the tightest possible upper half-bracket
+    /// collapses every input to the bottom by the lattice-bottom
+    /// axiom `a.meet(&bottom) == bottom`. Dual of the clamped_below
+    /// top-absorbs pin one side axis over.
+    #[test]
+    fn clamped_above_with_lattice_bottom_pins_to_bottom_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        let bottom = <DataClassification as crate::Lattice>::bottom();
+        for a in DataClassification::ALL {
+            assert_eq!(
+                a.clamped_above(&bottom),
+                bottom,
+                "clamped_above({a:?}, bottom) must pin to bottom — \
+                 the tightest upper half-bracket collapses every \
+                 input to the bottom",
+            );
+        }
+    }
+
+    /// [`Lattice::clamped_below`] AGREES with `self.join(low)` on
+    /// every [`DataClassification`] pair. Byte-identical to the
+    /// default's routing; pinned exhaustively so a future override
+    /// (a per-impl `clamped_below` that departed from the default)
+    /// that broke agreement is caught.
+    #[test]
+    fn clamped_below_agrees_with_join_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                assert_eq!(
+                    a.clamped_below(&low),
+                    a.join(&low),
+                    "clamped_below({a:?}, {low:?}) drifted from a ⊔ low \
+                     — default routing broken",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_above`] AGREES with `self.meet(high)` on
+    /// every [`DataClassification`] pair. Byte-identical to the
+    /// default's routing; pinned exhaustively so a future override
+    /// (a per-impl `clamped_above` that departed from the default)
+    /// that broke agreement is caught.
+    #[test]
+    fn clamped_above_agrees_with_meet_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for high in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                assert_eq!(
+                    a.clamped_above(&high),
+                    a.meet(&high),
+                    "clamped_above({a:?}, {high:?}) drifted from a ⊓ high \
+                     — default routing broken",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_below`] composed with
+    /// [`Lattice::clamped_above`] AGREES with the 3-ary
+    /// [`Lattice::clamped_between`] on every [`DataClassification`]
+    /// triple: `a.clamped_below(&low).clamped_above(&high) ==
+    /// a.clamped_between(&low, &high)`. THE composition law binding
+    /// the two 2-ary half-bracket arms to the 3-ary two-sided arm on
+    /// the (2-ary lower, 2-ary upper, 3-ary interval) × (projection)
+    /// grid. Byte-identical to both default routings (`self.join(low)
+    /// .meet(high)`); pinned exhaustively so a future override that
+    /// broke the composition-agreement law is caught.
+    #[test]
+    fn clamped_below_then_above_agrees_with_clamped_between_over_data_classification_all_triples() {
+        use tatara_process::classification::DataClassification;
+        for low in DataClassification::ALL {
+            for a in DataClassification::ALL {
+                for high in DataClassification::ALL {
+                    assert_eq!(
+                        a.clamped_below(&low).clamped_above(&high),
+                        a.clamped_between(&low, &high),
+                        "clamped_below then clamped_above drifted from \
+                         clamped_between at ({a:?}, {low:?}, {high:?}) \
+                         — half-bracket composition law broken",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::clamped_below`] on the pointed-top antichain
+    /// [`SubstrateType`] upholds the REFLEXIVE self-bracket identity
+    /// `a.clamped_below(&a) == a` on every element via the
+    /// `x.join(x) == x` idempotence axiom that DOES hold on the
+    /// pointed-top antichain, pinned as the substrate-carried arm of
+    /// the DataClassification reflexive-identity seal one closed-set
+    /// axis over. The above-floor fixed-point theorem does NOT extend
+    /// to the pointed-top antichain since its `Lattice` impl violates
+    /// join-agreement on the top-directed edge — the same discipline
+    /// the [`Lattice::clamped_between`] SubstrateType seal reflects.
+    #[test]
+    fn clamped_below_reflexive_self_bracket_is_identity_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            assert_eq!(
+                a.clamped_below(&a),
+                a,
+                "clamped_below({a:?}, {a:?}) must be the identity via \
+                 join-idempotence even on the pointed-top antichain",
+            );
+        }
+    }
+
+    /// [`Lattice::clamped_above`] on the pointed-top antichain
+    /// [`SubstrateType`] upholds the REFLEXIVE self-bracket identity
+    /// `a.clamped_above(&a) == a` on every element via the
+    /// `x.meet(x) == x` idempotence axiom that DOES hold on the
+    /// pointed-top antichain. Dual of the clamped_below SubstrateType
+    /// reflexive-identity seal one side axis over.
+    #[test]
+    fn clamped_above_reflexive_self_bracket_is_identity_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            assert_eq!(
+                a.clamped_above(&a),
+                a,
+                "clamped_above({a:?}, {a:?}) must be the identity via \
+                 meet-idempotence even on the pointed-top antichain",
+            );
+        }
+    }
+
+    /// [`Lattice::clamped_below`] composition with
+    /// [`Lattice::clamped_above`] AGREES with
+    /// [`Lattice::clamped_between`] on the pointed-top antichain
+    /// [`SubstrateType`] over every triple — the composition law is
+    /// BYTE-IDENTICAL to both default routings (`self.join(low)
+    /// .meet(high)`) and so holds unconditionally on every lattice
+    /// impl, including the pointed-top antichain that violates
+    /// leq/meet/join agreement on the top-directed edge. Pinned
+    /// exhaustively so a future override that broke the composition-
+    /// agreement law on the antichain is caught.
+    #[test]
+    fn clamped_below_then_above_agrees_with_clamped_between_over_substrate_type_all_triples() {
+        use tatara_process::classification::SubstrateType;
+        for low in SubstrateType::ALL {
+            for a in SubstrateType::ALL {
+                for high in SubstrateType::ALL {
+                    assert_eq!(
+                        a.clamped_below(&low).clamped_above(&high),
+                        a.clamped_between(&low, &high),
+                        "clamped_below then clamped_above drifted from \
+                         clamped_between at ({a:?}, {low:?}, {high:?}) \
+                         on the pointed-top antichain — composition \
+                         law broken",
+                    );
+                }
+            }
+        }
+    }
+
+    proptest! {
+        /// [`Lattice::clamped_below`] FIXED-POINT theorem on every
+        /// random [`DataClassification`] pair — proptest peer of the
+        /// exhaustive
+        /// `clamped_below_agrees_with_leq_fixed_point_over_data_classification_all_pairs`
+        /// seal.
+        #[test]
+        fn data_class_clamped_below_agrees_with_leq_fixed_point(
+            low in any_data_class(),
+            a in any_data_class(),
+        ) {
+            let clamped = a.clamped_below(&low);
+            prop_assert_eq!(low.leq(&a), clamped == a);
+        }
+
+        /// [`Lattice::clamped_above`] FIXED-POINT theorem on every
+        /// random [`DataClassification`] pair — proptest peer of the
+        /// exhaustive
+        /// `clamped_above_agrees_with_leq_fixed_point_over_data_classification_all_pairs`
+        /// seal.
+        #[test]
+        fn data_class_clamped_above_agrees_with_leq_fixed_point(
+            high in any_data_class(),
+            a in any_data_class(),
+        ) {
+            let clamped = a.clamped_above(&high);
+            prop_assert_eq!(a.leq(&high), clamped == a);
+        }
+
+        /// [`Lattice::clamped_below`] HALF-BRACKET-MEMBERSHIP
+        /// contract on every random [`DataClassification`] pair —
+        /// proptest peer of the exhaustive
+        /// `clamped_below_result_is_always_above_floor_over_data_classification_all_pairs`
+        /// seal.
+        #[test]
+        fn data_class_clamped_below_result_is_always_above_floor(
+            low in any_data_class(),
+            a in any_data_class(),
+        ) {
+            let clamped = a.clamped_below(&low);
+            prop_assert!(low.leq(&clamped));
+        }
+
+        /// [`Lattice::clamped_above`] HALF-BRACKET-MEMBERSHIP
+        /// contract on every random [`DataClassification`] pair —
+        /// proptest peer of the exhaustive
+        /// `clamped_above_result_is_always_below_ceiling_over_data_classification_all_pairs`
+        /// seal.
+        #[test]
+        fn data_class_clamped_above_result_is_always_below_ceiling(
+            high in any_data_class(),
+            a in any_data_class(),
+        ) {
+            let clamped = a.clamped_above(&high);
+            prop_assert!(clamped.leq(&high));
+        }
+
+        /// [`Lattice::clamped_below`] IDEMPOTENCE on every random
+        /// [`DataClassification`] pair — proptest peer of the
+        /// exhaustive
+        /// `clamped_below_is_idempotent_over_data_classification_all_pairs`
+        /// seal.
+        #[test]
+        fn data_class_clamped_below_is_idempotent(
+            low in any_data_class(),
+            a in any_data_class(),
+        ) {
+            let once = a.clamped_below(&low);
+            let twice = once.clamped_below(&low);
+            prop_assert_eq!(once, twice);
+        }
+
+        /// [`Lattice::clamped_above`] IDEMPOTENCE on every random
+        /// [`DataClassification`] pair — proptest peer of the
+        /// exhaustive
+        /// `clamped_above_is_idempotent_over_data_classification_all_pairs`
+        /// seal.
+        #[test]
+        fn data_class_clamped_above_is_idempotent(
+            high in any_data_class(),
+            a in any_data_class(),
+        ) {
+            let once = a.clamped_above(&high);
+            let twice = once.clamped_above(&high);
+            prop_assert_eq!(once, twice);
+        }
+
+        /// [`Lattice::clamped_below`] composition with
+        /// [`Lattice::clamped_above`] AGREES with
+        /// [`Lattice::clamped_between`] on every random
+        /// [`DataClassification`] triple — proptest peer of the
+        /// exhaustive
+        /// `clamped_below_then_above_agrees_with_clamped_between_over_data_classification_all_triples`
+        /// composition-law seal.
+        #[test]
+        fn data_class_clamped_below_then_above_agrees_with_clamped_between(
+            low in any_data_class(),
+            a in any_data_class(),
+            high in any_data_class(),
+        ) {
+            prop_assert_eq!(
+                a.clamped_below(&low).clamped_above(&high),
+                a.clamped_between(&low, &high),
+            );
+        }
+
+        /// Peer of the DataClassification clamped_below fixed-point
+        /// proptest on the CALM boolean-lattice axis — same shape,
+        /// different closed set.
+        #[test]
+        fn calm_clamped_below_agrees_with_leq_fixed_point(
+            low in any_calm(),
+            a in any_calm(),
+        ) {
+            let clamped = a.clamped_below(&low);
+            prop_assert_eq!(low.leq(&a), clamped == a);
+        }
+
+        /// Peer of the DataClassification clamped_above fixed-point
+        /// proptest on the CALM axis.
+        #[test]
+        fn calm_clamped_above_agrees_with_leq_fixed_point(
+            high in any_calm(),
+            a in any_calm(),
+        ) {
+            let clamped = a.clamped_above(&high);
+            prop_assert_eq!(a.leq(&high), clamped == a);
+        }
+
+        /// Peer of the DataClassification clamped_below half-bracket-
+        /// membership proptest on the CALM axis.
+        #[test]
+        fn calm_clamped_below_result_is_always_above_floor(
+            low in any_calm(),
+            a in any_calm(),
+        ) {
+            let clamped = a.clamped_below(&low);
+            prop_assert!(low.leq(&clamped));
+        }
+
+        /// Peer of the DataClassification clamped_above half-bracket-
+        /// membership proptest on the CALM axis.
+        #[test]
+        fn calm_clamped_above_result_is_always_below_ceiling(
+            high in any_calm(),
+            a in any_calm(),
+        ) {
+            let clamped = a.clamped_above(&high);
+            prop_assert!(clamped.leq(&high));
+        }
+
+        /// Peer of the DataClassification clamped_below idempotence
+        /// proptest on the CALM axis.
+        #[test]
+        fn calm_clamped_below_is_idempotent(
+            low in any_calm(),
+            a in any_calm(),
+        ) {
+            let once = a.clamped_below(&low);
+            let twice = once.clamped_below(&low);
+            prop_assert_eq!(once, twice);
+        }
+
+        /// Peer of the DataClassification clamped_above idempotence
+        /// proptest on the CALM axis.
+        #[test]
+        fn calm_clamped_above_is_idempotent(
+            high in any_calm(),
+            a in any_calm(),
+        ) {
+            let once = a.clamped_above(&high);
+            let twice = once.clamped_above(&high);
+            prop_assert_eq!(once, twice);
+        }
+
+        /// Peer of the DataClassification half-bracket composition-
+        /// law proptest on the CALM axis — same shape, different
+        /// closed set.
+        #[test]
+        fn calm_clamped_below_then_above_agrees_with_clamped_between(
+            low in any_calm(),
+            a in any_calm(),
+            high in any_calm(),
+        ) {
+            prop_assert_eq!(
+                a.clamped_below(&low).clamped_above(&high),
+                a.clamped_between(&low, &high),
+            );
         }
     }
 

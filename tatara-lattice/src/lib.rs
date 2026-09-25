@@ -924,6 +924,101 @@ pub trait Lattice: Sized + Clone + PartialEq {
     {
         iter.into_iter().any(|x| self.leq(x))
     }
+    /// Dual of [`Lattice::any_lower_bound_of`] on the MEET/JOIN axis —
+    /// `self` sits at-or-ABOVE AT LEAST ONE element the iterator yields.
+    /// `a.any_upper_bound_of([&b, &c, &d])` holds iff `b.leq(&a) ||
+    /// c.leq(&a) || d.leq(&a)`: `self` is an upper bound for SOME
+    /// element of the iterated set (equivalently: the iterated set
+    /// contains an element that witnesses `self` as an upper bound).
+    ///
+    /// Sits at the ∃-non-strict-upper cell of the (∀, ∃) × (lower,
+    /// upper) × (strict, non-strict) 2×2×2 N-ary Boolean bounds cube
+    /// — where [`Lattice::is_upper_bound_of`] decides the ∀
+    /// conjunction (is `self` at-or-above EVERY element), this decides
+    /// the ∃ disjunction (is `self` at-or-above SOME element). Closes
+    /// the (∀, ∃) × (upper) 2×1 face at the ∃-non-strict-upper corner
+    /// one QUANTIFIER axis over from [`Lattice::is_upper_bound_of`],
+    /// mirroring [`Lattice::any_lower_bound_of`]'s ∃-arm closure on
+    /// the dual meet/join arm at the same quantifier corner. The cube
+    /// now carries the ∃-arm on BOTH non-strict sides (lower + upper);
+    /// the two strict-arm ∃ peers ([`any_strict_lower_bound_of`],
+    /// [`any_strict_upper_bound_of`]) close the remaining two corners.
+    ///
+    /// **Empty-iterator vacuous falsehood**: `a.any_upper_bound_of(
+    /// std::iter::empty()) == false` for every element — the empty
+    /// disjunction is vacuously false by the [`Iterator::any`]
+    /// empty-iterator convention. Dual of [`Lattice::any_lower_bound_of`]'s
+    /// vacuous-falsehood on the meet arm; same (∀, ∃) axis split on
+    /// the N-ary Boolean bounds face as its lower-arm peer:
+    /// [`Lattice::is_upper_bound_of`] fires vacuously TRUE on the
+    /// empty iterator (every element is an upper bound of the empty
+    /// set by the empty-conjunction convention), while this ∃ peer
+    /// fires vacuously FALSE.
+    ///
+    /// **Singleton-identity**: `a.any_upper_bound_of([&b]) == b.leq(&a)`
+    /// — the 1-input existential predicate reduces to the pairwise
+    /// [`Lattice::leq`] relation with the direction flipped (since
+    /// `self` sits ABOVE the operand rather than BELOW it), AGREEING
+    /// with [`Lattice::is_upper_bound_of`]'s singleton reduction on the
+    /// non-strict upper arm (both quantifiers collapse to the same
+    /// per-element predicate when the iterator yields exactly one
+    /// element). Dual of [`Lattice::any_lower_bound_of`]'s
+    /// singleton-identity on the meet arm.
+    ///
+    /// **Universal-top witness on non-empty iterables**:
+    /// `T::top().any_upper_bound_of(iter) == true` for every non-empty
+    /// iterable — `x.leq(&T::top()) == true` for every `x` by the
+    /// lattice-top axiom, so [`Iterator::any`] fires on the first
+    /// element. On the empty iterable it fires false (the
+    /// vacuous-falsehood cell above). Dual of
+    /// [`Lattice::any_lower_bound_of`]'s universal-bottom witness one
+    /// meet/join axis over.
+    ///
+    /// **Refines FROM [`Lattice::is_upper_bound_of`] on non-empty
+    /// iterables**: `a.is_upper_bound_of(iter) && iter is non-empty ⇒
+    /// a.any_upper_bound_of(iter)` — every witnessing element in the
+    /// ∀ conjunction also witnesses the ∃ disjunction. The (∀ ⇒ ∃)
+    /// implication holds ONLY on non-empty iterables since the empty
+    /// case splits (∀ true, ∃ false). Same ∀ ⇒ ∃ refinement peer that
+    /// [`Lattice::any_lower_bound_of`] carries against
+    /// [`Lattice::is_lower_bound_of`] on the dual meet arm.
+    ///
+    /// **Any-witnessing-element acceptance**: if any `x` in the
+    /// iterator has `x.leq(self)`, then `self.any_upper_bound_of(iter)
+    /// == true` — [`Iterator::any`] short-circuits on the first
+    /// witnessing element. Dual short-circuit behaviour to
+    /// [`Lattice::is_upper_bound_of`]'s any-violating-element rejection
+    /// on the ∀ arm.
+    ///
+    /// Default routes through `iter.into_iter().any(|x| x.leq(self))`
+    /// so every impl inherits the direction-flipped ∃ N-ary Boolean
+    /// disjunction mechanically. A future override at the underlying
+    /// [`Lattice::leq`] lands at ONE site and this dual inherits
+    /// through the default.
+    ///
+    /// Theory anchor: same as [`Lattice::any_lower_bound_of`] on the
+    /// dual arm — THEORY.md §II.1 invariant 5 + §III. The ∃ N-ary
+    /// Boolean-disjunction bound predicate on every classification-
+    /// axis lattice now binds through TWO substrate defaults
+    /// ([`Lattice::any_lower_bound_of`], [`Lattice::any_upper_bound_of`])
+    /// closing the (∀, ∃) × (lower, upper) 2×2 non-strict N-ary
+    /// Boolean bounds face at ONE algebra owner.
+    ///
+    /// Frontier inspiration: same as [`Lattice::any_lower_bound_of`]
+    /// on the dual meet/join arm — order-theory's bounded-lattice
+    /// existential witness predicates + Racket's `ormap` / Haskell's
+    /// `any` composed with the direction-flipped pairwise `leq`
+    /// relation. Translated: threaded the same ∃ N-ary Boolean-
+    /// disjunction shape through the [`Lattice`] trait's default-
+    /// method surface as the QUANTIFIER-AXIS peer of
+    /// [`Lattice::is_upper_bound_of`] at the non-strict upper arm.
+    fn any_upper_bound_of<'a, I>(&self, iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().any(|x| x.leq(self))
+    }
     /// Interval-containment predicate — `self` sits inside the closed
     /// bracket `[low, high]` on the lattice's partial order.
     /// `a.is_between(&low, &high)` holds iff `low.leq(&a) && a.leq(&high)`:
@@ -14046,6 +14141,207 @@ mod tests {
         assert!(
             !compute.any_lower_bound_of([&storage, &storage]),
             "any_lower_bound_of({compute:?}, [{storage:?}, {storage:?}]) must be \
+             false — no element witnesses the ∃ on incomparable pairs",
+        );
+    }
+
+    /// [`Lattice::any_upper_bound_of`] fires vacuously FALSE on the
+    /// empty iterator at EVERY element on EVERY lattice — INCLUDING
+    /// every element where the universal peer
+    /// [`Lattice::is_upper_bound_of`] fires vacuously TRUE. The
+    /// empty-iterator vacuous-falsehood arm is the ONE cell where
+    /// the (∀, ∃) axis DIVERGES on the N-ary Boolean bounds face's
+    /// upper arm: [`Iterator::any`] on the empty iterator is `false`
+    /// by the empty-disjunction convention regardless of the
+    /// per-element predicate. Dual of [`Lattice::any_lower_bound_of`]'s
+    /// vacuous-falsehood seal on the meet arm. Pinned over BOTH the
+    /// total-order axis (`DataClassification::ALL` — 6 elements) AND
+    /// the antichain axis (`SubstrateType::ALL` — 8 elements) so BOTH
+    /// shape flavors bind the vacuous-falsehood identity via ONE
+    /// substrate primitive.
+    #[test]
+    fn any_upper_bound_of_is_vacuously_false_at_the_empty_iterator_over_every_element() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        let empty_dc: [&DataClassification; 0] = [];
+        for a in DataClassification::ALL {
+            assert!(
+                !a.any_upper_bound_of(empty_dc.iter().copied()),
+                "any_upper_bound_of({a:?}, []) must be false — the empty disjunction \
+                 is vacuously false at every element, including every element where \
+                 is_upper_bound_of fires vacuously true",
+            );
+        }
+        let empty_st: [&SubstrateType; 0] = [];
+        for a in SubstrateType::ALL {
+            assert!(
+                !a.any_upper_bound_of(empty_st.iter().copied()),
+                "any_upper_bound_of({a:?}, []) must be false on the pointed-top \
+                 antichain — the empty disjunction is vacuously false at every element",
+            );
+        }
+    }
+
+    /// [`Lattice::any_upper_bound_of`] at arity 1 reduces to the
+    /// direction-flipped pairwise [`Lattice::leq`] on the sole element
+    /// — the 1-input N-ary existential Boolean-disjunction upper-bound
+    /// predicate is the pairwise `leq` primitive with the operand
+    /// arm as the receiver's ≤-witness. AGREES with
+    /// [`Lattice::is_upper_bound_of`]'s singleton reduction at arity
+    /// 1 — both quantifiers collapse to the same per-element predicate
+    /// when the iterator yields exactly one element. Dual of
+    /// [`Lattice::any_lower_bound_of`]'s arity-1 seal on the meet arm.
+    /// Pinned exhaustively over `DataClassification::ALL^2` (36 pairs).
+    #[test]
+    fn any_upper_bound_of_arity_1_reduces_to_leq_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    a.any_upper_bound_of([&b]),
+                    b.leq(&a),
+                    "any_upper_bound_of({a:?}, [{b:?}]) drifted from leq({b:?}, \
+                     {a:?}) — the arity-1 existential N-ary upper-bound predicate \
+                     must reduce to the direction-flipped pairwise leq primitive \
+                     on the sole element",
+                );
+                assert_eq!(
+                    a.any_upper_bound_of([&b]),
+                    a.is_upper_bound_of([&b]),
+                    "any_upper_bound_of({a:?}, [{b:?}]) drifted from \
+                     is_upper_bound_of({a:?}, [{b:?}]) — the two quantifiers must \
+                     agree at arity 1 by collapsing to the same per-element \
+                     direction-flipped leq",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::top`] is an upper bound of AT LEAST ONE element of
+    /// every non-empty iterable — `T::top().any_upper_bound_of(iter)`
+    /// fires true whenever `iter` is non-empty, because
+    /// `x.leq(&T::top()) == true` for every `x` by the lattice-top
+    /// axiom and [`Iterator::any`] short-circuits on the first
+    /// element. On the empty iterable the ∃ arm fires vacuously false
+    /// — the (∀, ∃) axis splits at the empty case. Dual of
+    /// [`Lattice::any_lower_bound_of`]'s universal-bottom witness one
+    /// meet/join axis over. Pinned exhaustively over
+    /// `DataClassification::ALL^2` (36 iterable pairs + the empty case).
+    #[test]
+    fn top_is_any_upper_bound_of_every_nonempty_data_classification_iterable() {
+        use tatara_process::classification::DataClassification;
+        let top = DataClassification::top();
+        let empty: [&DataClassification; 0] = [];
+        assert!(
+            !top.any_upper_bound_of(empty.iter().copied()),
+            "any_upper_bound_of(top, []) must be false — the empty disjunction \
+             is vacuously false even at the lattice-top element",
+        );
+        for a in DataClassification::ALL {
+            assert!(
+                top.any_upper_bound_of([&a]),
+                "any_upper_bound_of(top, [{a:?}]) must be true — {a:?}.leq(top) \
+                 holds by the lattice-top axiom",
+            );
+            for b in DataClassification::ALL {
+                assert!(
+                    top.any_upper_bound_of([&a, &b]),
+                    "any_upper_bound_of(top, [{a:?}, {b:?}]) must be true — \
+                     {a:?}.leq(top) holds by the lattice-top axiom, so \
+                     Iterator::any short-circuits on the first element",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_upper_bound_of`] REFINES [`Lattice::
+    /// any_upper_bound_of`] on non-empty iterables: `a.is_upper_bound_of(
+    /// iter) && iter is non-empty ⇒ a.any_upper_bound_of(iter)`. The
+    /// ∀ ⇒ ∃ implication holds on every non-empty iterable via the
+    /// [`Iterator::any`] / [`Iterator::all`] refinement — every
+    /// witnessing element in the ∀ conjunction also witnesses the ∃
+    /// disjunction. The (∀, ∃) axis SPLITS on the empty case: the ∀
+    /// arm fires vacuously true, the ∃ arm fires vacuously false, so
+    /// the implication fails only at the empty iterable. Dual of
+    /// [`Lattice::any_lower_bound_of`]'s refinement seal on the meet
+    /// arm. Pinned exhaustively over `DataClassification::ALL` (6
+    /// elements) × `DataClassification::ALL^2` (36 non-empty pairs) =
+    /// 216 (element, iterable) combinations.
+    #[test]
+    fn is_upper_bound_of_refines_any_upper_bound_of_on_nonempty_data_classification_iterables() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let iter: [&DataClassification; 2] = [&b, &c];
+                    if a.is_upper_bound_of(iter) {
+                        assert!(
+                            a.any_upper_bound_of(iter),
+                            "is_upper_bound_of({a:?}, [{b:?}, {c:?}]) ⇒ \
+                             any_upper_bound_of({a:?}, [{b:?}, {c:?}]) refinement \
+                             failed on a non-empty iterable — the ∀ ⇒ ∃ implication \
+                             is universal on non-empty iterables",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_upper_bound_of`] on the pointed-top antichain
+    /// (e.g. [`SubstrateType`]) projects to the direction-flipped
+    /// shape the non-strict pair-level [`Lattice::leq`] carries at
+    /// ∃-arity: a distinct-non-top element `self` is an upper bound
+    /// of ONLY itself (the antichain has no distinct pair with
+    /// `x.leq(self)` unless `self == top`), so `self.any_upper_bound_of(
+    /// iter)` fires iff `iter` contains `self`; a top-`self` element
+    /// upper-bounds every element (universal-top witness). Pinned
+    /// via three discriminating cases: reflexive-self (fires),
+    /// distinct-non-top (rejects since incomparable), plus mixed
+    /// iterables to pin the short-circuit witness behaviour and the
+    /// top-receiver's universal-witness arm. Dual of the antichain
+    /// projection [`Lattice::any_lower_bound_of`] carries on the meet
+    /// arm.
+    #[test]
+    fn any_upper_bound_of_projects_the_pointed_top_antichain_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        let compute = SubstrateType::Compute;
+        let storage = SubstrateType::Storage;
+        // Reflexive-self singleton — leq is reflexive on every
+        // element, so ∃ fires on the sole reflexive witness.
+        assert!(
+            compute.any_upper_bound_of([&compute]),
+            "any_upper_bound_of({compute:?}, [{compute:?}]) must be true — leq is \
+             reflexive so the sole element witnesses the ∃ direction-flipped",
+        );
+        // Distinct-non-top singleton — incomparable pair rejects on
+        // both directions of the antichain.
+        assert!(
+            !compute.any_upper_bound_of([&storage]),
+            "any_upper_bound_of({compute:?}, [{storage:?}]) must be false — \
+             {storage:?} and {compute:?} are incomparable on the antichain so \
+             leq fails on the sole element",
+        );
+        // Top receiver upper-bounds every element by the
+        // lattice-top axiom on the pointed-top antichain.
+        assert!(
+            top.any_upper_bound_of([&compute]),
+            "any_upper_bound_of(top, [{compute:?}]) must be true — {compute:?}.leq(top) \
+             holds by the pointed-top antichain's top axiom",
+        );
+        // Mixed iterable with a self witness — short-circuits on the
+        // reflexive element.
+        let mixed: [&SubstrateType; 2] = [&storage, &compute];
+        assert!(
+            compute.any_upper_bound_of(mixed),
+            "any_upper_bound_of({compute:?}, [{storage:?}, {compute:?}]) must be \
+             true — reflexive self witnesses the ∃ even though {storage:?} does not",
+        );
+        // Mixed iterable with no witness — universal rejection on the
+        // antichain where only self and top can witness the ∃-upper arm.
+        assert!(
+            !compute.any_upper_bound_of([&storage, &storage]),
+            "any_upper_bound_of({compute:?}, [{storage:?}, {storage:?}]) must be \
              false — no element witnesses the ∃ on incomparable pairs",
         );
     }

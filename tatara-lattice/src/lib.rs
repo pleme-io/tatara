@@ -1019,6 +1019,157 @@ pub trait Lattice: Sized + Clone + PartialEq {
     {
         iter.into_iter().any(|x| x.leq(self))
     }
+    /// Strict-arm existential N-ary Boolean-DISJUNCTION peer of
+    /// [`Lattice::is_strict_lower_bound_of`] on the QUANTIFIER axis —
+    /// `self` sits STRICTLY BELOW AT LEAST ONE element the iterator
+    /// yields. `a.any_strict_lower_bound_of([&b, &c, &d])` holds iff
+    /// `a.strictly_below(&b) || a.strictly_below(&c) ||
+    /// a.strictly_below(&d)`: `self` is a STRICT lower bound for SOME
+    /// element of the iterated set (equivalently: the iterated set
+    /// contains an element that strictly witnesses `self` as a lower
+    /// bound).
+    ///
+    /// Sits at the ∃-strict-lower cell of the (∀, ∃) × (lower, upper) ×
+    /// (strict, non-strict) 2×2×2 N-ary Boolean bounds cube — where
+    /// [`Lattice::is_strict_lower_bound_of`] decides the strict-arm ∀
+    /// conjunction (is `self` STRICTLY BELOW EVERY element) and
+    /// [`Lattice::any_lower_bound_of`] decides the non-strict-arm ∃
+    /// disjunction (is `self` AT-OR-BELOW SOME element), this decides
+    /// the strict-arm ∃ disjunction at the corner one QUANTIFIER axis
+    /// over from [`Lattice::is_strict_lower_bound_of`] AND one
+    /// STRICTNESS axis over from [`Lattice::any_lower_bound_of`].
+    /// Closes the (∀, ∃) × (strict, non-strict) × (lower) 2×2×1 face at
+    /// the ∃-strict-lower corner, mirroring the closure
+    /// [`Lattice::any_strictly_between`] carries at the ∃-strict-
+    /// interval-containment corner one PRIMITIVE-SHAPE axis over on the
+    /// N-ary interval-containment face.
+    ///
+    /// **Empty-iterator vacuous falsehood**: `a.any_strict_lower_bound_of(
+    /// std::iter::empty()) == false` for every element — the empty
+    /// disjunction is vacuously false by the [`Iterator::any`] empty-
+    /// iterator convention. Same (∀, ∃) axis split as
+    /// [`Lattice::any_lower_bound_of`] on the non-strict arm:
+    /// [`Lattice::is_strict_lower_bound_of`] fires vacuously TRUE on
+    /// the empty iterator (every element is a strict lower bound of
+    /// the empty set by the empty-conjunction convention), while this
+    /// ∃ peer fires vacuously FALSE. The empty case is the ONE cell
+    /// where the (∀, ∃) axis DIVERGES on the strict-arm N-ary Boolean
+    /// bounds face, same as on the non-strict arm.
+    ///
+    /// **Singleton-strict-identity**: `a.any_strict_lower_bound_of([&b])
+    /// == a.strictly_below(&b)` — the 1-input strict existential
+    /// predicate reduces to the pairwise [`Lattice::strictly_below`]
+    /// relation on the sole element, AGREEING with
+    /// [`Lattice::is_strict_lower_bound_of`]'s singleton reduction at
+    /// arity 1 (both quantifiers collapse to the same per-element
+    /// predicate when the iterator yields exactly one element). Dual
+    /// of [`Lattice::any_lower_bound_of`]'s singleton reduction on the
+    /// non-strict arm one STRICTNESS axis over — the strict-existential
+    /// arity-1 reduction drops the reflexive diagonal from the ∃-arm
+    /// witness set.
+    ///
+    /// **Refines [`Lattice::any_lower_bound_of`]**:
+    /// `a.any_strict_lower_bound_of(iter) ⇒ a.any_lower_bound_of(iter)`
+    /// at every iterable — the strict disjunction refines the non-
+    /// strict one at every element position via
+    /// [`Lattice::strictly_below`]'s refines-[`Lattice::leq`] identity.
+    /// The strict-minus-non-strict gap on the N-ary ∃-aggregate is
+    /// exactly the iterables whose ∃-witnesses on the non-strict arm
+    /// are all reflexive-`self` (equal to `self`). Refinement holds
+    /// UNIFORMLY on the empty iterable too (both arms fire vacuously
+    /// false), unlike the ∀ ⇒ ∃ refinement one QUANTIFIER axis away
+    /// which splits at the empty case.
+    ///
+    /// **Refines FROM [`Lattice::is_strict_lower_bound_of`] on non-
+    /// empty iterables**: `a.is_strict_lower_bound_of(iter) && iter is
+    /// non-empty ⇒ a.any_strict_lower_bound_of(iter)` — every
+    /// witnessing element in the strict ∀ conjunction also witnesses
+    /// the strict ∃ disjunction. The (∀ ⇒ ∃) implication holds ONLY on
+    /// non-empty iterables since the empty case splits (∀ true, ∃
+    /// false). Same ∀ ⇒ ∃ refinement peer that
+    /// [`Lattice::any_lower_bound_of`] carries against
+    /// [`Lattice::is_lower_bound_of`] one STRICTNESS axis over on the
+    /// non-strict arm.
+    ///
+    /// **Universal-bottom witness on non-empty NON-bottom-only
+    /// iterables**: `T::bottom().any_strict_lower_bound_of(iter) ==
+    /// true` whenever `iter` contains at least one element `x` with
+    /// `T::bottom() != x`, because `T::bottom().strictly_below(&x) ==
+    /// true` at every non-bottom `x` by the lattice-bottom axiom
+    /// composed with [`Lattice::strictly_below`]'s irreflexive-diagonal
+    /// exclusion. When the iterable is empty OR contains ONLY the
+    /// bottom element, the ∃ arm fires false — the strict-arm
+    /// universal-bottom witness carries a NARROWER hypothesis than
+    /// [`Lattice::any_lower_bound_of`]'s (which fires on every
+    /// non-empty iterable) because the strict predicate excludes the
+    /// reflexive-bottom diagonal.
+    ///
+    /// **Irreflexivity on self-only iterables**: `self
+    /// .any_strict_lower_bound_of([&self]) == false` at every element
+    /// because [`Lattice::strictly_below`] is irreflexive. In
+    /// particular `self.any_strict_lower_bound_of([&self, &self, …])
+    /// == false` at every arity when the iterable contains ONLY `self`
+    /// — the strict predicate never fires on a reflexive-only ∃-witness
+    /// set, unlike the non-strict [`Lattice::any_lower_bound_of`] which
+    /// fires reflexively on `self.any_lower_bound_of([&self])`. Same
+    /// irreflexive-diagonal exclusion carried on the ∀ arm by
+    /// [`Lattice::is_strict_lower_bound_of`].
+    ///
+    /// **Any-witnessing-element acceptance**: if any `x` in the
+    /// iterator has `self.strictly_below(x)`, then
+    /// `self.any_strict_lower_bound_of(iter) == true` — [`Iterator::any`]
+    /// short-circuits on the first witnessing element. Dual short-
+    /// circuit behaviour to [`Lattice::is_strict_lower_bound_of`]'s
+    /// any-violating-element rejection on the ∀ arm one QUANTIFIER
+    /// axis over.
+    ///
+    /// **Antichain rejection**: on the pointed-top antichain
+    /// (e.g. [`SubstrateType`]), the strict-∃ predicate rejects most
+    /// iterables the non-strict-∃ predicate accepts — a non-top `self`
+    /// fires the strict ∃ ONLY when the iterable contains
+    /// [`SubstrateType::top`], since every distinct non-top pair is
+    /// incomparable (so `strictly_below` fails) and the reflexive-self
+    /// diagonal is excluded. On mixed iterables the top witness short-
+    /// circuits the predicate regardless of the other elements.
+    ///
+    /// Default routes through `iter.into_iter().any(|x|
+    /// self.strictly_below(x))` — the two-primitive antisymmetric
+    /// composition of [`Lattice::strictly_below`] and
+    /// [`Iterator::any`] on any partial order. A future normalization
+    /// at either primitive (a [`Lattice::strictly_below`] override, an
+    /// [`Iterator::any`] short-circuit tweak in the standard library)
+    /// lands at ONE site and this default inherits mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the strict ∃ N-ary Boolean-disjunction lower-
+    /// bound predicate is itself a typed named `bool` composing
+    /// [`Lattice::strictly_below`] via [`Iterator::any`]; every
+    /// downstream lattice-law consumer inherits it mechanically.
+    /// THEORY.md §III (typescape) — the strict ∃ N-ary Boolean-
+    /// disjunction lower-bound arm on every classification-axis
+    /// lattice binds at ONE substrate owner rather than at each
+    /// consumer's hand-authored `iter.any(|x| self.strictly_below(x))`.
+    ///
+    /// Frontier inspiration: order-theory's bounded-lattice
+    /// existential witness predicates on the STRICT arm (a strict
+    /// lower bound OF SOME element of a set) + Racket's `ormap` /
+    /// Haskell's `any` composed with the pairwise strict-order
+    /// relation. Rust's stdlib carries `Iterator::any` and
+    /// [`PartialOrd::lt`] but not an N-ary `iter.any_strictly_above(
+    /// self)` on [`PartialOrd`]. Translated: threaded the same strict
+    /// ∃ N-ary Boolean-disjunction shape through the [`Lattice`]
+    /// trait's default-method surface as the QUANTIFIER-AXIS peer of
+    /// [`Lattice::is_strict_lower_bound_of`] AND the STRICTNESS-AXIS
+    /// peer of [`Lattice::any_lower_bound_of`] at the strict-lower
+    /// arm — first-class algebra method every closed-set impl picks
+    /// up mechanically.
+    fn any_strict_lower_bound_of<'a, I>(&self, iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().any(|x| self.strictly_below(x))
+    }
     /// Interval-containment predicate — `self` sits inside the closed
     /// bracket `[low, high]` on the lattice's partial order.
     /// `a.is_between(&low, &high)` holds iff `low.leq(&a) && a.leq(&high)`:
@@ -14344,6 +14495,317 @@ mod tests {
             "any_upper_bound_of({compute:?}, [{storage:?}, {storage:?}]) must be \
              false — no element witnesses the ∃ on incomparable pairs",
         );
+    }
+
+    /// [`Lattice::any_strict_lower_bound_of`] fires vacuously FALSE on
+    /// the empty iterator at EVERY element on EVERY lattice — INCLUDING
+    /// every element where the strict ∀ peer
+    /// [`Lattice::is_strict_lower_bound_of`] fires vacuously TRUE. The
+    /// empty-iterator vacuous-falsehood arm is the ONE cell where the
+    /// (∀, ∃) axis DIVERGES on the STRICT-arm N-ary Boolean bounds face
+    /// — same split shape [`Lattice::any_lower_bound_of`] carries on
+    /// the non-strict arm one STRICTNESS axis over. Pinned over BOTH
+    /// the total-order axis (`DataClassification::ALL` — 6 elements)
+    /// AND the antichain axis (`SubstrateType::ALL` — 8 elements) so
+    /// BOTH shape flavors bind the strict vacuous-falsehood identity
+    /// via ONE substrate primitive.
+    #[test]
+    fn any_strict_lower_bound_of_is_vacuously_false_at_the_empty_iterator_over_every_element() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        let empty_dc: [&DataClassification; 0] = [];
+        for a in DataClassification::ALL {
+            assert!(
+                !a.any_strict_lower_bound_of(empty_dc.iter().copied()),
+                "any_strict_lower_bound_of({a:?}, []) must be false — the empty \
+                 disjunction is vacuously false at every element, including every \
+                 element where is_strict_lower_bound_of fires vacuously true",
+            );
+        }
+        let empty_st: [&SubstrateType; 0] = [];
+        for a in SubstrateType::ALL {
+            assert!(
+                !a.any_strict_lower_bound_of(empty_st.iter().copied()),
+                "any_strict_lower_bound_of({a:?}, []) must be false on the pointed-top \
+                 antichain — the empty disjunction is vacuously false at every element",
+            );
+        }
+    }
+
+    /// [`Lattice::any_strict_lower_bound_of`] at arity 1 reduces to the
+    /// pairwise [`Lattice::strictly_below`] on the sole element — the
+    /// 1-input N-ary strict existential Boolean-disjunction lower-bound
+    /// predicate is the pairwise `strictly_below` primitive with the
+    /// iterator arm degenerated to a singleton. AGREES with
+    /// [`Lattice::is_strict_lower_bound_of`]'s singleton reduction at
+    /// arity 1 — both quantifiers collapse to the same per-element
+    /// strict predicate when the iterator yields exactly one element.
+    /// Dual of [`Lattice::any_lower_bound_of`]'s arity-1 seal on the
+    /// non-strict arm one STRICTNESS axis over — the strict-existential
+    /// arity-1 reduction drops the reflexive diagonal from the ∃
+    /// witness set. Pinned exhaustively over
+    /// `DataClassification::ALL^2` (36 pairs).
+    #[test]
+    fn any_strict_lower_bound_of_arity_1_reduces_to_strictly_below_over_data_classification_all_pairs(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    a.any_strict_lower_bound_of([&b]),
+                    a.strictly_below(&b),
+                    "any_strict_lower_bound_of({a:?}, [{b:?}]) drifted from \
+                     strictly_below({a:?}, {b:?}) — the arity-1 strict existential \
+                     N-ary predicate must reduce to the pairwise strictly_below \
+                     primitive on the sole element",
+                );
+                assert_eq!(
+                    a.any_strict_lower_bound_of([&b]),
+                    a.is_strict_lower_bound_of([&b]),
+                    "any_strict_lower_bound_of({a:?}, [{b:?}]) drifted from \
+                     is_strict_lower_bound_of({a:?}, [{b:?}]) — the two quantifiers \
+                     must agree at arity 1 by collapsing to the same per-element \
+                     strictly_below",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::any_strict_lower_bound_of`] REJECTS a self-only
+    /// iterable at every element over [`DataClassification`] — the
+    /// strict predicate is irreflexive on any reflexive-only ∃ witness
+    /// set. `self.any_strict_lower_bound_of([&self]) == false` at every
+    /// arity when the iterable contains ONLY `self`, while the non-
+    /// strict [`Lattice::any_lower_bound_of`] fires reflexively on the
+    /// same input. Same irreflexive-diagonal exclusion carried on the
+    /// ∀ arm by [`Lattice::is_strict_lower_bound_of`]. Pinned as a
+    /// specific contrast against the non-strict version and against
+    /// self-inclusive multi-element iterables where a non-reflexive
+    /// witness recovers the ∃.
+    #[test]
+    fn any_strict_lower_bound_of_rejects_self_only_iterable_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            // Self-only singleton — strict ∃ rejects on the reflexive
+            // diagonal, non-strict ∃ accepts by reflexivity of leq.
+            assert!(
+                !a.any_strict_lower_bound_of([&a]),
+                "any_strict_lower_bound_of([&{a:?}]) at {a:?} must be false — the \
+                 strict predicate is irreflexive on its self-only ∃ witness set",
+            );
+            assert!(a.any_lower_bound_of([&a]));
+            // Self-only two-element iterable — same rejection.
+            assert!(
+                !a.any_strict_lower_bound_of([&a, &a]),
+                "any_strict_lower_bound_of([&{a:?}, &{a:?}]) at {a:?} must be false — \
+                 the strict predicate rejects every self-only ∃ witness set",
+            );
+        }
+    }
+
+    /// [`Lattice::bottom`] is a STRICT lower bound of AT LEAST ONE
+    /// element of every iterable containing a NON-BOTTOM element over
+    /// [`DataClassification`] — `T::bottom().any_strict_lower_bound_of(
+    /// iter)` fires true whenever `iter` contains at least one
+    /// non-bottom `x`, because `T::bottom().strictly_below(&x) == true`
+    /// at every non-bottom `x` by the lattice-bottom axiom composed
+    /// with [`Lattice::strictly_below`]'s irreflexive-diagonal
+    /// exclusion. On the empty iterable AND the bottom-only iterable
+    /// the strict ∃ arm fires false — the strict-arm universal-bottom
+    /// witness carries a NARROWER hypothesis than
+    /// [`Lattice::any_lower_bound_of`]'s (which fires on every
+    /// non-empty iterable) because the strict predicate excludes the
+    /// reflexive-bottom diagonal. Pinned exhaustively over
+    /// `DataClassification::ALL^2` (36 iterable pairs + the two edge
+    /// cases).
+    #[test]
+    fn bottom_is_any_strict_lower_bound_of_every_iterable_with_a_nonbottom_element_over_data_classification(
+    ) {
+        use tatara_process::classification::DataClassification;
+        let bottom = DataClassification::bottom();
+        let empty: [&DataClassification; 0] = [];
+        assert!(
+            !bottom.any_strict_lower_bound_of(empty.iter().copied()),
+            "any_strict_lower_bound_of(bottom, []) must be false — the empty \
+             disjunction is vacuously false even at the lattice-bottom element",
+        );
+        assert!(
+            !bottom.any_strict_lower_bound_of([&bottom]),
+            "any_strict_lower_bound_of(bottom, [bottom]) must be false — the strict \
+             predicate is irreflexive on the reflexive-bottom diagonal",
+        );
+        for a in DataClassification::ALL {
+            if a != bottom {
+                assert!(
+                    bottom.any_strict_lower_bound_of([&a]),
+                    "any_strict_lower_bound_of(bottom, [{a:?}]) must be true — \
+                     bottom.strictly_below({a:?}) holds by the lattice-bottom axiom \
+                     composed with strictly_below's irreflexive-diagonal exclusion",
+                );
+            }
+            for b in DataClassification::ALL {
+                if a != bottom || b != bottom {
+                    assert!(
+                        bottom.any_strict_lower_bound_of([&a, &b]),
+                        "any_strict_lower_bound_of(bottom, [{a:?}, {b:?}]) must be \
+                         true whenever the iterable contains at least one non-bottom \
+                         element — the non-bottom witness fires the ∃ via \
+                         bottom.strictly_below",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strict_lower_bound_of`] REFINES [`Lattice::
+    /// any_lower_bound_of`] at EVERY iterable over
+    /// [`DataClassification`] (empty case included) —
+    /// `a.any_strict_lower_bound_of(iter) ⇒ a.any_lower_bound_of(iter)`
+    /// because `strictly_below(x) ⇒ leq(x)` at every element position,
+    /// and [`Iterator::any`]-of-refining-predicates lifts to the same
+    /// implication at the aggregate. The strict-minus-non-strict gap
+    /// on the ∃-aggregate is exactly the iterables whose ∃ witnesses
+    /// on the non-strict arm are all reflexive-`self`. UNIFORM
+    /// refinement (holds on the empty iterable too) unlike the ∀ ⇒ ∃
+    /// refinement one QUANTIFIER axis away which splits at the empty
+    /// case. Pinned exhaustively over `DataClassification::ALL` (6
+    /// elements) × `DataClassification::ALL^2` (36 pairs + empty
+    /// case) = 222 (element, iterable) combinations.
+    #[test]
+    fn any_strict_lower_bound_of_refines_any_lower_bound_of_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            let empty: [&DataClassification; 0] = [];
+            if a.any_strict_lower_bound_of(empty.iter().copied()) {
+                assert!(a.any_lower_bound_of(empty.iter().copied()));
+            }
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let iter: [&DataClassification; 2] = [&b, &c];
+                    if a.any_strict_lower_bound_of(iter) {
+                        assert!(
+                            a.any_lower_bound_of(iter),
+                            "any_strict_lower_bound_of({a:?}, [{b:?}, {c:?}]) ⇒ \
+                             any_lower_bound_of({a:?}, [{b:?}, {c:?}]) refinement \
+                             failed — the strict ∃ refines the non-strict ∃ at every \
+                             iterable via strictly_below ⇒ leq",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_lower_bound_of`] REFINES [`Lattice::
+    /// any_strict_lower_bound_of`] on non-empty iterables over
+    /// [`DataClassification`] — `a.is_strict_lower_bound_of(iter) &&
+    /// iter is non-empty ⇒ a.any_strict_lower_bound_of(iter)`. The
+    /// ∀ ⇒ ∃ implication holds on every non-empty iterable via the
+    /// [`Iterator::any`] / [`Iterator::all`] refinement — every
+    /// witnessing element in the strict ∀ conjunction also witnesses
+    /// the strict ∃ disjunction. The (∀, ∃) axis SPLITS on the empty
+    /// case: the ∀ arm fires vacuously true, the ∃ arm fires vacuously
+    /// false, so the implication fails only at the empty iterable.
+    /// Same ∀ ⇒ ∃ refinement peer that [`Lattice::any_lower_bound_of`]
+    /// carries against [`Lattice::is_lower_bound_of`] one STRICTNESS
+    /// axis over on the non-strict arm. Pinned exhaustively over
+    /// `DataClassification::ALL` (6 elements) ×
+    /// `DataClassification::ALL^2` (36 non-empty pairs) = 216
+    /// (element, iterable) combinations.
+    #[test]
+    fn is_strict_lower_bound_of_refines_any_strict_lower_bound_of_on_nonempty_data_classification_iterables(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let iter: [&DataClassification; 2] = [&b, &c];
+                    if a.is_strict_lower_bound_of(iter) {
+                        assert!(
+                            a.any_strict_lower_bound_of(iter),
+                            "is_strict_lower_bound_of({a:?}, [{b:?}, {c:?}]) ⇒ \
+                             any_strict_lower_bound_of({a:?}, [{b:?}, {c:?}]) \
+                             refinement failed on a non-empty iterable — the strict \
+                             ∀ ⇒ ∃ implication is universal on non-empty iterables",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strict_lower_bound_of`] on the pointed-top
+    /// antichain (e.g. [`SubstrateType`]) projects to the strict-half-
+    /// edge shape: a distinct-non-top element `self` is a strict lower
+    /// bound of ONLY the top (since every distinct non-top pair is
+    /// incomparable so `strictly_below` fails, AND the reflexive-self
+    /// diagonal is excluded by irreflexivity), so
+    /// `self.any_strict_lower_bound_of(iter)` fires iff `iter`
+    /// contains [`SubstrateType::top`]. Pinned via four discriminating
+    /// cases: reflexive-self singleton (rejects — irreflexivity),
+    /// distinct-non-top singleton (rejects — incomparability), top-
+    /// singleton (fires — strict half-edge), mixed iterable containing
+    /// top (fires — top short-circuits the ∃). Peer of the antichain
+    /// projection [`Lattice::any_lower_bound_of`] carries on the non-
+    /// strict arm one STRICTNESS axis over — the strict projection
+    /// drops the reflexive-self witness that the non-strict projection
+    /// keeps.
+    #[test]
+    fn any_strict_lower_bound_of_projects_the_pointed_top_antichain_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        let compute = SubstrateType::Compute;
+        let storage = SubstrateType::Storage;
+        // Reflexive-self singleton — strict predicate rejects on
+        // irreflexive-diagonal exclusion.
+        assert!(
+            !compute.any_strict_lower_bound_of([&compute]),
+            "any_strict_lower_bound_of({compute:?}, [{compute:?}]) must be false — \
+             strictly_below is irreflexive so the reflexive-self diagonal is \
+             excluded from the ∃ witness set",
+        );
+        // Distinct-non-top singleton — incomparable pair rejects.
+        assert!(
+            !compute.any_strict_lower_bound_of([&storage]),
+            "any_strict_lower_bound_of({compute:?}, [{storage:?}]) must be false — \
+             {compute:?} and {storage:?} are incomparable on the antichain so \
+             strictly_below fails on the sole element",
+        );
+        // Top singleton — the strict half-edge into the top fires.
+        assert!(
+            compute.any_strict_lower_bound_of([&top]),
+            "any_strict_lower_bound_of({compute:?}, [top]) must be true — the \
+             pointed-top antichain's strict half-edge admits every non-top element \
+             as a strict lower bound of top",
+        );
+        // Mixed iterable with a top witness — short-circuits on top.
+        let mixed: [&SubstrateType; 2] = [&storage, &top];
+        assert!(
+            compute.any_strict_lower_bound_of(mixed),
+            "any_strict_lower_bound_of({compute:?}, [{storage:?}, top]) must be \
+             true — top witnesses the strict ∃ via the pointed-top strict half-edge \
+             even though {storage:?} does not",
+        );
+        // Mixed iterable with no witness — universal rejection on the
+        // antichain where only top can witness the strict ∃-lower arm
+        // from a non-top self.
+        assert!(
+            !compute.any_strict_lower_bound_of([&storage, &storage]),
+            "any_strict_lower_bound_of({compute:?}, [{storage:?}, {storage:?}]) \
+             must be false — no element witnesses the strict ∃ on incomparable \
+             pairs from a non-top self",
+        );
+        // The TOP itself is NOT a strict lower bound of any element on
+        // the pointed-top antichain — irreflexive on self, incomparable
+        // on distinct non-top elements, and top has no strict upper
+        // bound to witness the ∃.
+        for s in SubstrateType::ALL {
+            assert!(
+                !top.any_strict_lower_bound_of([&s]),
+                "any_strict_lower_bound_of(top, [{s:?}]) must be false — top has no \
+                 strict upper bound on the pointed-top antichain so no element can \
+                 witness the strict ∃-lower arm",
+            );
+        }
     }
 
     proptest! {

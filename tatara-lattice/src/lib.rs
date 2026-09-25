@@ -1170,6 +1170,184 @@ pub trait Lattice: Sized + Clone + PartialEq {
     {
         iter.into_iter().any(|x| self.strictly_below(x))
     }
+    /// Dual of [`Lattice::any_strict_lower_bound_of`] on the MEET/JOIN
+    /// axis AND strict-arm existential N-ary Boolean-DISJUNCTION peer
+    /// of [`Lattice::is_strict_upper_bound_of`] on the QUANTIFIER axis
+    /// — `self` sits STRICTLY ABOVE AT LEAST ONE element the iterator
+    /// yields. `a.any_strict_upper_bound_of([&b, &c, &d])` holds iff
+    /// `b.strictly_below(&a) || c.strictly_below(&a) ||
+    /// d.strictly_below(&a)`: `self` is a STRICT upper bound for SOME
+    /// element of the iterated set (equivalently: the iterated set
+    /// contains an element that strictly witnesses `self` as an upper
+    /// bound).
+    ///
+    /// Sits at the ∃-strict-upper cell of the (∀, ∃) × (lower, upper) ×
+    /// (strict, non-strict) 2×2×2 N-ary Boolean bounds cube — where
+    /// [`Lattice::is_strict_upper_bound_of`] decides the strict-arm ∀
+    /// conjunction (is `self` STRICTLY ABOVE EVERY element),
+    /// [`Lattice::any_upper_bound_of`] decides the non-strict-arm ∃
+    /// disjunction (is `self` AT-OR-ABOVE SOME element), and
+    /// [`Lattice::any_strict_lower_bound_of`] decides the strict-arm ∃
+    /// disjunction on the dual meet arm, this decides the strict-arm ∃
+    /// disjunction on the JOIN arm at the corner one QUANTIFIER axis
+    /// over from [`Lattice::is_strict_upper_bound_of`] AND one
+    /// STRICTNESS axis over from [`Lattice::any_upper_bound_of`] AND
+    /// one MEET/JOIN axis over from
+    /// [`Lattice::any_strict_lower_bound_of`]. Closes the LAST
+    /// remaining corner of the 2×2×2 N-ary Boolean bounds cube —
+    /// completing the (∀, ∃) × (lower, upper) × (strict, non-strict) at
+    /// ONE algebra owner.
+    ///
+    /// **Empty-iterator vacuous falsehood**: `a.any_strict_upper_bound_of(
+    /// std::iter::empty()) == false` for every element — the empty
+    /// disjunction is vacuously false by the [`Iterator::any`] empty-
+    /// iterator convention. Dual of
+    /// [`Lattice::any_strict_lower_bound_of`]'s vacuous-falsehood on
+    /// the meet arm; same (∀, ∃) axis split on the strict-arm N-ary
+    /// Boolean bounds face as its lower-arm peer:
+    /// [`Lattice::is_strict_upper_bound_of`] fires vacuously TRUE on
+    /// the empty iterator (every element is a strict upper bound of
+    /// the empty set by the empty-conjunction convention), while this
+    /// ∃ peer fires vacuously FALSE. The empty case is the ONE cell
+    /// where the (∀, ∃) axis DIVERGES on the strict-arm N-ary Boolean
+    /// bounds face, same as on the non-strict arm AND same as on the
+    /// dual meet arm.
+    ///
+    /// **Singleton-strict-identity**: `a.any_strict_upper_bound_of([&b])
+    /// == b.strictly_below(&a)` — the 1-input strict existential
+    /// predicate reduces to the direction-flipped pairwise
+    /// [`Lattice::strictly_below`] relation on the sole element,
+    /// AGREEING with [`Lattice::is_strict_upper_bound_of`]'s singleton
+    /// reduction at arity 1 (both quantifiers collapse to the same
+    /// per-element predicate when the iterator yields exactly one
+    /// element). Dual of [`Lattice::any_strict_lower_bound_of`]'s
+    /// singleton reduction on the meet arm one MEET/JOIN axis over —
+    /// the strict-existential arity-1 reduction drops the reflexive
+    /// diagonal from the ∃-arm witness set.
+    ///
+    /// **Refines [`Lattice::any_upper_bound_of`]**:
+    /// `a.any_strict_upper_bound_of(iter) ⇒ a.any_upper_bound_of(iter)`
+    /// at every iterable — the strict disjunction refines the non-
+    /// strict one at every element position via
+    /// [`Lattice::strictly_below`]'s refines-[`Lattice::leq`] identity
+    /// on the direction-flipped arm. The strict-minus-non-strict gap
+    /// on the N-ary ∃-aggregate is exactly the iterables whose
+    /// ∃-witnesses on the non-strict arm are all reflexive-`self`
+    /// (equal to `self`). Refinement holds UNIFORMLY on the empty
+    /// iterable too (both arms fire vacuously false), unlike the ∀ ⇒ ∃
+    /// refinement one QUANTIFIER axis away which splits at the empty
+    /// case.
+    ///
+    /// **Refines FROM [`Lattice::is_strict_upper_bound_of`] on non-
+    /// empty iterables**: `a.is_strict_upper_bound_of(iter) && iter is
+    /// non-empty ⇒ a.any_strict_upper_bound_of(iter)` — every
+    /// witnessing element in the strict ∀ conjunction also witnesses
+    /// the strict ∃ disjunction. The (∀ ⇒ ∃) implication holds ONLY on
+    /// non-empty iterables since the empty case splits (∀ true, ∃
+    /// false). Same ∀ ⇒ ∃ refinement peer that
+    /// [`Lattice::any_upper_bound_of`] carries against
+    /// [`Lattice::is_upper_bound_of`] one STRICTNESS axis over on the
+    /// non-strict arm AND that [`Lattice::any_strict_lower_bound_of`]
+    /// carries against [`Lattice::is_strict_lower_bound_of`] one
+    /// MEET/JOIN axis over on the dual meet arm.
+    ///
+    /// **Universal-top witness on non-empty NON-top-only iterables**:
+    /// `T::top().any_strict_upper_bound_of(iter) == true` whenever
+    /// `iter` contains at least one element `x` with `T::top() != x`,
+    /// because `x.strictly_below(&T::top()) == true` at every non-top
+    /// `x` by the lattice-top axiom composed with
+    /// [`Lattice::strictly_below`]'s irreflexive-diagonal exclusion.
+    /// When the iterable is empty OR contains ONLY the top element,
+    /// the ∃ arm fires false — the strict-arm universal-top witness
+    /// carries a NARROWER hypothesis than
+    /// [`Lattice::any_upper_bound_of`]'s (which fires on every
+    /// non-empty iterable) because the strict predicate excludes the
+    /// reflexive-top diagonal. Dual of
+    /// [`Lattice::any_strict_lower_bound_of`]'s universal-bottom
+    /// witness one MEET/JOIN axis over.
+    ///
+    /// **Irreflexivity on self-only iterables**: `self
+    /// .any_strict_upper_bound_of([&self]) == false` at every element
+    /// because [`Lattice::strictly_below`] is irreflexive. In
+    /// particular `self.any_strict_upper_bound_of([&self, &self, …])
+    /// == false` at every arity when the iterable contains ONLY `self`
+    /// — the strict predicate never fires on a reflexive-only ∃-witness
+    /// set, unlike the non-strict [`Lattice::any_upper_bound_of`] which
+    /// fires reflexively on `self.any_upper_bound_of([&self])`. Same
+    /// irreflexive-diagonal exclusion carried on the ∀ arm by
+    /// [`Lattice::is_strict_upper_bound_of`] AND on the dual meet arm
+    /// by [`Lattice::any_strict_lower_bound_of`].
+    ///
+    /// **Any-witnessing-element acceptance**: if any `x` in the
+    /// iterator has `x.strictly_below(self)`, then
+    /// `self.any_strict_upper_bound_of(iter) == true` — [`Iterator::any`]
+    /// short-circuits on the first witnessing element. Dual short-
+    /// circuit behaviour to [`Lattice::is_strict_upper_bound_of`]'s
+    /// any-violating-element rejection on the ∀ arm one QUANTIFIER
+    /// axis over.
+    ///
+    /// **Antichain rejection**: on the pointed-top antichain
+    /// (e.g. [`SubstrateType`]), the strict-∃ predicate rejects most
+    /// iterables the non-strict-∃ predicate accepts — a non-top `self`
+    /// NEVER fires the strict ∃-upper arm at any iterable of the
+    /// antichain's own elements, since every distinct non-top pair is
+    /// incomparable (so `strictly_below` fails on the flipped
+    /// direction) and the reflexive-self diagonal is excluded. Only
+    /// [`SubstrateType::top`] can witness the strict ∃-upper arm as
+    /// receiver, and only against a non-top element in the iterable.
+    /// Dual of [`Lattice::any_strict_lower_bound_of`]'s antichain
+    /// projection where the receiver's-side edge fires ONLY for the
+    /// top element in the iterable — here the receiver's-side edge
+    /// fires ONLY when the receiver IS the top.
+    ///
+    /// Default routes through `iter.into_iter().any(|x|
+    /// x.strictly_below(self))` — the two-primitive antisymmetric
+    /// composition of [`Lattice::strictly_below`] and
+    /// [`Iterator::any`] on the direction-flipped arm of any partial
+    /// order. A future normalization at either primitive (a
+    /// [`Lattice::strictly_below`] override, an [`Iterator::any`]
+    /// short-circuit tweak in the standard library) lands at ONE site
+    /// and this default inherits mechanically.
+    ///
+    /// Theory anchor: same as [`Lattice::any_strict_lower_bound_of`]
+    /// on the dual arm — THEORY.md §II.1 invariant 5 + §III. The
+    /// strict ∃ N-ary Boolean-disjunction bound predicate on every
+    /// classification-axis lattice now binds through FOUR substrate
+    /// defaults ([`Lattice::any_lower_bound_of`],
+    /// [`Lattice::any_upper_bound_of`],
+    /// [`Lattice::any_strict_lower_bound_of`],
+    /// [`Lattice::any_strict_upper_bound_of`]) closing the (∀, ∃) ×
+    /// (lower, upper) × (strict, non-strict) 2×2×2 N-ary Boolean bounds
+    /// cube's ∃-face at ONE algebra owner. Together with the four ∀
+    /// peers ([`Lattice::is_lower_bound_of`],
+    /// [`Lattice::is_upper_bound_of`],
+    /// [`Lattice::is_strict_lower_bound_of`],
+    /// [`Lattice::is_strict_upper_bound_of`]) closed at 59e088d /
+    /// 1239cb9 the whole 2×2×2 cube now binds at ONE algebra owner.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Lattice::any_strict_lower_bound_of`] on the dual meet/join
+    /// arm — order-theory's bounded-lattice existential witness
+    /// predicates on the STRICT arm (a strict upper bound OF SOME
+    /// element of a set) + Racket's `ormap` / Haskell's `any` composed
+    /// with the direction-flipped pairwise strict-order relation.
+    /// Rust's stdlib carries `Iterator::any` and [`PartialOrd::gt`]
+    /// but not an N-ary `iter.any_strictly_below(self)` on
+    /// [`PartialOrd`]. Translated: threaded the same strict ∃ N-ary
+    /// Boolean-disjunction shape through the [`Lattice`] trait's
+    /// default-method surface as the QUANTIFIER-AXIS peer of
+    /// [`Lattice::is_strict_upper_bound_of`] AND the STRICTNESS-AXIS
+    /// peer of [`Lattice::any_upper_bound_of`] AND the MEET/JOIN-AXIS
+    /// peer of [`Lattice::any_strict_lower_bound_of`] at the strict-
+    /// upper arm — first-class algebra method every closed-set impl
+    /// picks up mechanically.
+    fn any_strict_upper_bound_of<'a, I>(&self, iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        iter.into_iter().any(|x| x.strictly_below(self))
+    }
     /// Interval-containment predicate — `self` sits inside the closed
     /// bracket `[low, high]` on the lattice's partial order.
     /// `a.is_between(&low, &high)` holds iff `low.leq(&a) && a.leq(&high)`:
@@ -14804,6 +14982,334 @@ mod tests {
                 "any_strict_lower_bound_of(top, [{s:?}]) must be false — top has no \
                  strict upper bound on the pointed-top antichain so no element can \
                  witness the strict ∃-lower arm",
+            );
+        }
+    }
+
+    /// [`Lattice::any_strict_upper_bound_of`] fires vacuously FALSE on
+    /// the empty iterator at EVERY element on EVERY lattice — INCLUDING
+    /// every element where the strict ∀ peer
+    /// [`Lattice::is_strict_upper_bound_of`] fires vacuously TRUE. The
+    /// empty-iterator vacuous-falsehood arm is the ONE cell where the
+    /// (∀, ∃) axis DIVERGES on the STRICT-arm N-ary Boolean bounds
+    /// face's upper arm — same split shape
+    /// [`Lattice::any_upper_bound_of`] carries on the non-strict arm
+    /// one STRICTNESS axis over AND
+    /// [`Lattice::any_strict_lower_bound_of`] carries on the dual meet
+    /// arm one MEET/JOIN axis over. Pinned over BOTH the total-order
+    /// axis (`DataClassification::ALL` — 6 elements) AND the antichain
+    /// axis (`SubstrateType::ALL` — 8 elements) so BOTH shape flavors
+    /// bind the strict vacuous-falsehood identity via ONE substrate
+    /// primitive.
+    #[test]
+    fn any_strict_upper_bound_of_is_vacuously_false_at_the_empty_iterator_over_every_element() {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        let empty_dc: [&DataClassification; 0] = [];
+        for a in DataClassification::ALL {
+            assert!(
+                !a.any_strict_upper_bound_of(empty_dc.iter().copied()),
+                "any_strict_upper_bound_of({a:?}, []) must be false — the empty \
+                 disjunction is vacuously false at every element, including every \
+                 element where is_strict_upper_bound_of fires vacuously true",
+            );
+        }
+        let empty_st: [&SubstrateType; 0] = [];
+        for a in SubstrateType::ALL {
+            assert!(
+                !a.any_strict_upper_bound_of(empty_st.iter().copied()),
+                "any_strict_upper_bound_of({a:?}, []) must be false on the pointed-top \
+                 antichain — the empty disjunction is vacuously false at every element",
+            );
+        }
+    }
+
+    /// [`Lattice::any_strict_upper_bound_of`] at arity 1 reduces to the
+    /// direction-flipped pairwise [`Lattice::strictly_below`] on the
+    /// sole element — the 1-input N-ary strict existential Boolean-
+    /// disjunction upper-bound predicate is the pairwise
+    /// `strictly_below` primitive with the operand arm as the
+    /// receiver's strict-below-witness. AGREES with
+    /// [`Lattice::is_strict_upper_bound_of`]'s singleton reduction at
+    /// arity 1 — both quantifiers collapse to the same per-element
+    /// strict predicate when the iterator yields exactly one element.
+    /// Dual of [`Lattice::any_strict_lower_bound_of`]'s arity-1 seal
+    /// on the meet arm one MEET/JOIN axis over — the strict-existential
+    /// arity-1 reduction drops the reflexive diagonal from the ∃
+    /// witness set on the direction-flipped arm. Pinned exhaustively
+    /// over `DataClassification::ALL^2` (36 pairs).
+    #[test]
+    fn any_strict_upper_bound_of_arity_1_reduces_to_strictly_below_over_data_classification_all_pairs(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    a.any_strict_upper_bound_of([&b]),
+                    b.strictly_below(&a),
+                    "any_strict_upper_bound_of({a:?}, [{b:?}]) drifted from \
+                     strictly_below({b:?}, {a:?}) — the arity-1 strict existential \
+                     N-ary upper-bound predicate must reduce to the direction-flipped \
+                     pairwise strictly_below primitive on the sole element",
+                );
+                assert_eq!(
+                    a.any_strict_upper_bound_of([&b]),
+                    a.is_strict_upper_bound_of([&b]),
+                    "any_strict_upper_bound_of({a:?}, [{b:?}]) drifted from \
+                     is_strict_upper_bound_of({a:?}, [{b:?}]) — the two quantifiers \
+                     must agree at arity 1 by collapsing to the same per-element \
+                     direction-flipped strictly_below",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::any_strict_upper_bound_of`] REJECTS a self-only
+    /// iterable at every element over [`DataClassification`] — the
+    /// strict predicate is irreflexive on any reflexive-only ∃ witness
+    /// set. `self.any_strict_upper_bound_of([&self]) == false` at every
+    /// arity when the iterable contains ONLY `self`, while the non-
+    /// strict [`Lattice::any_upper_bound_of`] fires reflexively on the
+    /// same input. Same irreflexive-diagonal exclusion carried on the
+    /// ∀ arm by [`Lattice::is_strict_upper_bound_of`] AND on the dual
+    /// meet arm by [`Lattice::any_strict_lower_bound_of`]. Pinned as
+    /// a specific contrast against the non-strict version and against
+    /// self-inclusive multi-element iterables where a non-reflexive
+    /// witness recovers the ∃.
+    #[test]
+    fn any_strict_upper_bound_of_rejects_self_only_iterable_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            // Self-only singleton — strict ∃ rejects on the reflexive
+            // diagonal, non-strict ∃ accepts by reflexivity of leq.
+            assert!(
+                !a.any_strict_upper_bound_of([&a]),
+                "any_strict_upper_bound_of([&{a:?}]) at {a:?} must be false — the \
+                 strict predicate is irreflexive on its self-only ∃ witness set",
+            );
+            assert!(a.any_upper_bound_of([&a]));
+            // Self-only two-element iterable — same rejection.
+            assert!(
+                !a.any_strict_upper_bound_of([&a, &a]),
+                "any_strict_upper_bound_of([&{a:?}, &{a:?}]) at {a:?} must be false — \
+                 the strict predicate rejects every self-only ∃ witness set",
+            );
+        }
+    }
+
+    /// [`Lattice::top`] is a STRICT upper bound of AT LEAST ONE element
+    /// of every iterable containing a NON-TOP element over
+    /// [`DataClassification`] — `T::top().any_strict_upper_bound_of(
+    /// iter)` fires true whenever `iter` contains at least one non-top
+    /// `x`, because `x.strictly_below(&T::top()) == true` at every
+    /// non-top `x` by the lattice-top axiom composed with
+    /// [`Lattice::strictly_below`]'s irreflexive-diagonal exclusion.
+    /// On the empty iterable AND the top-only iterable the strict ∃
+    /// arm fires false — the strict-arm universal-top witness carries
+    /// a NARROWER hypothesis than [`Lattice::any_upper_bound_of`]'s
+    /// (which fires on every non-empty iterable) because the strict
+    /// predicate excludes the reflexive-top diagonal. Dual of
+    /// [`Lattice::any_strict_lower_bound_of`]'s universal-bottom
+    /// witness one MEET/JOIN axis over. Pinned exhaustively over
+    /// `DataClassification::ALL^2` (36 iterable pairs + the two edge
+    /// cases).
+    #[test]
+    fn top_is_any_strict_upper_bound_of_every_iterable_with_a_nontop_element_over_data_classification(
+    ) {
+        use tatara_process::classification::DataClassification;
+        let top = DataClassification::top();
+        let empty: [&DataClassification; 0] = [];
+        assert!(
+            !top.any_strict_upper_bound_of(empty.iter().copied()),
+            "any_strict_upper_bound_of(top, []) must be false — the empty \
+             disjunction is vacuously false even at the lattice-top element",
+        );
+        assert!(
+            !top.any_strict_upper_bound_of([&top]),
+            "any_strict_upper_bound_of(top, [top]) must be false — the strict \
+             predicate is irreflexive on the reflexive-top diagonal",
+        );
+        for a in DataClassification::ALL {
+            if a != top {
+                assert!(
+                    top.any_strict_upper_bound_of([&a]),
+                    "any_strict_upper_bound_of(top, [{a:?}]) must be true — \
+                     {a:?}.strictly_below(top) holds by the lattice-top axiom \
+                     composed with strictly_below's irreflexive-diagonal exclusion",
+                );
+            }
+            for b in DataClassification::ALL {
+                if a != top || b != top {
+                    assert!(
+                        top.any_strict_upper_bound_of([&a, &b]),
+                        "any_strict_upper_bound_of(top, [{a:?}, {b:?}]) must be \
+                         true whenever the iterable contains at least one non-top \
+                         element — the non-top witness fires the ∃ via \
+                         strictly_below(top)",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strict_upper_bound_of`] REFINES [`Lattice::
+    /// any_upper_bound_of`] at EVERY iterable over
+    /// [`DataClassification`] (empty case included) —
+    /// `a.any_strict_upper_bound_of(iter) ⇒ a.any_upper_bound_of(iter)`
+    /// because `x.strictly_below(a) ⇒ x.leq(a)` at every element
+    /// position, and [`Iterator::any`]-of-refining-predicates lifts to
+    /// the same implication at the aggregate. The strict-minus-non-
+    /// strict gap on the ∃-aggregate is exactly the iterables whose
+    /// ∃ witnesses on the non-strict arm are all reflexive-`self`.
+    /// UNIFORM refinement (holds on the empty iterable too) unlike the
+    /// ∀ ⇒ ∃ refinement one QUANTIFIER axis away which splits at the
+    /// empty case. Dual of [`Lattice::any_strict_lower_bound_of`]'s
+    /// uniform refinement seal on the meet arm one MEET/JOIN axis over.
+    /// Pinned exhaustively over `DataClassification::ALL` (6 elements)
+    /// × `DataClassification::ALL^2` (36 pairs + empty case) = 222
+    /// (element, iterable) combinations.
+    #[test]
+    fn any_strict_upper_bound_of_refines_any_upper_bound_of_over_data_classification_all() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            let empty: [&DataClassification; 0] = [];
+            if a.any_strict_upper_bound_of(empty.iter().copied()) {
+                assert!(a.any_upper_bound_of(empty.iter().copied()));
+            }
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let iter: [&DataClassification; 2] = [&b, &c];
+                    if a.any_strict_upper_bound_of(iter) {
+                        assert!(
+                            a.any_upper_bound_of(iter),
+                            "any_strict_upper_bound_of({a:?}, [{b:?}, {c:?}]) ⇒ \
+                             any_upper_bound_of({a:?}, [{b:?}, {c:?}]) refinement \
+                             failed — the strict ∃ refines the non-strict ∃ at every \
+                             iterable via strictly_below ⇒ leq on the direction-\
+                             flipped arm",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_upper_bound_of`] REFINES [`Lattice::
+    /// any_strict_upper_bound_of`] on non-empty iterables over
+    /// [`DataClassification`] — `a.is_strict_upper_bound_of(iter) &&
+    /// iter is non-empty ⇒ a.any_strict_upper_bound_of(iter)`. The
+    /// ∀ ⇒ ∃ implication holds on every non-empty iterable via the
+    /// [`Iterator::any`] / [`Iterator::all`] refinement — every
+    /// witnessing element in the strict ∀ conjunction also witnesses
+    /// the strict ∃ disjunction. The (∀, ∃) axis SPLITS on the empty
+    /// case: the ∀ arm fires vacuously true, the ∃ arm fires vacuously
+    /// false, so the implication fails only at the empty iterable.
+    /// Same ∀ ⇒ ∃ refinement peer that [`Lattice::any_upper_bound_of`]
+    /// carries against [`Lattice::is_upper_bound_of`] one STRICTNESS
+    /// axis over on the non-strict arm AND that
+    /// [`Lattice::any_strict_lower_bound_of`] carries against
+    /// [`Lattice::is_strict_lower_bound_of`] one MEET/JOIN axis over
+    /// on the dual meet arm. Pinned exhaustively over
+    /// `DataClassification::ALL` (6 elements) ×
+    /// `DataClassification::ALL^2` (36 non-empty pairs) = 216
+    /// (element, iterable) combinations.
+    #[test]
+    fn is_strict_upper_bound_of_refines_any_strict_upper_bound_of_on_nonempty_data_classification_iterables(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let iter: [&DataClassification; 2] = [&b, &c];
+                    if a.is_strict_upper_bound_of(iter) {
+                        assert!(
+                            a.any_strict_upper_bound_of(iter),
+                            "is_strict_upper_bound_of({a:?}, [{b:?}, {c:?}]) ⇒ \
+                             any_strict_upper_bound_of({a:?}, [{b:?}, {c:?}]) \
+                             refinement failed on a non-empty iterable — the strict \
+                             ∀ ⇒ ∃ implication is universal on non-empty iterables",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strict_upper_bound_of`] on the pointed-top
+    /// antichain (e.g. [`SubstrateType`]) projects to the strict-half-
+    /// edge shape on the RECEIVER side: a distinct-non-top element
+    /// `self` is NEVER a strict upper bound of any antichain element
+    /// (since every distinct non-top pair is incomparable so
+    /// `strictly_below` fails on the flipped direction, AND the
+    /// reflexive-self diagonal is excluded by irreflexivity), so
+    /// `self.any_strict_upper_bound_of(iter)` fires ONLY when `self`
+    /// IS [`SubstrateType::top`] AND `iter` contains a non-top element.
+    /// Pinned via four discriminating cases: reflexive-self singleton
+    /// (rejects — irreflexivity), distinct-non-top singleton (rejects
+    /// — incomparability), top-receiver singleton (fires — strict
+    /// half-edge on the receiver side), non-top-receiver with mixed
+    /// iterable containing top (rejects — top does not
+    /// strictly-below a non-top receiver). Dual of the antichain
+    /// projection [`Lattice::any_strict_lower_bound_of`] carries on
+    /// the meet arm one MEET/JOIN axis over — the strict half-edge
+    /// flips receiver-vs-witness sides at the (lower, upper) axis flip.
+    #[test]
+    fn any_strict_upper_bound_of_projects_the_pointed_top_antichain_over_substrate_type_all() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        let compute = SubstrateType::Compute;
+        let storage = SubstrateType::Storage;
+        // Reflexive-self singleton — strict predicate rejects on
+        // irreflexive-diagonal exclusion.
+        assert!(
+            !compute.any_strict_upper_bound_of([&compute]),
+            "any_strict_upper_bound_of({compute:?}, [{compute:?}]) must be false — \
+             strictly_below is irreflexive so the reflexive-self diagonal is \
+             excluded from the ∃ witness set",
+        );
+        // Distinct-non-top singleton — incomparable pair rejects.
+        assert!(
+            !compute.any_strict_upper_bound_of([&storage]),
+            "any_strict_upper_bound_of({compute:?}, [{storage:?}]) must be false — \
+             {storage:?} and {compute:?} are incomparable on the antichain so \
+             strictly_below fails on the sole element",
+        );
+        // Top-receiver singleton — the strict half-edge fires on the
+        // receiver side of the pointed-top antichain.
+        assert!(
+            top.any_strict_upper_bound_of([&compute]),
+            "any_strict_upper_bound_of(top, [{compute:?}]) must be true — the \
+             pointed-top antichain's strict half-edge admits top as a strict upper \
+             bound of every non-top element",
+        );
+        // Mixed iterable with a top witness — top does NOT
+        // strictly-below a non-top receiver, so the ∃ still rejects.
+        let mixed: [&SubstrateType; 2] = [&storage, &top];
+        assert!(
+            !compute.any_strict_upper_bound_of(mixed),
+            "any_strict_upper_bound_of({compute:?}, [{storage:?}, top]) must be \
+             false — no element strictly-below a non-top {compute:?} receiver on \
+             the pointed-top antichain, top included (top has no strict upper bound)",
+        );
+        // Top receiver with a mixed iterable containing top itself —
+        // fires on the non-top witness even though top-only would
+        // reject.
+        let mixed_from_top: [&SubstrateType; 2] = [&top, &compute];
+        assert!(
+            top.any_strict_upper_bound_of(mixed_from_top),
+            "any_strict_upper_bound_of(top, [top, {compute:?}]) must be true — \
+             {compute:?} witnesses the strict ∃ via the pointed-top strict half-edge \
+             even though top itself does not",
+        );
+        // A non-top receiver is NOT a strict upper bound of any
+        // antichain element — irreflexive on self, incomparable on
+        // distinct non-top elements, and top does not strictly-below
+        // a non-top receiver.
+        for s in SubstrateType::ALL {
+            assert!(
+                !compute.any_strict_upper_bound_of([&s]),
+                "any_strict_upper_bound_of({compute:?}, [{s:?}]) must be false — \
+                 non-top {compute:?} has no strict lower bound on the pointed-top \
+                 antichain so no element can witness the strict ∃-upper arm",
             );
         }
     }

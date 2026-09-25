@@ -4226,6 +4226,197 @@ pub trait Lattice: Sized + Clone + PartialEq {
         let vs: Vec<&'a Self> = iter.into_iter().collect();
         vs.windows(2).all(|w| w[0].is_strictly_comparable(w[1]))
     }
+    /// Existential ∃-consecutive-pair peer of [`Lattice::is_ascending`]
+    /// on the QUANTIFIER axis — the iterated set contains AT LEAST ONE
+    /// ascending consecutive pair on the lattice's partial order.
+    /// `T::any_ascending_pair([&a, &b, &c])` holds iff `a.leq(&b) ||
+    /// b.leq(&c)`: SOME consecutive pair `(vs[i], vs[i + 1])` satisfies
+    /// `vs[i].leq(&vs[i + 1])`.
+    ///
+    /// The ∃-CONSECUTIVE-PAIR peer of [`Lattice::is_ascending`] one
+    /// QUANTIFIER axis over on the (∀, ∃) × (leq, geq) × (strict,
+    /// non-strict) sequence-shape 2×2×2 monotonicity cube — where
+    /// [`Lattice::is_ascending`] decides the ∀-conjunction (are ALL
+    /// consecutive pairs ascending), this decides the ∃-disjunction (is
+    /// SOME consecutive pair ascending) on the SAME `leq` arm at the
+    /// non-strict corner. Opens the ∃-consecutive-pair arm on the
+    /// sequence-shape face at the direction-fixed non-strict starting
+    /// corner — the first ∃-peer on a face whose eight prior
+    /// direction-fixed / direction-collapsed / direction-free / strict /
+    /// non-strict / equality members are all ∀-conjunctions
+    /// ([`Lattice::is_ascending`], [`Lattice::is_descending`],
+    /// [`Lattice::is_strictly_ascending`], [`Lattice::is_strictly_descending`],
+    /// [`Lattice::is_constant`], [`Lattice::is_monotone_sequence`],
+    /// [`Lattice::is_strictly_monotone_sequence`],
+    /// [`Lattice::is_comparable_sequence`],
+    /// [`Lattice::is_incomparable_sequence`],
+    /// [`Lattice::is_strictly_comparable_sequence`]). Parallels the same
+    /// (∀, ∃) axis widening that lifted [`Lattice::any_lower_bound_of`]
+    /// from [`Lattice::is_lower_bound_of`] on the N-ary Boolean bounds
+    /// face — first-class algebra method every closed-set impl picks up
+    /// mechanically.
+    ///
+    /// **Empty-iterator vacuous falsehood**: `T::any_ascending_pair(std::
+    /// iter::empty()) == false` on every lattice — [`slice::windows`] on
+    /// a zero-length slice yields no pair, so [`Iterator::any`] on the
+    /// empty iterator is `false`. DIVERGES from [`Lattice::is_ascending`]'s
+    /// vacuous-TRUE arm at the empty case — this is the primary
+    /// distinguishing consequence of moving from the vacuous-conjunction
+    /// convention (∀ over ∅ = true) to the vacuous-disjunction convention
+    /// (∃ over ∅ = false). Same (∀, ∃) empty-case split carried on the
+    /// N-ary Boolean bounds face by [`Lattice::is_lower_bound_of`]'s
+    /// vacuous-true / [`Lattice::any_lower_bound_of`]'s vacuous-false
+    /// pair.
+    ///
+    /// **Singleton vacuous falsehood**: `T::any_ascending_pair([&a]) ==
+    /// false` for every `a` — a singleton has no consecutive pair, so
+    /// [`slice::windows`] yields no pair on the length-1 slice and
+    /// [`Iterator::any`] fires false. Same vacuous-∃-falsehood arm as the
+    /// empty-iterator case — every arity-0-and-arity-1 slice rejects.
+    /// DIVERGES from every ∀-consecutive-pair sequence-shape predicate's
+    /// singleton vacuous-TRUE arm.
+    ///
+    /// **Pair-identity**: `T::any_ascending_pair([&a, &b]) == a.leq(&b)`
+    /// — the 2-input ∃-ascending predicate reduces to the pairwise
+    /// [`Lattice::leq`] primitive on the sole consecutive pair, AGREEING
+    /// with [`Lattice::is_ascending`]'s pair-identity at arity 2 (both
+    /// quantifiers collapse to the same per-pair predicate when the slice
+    /// yields exactly one consecutive pair). Same arity-2 (∀ ⇔ ∃)
+    /// collapse the N-ary Boolean bounds cube's (∀, ∃) faces carry at
+    /// arity 1 — one CONSECUTIVE-PAIR axis over from the arity-1 face on
+    /// the N-ary Boolean bounds cube, the (∀, ∃) axis collapses at the
+    /// smallest witnessing slice.
+    ///
+    /// **Consecutive-duplicate acceptance**: `T::any_ascending_pair([&a,
+    /// &a]) == true` for every `a` — [`Lattice::leq`] is REFLEXIVE (its
+    /// default is `self.meet(other) == *self`, which reflexively fires
+    /// true on the self-pair), so the sole consecutive pair `(a, a)`
+    /// satisfies `a.leq(&a)` and [`Iterator::any`] fires true. Shared
+    /// reflexive-diagonal arm with [`Lattice::is_ascending`]'s
+    /// consecutive-duplicate acceptance — the pair predicate fires
+    /// UNCONDITIONALLY on any slice containing a consecutive-duplicate
+    /// pair anywhere in it. DIVERGES from a hypothetical strict ∃-peer
+    /// on the [`Lattice::strictly_below`] arm (a future
+    /// `any_strict_ascending_pair`), which would reject the reflexive
+    /// diagonal by irreflexivity of the strict comparator.
+    ///
+    /// **Refines FROM [`Lattice::is_ascending`] on iterables with at
+    /// least one consecutive pair**: `T::is_ascending(iter) && iter has
+    /// at least 2 elements ⇒ T::any_ascending_pair(iter)` — every
+    /// witnessing pair in the ∀-conjunction also witnesses the
+    /// ∃-disjunction. The (∀ ⇒ ∃) implication holds ONLY on slices with
+    /// at least one consecutive pair (arity ≥ 2) since the empty and
+    /// singleton arms split (∀ true, ∃ false). Same ∀ ⇒ ∃ refinement
+    /// peer that [`Lattice::any_lower_bound_of`] carries against
+    /// [`Lattice::is_lower_bound_of`] on the N-ary Boolean bounds face
+    /// one CONSECUTIVE-PAIR-VS-N-ARY axis over — the empty-case split is
+    /// the SHARED empty-arity divergence carried across every (∀, ∃) axis
+    /// of this algebra.
+    ///
+    /// **Refines FROM [`Lattice::is_strictly_ascending`] on iterables
+    /// with at least one consecutive pair**: `T::is_strictly_ascending(
+    /// iter) && iter has at least 2 elements ⇒ T::any_ascending_pair(
+    /// iter)` — the strict pairwise-primitive
+    /// [`Lattice::strictly_below`] refines [`Lattice::leq`] at every
+    /// pair (`self.leq(other) && self != other ⇒ self.leq(other)` by
+    /// projection onto the first conjunct), so a strict-ascending
+    /// witnessing pair also witnesses the non-strict ∃-disjunction on
+    /// [`Iterator::any`]. Composes the STRICTNESS-AXIS refinement
+    /// (strict ⇒ non-strict at every pair) with the QUANTIFIER-AXIS
+    /// refinement (∀ ⇒ ∃ on non-empty-non-singleton) at ONE ∃-arm
+    /// aggregate.
+    ///
+    /// **Complements [`Lattice::is_strictly_descending`] on iterables
+    /// with at least one consecutive pair**: `!T::any_ascending_pair(
+    /// iter) && iter has at least 2 elements ⟺ T::is_strictly_descending(
+    /// iter)` — the negation of "some pair is `leq`" is "every pair is
+    /// NOT `leq`", which on a total order (e.g. [`DataClassification`])
+    /// coincides with "every pair is strictly greater", i.e.
+    /// [`Lattice::is_strictly_descending`]. On a partial order the
+    /// negation is "every pair fails `leq`", which admits both strictly-
+    /// descending pairs AND incomparable pairs — the exact ⟺ complement
+    /// identity holds on totally-ordered lattices; on the pointed-top
+    /// antichain it splits into "every pair is strictly-descending OR
+    /// incomparable" one PARTIAL-ORDER-VS-TOTAL-ORDER axis over. Pinned
+    /// on the [`DataClassification`] total-order axis below.
+    ///
+    /// **Any-witnessing-consecutive-pair acceptance**: if any consecutive
+    /// pair `(vs[i], vs[i + 1])` satisfies `vs[i].leq(&vs[i + 1])`, then
+    /// `T::any_ascending_pair(iter) == true` — [`Iterator::any`] on
+    /// [`slice::windows`] short-circuits at the first witnessing pair.
+    /// Dual short-circuit behaviour to [`Lattice::is_ascending`]'s
+    /// any-violating-pair rejection on the ∀ arm one QUANTIFIER axis
+    /// over.
+    ///
+    /// **Antichain projection**: on the pointed-top antichain (e.g.
+    /// [`SubstrateType`]), the ∃-∨ predicate accepts a slice iff it
+    /// contains AT LEAST ONE consecutive pair `(a, b)` with `a.leq(&b)`,
+    /// which on the pointed-top antichain fires exactly when `a == b`
+    /// (the reflexive diagonal) OR `b == top` (the top-directed
+    /// half-edge). Rejects a slice whose every consecutive pair is a
+    /// distinct-non-top incomparable pair — a stronger acceptance
+    /// filter than the total-order case where every consecutive pair
+    /// either ascends or strictly-descends. Peer of
+    /// [`Lattice::is_ascending`]'s antichain-projection on the ∃ arm —
+    /// the ∀-∧ arm required EVERY consecutive pair to fire the pointed-
+    /// top acceptance filter (reflexive OR top-directed), the ∃-∨ arm
+    /// requires SOME consecutive pair to fire it.
+    ///
+    /// Default routes through `iter.into_iter().collect::<Vec<&Self>>()`
+    /// followed by `.windows(2).any(|w| w[0].leq(w[1]))` — one
+    /// [`Lattice::leq`] delegation per consecutive pair on the collected
+    /// buffer with [`Iterator::any`] short-circuiting at the first
+    /// witness, mirroring [`Lattice::is_ascending`]'s walk with the ∀-∧
+    /// aggregator swapped for the ∃-∨ aggregator. The collect materializes
+    /// the iterator once so the walk operates on a stable slice. A future
+    /// normalization at [`Lattice::leq`] lands at ONE site and this
+    /// default inherits mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the ∃-consecutive-pair ascending predicate is itself a
+    /// typed named `bool` composing [`Lattice::leq`] via [`slice::windows`]
+    /// plus [`Iterator::any`]; every downstream lattice-law consumer
+    /// inherits the predicate through the default mechanically) +
+    /// THEORY.md §III (typescape — the ∃-consecutive-pair ascending arm
+    /// on every classification-axis lattice binds at ONE substrate owner
+    /// on the [`Lattice`] algebra rather than at each consumer's hand-
+    /// authored `vs.windows(2).any(|w| w[0].leq(&w[1]))` walk).
+    ///
+    /// Frontier inspiration: order-theory's monotonicity-detection ∃
+    /// predicates on the CONSECUTIVE-PAIR arm (does the sequence contain
+    /// a locally-monotone step) + Racket's `ormap` / Haskell's `any`
+    /// composed with the pairwise partial-order relation. Rust's stdlib
+    /// carries [`Iterator::any`] and [`PartialOrd::le`] but not an
+    /// N-ary `windows(2).any(|w| w[0] <= w[1])` predicate on
+    /// [`PartialOrd`] — the sequence-shape ∃-consecutive-pair predicate
+    /// is a first-class named method the standard library does not
+    /// expose. Translated: threaded the same ∃-consecutive-pair shape
+    /// through the [`Lattice`] trait's default-method surface as the
+    /// QUANTIFIER-AXIS peer of [`Lattice::is_ascending`] on the non-
+    /// strict `leq` arm — the FIRST ∃-consecutive-pair peer on the
+    /// sequence-shape face, opening the (∀, ∃) × (leq, geq) × (strict,
+    /// non-strict) sequence-shape 2×2×2 monotonicity cube's ∃ arm at
+    /// the direction-fixed non-strict starting corner (parallel to how
+    /// [`Lattice::is_ascending`] was the first direction-fixed
+    /// sequential ∀ predicate added at 24711e0). Future widenings fill
+    /// the remaining seven ∃-cube corners (`any_descending_pair`,
+    /// `any_strict_ascending_pair`, `any_strict_descending_pair`,
+    /// `any_monotone_pair`, `any_strict_monotone_pair`,
+    /// `any_comparable_pair`, `any_constant_pair`) at ONE algebra owner
+    /// rather than at each consumer's hand-authored `windows(2).any(...)`
+    /// walk — the same face-completion move MLIR's dialect-conversion
+    /// library performs when it saturates a transformation dialect's
+    /// op-signature combinator surface at one canonical rewriter, and
+    /// that Lean's mathlib performs when it seals an order-theoretic
+    /// predicate face at one `instance` definition.
+    fn any_ascending_pair<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).any(|w| w[0].leq(w[1]))
+    }
     /// N-ary interval-containment predicate — EVERY element the iterator
     /// yields sits inside the closed bracket `[low, high]` on the
     /// lattice's partial order. `T::all_between(&low, &high, [&a, &b,
@@ -15312,6 +15503,327 @@ mod tests {
                  antichain so no element can witness the strict ∃-upper arm",
             );
         }
+    }
+
+    /// [`Lattice::any_ascending_pair`] is VACUOUSLY FALSE at the empty
+    /// iterator on both [`DataClassification`] (total order) and
+    /// [`SubstrateType`] (pointed-top antichain) — the ∃-consecutive-pair
+    /// disjunction has no pair to witness on a zero-length slice, so
+    /// [`Iterator::any`] on the empty windows-of-2 iterator fires false.
+    /// DIVERGES from [`Lattice::is_ascending`]'s vacuous-TRUE arm at the
+    /// same empty case — same (∀, ∃) empty-arity split carried on the
+    /// N-ary Boolean bounds face by
+    /// [`Lattice::is_lower_bound_of`]'s vacuous-true /
+    /// [`Lattice::any_lower_bound_of`]'s vacuous-false pair.
+    #[test]
+    fn any_ascending_pair_is_vacuously_false_at_the_empty_iterator_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        let empty_dc: [&DataClassification; 0] = [];
+        assert!(
+            !DataClassification::any_ascending_pair(empty_dc.iter().copied()),
+            "any_ascending_pair([]) must be false — the empty ∃-disjunction has no \
+             consecutive pair to witness",
+        );
+        assert!(
+            DataClassification::is_ascending(empty_dc.iter().copied()),
+            "is_ascending([]) must be true — the (∀, ∃) axis diverges at the empty case",
+        );
+        let empty_st: [&SubstrateType; 0] = [];
+        assert!(
+            !SubstrateType::any_ascending_pair(empty_st.iter().copied()),
+            "any_ascending_pair([]) must be false on the pointed-top antichain too — \
+             the empty ∃-disjunction has no consecutive pair to witness on any lattice",
+        );
+    }
+
+    /// [`Lattice::any_ascending_pair`] is VACUOUSLY FALSE on every
+    /// singleton over [`DataClassification`] and [`SubstrateType`] — a
+    /// length-1 slice yields no [`slice::windows`]-of-2 pair, so
+    /// [`Iterator::any`] fires false. Same vacuous-∃-falsehood arm as
+    /// the empty-iterator case — every arity-0-and-arity-1 slice
+    /// rejects the ∃-consecutive-pair walk. DIVERGES from every
+    /// ∀-consecutive-pair sequence-shape predicate's singleton
+    /// vacuous-TRUE arm (they all fire true on a singleton because the
+    /// empty windows-of-2 conjunction is vacuous). Pinned exhaustively
+    /// over `DataClassification::ALL` (6 singletons) and
+    /// `SubstrateType::ALL` (7 singletons).
+    #[test]
+    fn any_ascending_pair_is_vacuously_false_on_every_singleton_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            assert!(
+                !DataClassification::any_ascending_pair([&a]),
+                "any_ascending_pair([&{a:?}]) must be false — a singleton has no \
+                 consecutive pair, so the ∃-disjunction fires vacuously false",
+            );
+            assert!(
+                DataClassification::is_ascending([&a]),
+                "is_ascending([&{a:?}]) must be true — the (∀, ∃) axis diverges at \
+                 every singleton",
+            );
+        }
+        for s in SubstrateType::ALL {
+            assert!(
+                !SubstrateType::any_ascending_pair([&s]),
+                "any_ascending_pair([&{s:?}]) must be false on the pointed-top \
+                 antichain — a singleton has no consecutive pair on any lattice",
+            );
+        }
+    }
+
+    /// [`Lattice::any_ascending_pair`] at arity 2 reduces to the
+    /// pairwise [`Lattice::leq`] on the sole consecutive pair — the
+    /// 2-input ∃-consecutive-pair ascending predicate is the pairwise
+    /// `leq` primitive on the sole pair. AGREES with
+    /// [`Lattice::is_ascending`]'s pair-identity at arity 2 — both
+    /// quantifiers collapse to the same per-pair predicate when the
+    /// slice yields exactly one consecutive pair. Pinned exhaustively
+    /// over `DataClassification::ALL^2` (36 pairs).
+    #[test]
+    fn any_ascending_pair_arity_2_reduces_to_leq_over_data_classification_all_pairs() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::any_ascending_pair([&a, &b]),
+                    a.leq(&b),
+                    "any_ascending_pair([{a:?}, {b:?}]) drifted from leq({a:?}, {b:?}) \
+                     — the arity-2 ∃-consecutive-pair ascending predicate must reduce \
+                     to the pairwise leq primitive on the sole consecutive pair",
+                );
+                assert_eq!(
+                    DataClassification::any_ascending_pair([&a, &b]),
+                    DataClassification::is_ascending([&a, &b]),
+                    "any_ascending_pair([{a:?}, {b:?}]) drifted from is_ascending \
+                     ([{a:?}, {b:?}]) — the two quantifiers must agree at arity 2 by \
+                     collapsing to the same per-pair leq",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::any_ascending_pair`] ACCEPTS every slice containing a
+    /// consecutive-duplicate pair over both [`DataClassification`] and
+    /// [`SubstrateType`] — the reflexive [`Lattice::leq`] arm accepts
+    /// `(a, a)` unconditionally at every element, so any slice with a
+    /// consecutive-duplicate pair anywhere in it fires the ∃ walk. Same
+    /// reflexive-diagonal acceptance arm as [`Lattice::is_ascending`]'s
+    /// consecutive-duplicate acceptance on the ∀ arm one QUANTIFIER
+    /// axis over. Pinned across both classification axes.
+    #[test]
+    fn any_ascending_pair_accepts_every_slice_with_a_consecutive_duplicate_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            assert!(
+                DataClassification::any_ascending_pair([&a, &a]),
+                "any_ascending_pair([{a:?}, {a:?}]) must be true — leq is reflexive so \
+                 the self-pair witnesses the ∃-consecutive-pair walk",
+            );
+        }
+        for s in SubstrateType::ALL {
+            assert!(
+                SubstrateType::any_ascending_pair([&s, &s]),
+                "any_ascending_pair([{s:?}, {s:?}]) must be true on the pointed-top \
+                 antichain too — reflexive leq fires on every self-pair on every lattice",
+            );
+        }
+        // A consecutive-duplicate pair anywhere in a longer slice still
+        // fires the ∃ walk.
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                let slice: [&SubstrateType; 3] = [&a, &b, &b];
+                assert!(
+                    SubstrateType::any_ascending_pair(slice),
+                    "any_ascending_pair([{a:?}, {b:?}, {b:?}]) must be true — the \
+                     trailing consecutive-duplicate pair ({b:?}, {b:?}) witnesses the \
+                     ∃-walk via reflexive leq, regardless of the leading pair",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::is_ascending`] REFINES [`Lattice::any_ascending_pair`]
+    /// on iterables with at least one consecutive pair over
+    /// [`DataClassification`] — `T::is_ascending(iter) && iter.len() ≥ 2
+    /// ⇒ T::any_ascending_pair(iter)` because every witnessing pair in
+    /// the ∀-conjunction also witnesses the ∃-disjunction. The (∀, ∃)
+    /// axis SPLITS on the empty and singleton arms: the ∀ arm fires
+    /// vacuously true, the ∃ arm fires vacuously false, so the
+    /// implication fails only on arity-0-and-arity-1 slices. Same
+    /// ∀ ⇒ ∃ refinement peer that [`Lattice::any_lower_bound_of`] carries
+    /// against [`Lattice::is_lower_bound_of`] one CONSECUTIVE-PAIR-VS-
+    /// N-ARY axis over on the N-ary Boolean bounds face. Pinned
+    /// exhaustively over `DataClassification::ALL^3` (216 triples) plus
+    /// the pair-level and singleton-level base cases.
+    #[test]
+    fn is_ascending_refines_any_ascending_pair_on_nonsingleton_data_classification_iterables() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                let pair: [&DataClassification; 2] = [&a, &b];
+                if DataClassification::is_ascending(pair) {
+                    assert!(
+                        DataClassification::any_ascending_pair(pair),
+                        "is_ascending([{a:?}, {b:?}]) ⇒ any_ascending_pair([{a:?}, \
+                         {b:?}]) refinement failed on a 2-element slice — the ∀ ⇒ ∃ \
+                         implication is universal on iterables with at least one \
+                         consecutive pair",
+                    );
+                }
+                for c in DataClassification::ALL {
+                    let triple: [&DataClassification; 3] = [&a, &b, &c];
+                    if DataClassification::is_ascending(triple) {
+                        assert!(
+                            DataClassification::any_ascending_pair(triple),
+                            "is_ascending([{a:?}, {b:?}, {c:?}]) ⇒ any_ascending_pair \
+                             ([{a:?}, {b:?}, {c:?}]) refinement failed on a triple — \
+                             the ∀ ⇒ ∃ implication is universal on iterables with at \
+                             least one consecutive pair",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strictly_ascending`] REFINES
+    /// [`Lattice::any_ascending_pair`] on iterables with at least one
+    /// consecutive pair over [`DataClassification`] —
+    /// `T::is_strictly_ascending(iter) && iter.len() ≥ 2 ⇒
+    /// T::any_ascending_pair(iter)` because the strict pairwise-primitive
+    /// [`Lattice::strictly_below`] refines [`Lattice::leq`] at every
+    /// pair, so a strict-ascending witnessing pair also witnesses the
+    /// non-strict ∃-disjunction. Composes the STRICTNESS-AXIS refinement
+    /// with the QUANTIFIER-AXIS refinement at ONE ∃-arm aggregate.
+    /// Pinned exhaustively over `DataClassification::ALL^3` (216
+    /// triples) plus the pair-level base case.
+    #[test]
+    fn is_strictly_ascending_refines_any_ascending_pair_on_nonsingleton_data_classification_iterables(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                let pair: [&DataClassification; 2] = [&a, &b];
+                if DataClassification::is_strictly_ascending(pair) {
+                    assert!(
+                        DataClassification::any_ascending_pair(pair),
+                        "is_strictly_ascending([{a:?}, {b:?}]) ⇒ any_ascending_pair \
+                         ([{a:?}, {b:?}]) refinement failed on a 2-element slice — \
+                         strict ⇒ non-strict at every pair, and the resulting \
+                         non-strict witness fires the ∃-walk",
+                    );
+                }
+                for c in DataClassification::ALL {
+                    let triple: [&DataClassification; 3] = [&a, &b, &c];
+                    if DataClassification::is_strictly_ascending(triple) {
+                        assert!(
+                            DataClassification::any_ascending_pair(triple),
+                            "is_strictly_ascending([{a:?}, {b:?}, {c:?}]) ⇒ \
+                             any_ascending_pair([{a:?}, {b:?}, {c:?}]) refinement \
+                             failed on a triple — the composed STRICTNESS + \
+                             QUANTIFIER refinement must hold on every non-empty-non- \
+                             singleton iterable",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_ascending_pair`] and
+    /// [`Lattice::is_strictly_descending`] are BOOLEAN COMPLEMENTS on
+    /// iterables with at least one consecutive pair over
+    /// [`DataClassification`] (a totally-ordered lattice) —
+    /// `!T::any_ascending_pair(iter) && iter.len() ≥ 2 ⟺
+    /// T::is_strictly_descending(iter)`. On a total order the negation
+    /// of "some pair is `leq`" is "every pair is NOT `leq`", which
+    /// coincides with "every pair is strictly greater" because the
+    /// order is total (no incomparable pairs). Pinned exhaustively over
+    /// `DataClassification::ALL^2` (36 pairs) and
+    /// `DataClassification::ALL^3` (216 triples).
+    #[test]
+    fn any_ascending_pair_complements_is_strictly_descending_on_nonsingleton_data_classification_iterables(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                let pair: [&DataClassification; 2] = [&a, &b];
+                assert_eq!(
+                    !DataClassification::any_ascending_pair(pair),
+                    DataClassification::is_strictly_descending(pair),
+                    "!any_ascending_pair([{a:?}, {b:?}]) drifted from \
+                     is_strictly_descending([{a:?}, {b:?}]) — on a total order the \
+                     ∃-leq negation and the ∀-strictly_above conjunction agree at \
+                     every non-empty-non-singleton iterable",
+                );
+                for c in DataClassification::ALL {
+                    let triple: [&DataClassification; 3] = [&a, &b, &c];
+                    assert_eq!(
+                        !DataClassification::any_ascending_pair(triple),
+                        DataClassification::is_strictly_descending(triple),
+                        "!any_ascending_pair([{a:?}, {b:?}, {c:?}]) drifted from \
+                         is_strictly_descending([{a:?}, {b:?}, {c:?}]) — the ⟺ \
+                         complement identity must hold on every non-empty-non- \
+                         singleton total-order iterable",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_ascending_pair`] projects the pointed-top
+    /// antichain over [`SubstrateType`] — a slice on the antichain
+    /// fires the ∃-∨ predicate iff it contains at least one consecutive
+    /// pair `(a, b)` with `a.leq(&b)`, which on the pointed-top
+    /// antichain requires either the reflexive diagonal (`a == b`) or
+    /// the top-directed half-edge (`b == top`). Rejects a slice whose
+    /// every consecutive pair is a distinct-non-top incomparable pair.
+    /// Peer of [`Lattice::is_ascending`]'s antichain-projection on the
+    /// ∃ arm — the ∀-∧ arm required EVERY consecutive pair to fire the
+    /// pointed-top acceptance filter, the ∃-∨ arm requires SOME
+    /// consecutive pair to fire it.
+    #[test]
+    fn any_ascending_pair_projects_the_pointed_top_antichain_over_substrate_type() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        let compute = SubstrateType::Compute;
+        let storage = SubstrateType::Storage;
+        // Distinct-non-top incomparable pair — rejected on the antichain.
+        assert!(
+            !SubstrateType::any_ascending_pair([&compute, &storage]),
+            "any_ascending_pair([{compute:?}, {storage:?}]) must be false — the pair \
+             is distinct-non-top incomparable on the pointed-top antichain",
+        );
+        // Reflexive diagonal — accepted by reflexive leq.
+        assert!(
+            SubstrateType::any_ascending_pair([&compute, &compute]),
+            "any_ascending_pair([{compute:?}, {compute:?}]) must be true — the \
+             reflexive self-pair fires the ∃-walk on every lattice",
+        );
+        // Top-directed half-edge — accepted by the pointed-top axiom.
+        assert!(
+            SubstrateType::any_ascending_pair([&compute, &top]),
+            "any_ascending_pair([{compute:?}, top]) must be true — the top-directed \
+             half-edge witnesses leq on the pointed-top antichain",
+        );
+        // Slice of all-distinct-non-top-incomparable pairs — rejected.
+        assert!(
+            !SubstrateType::any_ascending_pair([&compute, &storage, &compute]),
+            "any_ascending_pair([{compute:?}, {storage:?}, {compute:?}]) must be \
+             false — every consecutive pair is a distinct-non-top incomparable pair \
+             on the pointed-top antichain",
+        );
+        // Slice with a top-directed half-edge anywhere in it — accepted
+        // by the ∃-walk short-circuiting at the witnessing pair.
+        assert!(
+            SubstrateType::any_ascending_pair([&compute, &storage, &top]),
+            "any_ascending_pair([{compute:?}, {storage:?}, top]) must be true — the \
+             trailing ({storage:?}, top) top-directed half-edge witnesses the \
+             ∃-walk even though the leading pair is incomparable",
+        );
     }
 
     proptest! {

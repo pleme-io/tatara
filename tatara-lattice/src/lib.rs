@@ -5858,6 +5858,200 @@ pub trait Lattice: Sized + Clone + PartialEq {
         let vs: Vec<&'a Self> = iter.into_iter().collect();
         vs.windows(2).any(|w| w[0].is_incomparable(w[1]))
     }
+    /// Equality-arm ∃-consecutive-pair peer of [`Lattice::is_constant`] on the
+    /// QUANTIFIER axis — the iterated set contains AT LEAST ONE consecutive
+    /// pair of EQUAL elements on [`PartialEq`]. `T::any_constant_pair([&a,
+    /// &b, &c])` holds iff `a == b || b == c`: SOME consecutive pair
+    /// `(vs[i], vs[i + 1])` satisfies `vs[i] == vs[i + 1]`.
+    ///
+    /// Closes the (`<`, `≤`, `=`, `≥`, `>`) 5-arm ∃-consecutive-pair
+    /// trichotomy face at the LAST unpinned equality-arm corner — where
+    /// [`Lattice::any_ascending_pair`] and [`Lattice::any_descending_pair`]
+    /// pin the two non-strict directional arms, [`Lattice::
+    /// any_strict_ascending_pair`] and [`Lattice::any_strict_descending_pair`]
+    /// pin the two strict directional arms, this pins the equality arm —
+    /// closing the whole 5-arm sequence-shape ∃-consecutive-pair trichotomy
+    /// at ONE substrate default per cell. Also closes the (∀, ∃) × (=) ×
+    /// (consecutive-pair) 2×1×1 face at the ∃-arm equality-corner one
+    /// QUANTIFIER axis over from [`Lattice::is_constant`]. STRICTNESS axis
+    /// is ABSORBED on the equality arm via [`PartialEq`]'s reflexivity (a
+    /// "strict equality" arm would be empty on every lattice), same absorption
+    /// [`Lattice::is_constant`]'s docstring pins on the ∀ arm one QUANTIFIER
+    /// axis over.
+    ///
+    /// **Empty-iterator vacuous falsehood**: `T::any_constant_pair(std::iter::
+    /// empty()) == false` on every lattice — [`slice::windows`] on a
+    /// zero-length slice yields no pair, so [`Iterator::any`] on the empty
+    /// iterator is `false`. DIVERGES from [`Lattice::is_constant`]'s
+    /// vacuous-TRUE arm at the empty case — the (∀, ∃) axis toggles the
+    /// empty-arity verdict on the equality arm exactly as it does on every
+    /// direction-fixed arm and on the direction-free comparable arm. Shared
+    /// vacuous-∃-falsehood arm with every existing ∃-consecutive-pair peer
+    /// on the sequence-shape face ([`Lattice::any_ascending_pair`],
+    /// [`Lattice::any_descending_pair`], [`Lattice::any_strict_ascending_pair`],
+    /// [`Lattice::any_strict_descending_pair`], [`Lattice::any_comparable_pair`],
+    /// [`Lattice::any_strictly_comparable_pair`], [`Lattice::any_incomparable_pair`])
+    /// at the empty case — every ∃-consecutive-pair peer on the sequence-
+    /// shape face fires false on the empty iterator.
+    ///
+    /// **Singleton vacuous falsehood**: `T::any_constant_pair([&a]) == false`
+    /// for every `a` — a singleton has no consecutive pair, so
+    /// [`slice::windows`] yields no pair on the length-1 slice and
+    /// [`Iterator::any`] fires false. Shared vacuous-∃-falsehood arm with
+    /// every existing ∃-consecutive-pair peer at every singleton.
+    ///
+    /// **Pair-identity**: `T::any_constant_pair([&a, &b]) == (a == b)` — the
+    /// 2-input equality-arm ∃-consecutive-pair predicate reduces to the
+    /// [`PartialEq`] primitive on the sole consecutive pair, AGREEING with
+    /// [`Lattice::is_constant`]'s pair-identity at arity 2 (both quantifiers
+    /// collapse to the same per-pair predicate when the slice yields exactly
+    /// one consecutive pair). Peer of every direction-fixed and direction-
+    /// free ∃-consecutive-pair predicate's pair-identity at arity 2 with the
+    /// per-pair primitive swapped for [`PartialEq::eq`].
+    ///
+    /// **Reflexive-diagonal acceptance**: `T::any_constant_pair([&a, &a]) ==
+    /// true` for every `a` — [`PartialEq`] is REFLEXIVE by the supertrait
+    /// bound on [`Lattice`] itself, so the sole consecutive pair `(a, a)`
+    /// passes `a == a` and [`Iterator::any`] fires true. Shared reflexive-
+    /// diagonal acceptance arm with [`Lattice::any_ascending_pair`] and
+    /// [`Lattice::any_descending_pair`] on the non-strict directional arms;
+    /// DIVERGES from [`Lattice::any_strict_ascending_pair`], [`Lattice::
+    /// any_strict_descending_pair`], [`Lattice::any_strictly_comparable_pair`],
+    /// and [`Lattice::any_incomparable_pair`] which all REJECT the reflexive
+    /// self-pair via irreflexivity of their per-pair primitives. The
+    /// reflexive-diagonal verdict cleanly PARTITIONS the ∃-consecutive-pair
+    /// peers into the reflexive-accepting arms (`≤`, `=`, `≥`) and the
+    /// irreflexive-rejecting arms (`<`, `>`, incomparable).
+    ///
+    /// **Refines FROM [`Lattice::is_constant`] on iterables with at least one
+    /// consecutive pair**: `T::is_constant(iter) && iter has at least 2
+    /// elements ⇒ T::any_constant_pair(iter)` — every witnessing pair in the
+    /// ∀-conjunction also witnesses the ∃-disjunction. The (∀ ⇒ ∃)
+    /// implication holds ONLY on slices with at least one consecutive pair
+    /// (arity ≥ 2) since the empty and singleton arms split (∀ true, ∃
+    /// false). Peer of the same (∀ ⇒ ∃) refinement on every direction-fixed
+    /// and direction-free arm one AXIS-COMBINATION over.
+    ///
+    /// **Refines INTO both non-strict directional ∃-consecutive-pair peers**:
+    /// `T::any_constant_pair(iter) ⇒ T::any_ascending_pair(iter) &&
+    /// T::any_descending_pair(iter)` on every iterable — [`PartialEq::eq`]
+    /// is REFLEXIVE and the lattice's [`Lattice::leq`] / [`Lattice::geq`]
+    /// primitives are BOTH REFLEXIVE (each routes through the meet-idempotence
+    /// axiom `a ⊓ a = a`), so any witnessing equal pair `(a, a)` also
+    /// witnesses `a.leq(&a)` AND `a.geq(&a)` on the ∃-arm. This pins the
+    /// equality arm as the STRONGEST refinement corner on the (`<`, `≤`, `=`,
+    /// `≥`, `>`) 5-arm ∃-consecutive-pair trichotomy — a witnessing constant
+    /// pair implies BOTH non-strict directional witnesses AND (by transitivity
+    /// through [`Lattice::is_comparable`]) a direction-free comparable witness.
+    /// Peer of [`Lattice::is_constant`]'s refines-both-ascending-and-descending
+    /// pin on the ∃ arm one QUANTIFIER axis over.
+    ///
+    /// **Refines INTO [`Lattice::any_comparable_pair`]**: `T::any_constant_pair(
+    /// iter) ⇒ T::any_comparable_pair(iter)` on every iterable — [`PartialEq`]
+    /// reflexivity composed with [`Lattice::is_comparable`] reflexivity means
+    /// any witnessing equal pair `(a, a)` also witnesses `a.is_comparable(&a)`,
+    /// so the ∃-comparable walk finds the same witness. Peer of [`Lattice::
+    /// is_constant`]'s refines-chain arm on the ∃ arm one QUANTIFIER axis
+    /// over.
+    ///
+    /// **Refutes both strict directional AND direction-free strict
+    /// sequence-shape predicates on iterables where every consecutive pair
+    /// is equal**: `T::is_constant(iter) && iter has at least 2 elements ⇒
+    /// !T::is_strictly_ascending(iter) && !T::is_strictly_descending(iter)
+    /// && !T::is_strictly_monotone_sequence(iter) &&
+    /// !T::is_strictly_comparable_sequence(iter)` — the strict primitives are
+    /// ALL IRREFLEXIVE, so every consecutive equal-pair rejects every strict
+    /// walk. Peer of the same reflexive-vs-irreflexive partition on the ∀ arm
+    /// one QUANTIFIER axis over.
+    ///
+    /// **Reversal invariance**: `T::any_constant_pair(iter) ==
+    /// T::any_constant_pair(iter.rev())` on every collection — [`PartialEq`]
+    /// is SYMMETRIC (`a == b ⇔ b == a`) AND [`Iterator::any`]'s disjunction
+    /// is order-insensitive, so reversing the slice reverses each consecutive
+    /// pair and preserves the aggregated verdict. AGREES with [`Lattice::
+    /// is_constant`]'s reversal invariance on the ∃ arm one QUANTIFIER axis
+    /// over — the equality arm is REVERSAL-INVARIANT on both quantifier
+    /// corners, DIVERGING from the direction-fixed monotonicity arms
+    /// (order-dependent) and AGREEING with the direction-free comparability
+    /// arms (order-independent).
+    ///
+    /// **NOT permutation-invariant** on multiset inputs: depends on
+    /// CONSECUTIVE-ADJACENCY structure, so a permutation that separates a
+    /// duplicate pair by inserting a distinct element between them can flip
+    /// the verdict. Witness on any lattice with at least 3 distinct elements:
+    /// `[a, a, b]` fires true via the leading `(a, a)` consecutive pair;
+    /// the permutation `[a, b, a]` on the same multiset fires false because
+    /// neither consecutive pair is equal (the shared `a` is separated by
+    /// `b`). Peer of every ∃-consecutive-pair predicate's permutation-
+    /// non-invariance on the equality arm.
+    ///
+    /// **Total-order and antichain projections agree**: on both totally-
+    /// ordered lattices (e.g. [`DataClassification`], [`baseline::Baseline`],
+    /// [`CalmClassification`]) AND antichain lattices (e.g. [`SubstrateType`]),
+    /// the predicate accepts a consecutive pair iff both elements are equal —
+    /// same acceptance shape everywhere because the predicate depends only on
+    /// [`PartialEq`] equality and not on the lattice's partial order. This
+    /// is the CLEANEST projection of any ∃-consecutive-pair predicate onto
+    /// EVERY lattice impl: the equality arm is UNIVERSALLY well-behaved
+    /// because [`PartialEq`] is a supertrait bound that every impl satisfies
+    /// natively; the directional and comparability arms depend on `leq` /
+    /// `geq` / `strictly_below` / `strictly_above` / `is_comparable`
+    /// behavior that varies across impls (e.g. the antichain's [`Lattice::
+    /// leq`] admits only the pointed-top absorbing edge). Peer of [`Lattice::
+    /// is_constant`]'s clean projection on the ∃ arm one QUANTIFIER axis
+    /// over.
+    ///
+    /// Default routes through `iter.into_iter().collect::<Vec<&Self>>()`
+    /// followed by `.windows(2).any(|w| w[0] == w[1])` — one [`PartialEq::eq`]
+    /// delegation per consecutive pair on the collected buffer with
+    /// [`Iterator::any`] short-circuiting at the first witness, mirroring
+    /// [`Lattice::is_constant`]'s walk with the ∀-conjunction swapped to
+    /// the ∃-disjunction (which itself decomposes into per-pair [`PartialEq::
+    /// eq`] calls). The collect materializes the iterator once so the walk
+    /// operates on a stable slice — an [`IntoIterator`] that yields distinct
+    /// values on distinct calls would otherwise break the walk's determinism.
+    /// Because [`PartialEq`] is a supertrait bound on [`Lattice`] itself, the
+    /// default inherits universally on every impl without any per-impl
+    /// override.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the equality-arm ∃-consecutive-pair predicate is itself a
+    /// typed named `bool` composing [`PartialEq::eq`] via [`slice::windows`]
+    /// plus [`Iterator::any`]; every downstream lattice-law consumer inherits
+    /// the predicate through the default mechanically) + THEORY.md §III
+    /// (typescape — the equality-arm ∃-consecutive-pair predicate on every
+    /// classification-axis lattice binds at ONE substrate owner on the
+    /// [`Lattice`] algebra rather than at each consumer's hand-authored
+    /// `vs.windows(2).any(|w| w[0] == w[1])` walk).
+    ///
+    /// Frontier inspiration: the consecutive-duplicate existential predicate
+    /// is the natural characterization of "the sequence contains at least
+    /// one adjacent-equal pair somewhere in its adjacency structure" — the
+    /// primitive underlying every deduplication algorithm on the streaming
+    /// arm (Haskell's `Data.List.group`, Racket's `check-duplicates` on the
+    /// consecutive arm, Python `itertools.groupby`'s implicit consecutive-
+    /// equality partition). Rust's stdlib carries [`slice::windows`] and
+    /// [`Iterator::any`] and [`PartialEq::eq`], but no `iter.has_adjacent_duplicate()`
+    /// primitive on [`PartialEq`] (the composition `vs.windows(2).any(|w|
+    /// w[0] == w[1])` is idiomatic but hand-authored at each callsite).
+    /// Translated: threaded the same ∃-consecutive-pair equality shape
+    /// through the [`Lattice`] trait's default-method surface as the
+    /// QUANTIFIER-AXIS peer of [`Lattice::is_constant`] on the equality
+    /// arm — the eighth ∃-consecutive-pair peer on the sequence-shape face,
+    /// closing the (`<`, `≤`, `=`, `≥`, `>`) 5-arm ∃-consecutive-pair
+    /// trichotomy at the LAST unpinned equality-arm corner, the same face-
+    /// completion move MLIR's dialect-conversion library performs when it
+    /// saturates a transformation dialect's op-signature combinator surface
+    /// at one canonical rewriter, and that Lean's mathlib performs when it
+    /// seals an order-theoretic predicate face at one `instance` definition.
+    fn any_constant_pair<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).any(|w| w[0] == w[1])
+    }
     /// N-ary interval-containment predicate — EVERY element the iterator
     /// yields sits inside the closed bracket `[low, high]` on the
     /// lattice's partial order. `T::all_between(&low, &high, [&a, &b,
@@ -19946,6 +20140,412 @@ mod tests {
             "any_incomparable_pair([{compute:?}, {compute:?}, {compute:?}]) must be \
              false — every consecutive pair is a reflexive self-pair the irreflexive \
              incomparable primitive rejects",
+        );
+    }
+
+    // ── any_constant_pair — equality-arm ∃-consecutive-pair peer of is_constant
+
+    /// [`Lattice::any_constant_pair`] is vacuously FALSE at the empty iterator
+    /// on every closed-set impl — [`slice::windows`] on a zero-length slice
+    /// yields no pair, so [`Iterator::any`] on the empty iterator returns
+    /// `false`. DIVERGES from [`Lattice::is_constant`]'s vacuous-TRUE arm at
+    /// the empty case — the (∀, ∃) axis toggles the empty-arity verdict on
+    /// the equality arm exactly as it does on every direction-fixed arm and
+    /// on the direction-free comparable arm. Shared vacuous-∃-falsehood arm
+    /// with every existing ∃-consecutive-pair peer at the empty case.
+    /// Fail-before-pass-after: pre-lift the equality-arm ∃-consecutive-pair
+    /// predicate was empty on the trait, so this vacuous-falsehood arm did
+    /// not exist as a substrate primitive.
+    #[test]
+    fn any_constant_pair_is_vacuously_false_at_the_empty_iterator() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        assert!(!DataClassification::any_constant_pair(std::iter::empty()));
+        assert!(!CalmClassification::any_constant_pair(std::iter::empty()));
+        assert!(!SubstrateType::any_constant_pair(std::iter::empty()));
+    }
+
+    /// [`Lattice::any_constant_pair`] is vacuously FALSE at every singleton —
+    /// a singleton contains no consecutive pair, same empty-disjunction
+    /// identity as the empty arm. Pinned exhaustively over every variant of
+    /// every closed-set impl. DIVERGES from [`Lattice::is_constant`]'s
+    /// singleton vacuous-TRUE.
+    #[test]
+    fn any_constant_pair_is_vacuously_false_at_every_singleton() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(!DataClassification::any_constant_pair([&a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(!CalmClassification::any_constant_pair([&a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(!SubstrateType::any_constant_pair([&a]));
+        }
+    }
+
+    /// [`Lattice::any_constant_pair`] at arity 2 REDUCES to `a == b` on every
+    /// [`DataClassification`] pair — the 2-input equality-arm ∃-consecutive-
+    /// pair predicate collapses to the [`PartialEq`] primitive on the sole
+    /// consecutive pair, AGREEING with [`Lattice::is_constant`]'s pair-
+    /// identity at arity 2. Pinned exhaustively over `ALL^2` (36 pairs).
+    /// Fail-before-pass-after: the substrate had no pair-identity theorem on
+    /// the equality-arm ∃-consecutive-pair face before this lift.
+    #[test]
+    fn any_constant_pair_reduces_to_partial_eq_at_arity_2_over_data_classification() {
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::any_constant_pair([&a, &b]),
+                    a == b,
+                    "any_constant_pair([{a:?}, {b:?}]) drifted from a == b at arity 2 on \
+                     DataClassification",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::any_constant_pair`] at arity 2 REDUCES to `a == b` on every
+    /// [`SubstrateType`] pair — second-axis coverage of the pair-identity
+    /// theorem over the pointed-top antichain. Pinned exhaustively over
+    /// `ALL^2` (49 pairs). Because the predicate depends only on
+    /// [`PartialEq`] and not on the lattice's partial order, this projection
+    /// AGREES with the total-order projection above at every pair.
+    #[test]
+    fn any_constant_pair_reduces_to_partial_eq_at_arity_2_over_substrate_type() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                assert_eq!(
+                    SubstrateType::any_constant_pair([&a, &b]),
+                    a == b,
+                    "any_constant_pair([{a:?}, {b:?}]) drifted from a == b at arity 2 on \
+                     SubstrateType",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::any_constant_pair`] ACCEPTS every all-duplicate collection
+    /// at arity ≥ 2 — [`PartialEq`] is REFLEXIVE by the supertrait bound on
+    /// [`Lattice`] itself, so the leading consecutive pair `(a, a)` passes
+    /// `a == a` and [`Iterator::any`] short-circuits true. Shared reflexive-
+    /// diagonal acceptance arm with [`Lattice::any_ascending_pair`] and
+    /// [`Lattice::any_descending_pair`] on the non-strict directional arms.
+    /// Pinned on every closed-set impl at arity 3 to catch a regression that
+    /// swapped the [`PartialEq::eq`] delegation to a strict comparator.
+    #[test]
+    fn any_constant_pair_accepts_every_all_duplicate_collection() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            assert!(DataClassification::any_constant_pair([&a, &a]));
+            assert!(DataClassification::any_constant_pair([&a, &a, &a]));
+        }
+        for a in CalmClassification::ALL {
+            assert!(CalmClassification::any_constant_pair([&a, &a]));
+            assert!(CalmClassification::any_constant_pair([&a, &a, &a]));
+        }
+        for a in SubstrateType::ALL {
+            assert!(SubstrateType::any_constant_pair([&a, &a]));
+            assert!(SubstrateType::any_constant_pair([&a, &a, &a]));
+        }
+    }
+
+    /// [`Lattice::is_constant`] refines [`Lattice::any_constant_pair`] on
+    /// iterables with at least one consecutive pair — `T::is_constant(iter)
+    /// && iter.len() ≥ 2 ⇒ T::any_constant_pair(iter)` because every
+    /// witnessing pair in the ∀-conjunction also witnesses the ∃-disjunction.
+    /// Peer of the same (∀ ⇒ ∃) refinement on every direction-fixed and
+    /// direction-free arm one AXIS-COMBINATION over. Pinned exhaustively over
+    /// `DataClassification::ALL` and `SubstrateType::ALL` at arity 2 and 3.
+    #[test]
+    fn is_constant_refines_any_constant_pair_on_nonsingleton_iterables() {
+        use tatara_process::classification::SubstrateType;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                let pair = [&a, &b];
+                if DataClassification::is_constant(pair) {
+                    assert!(
+                        DataClassification::any_constant_pair(pair),
+                        "is_constant([{a:?}, {b:?}]) ⇒ any_constant_pair([{a:?}, {b:?}]) \
+                         refinement failed on DataClassification",
+                    );
+                }
+                for c in DataClassification::ALL {
+                    let triple = [&a, &b, &c];
+                    if DataClassification::is_constant(triple) {
+                        assert!(
+                            DataClassification::any_constant_pair(triple),
+                            "is_constant([{a:?}, {b:?}, {c:?}]) ⇒ any_constant_pair([\
+                             {a:?}, {b:?}, {c:?}]) refinement failed on \
+                             DataClassification",
+                        );
+                    }
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                let pair = [&a, &b];
+                if SubstrateType::is_constant(pair) {
+                    assert!(
+                        SubstrateType::any_constant_pair(pair),
+                        "is_constant([{a:?}, {b:?}]) ⇒ any_constant_pair([{a:?}, {b:?}]) \
+                         refinement failed on SubstrateType",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_constant_pair`] refines INTO both non-strict
+    /// directional ∃-consecutive-pair peers — `T::any_constant_pair(iter) ⇒
+    /// T::any_ascending_pair(iter) && T::any_descending_pair(iter)` on every
+    /// iterable, because [`Lattice::leq`] and [`Lattice::geq`] are BOTH
+    /// REFLEXIVE (each routes through the meet-idempotence axiom `a ⊓ a =
+    /// a`), so any witnessing equal pair `(a, a)` also witnesses both non-
+    /// strict directional walks. This pins the equality arm as the STRONGEST
+    /// refinement corner on the (`<`, `≤`, `=`, `≥`, `>`) 5-arm ∃-consecutive-
+    /// pair trichotomy. Pinned exhaustively over `DataClassification::ALL`
+    /// and `SubstrateType::ALL` at arity 2 and 3.
+    #[test]
+    fn any_constant_pair_refines_both_non_strict_directional_any_pair_predicates() {
+        use tatara_process::classification::SubstrateType;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                let pair = [&a, &b];
+                if DataClassification::any_constant_pair(pair) {
+                    assert!(
+                        DataClassification::any_ascending_pair(pair)
+                            && DataClassification::any_descending_pair(pair),
+                        "any_constant_pair([{a:?}, {b:?}]) ⇒ any_ascending_pair && \
+                         any_descending_pair refinement failed on DataClassification",
+                    );
+                }
+                for c in DataClassification::ALL {
+                    let triple = [&a, &b, &c];
+                    if DataClassification::any_constant_pair(triple) {
+                        assert!(
+                            DataClassification::any_ascending_pair(triple)
+                                && DataClassification::any_descending_pair(triple),
+                            "any_constant_pair([{a:?}, {b:?}, {c:?}]) ⇒ any_ascending_pair \
+                             && any_descending_pair refinement failed on \
+                             DataClassification",
+                        );
+                    }
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                let pair = [&a, &b];
+                if SubstrateType::any_constant_pair(pair) {
+                    assert!(
+                        SubstrateType::any_ascending_pair(pair)
+                            && SubstrateType::any_descending_pair(pair),
+                        "any_constant_pair([{a:?}, {b:?}]) ⇒ any_ascending_pair && \
+                         any_descending_pair refinement failed on SubstrateType",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_constant_pair`] refines INTO [`Lattice::
+    /// any_comparable_pair`] on every iterable — [`PartialEq`] reflexivity
+    /// composed with [`Lattice::is_comparable`] reflexivity means any
+    /// witnessing equal pair `(a, a)` also witnesses `a.is_comparable(&a)`.
+    /// Peer of [`Lattice::is_constant`]'s refines-chain arm on the ∃ arm
+    /// one QUANTIFIER axis over. Pinned exhaustively on the pointed-top
+    /// antichain where the direction-free comparable arm has a non-trivial
+    /// projection (unlike the totally-ordered lattices where any_comparable_pair
+    /// fires true universally at arity ≥ 2, making the refinement vacuous).
+    #[test]
+    fn any_constant_pair_refines_any_comparable_pair_over_substrate_type() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                let pair = [&a, &b];
+                if SubstrateType::any_constant_pair(pair) {
+                    assert!(
+                        SubstrateType::any_comparable_pair(pair),
+                        "any_constant_pair([{a:?}, {b:?}]) ⇒ any_comparable_pair([{a:?}, \
+                         {b:?}]) refinement failed on SubstrateType",
+                    );
+                }
+                for c in SubstrateType::ALL {
+                    let triple = [&a, &b, &c];
+                    if SubstrateType::any_constant_pair(triple) {
+                        assert!(
+                            SubstrateType::any_comparable_pair(triple),
+                            "any_constant_pair([{a:?}, {b:?}, {c:?}]) ⇒ any_comparable_pair \
+                             refinement failed on SubstrateType",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_constant_pair`] REFUTES every strict sequence-shape
+    /// predicate on iterables where every consecutive pair is equal — the
+    /// strict primitives are ALL IRREFLEXIVE, so every consecutive equal-pair
+    /// rejects every strict walk (`is_strictly_ascending`,
+    /// `is_strictly_descending`, `is_strictly_monotone_sequence`,
+    /// `is_strictly_comparable_sequence`, `any_strict_ascending_pair`,
+    /// `any_strict_descending_pair`, `any_strictly_comparable_pair`,
+    /// `any_incomparable_pair`). Pinned on every closed-set impl at every
+    /// all-duplicate slice of arity 3.
+    #[test]
+    fn any_constant_pair_refutes_every_strict_predicate_on_all_duplicate_slices() {
+        use tatara_process::classification::{
+            CalmClassification, DataClassification, SubstrateType,
+        };
+        for a in DataClassification::ALL {
+            let slice = [&a, &a, &a];
+            assert!(DataClassification::any_constant_pair(slice));
+            assert!(!DataClassification::is_strictly_ascending(slice));
+            assert!(!DataClassification::is_strictly_descending(slice));
+            assert!(!DataClassification::is_strictly_monotone_sequence(slice));
+            assert!(!DataClassification::is_strictly_comparable_sequence(slice));
+            assert!(!DataClassification::any_strict_ascending_pair(slice));
+            assert!(!DataClassification::any_strict_descending_pair(slice));
+            assert!(!DataClassification::any_strictly_comparable_pair(slice));
+            assert!(!DataClassification::any_incomparable_pair(slice));
+        }
+        for a in CalmClassification::ALL {
+            let slice = [&a, &a, &a];
+            assert!(CalmClassification::any_constant_pair(slice));
+            assert!(!CalmClassification::any_strict_ascending_pair(slice));
+            assert!(!CalmClassification::any_strict_descending_pair(slice));
+            assert!(!CalmClassification::any_strictly_comparable_pair(slice));
+            assert!(!CalmClassification::any_incomparable_pair(slice));
+        }
+        for a in SubstrateType::ALL {
+            let slice = [&a, &a, &a];
+            assert!(SubstrateType::any_constant_pair(slice));
+            assert!(!SubstrateType::any_strict_ascending_pair(slice));
+            assert!(!SubstrateType::any_strict_descending_pair(slice));
+            assert!(!SubstrateType::any_strictly_comparable_pair(slice));
+            assert!(!SubstrateType::any_incomparable_pair(slice));
+        }
+    }
+
+    /// [`Lattice::any_constant_pair`] is REVERSAL-INVARIANT on every
+    /// collection — [`PartialEq`] is SYMMETRIC (`a == b ⇔ b == a`) AND
+    /// [`Iterator::any`]'s disjunction is order-insensitive, so reversing
+    /// the slice reverses each consecutive pair and preserves the aggregated
+    /// verdict. AGREES with [`Lattice::is_constant`]'s reversal invariance
+    /// on the ∃ arm one QUANTIFIER axis over. Pinned exhaustively over
+    /// `DataClassification::ALL^3` (216 triples) and `SubstrateType::ALL^3`
+    /// (343 triples).
+    #[test]
+    fn any_constant_pair_is_reversal_invariant() {
+        use tatara_process::classification::SubstrateType;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let forward = DataClassification::any_constant_pair([&a, &b, &c]);
+                    let reversed = DataClassification::any_constant_pair([&c, &b, &a]);
+                    assert_eq!(
+                        forward, reversed,
+                        "any_constant_pair([{a:?}, {b:?}, {c:?}]) drifted under reversal \
+                         on DataClassification",
+                    );
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    let forward = SubstrateType::any_constant_pair([&a, &b, &c]);
+                    let reversed = SubstrateType::any_constant_pair([&c, &b, &a]);
+                    assert_eq!(
+                        forward, reversed,
+                        "any_constant_pair([{a:?}, {b:?}, {c:?}]) drifted under reversal \
+                         on SubstrateType",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_constant_pair`] projects the pointed-top antichain
+    /// [`SubstrateType`] cleanly — a slice fires the equality-arm ∃-∨
+    /// predicate iff it contains AT LEAST ONE consecutive pair of EQUAL
+    /// elements. The projection depends only on [`PartialEq`] and not on
+    /// the lattice's partial order, so it matches the total-order projection
+    /// exactly (unlike every directional and comparability ∃-consecutive-
+    /// pair peer, whose antichain projection twists via the pointed-top
+    /// absorbing edge). This pins the CLEANEST antichain projection of any
+    /// ∃-consecutive-pair predicate.
+    #[test]
+    fn any_constant_pair_projects_the_pointed_top_antichain_over_substrate_type() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        let compute = SubstrateType::Compute;
+        let storage = SubstrateType::Storage;
+        assert!(
+            !SubstrateType::any_constant_pair([&compute, &storage]),
+            "any_constant_pair([{compute:?}, {storage:?}]) must be false — distinct \
+             non-top substrates are unequal even on the pointed-top antichain",
+        );
+        assert!(
+            SubstrateType::any_constant_pair([&compute, &compute]),
+            "any_constant_pair([{compute:?}, {compute:?}]) must be true — reflexive \
+             PartialEq accepts the self-pair",
+        );
+        assert!(
+            !SubstrateType::any_constant_pair([&top, &compute]),
+            "any_constant_pair([top, {compute:?}]) must be false — top-touching pairs \
+             are comparable but not EQUAL on the pointed-top antichain",
+        );
+        assert!(
+            !SubstrateType::any_constant_pair([&compute, &storage, &compute]),
+            "any_constant_pair([{compute:?}, {storage:?}, {compute:?}]) must be false — \
+             the shared Compute is separated by Storage in the middle, so neither \
+             consecutive pair is equal and the ∃-equality walk finds no witness",
+        );
+        assert!(
+            SubstrateType::any_constant_pair([&compute, &compute, &storage]),
+            "any_constant_pair([{compute:?}, {compute:?}, {storage:?}]) must be true — \
+             the leading (Compute, Compute) consecutive pair witnesses the ∃-equality \
+             walk on the pointed-top antichain",
+        );
+    }
+
+    /// [`Lattice::any_constant_pair`] is NOT permutation-invariant on
+    /// multiset inputs — depends on CONSECUTIVE-ADJACENCY structure, so a
+    /// permutation that separates a duplicate pair by inserting a distinct
+    /// element between them can flip the verdict. Witness: `[Public, Public,
+    /// Internal]` fires true via the leading consecutive duplicate; the
+    /// permutation `[Public, Internal, Public]` on the same multiset fires
+    /// false because the shared `Public` is separated by `Internal`. Peer of
+    /// every ∃-consecutive-pair predicate's permutation-non-invariance on the
+    /// equality arm.
+    #[test]
+    fn any_constant_pair_is_not_permutation_invariant_on_multisets() {
+        let a = DataClassification::Public;
+        let b = DataClassification::Internal;
+        assert!(
+            DataClassification::any_constant_pair([&a, &a, &b]),
+            "any_constant_pair([{a:?}, {a:?}, {b:?}]) must be true — the leading pair \
+             witnesses the ∃-equality walk",
+        );
+        assert!(
+            !DataClassification::any_constant_pair([&a, &b, &a]),
+            "any_constant_pair([{a:?}, {b:?}, {a:?}]) must be false — the shared value \
+             is separated by a distinct element, so no consecutive pair is equal",
+        );
+        assert!(
+            DataClassification::any_constant_pair([&a, &b, &b]),
+            "any_constant_pair([{a:?}, {b:?}, {b:?}]) must be true — the trailing pair \
+             witnesses the ∃-equality walk",
         );
     }
 

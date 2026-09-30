@@ -5317,6 +5317,283 @@ pub trait Lattice: Sized + Clone + PartialEq {
         let vs: Vec<&'a Self> = iter.into_iter().collect();
         vs.windows(2).any(|w| w[0].is_comparable(w[1]))
     }
+    /// Strict-arm direction-free ∃-consecutive-pair peer of
+    /// [`Lattice::is_strictly_comparable_sequence`] on the QUANTIFIER axis
+    /// AND strict-arm peer of [`Lattice::any_comparable_pair`] on the
+    /// STRICTNESS axis — the iterated set contains AT LEAST ONE
+    /// STRICTLY-COMPARABLE consecutive pair on the lattice's partial order.
+    /// `T::any_strictly_comparable_pair([&a, &b, &c])` holds iff
+    /// `a.is_strictly_comparable(&b) || b.is_strictly_comparable(&c)`:
+    /// SOME consecutive pair `(vs[i], vs[i + 1])` satisfies
+    /// `vs[i].is_strictly_comparable(&vs[i + 1])`.
+    ///
+    /// Closes the (∀, ∃) × (strict, non-strict) × (direction-free
+    /// consecutive-pair) 2×2×1 face at the LAST unpinned strict-∃ corner
+    /// (the future-widening slot [`Lattice::any_comparable_pair`]'s
+    /// docstring named explicitly) — where [`Lattice::
+    /// is_strictly_comparable_sequence`] decides the strict ∀-∧
+    /// conjunction (are ALL consecutive pairs strictly comparable), this
+    /// decides the strict ∃-∨ disjunction (is SOME consecutive pair
+    /// strictly comparable) on the SAME direction-free
+    /// [`Lattice::is_strictly_comparable`] arm. Strict-arm dual of
+    /// [`Lattice::any_comparable_pair`] one STRICTNESS axis over: where
+    /// the non-strict peer accepts the reflexive diagonal via
+    /// [`Lattice::is_comparable`]'s reflexivity, this strict peer rejects
+    /// every reflexive self-pair via [`Lattice::is_strictly_comparable`]'s
+    /// irreflexivity (which itself decomposes into
+    /// `self.strictly_below(other) || self.strictly_above(other)`, both
+    /// of whose arms are irreflexive).
+    ///
+    /// **Empty-iterator vacuous falsehood**: `T::any_strictly_comparable_pair(
+    /// std::iter::empty()) == false` on every lattice — [`slice::windows`]
+    /// on a zero-length slice yields no pair, so [`Iterator::any`] on the
+    /// empty iterator is `false`. DIVERGES from [`Lattice::
+    /// is_strictly_comparable_sequence`]'s vacuous-TRUE arm at the empty
+    /// case — the (∀, ∃) axis toggles the empty-arity verdict on the
+    /// direction-free strict arm exactly as it does on every direction-
+    /// fixed and non-strict arm. Shared vacuous-∃-falsehood arm with
+    /// [`Lattice::any_ascending_pair`], [`Lattice::any_descending_pair`],
+    /// [`Lattice::any_strict_ascending_pair`], [`Lattice::
+    /// any_strict_descending_pair`], and [`Lattice::any_comparable_pair`]
+    /// at the empty case — every ∃-consecutive-pair peer on the sequence-
+    /// shape face fires false on the empty iterator.
+    ///
+    /// **Singleton vacuous falsehood**: `T::any_strictly_comparable_pair(
+    /// [&a]) == false` for every `a` — a singleton has no consecutive pair,
+    /// so [`slice::windows`] yields no pair on the length-1 slice and
+    /// [`Iterator::any`] fires false. Shared vacuous-∃-falsehood arm with
+    /// every existing ∃-consecutive-pair peer at every singleton — every
+    /// arity-0-and-arity-1 slice rejects every ∃-consecutive-pair walk.
+    /// DIVERGES from every ∀-consecutive-pair sequence-shape predicate's
+    /// singleton vacuous-TRUE arm.
+    ///
+    /// **Pair-identity**: `T::any_strictly_comparable_pair([&a, &b]) ==
+    /// a.is_strictly_comparable(&b)` — the 2-input direction-free strict
+    /// ∃-consecutive-pair comparable predicate reduces to the pairwise
+    /// [`Lattice::is_strictly_comparable`] primitive on the sole
+    /// consecutive pair, AGREEING with [`Lattice::
+    /// is_strictly_comparable_sequence`]'s pair-identity at arity 2 (both
+    /// quantifiers collapse to the same per-pair predicate when the slice
+    /// yields exactly one consecutive pair). Direction-free peer of
+    /// [`Lattice::any_strict_ascending_pair`]'s and [`Lattice::
+    /// any_strict_descending_pair`]'s arity-2 strict-leq/geq identities:
+    /// at the pair level the direction-free strict ∃ predicate absorbs
+    /// both direction-fixed strict ∃ predicates via [`Lattice::
+    /// is_strictly_comparable`]'s definitional disjunction
+    /// `self.strictly_below(other) || self.strictly_above(other)`.
+    ///
+    /// **Reflexive-diagonal rejection**: `T::any_strictly_comparable_pair(
+    /// [&a, &a]) == false` for every `a` — [`Lattice::
+    /// is_strictly_comparable`] is IRREFLEXIVE (both
+    /// [`Lattice::strictly_below`] and [`Lattice::strictly_above`] carry
+    /// the `self != other` conjunct that rejects the reflexive self-pair,
+    /// so the disjunction fires false), so the sole consecutive pair
+    /// `(a, a)` fails `a.is_strictly_comparable(&a)` and [`Iterator::any`]
+    /// fires false. Shared irreflexive-diagonal rejection arm with
+    /// [`Lattice::any_strict_ascending_pair`]'s and [`Lattice::
+    /// any_strict_descending_pair`]'s consecutive-duplicate rejection —
+    /// every strict ∃-consecutive-pair peer rejects any slice whose
+    /// EVERY consecutive pair is a reflexive self-pair. DIVERGES from
+    /// [`Lattice::any_comparable_pair`]'s reflexive-diagonal ACCEPTANCE
+    /// via reflexive [`Lattice::is_comparable`] one STRICTNESS axis
+    /// over — the STRICTNESS axis toggles the reflexive-diagonal verdict
+    /// on the direction-free arm exactly as it does on every direction-
+    /// fixed arm.
+    ///
+    /// **Refines FROM [`Lattice::is_strictly_comparable_sequence`] on
+    /// iterables with at least one consecutive pair**:
+    /// `T::is_strictly_comparable_sequence(iter) && iter has at least 2
+    /// elements ⇒ T::any_strictly_comparable_pair(iter)` — every
+    /// witnessing pair in the strict ∀-conjunction also witnesses the
+    /// strict ∃-disjunction. The (∀ ⇒ ∃) implication holds ONLY on
+    /// slices with at least one consecutive pair (arity ≥ 2) since the
+    /// empty and singleton arms split (∀ true, ∃ false). Peer of the
+    /// same (∀ ⇒ ∃) refinement on every direction-fixed strict arm one
+    /// DIRECTION-COLLAPSE axis over and on the non-strict direction-free
+    /// arm one STRICTNESS axis over.
+    ///
+    /// **Refines INTO [`Lattice::any_comparable_pair`] on every iterable**:
+    /// `T::any_strictly_comparable_pair(iter) ⇒
+    /// T::any_comparable_pair(iter)` on every slice, INCLUDING empty and
+    /// singleton slices where both sides are vacuously false and the
+    /// implication holds vacuously. The strict pair-level primitive
+    /// [`Lattice::is_strictly_comparable`] refines [`Lattice::
+    /// is_comparable`] at every pair (`a.is_strictly_comparable(&b) ⇒
+    /// a.is_comparable(&b)` by projection onto the underlying leq/geq
+    /// disjunction with the `a != b` conjunct dropped), so a strict-∃
+    /// witnessing pair also witnesses the non-strict ∃-disjunction. The
+    /// STRICTNESS axis refines on the direction-free ∃ arm at every
+    /// slice — dual of [`Lattice::any_strict_ascending_pair`] ⇒
+    /// [`Lattice::any_ascending_pair`] and [`Lattice::
+    /// any_strict_descending_pair`] ⇒ [`Lattice::any_descending_pair`] on
+    /// the direction-fixed arms one DIRECTION-COLLAPSE axis over.
+    ///
+    /// **Refined BY [`Lattice::any_strict_ascending_pair`] AND [`Lattice::
+    /// any_strict_descending_pair`] on every iterable**:
+    /// `T::any_strict_ascending_pair(iter) ⇒
+    /// T::any_strictly_comparable_pair(iter)` and
+    /// `T::any_strict_descending_pair(iter) ⇒
+    /// T::any_strictly_comparable_pair(iter)` on every slice. Every
+    /// strictly-below-witnessing (or strictly-above-witnessing) consecutive
+    /// pair satisfies [`Lattice::is_strictly_comparable`] via the
+    /// definitional disjunction `self.strictly_below(other) ||
+    /// self.strictly_above(other)`, so a directional strict ∃-witnessing
+    /// pair also witnesses the direction-free strict ∃-disjunction.
+    /// Composes the DIRECTION-COLLAPSE refinement (direction-fixed ⇒
+    /// direction-free at every pair) with the QUANTIFIER-AXIS identity
+    /// (∃ ⇒ ∃ trivially) at ONE strict ∃-arm aggregate. The two
+    /// direction-fixed strict ∃-peers factor into this direction-free
+    /// strict ∃-peer as their (irreflexive-non-overlapping on the diagonal,
+    /// asymmetry-non-overlapping off it) union of witnesses.
+    ///
+    /// **Sits at the WIDEST accepting strict corner** of the (strict) ×
+    /// (leq, geq, direction-free) × (∃-consecutive-pair) 1×3×1
+    /// refinement face — the direction-free strict ∃-peer is refined by
+    /// every direction-fixed strict ∃-consecutive-pair peer AND itself
+    /// refines the direction-free non-strict ∃-peer
+    /// [`Lattice::any_comparable_pair`]. In the (strict, non-strict) ×
+    /// (direction-free) × (∃) 2×1×1 cell, this is the tighter of the two
+    /// direction-free ∃-corners; the LOOSER
+    /// [`Lattice::any_comparable_pair`] absorbs the reflexive-diagonal
+    /// arm this strict peer relinquishes to gain irreflexivity.
+    ///
+    /// **Complements [`Lattice::is_comparable_sequence`] at arity 2, off
+    /// the reflexive diagonal**: on every DISTINCT pair `(a, b)` with
+    /// `a != b`, `T::any_strictly_comparable_pair([&a, &b]) ==
+    /// T::is_comparable_sequence([&a, &b])` — off-diagonal the arity-2
+    /// direction-free strict ∃ and direction-free non-strict ∀ agree via
+    /// [`Lattice::is_strictly_comparable`] ⇔ `a.is_comparable(&b) &&
+    /// a != b` ⇔ [`Lattice::is_comparable`] (under the distinct-pair
+    /// assumption). AT THE REFLEXIVE DIAGONAL the agreement BREAKS —
+    /// [`Lattice::any_strictly_comparable_pair`] rejects `[&a, &a]` via
+    /// strict-arm irreflexivity while [`Lattice::is_comparable_sequence`]
+    /// accepts `[&a, &a]` via non-strict reflexive is_comparable. Dual
+    /// of [`Lattice::is_strictly_comparable_sequence`]'s off-diagonal
+    /// complementarity with [`Lattice::is_incomparable_sequence`] pinned
+    /// on the ∀ arm one QUANTIFIER axis over.
+    ///
+    /// **Any-strictly-comparable-consecutive-pair acceptance**: if any
+    /// consecutive pair `(vs[i], vs[i + 1])` satisfies `vs[i].
+    /// is_strictly_comparable(&vs[i + 1])`, then `T::
+    /// any_strictly_comparable_pair(iter) == true` — [`Iterator::any`] on
+    /// [`slice::windows`] short-circuits at the first witnessing pair.
+    /// Dual short-circuit behaviour to [`Lattice::
+    /// is_strictly_comparable_sequence`]'s any-non-strictly-comparable-
+    /// pair rejection on the ∀ arm one QUANTIFIER axis over.
+    ///
+    /// **Total-order acceptance at slices with at least one distinct
+    /// consecutive pair**: on any totally-ordered lattice (e.g.
+    /// [`DataClassification`], [`baseline::Baseline`],
+    /// [`CalmClassification`]), the predicate ACCEPTS every slice
+    /// containing at least one distinct consecutive pair — every distinct
+    /// pair on a total order is strictly comparable via the rank's strict
+    /// `<` in one direction (pinned by
+    /// `is_strictly_comparable_matches_strict_inequality_over_data_
+    /// classification_all_pairs`), so [`Lattice::is_strictly_comparable`]
+    /// fires true on any distinct consecutive pair and [`Iterator::any`]
+    /// fires true on the first witnessing pair. Peer of [`Lattice::
+    /// any_comparable_pair`]'s total-order universal acceptance one
+    /// STRICTNESS axis over — where the non-strict peer accepts every
+    /// non-singleton slice (including all-duplicate slices via reflexive
+    /// is_comparable), this strict peer restricts acceptance to slices
+    /// with at least one distinct consecutive pair.
+    ///
+    /// **Reversal invariance**: `T::any_strictly_comparable_pair(iter) ==
+    /// T::any_strictly_comparable_pair(iter.rev())` on every collection —
+    /// [`Lattice::is_strictly_comparable`] is SYMMETRIC (its default
+    /// `self.strictly_below(other) || self.strictly_above(other)` is a
+    /// swap-invariant disjunction whose two arms swap into each other
+    /// under argument reversal) AND [`Iterator::any`]'s disjunction is
+    /// order-insensitive, so reversing the slice reverses each consecutive
+    /// pair and preserves the aggregated verdict. AGREES with [`Lattice::
+    /// is_strictly_comparable_sequence`]'s and [`Lattice::
+    /// any_comparable_pair`]'s reversal invariance on the direction-free
+    /// arm at both quantifier corners AND at both strictness corners.
+    /// DIVERGES from [`Lattice::any_strict_ascending_pair`] / [`Lattice::
+    /// any_strict_descending_pair`] (which flip on reversal via
+    /// [`Lattice::strictly_below`]'s directionality — reversing swaps the
+    /// strict ascending arm with the strict descending arm at every pair).
+    ///
+    /// **Antichain projection**: on the pointed-top antichain (e.g.
+    /// [`SubstrateType`]), the strict ∃-∨ predicate accepts a slice iff
+    /// it contains AT LEAST ONE consecutive pair `(a, b)` with
+    /// `a.is_strictly_comparable(&b)`, which on the pointed-top antichain
+    /// fires exactly when EITHER `a == top XOR b == top` (the top-touching
+    /// strict half-edge in EITHER direction via [`Lattice::
+    /// is_strictly_comparable`]'s definitional disjunction of the two
+    /// strict directional arms). Rejects the reflexive diagonal (via
+    /// strict-arm irreflexivity) AND every distinct-non-top pair (via
+    /// antichain incomparability, since neither [`Lattice::
+    /// strictly_below`] nor [`Lattice::strictly_above`] holds when
+    /// neither non-strict comparator does). This is the STRICTEST
+    /// direction-free antichain projection on the sequence-shape ∃-face:
+    /// the strict half-edge fires in EITHER direction (top→x or x→top)
+    /// but rejects every non-top-touching pair AND every top-to-top pair
+    /// AND every reflexive pair. Peer of [`Lattice::
+    /// is_strictly_comparable_sequence`]'s antichain projection at the ∃
+    /// arm one QUANTIFIER axis over.
+    ///
+    /// Default routes through `iter.into_iter().collect::<Vec<&Self>>()`
+    /// followed by `.windows(2).any(|w| w[0].is_strictly_comparable(w[1]))`
+    /// — one [`Lattice::is_strictly_comparable`] delegation per consecutive
+    /// pair on the collected buffer with [`Iterator::any`] short-circuiting
+    /// at the first witness, mirroring [`Lattice::any_comparable_pair`]'s
+    /// walk with the pair-level primitive swapped from [`Lattice::
+    /// is_comparable`] to [`Lattice::is_strictly_comparable`]. The collect
+    /// materializes the iterator once so the walk operates on a stable
+    /// slice — an [`IntoIterator`] that yields distinct values on distinct
+    /// calls would otherwise break the walk's determinism. A future
+    /// normalization at [`Lattice::is_strictly_comparable`] (which itself
+    /// decomposes into `self.strictly_below(other) ||
+    /// self.strictly_above(other)`, or equivalently
+    /// `self.is_comparable(other) && self != other`) lands at ONE site
+    /// and this default inherits mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the direction-free strict ∃-consecutive-pair comparability
+    /// predicate is itself a typed named `bool` composing [`Lattice::
+    /// is_strictly_comparable`] via [`slice::windows`] plus [`Iterator::
+    /// any`]; every downstream lattice-law consumer inherits the predicate
+    /// through the default mechanically) + THEORY.md §III (typescape — the
+    /// direction-free strict ∃-consecutive-pair comparability arm on
+    /// every classification-axis lattice binds at ONE substrate owner on
+    /// the [`Lattice`] algebra rather than at each consumer's hand-
+    /// authored `vs.windows(2).any(|w| w[0].is_strictly_comparable(&w[1]))`
+    /// walk).
+    ///
+    /// Frontier inspiration: order-theory's strict-comparability graph
+    /// existential walks — the direction-free strict ∃-consecutive-pair
+    /// comparability predicate is the natural characterization of "the
+    /// sequence has at least one strict-comparability edge (i.e. a non-
+    /// reflexive comparable adjacency) somewhere in its adjacency graph".
+    /// Racket's `ormap` and Haskell's `any` composed with the pairwise
+    /// partial-order strict-symmetric relation. Rust's stdlib carries
+    /// [`Iterator::any`] and [`PartialOrd::partial_cmp`] but not an
+    /// N-ary `windows(2).any(|w| matches!(w[0].partial_cmp(&w[1]),
+    /// Some(Less | Greater)))` predicate — the sequence-shape direction-
+    /// free strict ∃-consecutive-pair predicate is a first-class named
+    /// method the standard library does not expose. Translated: threaded
+    /// the same strict ∃-consecutive-pair shape through the [`Lattice`]
+    /// trait's default-method surface as the STRICTNESS-AXIS peer of
+    /// [`Lattice::any_comparable_pair`] AND the QUANTIFIER-AXIS peer of
+    /// [`Lattice::is_strictly_comparable_sequence`] on the direction-free
+    /// arm — the sixth ∃-consecutive-pair peer on the sequence-shape
+    /// face, closing the (∀, ∃) × (strict, non-strict) × (direction-free)
+    /// 2×2×1 face at the LAST unpinned strict-∃-direction-free corner
+    /// (the future-widening slot [`Lattice::any_comparable_pair`]'s
+    /// docstring named explicitly), the same face-completion move MLIR's
+    /// dialect-conversion library performs when it saturates a
+    /// transformation dialect's op-signature combinator surface at one
+    /// canonical rewriter, and that Lean's mathlib performs when it seals
+    /// an order-theoretic predicate face at one `instance` definition.
+    fn any_strictly_comparable_pair<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).any(|w| w[0].is_strictly_comparable(w[1]))
+    }
     /// N-ary interval-containment predicate — EVERY element the iterator
     /// yields sits inside the closed bracket `[low, high]` on the
     /// lattice's partial order. `T::all_between(&low, &high, [&a, &b,
@@ -18348,6 +18625,638 @@ mod tests {
             "any_comparable_pair([{compute:?}, {compute:?}, {compute:?}]) must be \
              true — every consecutive pair is a reflexive self-pair the non-strict \
              is_comparable primitive accepts",
+        );
+    }
+
+    /// [`Lattice::any_strictly_comparable_pair`] is VACUOUSLY FALSE on the
+    /// empty iterator over [`DataClassification`] and [`SubstrateType`] —
+    /// [`slice::windows`] on a zero-length slice yields no pair, so
+    /// [`Iterator::any`] on the empty iterator is `false`. Shared vacuous-
+    /// ∃-falsehood arm with every ∃-consecutive-pair peer on the sequence-
+    /// shape face at the empty case. DIVERGES from
+    /// [`Lattice::is_strictly_comparable_sequence`]'s vacuous-TRUE arm at
+    /// the empty case one QUANTIFIER axis over.
+    #[test]
+    fn any_strictly_comparable_pair_is_vacuously_false_at_the_empty_iterator_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        let empty_dc: [&DataClassification; 0] = [];
+        assert!(
+            !DataClassification::any_strictly_comparable_pair(empty_dc.iter().copied()),
+            "any_strictly_comparable_pair([]) must be false — the empty strict \
+             ∃-disjunction has no consecutive pair to witness",
+        );
+        assert!(
+            DataClassification::is_strictly_comparable_sequence(empty_dc.iter().copied()),
+            "is_strictly_comparable_sequence([]) must be true — the (∀, ∃) axis \
+             diverges at the empty case on the direction-free strict arm too",
+        );
+        let empty_st: [&SubstrateType; 0] = [];
+        assert!(
+            !SubstrateType::any_strictly_comparable_pair(empty_st.iter().copied()),
+            "any_strictly_comparable_pair([]) must be false on the pointed-top \
+             antichain too — the empty strict ∃-disjunction has no consecutive pair \
+             to witness on any lattice",
+        );
+    }
+
+    /// [`Lattice::any_strictly_comparable_pair`] is VACUOUSLY FALSE on every
+    /// singleton over [`DataClassification`] and [`SubstrateType`] — a
+    /// length-1 slice yields no [`slice::windows`]-of-2 pair, so
+    /// [`Iterator::any`] fires false. Shared singleton vacuous-falsehood arm
+    /// with every existing ∃-consecutive-pair peer — the (∀, ∃) quantifier
+    /// axis toggles the singleton verdict; the STRICTNESS axis does not.
+    /// Pinned exhaustively over `DataClassification::ALL` (6 singletons)
+    /// and `SubstrateType::ALL` (7 singletons).
+    #[test]
+    fn any_strictly_comparable_pair_is_vacuously_false_on_every_singleton_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            assert!(
+                !DataClassification::any_strictly_comparable_pair([&a]),
+                "any_strictly_comparable_pair([&{a:?}]) must be false — a singleton \
+                 has no consecutive pair, so the direction-free strict ∃-disjunction \
+                 fires vacuously false",
+            );
+            assert!(
+                DataClassification::is_strictly_comparable_sequence([&a]),
+                "is_strictly_comparable_sequence([&{a:?}]) must be true — the (∀, ∃) \
+                 axis diverges at every singleton on the direction-free strict arm too",
+            );
+        }
+        for s in SubstrateType::ALL {
+            assert!(
+                !SubstrateType::any_strictly_comparable_pair([&s]),
+                "any_strictly_comparable_pair([&{s:?}]) must be false on the \
+                 pointed-top antichain — a singleton has no consecutive pair on any \
+                 lattice",
+            );
+        }
+    }
+
+    /// [`Lattice::any_strictly_comparable_pair`] at arity 2 reduces to the
+    /// pairwise [`Lattice::is_strictly_comparable`] on the sole consecutive
+    /// pair — the 2-input direction-free strict ∃-consecutive-pair
+    /// comparable predicate IS the pairwise `is_strictly_comparable`
+    /// primitive on the sole pair. AGREES with [`Lattice::
+    /// is_strictly_comparable_sequence`]'s pair-identity at arity 2 — both
+    /// quantifiers collapse to the same per-pair predicate when the slice
+    /// yields exactly one consecutive pair. Direction-free peer of
+    /// [`Lattice::any_strict_ascending_pair`]'s and [`Lattice::
+    /// any_strict_descending_pair`]'s arity-2 strict-leq/geq identities
+    /// via [`Lattice::is_strictly_comparable`]'s definitional disjunction.
+    /// Pinned exhaustively over `DataClassification::ALL^2` (36 pairs).
+    #[test]
+    fn any_strictly_comparable_pair_arity_2_reduces_to_is_strictly_comparable_over_data_classification_all_pairs(
+    ) {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    DataClassification::any_strictly_comparable_pair([&a, &b]),
+                    a.is_strictly_comparable(&b),
+                    "any_strictly_comparable_pair([{a:?}, {b:?}]) drifted from \
+                     is_strictly_comparable({a:?}, {b:?}) — the arity-2 direction-free \
+                     strict ∃-consecutive-pair comparable predicate must reduce to the \
+                     pairwise is_strictly_comparable primitive on the sole consecutive \
+                     pair",
+                );
+                assert_eq!(
+                    DataClassification::any_strictly_comparable_pair([&a, &b]),
+                    DataClassification::is_strictly_comparable_sequence([&a, &b]),
+                    "any_strictly_comparable_pair([{a:?}, {b:?}]) drifted from \
+                     is_strictly_comparable_sequence([{a:?}, {b:?}]) — the two \
+                     direction-free strict quantifiers must agree at arity 2 by \
+                     collapsing to the same per-pair is_strictly_comparable",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::any_strictly_comparable_pair`] REJECTS every slice whose
+    /// EVERY consecutive pair is a reflexive self-pair over both
+    /// [`DataClassification`] and [`SubstrateType`] — [`Lattice::
+    /// is_strictly_comparable`] is IRREFLEXIVE (both [`Lattice::
+    /// strictly_below`] and [`Lattice::strictly_above`] carry the `self !=
+    /// other` conjunct that rejects the reflexive self-pair, so the
+    /// disjunction fires false at every reflexive diagonal), so every
+    /// consecutive pair of an all-duplicate slice fails
+    /// `is_strictly_comparable` and [`Iterator::any`] fires false. Shared
+    /// irreflexive-diagonal rejection arm with [`Lattice::
+    /// any_strict_ascending_pair`] and [`Lattice::any_strict_descending_pair`]
+    /// on every all-duplicate slice. DIVERGES from [`Lattice::
+    /// any_comparable_pair`]'s reflexive-diagonal ACCEPTANCE one STRICTNESS
+    /// axis over — the STRICTNESS axis toggles the reflexive-diagonal
+    /// verdict on the direction-free arm exactly as it does on every
+    /// direction-fixed arm. A mixed slice `[a, a, b]` with `a != b` on a
+    /// total order still fires the ∃-walk on the trailing `(a, b)` witness
+    /// — the ∃-∨ aggregator only rejects when EVERY consecutive pair fails
+    /// the strict comparator.
+    #[test]
+    fn any_strictly_comparable_pair_rejects_every_all_duplicate_slice_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            assert!(
+                !DataClassification::any_strictly_comparable_pair([&a, &a]),
+                "any_strictly_comparable_pair([{a:?}, {a:?}]) must be false — \
+                 is_strictly_comparable is irreflexive so the sole self-pair fails to \
+                 witness the strict direction-free ∃-consecutive-pair walk",
+            );
+            assert!(
+                !DataClassification::any_strictly_comparable_pair([&a, &a, &a]),
+                "any_strictly_comparable_pair([{a:?}, {a:?}, {a:?}]) must be false — \
+                 every consecutive pair is a reflexive self-pair the irreflexive strict \
+                 direction-free comparator rejects, DIVERGING from any_comparable_pair's \
+                 ACCEPTANCE of the same slice via reflexive is_comparable",
+            );
+        }
+        for s in SubstrateType::ALL {
+            assert!(
+                !SubstrateType::any_strictly_comparable_pair([&s, &s]),
+                "any_strictly_comparable_pair([{s:?}, {s:?}]) must be false on the \
+                 pointed-top antichain too — irreflexive is_strictly_comparable rejects \
+                 every self-pair on every lattice",
+            );
+        }
+        // A mixed slice with a witnessing distinct pair still fires the
+        // ∃-walk despite a leading self-pair — the ∃-∨ aggregator only
+        // rejects when EVERY consecutive pair fails the strict comparator.
+        assert!(
+            DataClassification::any_strictly_comparable_pair([
+                &DataClassification::Public,
+                &DataClassification::Public,
+                &DataClassification::Internal,
+            ]),
+            "any_strictly_comparable_pair([Public, Public, Internal]) must be true — \
+             the trailing (Public, Internal) strictly-comparable pair witnesses the \
+             ∃-walk even though the leading self-pair does not",
+        );
+    }
+
+    /// [`Lattice::is_strictly_comparable_sequence`] REFINES
+    /// [`Lattice::any_strictly_comparable_pair`] on iterables with at least
+    /// one consecutive pair over [`DataClassification`] and
+    /// [`SubstrateType`] — `T::is_strictly_comparable_sequence(iter) &&
+    /// iter.len() ≥ 2 ⇒ T::any_strictly_comparable_pair(iter)` because
+    /// every witnessing pair in the strict ∀-conjunction also witnesses the
+    /// strict ∃-disjunction. The (∀, ∃) axis SPLITS on the empty and
+    /// singleton arms: the ∀ arm fires vacuously true, the ∃ arm fires
+    /// vacuously false, so the implication fails only on
+    /// arity-0-and-arity-1 slices. Peer of the same (∀ ⇒ ∃) refinement on
+    /// every direction-fixed strict arm one DIRECTION-COLLAPSE axis over
+    /// and on the non-strict direction-free arm one STRICTNESS axis over.
+    /// Pinned exhaustively over `DataClassification::ALL^3` (216 triples)
+    /// and `SubstrateType::ALL^3` (343 triples on the pointed-top antichain
+    /// where the partial-order incomparable arm actually exercises the
+    /// refinement's asymmetric information content).
+    #[test]
+    fn is_strictly_comparable_sequence_refines_any_strictly_comparable_pair_on_nonsingleton_iterables_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                let pair: [&DataClassification; 2] = [&a, &b];
+                if DataClassification::is_strictly_comparable_sequence(pair) {
+                    assert!(
+                        DataClassification::any_strictly_comparable_pair(pair),
+                        "is_strictly_comparable_sequence([{a:?}, {b:?}]) ⇒ \
+                         any_strictly_comparable_pair([{a:?}, {b:?}]) refinement failed \
+                         on a 2-element slice — the strict ∀ ⇒ ∃ implication is \
+                         universal on iterables with at least one consecutive pair",
+                    );
+                }
+                for c in DataClassification::ALL {
+                    let triple: [&DataClassification; 3] = [&a, &b, &c];
+                    if DataClassification::is_strictly_comparable_sequence(triple) {
+                        assert!(
+                            DataClassification::any_strictly_comparable_pair(triple),
+                            "is_strictly_comparable_sequence([{a:?}, {b:?}, {c:?}]) ⇒ \
+                             any_strictly_comparable_pair([{a:?}, {b:?}, {c:?}]) \
+                             refinement failed on a triple — the direction-free \
+                             strict ∀ ⇒ ∃ implication is universal on iterables with \
+                             at least one consecutive pair",
+                        );
+                    }
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    let triple: [&SubstrateType; 3] = [&a, &b, &c];
+                    if SubstrateType::is_strictly_comparable_sequence(triple) {
+                        assert!(
+                            SubstrateType::any_strictly_comparable_pair(triple),
+                            "is_strictly_comparable_sequence([{a:?}, {b:?}, {c:?}]) ⇒ \
+                             any_strictly_comparable_pair([{a:?}, {b:?}, {c:?}]) \
+                             refinement failed on a pointed-top antichain triple — \
+                             the direction-free strict ∀ ⇒ ∃ implication holds at \
+                             every partial order, not just totally-ordered ones",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strictly_comparable_pair`] REFINES
+    /// [`Lattice::any_comparable_pair`] on EVERY iterable over
+    /// [`DataClassification`] AND [`SubstrateType`] —
+    /// `T::any_strictly_comparable_pair(iter) ⇒ T::any_comparable_pair(iter)`
+    /// on every slice, INCLUDING empty and singleton slices where both
+    /// sides are vacuously false and the implication holds vacuously. The
+    /// strict pairwise primitive [`Lattice::is_strictly_comparable`]
+    /// refines [`Lattice::is_comparable`] at every pair (`a.
+    /// is_strictly_comparable(&b) ⇒ a.is_comparable(&b)` by projection
+    /// onto the underlying leq/geq disjunction with the `a != b` conjunct
+    /// dropped), so a strict-∃ witnessing pair also witnesses the non-
+    /// strict ∃-disjunction on [`Iterator::any`]. The STRICTNESS axis
+    /// refines on the direction-free ∃ arm at every slice — dual of
+    /// [`Lattice::any_strict_ascending_pair`] ⇒
+    /// [`Lattice::any_ascending_pair`] and [`Lattice::
+    /// any_strict_descending_pair`] ⇒ [`Lattice::any_descending_pair`]
+    /// on the direction-fixed arms one DIRECTION-COLLAPSE axis over.
+    /// Pinned exhaustively over `DataClassification::ALL^2` (36 pairs) and
+    /// `DataClassification::ALL^3` (216 triples) plus empty and singleton
+    /// base cases and over `SubstrateType::ALL^3` (343 triples on the
+    /// pointed-top antichain).
+    #[test]
+    fn any_strictly_comparable_pair_refines_any_comparable_pair_on_every_iterable_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        let empty: [&DataClassification; 0] = [];
+        assert!(
+            !DataClassification::any_strictly_comparable_pair(empty.iter().copied())
+                || DataClassification::any_comparable_pair(empty.iter().copied()),
+            "empty-slice refinement failed vacuously — both sides must be false and \
+             the implication holds vacuously",
+        );
+        for a in DataClassification::ALL {
+            assert!(
+                !DataClassification::any_strictly_comparable_pair([&a])
+                    || DataClassification::any_comparable_pair([&a]),
+                "singleton-slice refinement failed on [&{a:?}] — both sides must be \
+                 false and the implication holds vacuously",
+            );
+            for b in DataClassification::ALL {
+                let pair: [&DataClassification; 2] = [&a, &b];
+                if DataClassification::any_strictly_comparable_pair(pair) {
+                    assert!(
+                        DataClassification::any_comparable_pair(pair),
+                        "any_strictly_comparable_pair([{a:?}, {b:?}]) ⇒ \
+                         any_comparable_pair([{a:?}, {b:?}]) refinement failed on a \
+                         2-element slice — strict ⇒ non-strict at every pair, and the \
+                         resulting non-strict witness fires the direction-free \
+                         non-strict ∃-walk",
+                    );
+                }
+                for c in DataClassification::ALL {
+                    let triple: [&DataClassification; 3] = [&a, &b, &c];
+                    if DataClassification::any_strictly_comparable_pair(triple) {
+                        assert!(
+                            DataClassification::any_comparable_pair(triple),
+                            "any_strictly_comparable_pair([{a:?}, {b:?}, {c:?}]) ⇒ \
+                             any_comparable_pair([{a:?}, {b:?}, {c:?}]) refinement \
+                             failed on a triple — the STRICTNESS refinement holds on \
+                             the direction-free ∃ arm at every non-empty-non-singleton \
+                             iterable",
+                        );
+                    }
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    let triple: [&SubstrateType; 3] = [&a, &b, &c];
+                    if SubstrateType::any_strictly_comparable_pair(triple) {
+                        assert!(
+                            SubstrateType::any_comparable_pair(triple),
+                            "any_strictly_comparable_pair([{a:?}, {b:?}, {c:?}]) ⇒ \
+                             any_comparable_pair([{a:?}, {b:?}, {c:?}]) refinement \
+                             failed on a pointed-top antichain triple — the STRICTNESS \
+                             refinement holds on every partial order",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strict_ascending_pair`] AND
+    /// [`Lattice::any_strict_descending_pair`] each REFINE
+    /// [`Lattice::any_strictly_comparable_pair`] on EVERY iterable over
+    /// both [`DataClassification`] and [`SubstrateType`] —
+    /// `T::any_strict_ascending_pair(iter) ⇒ T::any_strictly_comparable_pair(
+    /// iter)` and `T::any_strict_descending_pair(iter) ⇒
+    /// T::any_strictly_comparable_pair(iter)` on every slice, INCLUDING
+    /// empty and singleton slices where all three sides are vacuously
+    /// false and the implication holds vacuously. Composes the DIRECTION-
+    /// COLLAPSE refinement (direction-fixed ⇒ direction-free at every pair
+    /// via [`Lattice::is_strictly_comparable`]'s definitional disjunction
+    /// `self.strictly_below(other) || self.strictly_above(other)`) with
+    /// the QUANTIFIER-AXIS identity (∃ ⇒ ∃ trivially) at ONE strict ∃-arm
+    /// aggregate. The two direction-fixed strict ∃-peers factor into this
+    /// direction-free strict ∃-peer as their (asymmetry-non-overlapping)
+    /// union of witnesses. Pinned exhaustively over
+    /// `DataClassification::ALL^3` (216 triples) and over
+    /// `SubstrateType::ALL^3` (343 triples on the pointed-top antichain
+    /// where the top-touching strict half-edges witness the two direction-
+    /// fixed refinements' disjoint acceptances).
+    #[test]
+    fn any_strict_ascending_pair_and_any_strict_descending_pair_refine_any_strictly_comparable_pair_over_data_classification_and_substrate_type_all_triples(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                for c in DataClassification::ALL {
+                    let triple: [&DataClassification; 3] = [&a, &b, &c];
+                    if DataClassification::any_strict_ascending_pair(triple) {
+                        assert!(
+                            DataClassification::any_strictly_comparable_pair(triple),
+                            "any_strict_ascending_pair([{a:?}, {b:?}, {c:?}]) ⇒ \
+                             any_strictly_comparable_pair([{a:?}, {b:?}, {c:?}]) \
+                             refinement failed — strictly_below ⇒ is_strictly_comparable \
+                             at every pair, so a strictly_below-witness pair also \
+                             witnesses is_strictly_comparable",
+                        );
+                    }
+                    if DataClassification::any_strict_descending_pair(triple) {
+                        assert!(
+                            DataClassification::any_strictly_comparable_pair(triple),
+                            "any_strict_descending_pair([{a:?}, {b:?}, {c:?}]) ⇒ \
+                             any_strictly_comparable_pair([{a:?}, {b:?}, {c:?}]) \
+                             refinement failed — strictly_above ⇒ is_strictly_comparable \
+                             at every pair, so a strictly_above-witness pair also \
+                             witnesses is_strictly_comparable",
+                        );
+                    }
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                for c in SubstrateType::ALL {
+                    let triple: [&SubstrateType; 3] = [&a, &b, &c];
+                    if SubstrateType::any_strict_ascending_pair(triple) {
+                        assert!(
+                            SubstrateType::any_strictly_comparable_pair(triple),
+                            "any_strict_ascending_pair([{a:?}, {b:?}, {c:?}]) ⇒ \
+                             any_strictly_comparable_pair([{a:?}, {b:?}, {c:?}]) \
+                             refinement failed on the pointed-top antichain — the \
+                             top-directed strict half-edge also witnesses \
+                             is_strictly_comparable",
+                        );
+                    }
+                    if SubstrateType::any_strict_descending_pair(triple) {
+                        assert!(
+                            SubstrateType::any_strictly_comparable_pair(triple),
+                            "any_strict_descending_pair([{a:?}, {b:?}, {c:?}]) ⇒ \
+                             any_strictly_comparable_pair([{a:?}, {b:?}, {c:?}]) \
+                             refinement failed on the pointed-top antichain — the \
+                             top-originating strict half-edge also witnesses \
+                             is_strictly_comparable",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strictly_comparable_pair`] AGREES with
+    /// [`Lattice::is_comparable_sequence`] on every DISTINCT arity-2 pair
+    /// over [`DataClassification`] and [`SubstrateType`] — on any distinct
+    /// pair `(a, b)` with `a != b`, `T::any_strictly_comparable_pair([&a,
+    /// &b]) == T::is_comparable_sequence([&a, &b])` via [`Lattice::
+    /// is_strictly_comparable`] ⇔ `a.is_comparable(&b) && a != b` ⇔
+    /// [`Lattice::is_comparable`] (under the distinct-pair assumption). AT
+    /// THE REFLEXIVE DIAGONAL the agreement BREAKS — the strict ∃-arm
+    /// rejects `[&a, &a]` via strict-arm irreflexivity while
+    /// [`Lattice::is_comparable_sequence`] accepts `[&a, &a]` via non-
+    /// strict reflexive is_comparable. This test pins BOTH the off-diagonal
+    /// agreement (32 distinct DataClassification pairs, 42 distinct
+    /// SubstrateType pairs) AND the on-diagonal disagreement (6
+    /// DataClassification reflexives, 7 SubstrateType reflexives). Dual
+    /// of [`Lattice::is_strictly_comparable_sequence`]'s off-diagonal
+    /// complementarity with [`Lattice::is_incomparable_sequence`] one
+    /// QUANTIFIER axis over.
+    #[test]
+    fn any_strictly_comparable_pair_agrees_with_is_comparable_sequence_off_the_reflexive_diagonal_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                let pair: [&DataClassification; 2] = [&a, &b];
+                let strict_any = DataClassification::any_strictly_comparable_pair(pair);
+                let non_strict_all = DataClassification::is_comparable_sequence(pair);
+                if a != b {
+                    assert_eq!(
+                        strict_any, non_strict_all,
+                        "any_strictly_comparable_pair([{a:?}, {b:?}]) drifted from \
+                         is_comparable_sequence([{a:?}, {b:?}]) off the reflexive \
+                         diagonal — on any distinct pair the strict ∃ and non-strict ∀ \
+                         must agree via is_strictly_comparable ⇔ is_comparable && \
+                         a != b ⇔ is_comparable",
+                    );
+                } else {
+                    assert!(
+                        !strict_any,
+                        "any_strictly_comparable_pair([{a:?}, {a:?}]) must be false on \
+                         the reflexive diagonal — strict-arm irreflexivity rejects the \
+                         self-pair",
+                    );
+                    assert!(
+                        non_strict_all,
+                        "is_comparable_sequence([{a:?}, {a:?}]) must be true on the \
+                         reflexive diagonal — non-strict is_comparable accepts the \
+                         self-pair via reflexive leq",
+                    );
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                let pair: [&SubstrateType; 2] = [&a, &b];
+                let strict_any = SubstrateType::any_strictly_comparable_pair(pair);
+                let non_strict_all = SubstrateType::is_comparable_sequence(pair);
+                if a != b {
+                    assert_eq!(
+                        strict_any, non_strict_all,
+                        "any_strictly_comparable_pair([{a:?}, {b:?}]) drifted from \
+                         is_comparable_sequence([{a:?}, {b:?}]) off the reflexive \
+                         diagonal on the pointed-top antichain — the ⇔ off-diagonal \
+                         agreement must hold on every partial order",
+                    );
+                } else {
+                    assert!(
+                        !strict_any,
+                        "any_strictly_comparable_pair([{a:?}, {a:?}]) must be false on \
+                         the reflexive diagonal on the pointed-top antichain too — \
+                         irreflexivity holds on every lattice",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_strictly_comparable_pair`] ACCEPTS every slice
+    /// containing at least one distinct consecutive pair on the totally-
+    /// ordered [`DataClassification`] lattice — every distinct pair on a
+    /// total order is strictly comparable via the rank's strict `<` in
+    /// one direction (pinned by
+    /// `is_strictly_comparable_matches_strict_inequality_over_data_
+    /// classification_all_pairs`), so [`Lattice::is_strictly_comparable`]
+    /// fires true on any distinct consecutive pair and [`Iterator::any`]
+    /// short-circuits at the first witness. Peer of [`Lattice::
+    /// any_comparable_pair`]'s total-order universal acceptance one
+    /// STRICTNESS axis over — where the non-strict peer accepts every
+    /// non-singleton slice (including all-duplicate slices via reflexive
+    /// is_comparable), this strict peer restricts acceptance to slices
+    /// with at least one distinct consecutive pair. Pinned exhaustively
+    /// over `DataClassification::ALL^2` (36 pairs — 30 distinct accept,
+    /// 6 reflexive reject) and a targeted triple sample.
+    #[test]
+    fn any_strictly_comparable_pair_accepts_distinct_consecutive_pairs_over_data_classification() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                let expected = a != b;
+                assert_eq!(
+                    DataClassification::any_strictly_comparable_pair([&a, &b]),
+                    expected,
+                    "any_strictly_comparable_pair([{a:?}, {b:?}]) drifted from a != b \
+                     — on a total order the arity-2 strict ∃-walk fires exactly on \
+                     distinct pairs (rejects reflexive diagonals via irreflexivity, \
+                     accepts distinct pairs via total-order strict-comparability)",
+                );
+            }
+        }
+        // Targeted triple sample: a slice with one distinct consecutive
+        // pair anywhere in it fires the ∃-walk; an all-duplicate triple
+        // rejects.
+        assert!(
+            DataClassification::any_strictly_comparable_pair([
+                &DataClassification::Public,
+                &DataClassification::Public,
+                &DataClassification::Internal,
+            ]),
+            "any_strictly_comparable_pair([Public, Public, Internal]) must be true — \
+             the trailing distinct pair witnesses the ∃-walk despite the leading \
+             self-pair",
+        );
+        assert!(
+            !DataClassification::any_strictly_comparable_pair([
+                &DataClassification::Public,
+                &DataClassification::Public,
+                &DataClassification::Public,
+            ]),
+            "any_strictly_comparable_pair([Public, Public, Public]) must be false — \
+             every consecutive pair is a reflexive self-pair the irreflexive strict \
+             comparator rejects",
+        );
+    }
+
+    /// [`Lattice::any_strictly_comparable_pair`] projects the pointed-top
+    /// antichain over [`SubstrateType`] — a slice on the antichain fires
+    /// the direction-free strict ∃-∨ predicate iff it contains AT LEAST
+    /// ONE consecutive pair `(a, b)` where EITHER `a == top XOR b == top`
+    /// (the top-touching strict half-edge in EITHER direction via
+    /// [`Lattice::is_strictly_comparable`]'s definitional disjunction of
+    /// the two strict directional arms). Rejects the reflexive diagonal
+    /// (via strict-arm irreflexivity) AND every distinct-non-top pair
+    /// (via antichain incomparability, since neither [`Lattice::
+    /// strictly_below`] nor [`Lattice::strictly_above`] holds when neither
+    /// non-strict comparator does). Direction-free peer of [`Lattice::
+    /// any_strict_ascending_pair`]'s and [`Lattice::
+    /// any_strict_descending_pair`]'s antichain projections — this widens
+    /// the top-touching strict half-edge to fire in BOTH directions
+    /// (top→x AND x→top) at every top-touching adjacency, rather than only
+    /// one direction on each direction-fixed peer, since [`Lattice::
+    /// is_strictly_comparable`] absorbs both directional arms.
+    #[test]
+    fn any_strictly_comparable_pair_projects_the_pointed_top_antichain_over_substrate_type() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        let compute = SubstrateType::Compute;
+        let storage = SubstrateType::Storage;
+        // Distinct-non-top incomparable pair — rejected on the antichain
+        // (neither strictly_below nor strictly_above holds; the underlying
+        // is_comparable also fails on the pointed-top antichain when both
+        // endpoints are distinct-non-top).
+        assert!(
+            !SubstrateType::any_strictly_comparable_pair([&compute, &storage]),
+            "any_strictly_comparable_pair([{compute:?}, {storage:?}]) must be false — \
+             the pair is distinct-non-top incomparable on the pointed-top antichain",
+        );
+        // Reflexive diagonal — REJECTED by strict-arm irreflexivity
+        // (DIVERGES from the non-strict any_comparable_pair projection one
+        // STRICTNESS axis over, which accepts the reflexive diagonal via
+        // reflexive is_comparable).
+        assert!(
+            !SubstrateType::any_strictly_comparable_pair([&compute, &compute]),
+            "any_strictly_comparable_pair([{compute:?}, {compute:?}]) must be false — \
+             the STRICT direction-free arm rejects the reflexive self-pair by \
+             is_strictly_comparable's irreflexivity, DIVERGING from \
+             any_comparable_pair's non-strict reflexive-diagonal ACCEPTANCE one \
+             STRICTNESS axis over",
+        );
+        // Top-touching strict half-edge in EITHER direction — accepted
+        // by the pointed-top axiom (top is strictly comparable with every
+        // non-top element via BOTH strictly_below and strictly_above
+        // arms of is_strictly_comparable's disjunction). DIVERGES from
+        // any_strict_ascending_pair's asymmetric direction-fixed projection
+        // (which only fires when the top sits SECOND).
+        assert!(
+            SubstrateType::any_strictly_comparable_pair([&top, &compute]),
+            "any_strictly_comparable_pair([top, {compute:?}]) must be true — the \
+             top-originating strict half-edge witnesses is_strictly_comparable on the \
+             pointed-top antichain via the strictly_above arm",
+        );
+        assert!(
+            SubstrateType::any_strictly_comparable_pair([&compute, &top]),
+            "any_strictly_comparable_pair([{compute:?}, top]) must be true — the \
+             top-directed strict half-edge witnesses is_strictly_comparable in the \
+             reverse direction via the strictly_below arm (DIVERGES from \
+             any_strict_ascending_pair, which only fires when the top sits SECOND, \
+             and from any_strict_descending_pair, which only fires when the top sits \
+             FIRST)",
+        );
+        // Slice of all-distinct-non-top-incomparable pairs — rejected.
+        assert!(
+            !SubstrateType::any_strictly_comparable_pair([&compute, &storage, &compute]),
+            "any_strictly_comparable_pair([{compute:?}, {storage:?}, {compute:?}]) \
+             must be false — every consecutive pair is a distinct-non-top incomparable \
+             pair on the pointed-top antichain",
+        );
+        // Slice with a top-touching strict half-edge anywhere in it —
+        // accepted by the ∃-walk short-circuiting at the witnessing pair.
+        assert!(
+            SubstrateType::any_strictly_comparable_pair([&compute, &top, &storage]),
+            "any_strictly_comparable_pair([{compute:?}, top, {storage:?}]) must be \
+             true — every consecutive pair is top-touching so both witness \
+             is_strictly_comparable, and the ∃-walk short-circuits at the first",
+        );
+        // Reflexive-diagonal slice — rejected at every consecutive pair
+        // by strict-arm irreflexivity (DIVERGES from any_comparable_pair's
+        // acceptance of the same slice via reflexive is_comparable).
+        assert!(
+            !SubstrateType::any_strictly_comparable_pair([&compute, &compute, &compute]),
+            "any_strictly_comparable_pair([{compute:?}, {compute:?}, {compute:?}]) \
+             must be false — every consecutive pair is a reflexive self-pair the \
+             irreflexive strict direction-free comparator rejects, DIVERGING from \
+             any_comparable_pair's ACCEPTANCE of the same slice via reflexive \
+             is_comparable",
+        );
+        // Slice with a top-to-top pair — rejected by strict-arm
+        // irreflexivity, since both endpoints are the top and the pair is
+        // still a reflexive self-pair.
+        assert!(
+            !SubstrateType::any_strictly_comparable_pair([&top, &top]),
+            "any_strictly_comparable_pair([top, top]) must be false — even the \
+             top-to-top pair fails strict-arm irreflexivity (it is still a \
+             reflexive self-pair)",
         );
     }
 

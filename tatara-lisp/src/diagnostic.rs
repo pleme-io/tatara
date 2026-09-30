@@ -19,13 +19,14 @@ use crate::error::LispError;
 
 /// `writeln!` into a writer whose `fmt::Write` impl is infallible.
 ///
-/// `format_diagnostic` assembles its rustc-style snippet by emitting
-/// four formatted lines into a `String`. `String`'s `fmt::Write` impl
-/// is total — `impl fmt::Write for String { fn write_str(&mut self, s)
-/// { self.push_str(s); Ok(()) } }` — so every `writeln!`/`write!` into
-/// it returns `Ok(())`; the inline `.expect("writes to a String never
-/// fail")` triple recurred at four sites (THEORY.md §VI.1
-/// three-times rule, crossed decisively).
+/// [`SourceProjection::render_snippet_body`] assembles the rustc-style
+/// snippet by emitting four formatted lines into a `String`, and
+/// `format_diagnostic` composes on top of it. `String`'s `fmt::Write`
+/// impl is total — `impl fmt::Write for String { fn write_str(&mut
+/// self, s) { self.push_str(s); Ok(()) } }` — so every
+/// `writeln!`/`write!` into it returns `Ok(())`; the inline
+/// `.expect("writes to a String never fail")` triple recurred at four
+/// sites (THEORY.md §VI.1 three-times rule, crossed decisively).
 ///
 /// Lifting it into ONE macro centralizes the canonical panic message:
 /// a typo in the expect-string can never drift across the four
@@ -52,12 +53,12 @@ macro_rules! infallible_writeln {
 
 /// `write!` into a writer whose `fmt::Write` impl is infallible — the
 /// non-newline-terminated sibling of `infallible_writeln!`. Used by
-/// `format_diagnostic` for its trailing caret line, which must not
-/// emit a closing newline (so consumers concatenating the rendered
-/// diagnostic into a longer message see the caret as the final
-/// character, not the line after it). Same `String`-infallibility
-/// invariant; same canonical panic message; same theory-anchor
-/// (THEORY.md §VI.1).
+/// [`SourceProjection::render_snippet_body`] for its trailing caret
+/// line, which must not emit a closing newline (so consumers
+/// concatenating the rendered diagnostic into a longer message see the
+/// caret as the final character, not the line after it). Same
+/// `String`-infallibility invariant; same canonical panic message;
+/// same theory-anchor (THEORY.md §VI.1).
 macro_rules! infallible_write {
     ($out:expr, $($t:tt)*) => {{
         use ::std::fmt::Write as _;
@@ -157,6 +158,71 @@ impl<'a> SourceProjection<'a> {
             caret_pad,
         }
     }
+
+    /// Render the rustc-style snippet body — the location line, the
+    /// gutter, the source line, and the trailing caret line —
+    /// **without** a leading `error:` (or `warning:` / `note:`) header
+    /// and **without** a trailing newline. The rendered body opens
+    /// with a leading `\n` so consumers concatenating it after their
+    /// own header (`"error: {msg}"`, `"warning: {msg}"`, a
+    /// JSON-emitter's structured `level` field, an LSP surface's
+    /// `Diagnostic` prefix, a `note:` companion pinned under a
+    /// different column of the SAME source line) see the location
+    /// on the next line — matching rustc's snippet posture.
+    ///
+    /// `label` is the file path or any identifier the caller wants in
+    /// the `--> label:line:col` line; pass `None` when there is no
+    /// source name (the REPL, an in-memory string) and the location
+    /// renders as `--> line N, column M`.
+    ///
+    /// Pre-lift the snippet body was assembled inline inside
+    /// [`format_diagnostic`] via three [`infallible_writeln!`] sites
+    /// plus one [`infallible_write!`] site. Consumers wanting the
+    /// same body under their own header (a `warning:` variant, a
+    /// `note:` companion, a JSON emitter, an LSP surface) had no
+    /// first-class named renderer to reach for — they either
+    /// re-implemented the four emission sites (silently drifting the
+    /// gutter width, the `-->` arrow, the pipe separator, or the
+    /// tab-mirror discipline the `caret_pad` field already inherits)
+    /// or substring-parsed [`format_diagnostic`]'s rendered snippet
+    /// after stripping its `error: <msg>` prefix. Post-lift this
+    /// method is the ONE named snippet-body renderer every
+    /// non-`error` diagnostic surface composes over; a regression at
+    /// the snippet template (an added gutter char, a swapped arrow
+    /// glyph, a trailing-newline drift) reaches every consumer
+    /// through ONE edit at the substrate boundary.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform /
+    /// constructive diagnostics. The rustc-style snippet template is
+    /// named as a first-class substrate primitive so downstream
+    /// header-owning consumers (warnings, notes, JSON emitters, LSP)
+    /// cannot silently drift the gutter/arrow/pipe/caret shape from
+    /// the substrate. THEORY.md §VI.1 — generation over composition;
+    /// the four-emission-site snippet template inside
+    /// [`format_diagnostic`] is named as ONE typed renderer every
+    /// future header-owning emitter binds to rather than re-derives.
+    #[must_use]
+    pub fn render_snippet_body(&self, label: Option<&str>) -> String {
+        let line_str = self.line.to_string();
+        let gutter = " ".repeat(line_str.len());
+        let Self {
+            line,
+            column,
+            line_text,
+            caret_pad,
+        } = self;
+
+        let mut out = String::new();
+        out.push('\n');
+        match label {
+            Some(label) => infallible_writeln!(out, "{gutter}--> {label}:{line}:{column}"),
+            None => infallible_writeln!(out, "{gutter}--> line {line}, column {column}"),
+        }
+        infallible_writeln!(out, "{gutter} |");
+        infallible_writeln!(out, "{line_str} | {line_text}");
+        infallible_write!(out, "{gutter} | {caret_pad}^");
+        out
+    }
 }
 
 /// Convert a byte offset into a 1-based `LineCol`. Offsets past EOF
@@ -252,23 +318,7 @@ pub fn format_diagnostic(src: &str, err: &LispError, label: Option<&str>) -> Str
     let Some(pos) = err.position() else {
         return out;
     };
-    let SourceProjection {
-        line,
-        column,
-        line_text,
-        caret_pad,
-    } = SourceProjection::at(src, pos);
-    let line_str = line.to_string();
-    let gutter = " ".repeat(line_str.len());
-
-    out.push('\n');
-    match label {
-        Some(label) => infallible_writeln!(out, "{gutter}--> {label}:{line}:{column}"),
-        None => infallible_writeln!(out, "{gutter}--> line {line}, column {column}"),
-    }
-    infallible_writeln!(out, "{gutter} |");
-    infallible_writeln!(out, "{line_str} | {line_text}");
-    infallible_write!(out, "{gutter} | {caret_pad}^");
+    out.push_str(&SourceProjection::at(src, pos).render_snippet_body(label));
     out
 }
 
@@ -745,6 +795,209 @@ error: unmatched opening paren at position 3
             std::ptr::eq(borrowed.as_ptr(), src.as_ptr()),
             "line_text must borrow directly from src, not allocate"
         );
+    }
+
+    // ── SourceProjection::render_snippet_body — the rustc-style snippet
+    // template lifted OUT of `format_diagnostic` onto the typed
+    // projection. Sibling of [`Self::at`] (the byte-offset →
+    // rendered-components projection); `render_snippet_body` composes
+    // ON TOP OF the projection to emit the location line + gutter +
+    // source line + caret line as ONE named renderer every
+    // header-owning consumer (a `warning:` variant, a `note:`
+    // companion, a JSON emitter, an LSP surface) binds to rather than
+    // re-implementing the four-emission-site template. Pre-lift these
+    // consumers either re-implemented the template (silently drifting
+    // the gutter width, the arrow glyph, the pipe separator, or the
+    // tab-mirror discipline) or substring-parsed `format_diagnostic`'s
+    // snippet after stripping "error: <msg>". The pins below anchor
+    // the composition law, the leading-newline posture, the
+    // no-trailing-newline posture, the labelless fallback, the
+    // tab-mirror discipline inheritance, and the gutter-width rule at
+    // the substrate boundary — fail-before-pass-after: the method did
+    // not exist pre-lift, so these tests cannot even compile against
+    // the pre-lift API surface.
+
+    #[test]
+    fn render_snippet_body_matches_format_diagnostic_snippet_after_stripping_header() {
+        // COMPOSITION LAW: `render_snippet_body` returns exactly the
+        // substring `format_diagnostic` appends after its
+        // `"error: {msg}"` header. A regression that split the
+        // composition (e.g. `format_diagnostic` re-inlined the four
+        // emission sites rather than routing through the projection's
+        // renderer) would silently drift the snippet body between the
+        // two paths — this pin surfaces the drift at the substrate
+        // boundary.
+        for (src, label) in [
+            ("   )", Some("x.lisp")),
+            ("(a b)\n(c d)\n   )\n", Some("nested.lisp")),
+            ("\t)", Some("tabby.lisp")),
+            (")", None),
+            ("(a b) '", Some("dangle.lisp")),
+        ] {
+            let err = read(src).unwrap_err();
+            let rendered = format_diagnostic(src, &err, label);
+            let header = format!("error: {err}");
+            let body_via_format = rendered
+                .strip_prefix(&header)
+                .expect("format_diagnostic starts with its 'error: {msg}' header");
+            let pos = err.position().expect("reader error carries a position");
+            let proj = SourceProjection::at(src, pos);
+            let body_via_render = proj.render_snippet_body(label);
+            assert_eq!(
+                body_via_format, body_via_render,
+                "snippet body drifted between format_diagnostic and \
+                 SourceProjection::render_snippet_body for src={src:?} label={label:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn render_snippet_body_opens_with_leading_newline() {
+        // LEADING-NEWLINE PIN: the snippet body must begin with `\n`
+        // so a consumer concatenating it after `"error: {msg}"` (or
+        // `"warning: {msg}"` / a JSON-emitter's `level` field) sees
+        // the location on the next line — matching rustc's snippet
+        // posture. A regression that dropped the leading `\n` would
+        // squash the location onto the header line and reads as a
+        // one-liner formatting bug at every downstream consumer.
+        let proj = SourceProjection::at("   )", 3);
+        let body = proj.render_snippet_body(Some("x.lisp"));
+        assert!(
+            body.starts_with('\n'),
+            "snippet body must open with `\\n`; got: {body:?}"
+        );
+    }
+
+    #[test]
+    fn render_snippet_body_ends_at_caret_without_trailing_newline() {
+        // NO-TRAILING-NEWLINE PIN: the snippet body's last char is
+        // `^`, not a newline — so a consumer chaining a `note:`
+        // companion line (or a second snippet) onto the same string
+        // controls the exact separator (a blank line, an inline gap,
+        // no separator at all). Sibling of
+        // `infallible_write_macro_appends_formatted_text_without_newline`
+        // at the composed-snippet level.
+        let proj = SourceProjection::at("   )", 3);
+        let body = proj.render_snippet_body(Some("x.lisp"));
+        assert!(
+            body.ends_with('^'),
+            "snippet body must end at the caret; got: {body:?}"
+        );
+        assert!(
+            !body.ends_with("^\n"),
+            "snippet body must NOT emit a trailing newline (would drift consumer concat); \
+             got: {body:?}"
+        );
+    }
+
+    #[test]
+    fn render_snippet_body_omits_label_when_none() {
+        // LABELLESS PIN: with `label = None` the location line reads
+        // `--> line N, column M` (matching `format_diagnostic`'s
+        // labelless fallback). Pin the fallback at the substrate
+        // boundary so a REPL / in-memory-string consumer picks up
+        // the same shape as `format_diagnostic` without needing to
+        // route through the "error: <msg>" header.
+        let proj = SourceProjection::at(")", 0);
+        let body = proj.render_snippet_body(None);
+        let expected = "\
+\n --> line 1, column 1
+  |
+1 | )
+  | ^";
+        assert_eq!(body, expected, "got:\n{body}");
+    }
+
+    #[test]
+    fn render_snippet_body_emits_labelled_location_line_when_some() {
+        // LABELLED PIN: with `label = Some(l)` the location line
+        // reads `--> l:line:col` (matching `format_diagnostic`'s
+        // labelled shape). Pin the labelled emission at the substrate
+        // boundary so a consumer routing its own path label into the
+        // snippet picks up the same shape as `format_diagnostic`.
+        let proj = SourceProjection::at("   )", 3);
+        let body = proj.render_snippet_body(Some("x.lisp"));
+        let expected = "\
+\n --> x.lisp:1:4
+  |
+1 |    )
+  |    ^";
+        assert_eq!(body, expected, "got:\n{body}");
+    }
+
+    #[test]
+    fn render_snippet_body_inherits_tab_mirror_discipline() {
+        // DISCIPLINE INHERITANCE PIN: the snippet body's caret line
+        // reproduces the `caret_pad` field verbatim — a tab-indented
+        // source produces a caret line whose leading char is `\t`,
+        // not a space. A regression that specialized the caret line
+        // (e.g. replaced `{caret_pad}` with a space-repeat) would
+        // slide the caret left of the offending byte on tab-indented
+        // sources at every renderer routing through this method.
+        // Sibling of `format_diagnostic_caret_pad_mirrors_tab_indent_
+        // for_terminal_alignment` at the header-agnostic snippet
+        // level.
+        let proj = SourceProjection::at("\t)", 1);
+        let body = proj.render_snippet_body(Some("tabby.lisp"));
+        let expected = "\
+\n --> tabby.lisp:1:2
+  |
+1 | \t)
+  | \t^";
+        assert_eq!(body, expected, "got:\n{body}");
+    }
+
+    #[test]
+    fn render_snippet_body_gutter_width_tracks_line_number_digit_count() {
+        // GUTTER-WIDTH PIN: the gutter (the leading space run before
+        // `-->`, ` |`, and ` |` on the caret line) is
+        // `" ".repeat(line.to_string().len())` — one space per line-
+        // number digit. A regression that hard-coded the gutter width
+        // to one space would mis-align the `-->` arrow on multi-digit
+        // line numbers, and the snippet's rendered snippet would look
+        // ragged. Pin the invariant on a two-digit line-number source
+        // to surface a hard-coded-width regression that a single-line
+        // fixture would miss.
+        let mut src = String::new();
+        for _ in 0..11 {
+            src.push_str("(a)\n");
+        }
+        src.push_str("   )"); // stray `)` on line 12, byte offset 47.
+        let pos = src.len() - 1;
+        let proj = SourceProjection::at(&src, pos);
+        assert_eq!(proj.line, 12, "sanity: line-12 fixture");
+        let body = proj.render_snippet_body(Some("wide.lisp"));
+        let expected = "\
+\n  --> wide.lisp:12:4
+   |
+12 |    )
+   |    ^";
+        assert_eq!(body, expected, "got:\n{body}");
+    }
+
+    #[test]
+    fn render_snippet_body_composes_under_warning_header() {
+        // HEADER-AGNOSTIC PIN: the snippet body is header-agnostic —
+        // a `warning:` consumer prepends its own header and the
+        // rendered output has the same shape as `format_diagnostic`
+        // modulo the header prefix. This is the whole point of the
+        // lift: a warning / note / JSON / LSP consumer composes ON TOP
+        // OF this method rather than re-implementing the four-
+        // emission-site template. Pin the composition on the smallest
+        // meaningful header change so a regression at the snippet
+        // template surfaces on every header-owning consumer.
+        let src = "   )";
+        let err = read(src).unwrap_err();
+        let pos = err.position().expect("reader error carries a position");
+        let proj = SourceProjection::at(src, pos);
+        let warning = format!("warning: {err}{}", proj.render_snippet_body(Some("x.lisp")));
+        let expected = "\
+warning: unmatched closing paren at position 3
+ --> x.lisp:1:4
+  |
+1 |    )
+  |    ^";
+        assert_eq!(warning, expected, "got:\n{warning}");
     }
 
     #[test]

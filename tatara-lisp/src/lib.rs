@@ -57,7 +57,7 @@ pub use compile::{
     compile_typed, compile_typed_any, compile_typed_any_from_forms, compile_typed_from_forms,
     split_name_slot, NamedDefinition,
 };
-pub use diagnostic::{format_diagnostic, line_col, Level, LineCol, SourceProjection};
+pub use diagnostic::{format_diagnostic, line_col, Level, LineCol, LspSeverity, SourceProjection};
 pub use env::Env;
 pub use error::{
     CompilerSpecIoStage, ExpectedKwargShape, KwargPath, KwargPathKind, LispError, MacroDefHead,

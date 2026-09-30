@@ -408,6 +408,109 @@ impl Level {
     }
 }
 
+/// Language Server Protocol `DiagnosticSeverity` wire code.
+///
+/// Mirrors the LSP specification's `DiagnosticSeverity` enumeration
+/// verbatim on the wire — `Error = 1`, `Warning = 2`,
+/// `Information = 3`, `Hint = 4` — with `#[repr(u8)]` so the enum
+/// discriminant IS the LSP wire code by construction. A JSON emitter
+/// serialising `severity as u8` gets 1..=4 mechanically; the substrate
+/// makes it impossible to write a variant whose numeric code is not
+/// in the LSP-legal range.
+///
+/// Sibling of [`Level`] on the LSP-wire side of the substrate:
+/// [`Level`] owns the rustc-style header prefix
+/// (`error:` / `warning:` / `note:` / `help:`); `LspSeverity` owns
+/// the LSP-wire numeric code; [`Level::lsp_severity`] +
+/// [`From<Level> for LspSeverity`] compose the mapping. The canonical
+/// rustc → LSP mapping is:
+///
+/// | rustc [`Level`] | LSP [`LspSeverity`] | Wire code |
+/// |-----------------|---------------------|-----------|
+/// | `Error`         | `Error`             | 1         |
+/// | `Warning`       | `Warning`           | 2         |
+/// | `Note`          | `Information`       | 3         |
+/// | `Help`          | `Hint`              | 4         |
+///
+/// `Note → Information` and `Help → Hint` follow rustc's own LSP
+/// bridge posture (rustc-analyzer's `to_proto` mapping) — a `note:` is
+/// informational context, a `help:` is a mechanically-applicable
+/// suggestion.
+///
+/// Pre-lift consumers wanting the LSP wire code re-derived the
+/// mapping inline (a match on `Level` returning a raw `u8`) or
+/// hard-coded the 1..=4 literals at every callsite. Post-lift this
+/// enum is the ONE substrate primitive every LSP-facing consumer
+/// binds to; a regression at the mapping (a swapped code, an
+/// out-of-range literal, a drift from the LSP spec) reaches every
+/// consumer through ONE edit at the substrate boundary.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform / constructive
+/// diagnostics. The LSP wire code is a typed enum discriminant so
+/// downstream LSP surfaces cannot silently emit an illegal severity
+/// (e.g. `0` or `5`) from the substrate. THEORY.md §VI.1 — generation
+/// over composition; the four spellings of the LSP wire code that
+/// would otherwise recur at every LSP-facing consumer are named as
+/// ONE closed sum every future emitter binds to rather than
+/// re-derives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum LspSeverity {
+    /// LSP `DiagnosticSeverity.Error` — reports an error. Wire code 1.
+    Error = 1,
+    /// LSP `DiagnosticSeverity.Warning` — reports a warning. Wire code 2.
+    Warning = 2,
+    /// LSP `DiagnosticSeverity.Information` — reports an informational
+    /// message. Wire code 3. Canonical target for rustc's `note:` per
+    /// the rustc-analyzer LSP bridge.
+    Information = 3,
+    /// LSP `DiagnosticSeverity.Hint` — reports a hint. Wire code 4.
+    /// Canonical target for rustc's `help:` per the rustc-analyzer LSP
+    /// bridge.
+    Hint = 4,
+}
+
+impl LspSeverity {
+    /// The LSP `DiagnosticSeverity` wire code — the numeric value the
+    /// `severity` field of an LSP `Diagnostic` JSON record must carry.
+    /// `1..=4` by construction (the enum's `#[repr(u8)]` discriminants
+    /// pin the codes at the substrate boundary), so a JSON emitter can
+    /// serialise `severity as u8` without a bounds check.
+    #[must_use]
+    pub const fn code(self) -> u8 {
+        self as u8
+    }
+}
+
+impl From<Level> for LspSeverity {
+    /// Canonical rustc → LSP severity mapping. See [`LspSeverity`] for
+    /// the table.
+    fn from(level: Level) -> Self {
+        level.lsp_severity()
+    }
+}
+
+impl Level {
+    /// Map this rustc-style level onto its LSP `DiagnosticSeverity`
+    /// counterpart. Canonical mapping (see [`LspSeverity`] for the
+    /// table): `Error → Error`, `Warning → Warning`,
+    /// `Note → Information`, `Help → Hint`.
+    ///
+    /// `const fn` so an LSP emitter can compose this into a `const`
+    /// severity table without dispatching at runtime, and so the
+    /// mapping's shape is verifiable at compile time (see the
+    /// `const _: () = …` witnesses in this module's tests).
+    #[must_use]
+    pub const fn lsp_severity(self) -> LspSeverity {
+        match self {
+            Self::Error => LspSeverity::Error,
+            Self::Warning => LspSeverity::Warning,
+            Self::Note => LspSeverity::Information,
+            Self::Help => LspSeverity::Hint,
+        }
+    }
+}
+
 /// Render a `LispError` as a rustc-style `error:` diagnostic with a
 /// caret. Equivalent to `Level::Error.format_diagnostic(src, err,
 /// label)` — kept as a free function for the two established call
@@ -440,10 +543,45 @@ pub fn format_diagnostic(src: &str, err: &LispError, label: Option<&str>) -> Str
 mod tests {
     use super::{
         format_diagnostic, line_at, line_col, mirror_source_prefix_as_pad, Level, LineCol,
-        SourceProjection,
+        LspSeverity, SourceProjection,
     };
     use crate::error::LispError;
     use crate::reader::read;
+
+    // ── COMPILE-TIME LSP wire-code invariants ─────────────────────────
+    //
+    // These `const _: () = assert!(…)` sweeps run at `cargo check`
+    // time — a regression that swapped a discriminant (e.g. `Error =
+    // 2`) fails the build before a single test runs. Sibling of the
+    // runtime `lsp_severity_*` pins below; the two surfaces bind the
+    // SAME theorem at TWO stages of the toolchain (const-eval sweep +
+    // runtime pin) so a build that skips tests still catches the
+    // regression here, and a build that runs tests catches it a
+    // second time as a safety net.
+
+    /// LSP `DiagnosticSeverity.Error` MUST serialise as wire code 1.
+    const _: () = assert!(LspSeverity::Error.code() == 1);
+    /// LSP `DiagnosticSeverity.Warning` MUST serialise as wire code 2.
+    const _: () = assert!(LspSeverity::Warning.code() == 2);
+    /// LSP `DiagnosticSeverity.Information` MUST serialise as wire code 3.
+    const _: () = assert!(LspSeverity::Information.code() == 3);
+    /// LSP `DiagnosticSeverity.Hint` MUST serialise as wire code 4.
+    const _: () = assert!(LspSeverity::Hint.code() == 4);
+
+    /// Canonical rustc → LSP mapping, pinned at const-eval so the
+    /// four discriminant equalities are enforced before test time.
+    const _: () = {
+        assert!(matches!(Level::Error.lsp_severity(), LspSeverity::Error));
+        assert!(matches!(
+            Level::Warning.lsp_severity(),
+            LspSeverity::Warning
+        ));
+        assert!(matches!(
+            Level::Note.lsp_severity(),
+            LspSeverity::Information
+        ));
+        assert!(matches!(Level::Help.lsp_severity(), LspSeverity::Hint));
+    };
 
     // ── line_col ────────────────────────────────────────────────────
 
@@ -1344,6 +1482,206 @@ warning: unmatched closing paren at position 3
             note_body, help_body,
             "note: and help: differ beyond the header prefix"
         );
+    }
+
+    // ── LspSeverity — the typed LSP `DiagnosticSeverity` wire code
+    // lifted OUT of the raw `1..=4` u8 spelling every LSP-facing
+    // consumer would otherwise re-derive at its own callsite.
+    // Sibling of [`Level`] on the LSP-wire side of the substrate:
+    // [`Level`] owns the rustc-style header prefix, [`LspSeverity`]
+    // owns the LSP-wire numeric code, [`Level::lsp_severity`] +
+    // [`From<Level>`] compose the mapping. Pre-lift a JSON emitter /
+    // LSP surface wanting the wire code re-derived the `1..=4`
+    // literal inline (`match level { Level::Error => 1, … }`) or
+    // hard-coded the code at every callsite. Post-lift this enum is
+    // the ONE substrate primitive every LSP-facing consumer binds to;
+    // a regression at the mapping (a swapped code, an out-of-range
+    // literal, a drift from the LSP spec) reaches every consumer
+    // through ONE edit. The pins below anchor the closed-sum
+    // discriminant contract, the canonical rustc → LSP mapping, the
+    // `From<Level>` bridge equivalence, the `#[repr(u8)]` cast
+    // discipline, and the `code()` const-fn-ness at the substrate
+    // boundary — fail-before-pass-after: the enum did not exist
+    // pre-lift, so these tests cannot even compile against the
+    // pre-lift API surface.
+
+    #[test]
+    fn lsp_severity_code_returns_lsp_wire_value_for_every_variant() {
+        // CLOSED-SUM PIN: each `LspSeverity` discriminant serialises as
+        // the LSP-spec wire code. A regression that swapped a variant's
+        // discriminant (e.g. `Warning = 3`) would fail the const-eval
+        // sweep above AND this runtime pin. `1..=4` is the LSP-legal
+        // range; any code outside it is a protocol violation.
+        let codes: [(LspSeverity, u8); 4] = [
+            (LspSeverity::Error, 1),
+            (LspSeverity::Warning, 2),
+            (LspSeverity::Information, 3),
+            (LspSeverity::Hint, 4),
+        ];
+        for (severity, expected) in codes {
+            assert_eq!(
+                severity.code(),
+                expected,
+                "wire-code drift for {severity:?}",
+            );
+            assert!(
+                (1..=4).contains(&severity.code()),
+                "wire code out of LSP-legal 1..=4 range for {severity:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn lsp_severity_code_equals_repr_u8_cast() {
+        // REPR-DISCIPLINE PIN: the `#[repr(u8)]` discriminant IS the
+        // wire code — `code()` is exactly `self as u8`. Pin the cast
+        // equivalence so a regression that specialised `code()` (e.g.
+        // added +1, subtracted from a base, routed through a table) or
+        // dropped the `#[repr(u8)]` attribute fails HERE. Load-bearing
+        // for downstream emitters that serialise `severity as u8`
+        // directly without going through `.code()`.
+        for severity in [
+            LspSeverity::Error,
+            LspSeverity::Warning,
+            LspSeverity::Information,
+            LspSeverity::Hint,
+        ] {
+            assert_eq!(
+                severity.code(),
+                severity as u8,
+                "code() and `as u8` cast diverged for {severity:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn level_lsp_severity_maps_each_rustc_level_to_canonical_lsp_severity() {
+        // CANONICAL MAPPING PIN: rustc's `Level` maps onto LSP's
+        // `DiagnosticSeverity` per the rustc-analyzer LSP bridge —
+        // `Error → Error`, `Warning → Warning`, `Note → Information`,
+        // `Help → Hint`. A regression that transposed the Note/Help
+        // arms (a common typo) surfaces here. Pin all four arms so a
+        // per-variant specialisation cannot slip through.
+        let mapping: [(Level, LspSeverity); 4] = [
+            (Level::Error, LspSeverity::Error),
+            (Level::Warning, LspSeverity::Warning),
+            (Level::Note, LspSeverity::Information),
+            (Level::Help, LspSeverity::Hint),
+        ];
+        for (level, expected) in mapping {
+            assert_eq!(
+                level.lsp_severity(),
+                expected,
+                "rustc → LSP mapping drift for {level:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn level_lsp_severity_agrees_with_from_level_bridge() {
+        // BRIDGE EQUIVALENCE PIN: `Level::lsp_severity(l)` MUST equal
+        // `LspSeverity::from(l)`. Pin the two paths so a regression
+        // that specialised ONE without the other (e.g. the `From`
+        // impl started routing through a stale table, or
+        // `lsp_severity` picked up a per-variant special case) would
+        // silently split the two entry points at every downstream
+        // consumer.
+        for level in [Level::Error, Level::Warning, Level::Note, Level::Help] {
+            let via_method = level.lsp_severity();
+            let via_from: LspSeverity = level.into();
+            assert_eq!(
+                via_method, via_from,
+                "lsp_severity method / From<Level> bridge diverged for {level:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn level_lsp_severity_produces_lsp_legal_wire_code_on_every_variant() {
+        // WIRE-CODE SURJECTION PIN: for every rustc `Level`, the
+        // routed LSP wire code lands in the LSP-legal `1..=4` range
+        // AND covers exactly the four LSP severities (surjectivity —
+        // every LSP severity is reachable from SOME rustc level).
+        // Pin both directions so a future rustc-level addition that
+        // silently mapped to code 0 (unmapped default) surfaces here.
+        let mut hit = [false; 4];
+        for level in [Level::Error, Level::Warning, Level::Note, Level::Help] {
+            let code = level.lsp_severity().code();
+            assert!(
+                (1..=4).contains(&code),
+                "wire code out of LSP-legal 1..=4 range for {level:?}: {code}",
+            );
+            hit[usize::from(code) - 1] = true;
+        }
+        assert!(
+            hit.iter().all(|h| *h),
+            "surjection onto {{1, 2, 3, 4}} incomplete; hit = {hit:?}",
+        );
+    }
+
+    #[test]
+    fn lsp_severity_code_is_callable_in_const_context() {
+        // CONST-FN PIN: `LspSeverity::code` MUST be usable in a
+        // `const` context so a downstream emitter can compose it into
+        // a compile-time severity table. A regression that removed
+        // the `const` qualifier would fail HERE at rustc time — the
+        // const bindings below evaluate at test-compile time, not at
+        // runtime. Sibling of the module-level `const _: () = …`
+        // sweep at the top of this test module: this pin surfaces
+        // the const-fn contract on a per-test basis rather than only
+        // through the module-level sweep.
+        const ERROR_CODE: u8 = LspSeverity::Error.code();
+        const WARNING_CODE: u8 = LspSeverity::Warning.code();
+        const INFORMATION_CODE: u8 = LspSeverity::Information.code();
+        const HINT_CODE: u8 = LspSeverity::Hint.code();
+        assert_eq!(ERROR_CODE, 1);
+        assert_eq!(WARNING_CODE, 2);
+        assert_eq!(INFORMATION_CODE, 3);
+        assert_eq!(HINT_CODE, 4);
+    }
+
+    #[test]
+    fn level_lsp_severity_is_callable_in_const_context() {
+        // CONST-FN PIN: `Level::lsp_severity` MUST be usable in a
+        // `const` context — a downstream `const SEVERITY_TABLE: [u8;
+        // 4] = …` compile-time table is the whole point of the lift.
+        // A regression that removed the `const` qualifier fails HERE
+        // at rustc time.
+        const ERROR_SEV: LspSeverity = Level::Error.lsp_severity();
+        const WARNING_SEV: LspSeverity = Level::Warning.lsp_severity();
+        const NOTE_SEV: LspSeverity = Level::Note.lsp_severity();
+        const HELP_SEV: LspSeverity = Level::Help.lsp_severity();
+        assert!(matches!(ERROR_SEV, LspSeverity::Error));
+        assert!(matches!(WARNING_SEV, LspSeverity::Warning));
+        assert!(matches!(NOTE_SEV, LspSeverity::Information));
+        assert!(matches!(HELP_SEV, LspSeverity::Hint));
+    }
+
+    #[test]
+    fn lsp_severity_variants_are_pairwise_distinct_on_wire_code() {
+        // INJECTIVITY PIN: no two `LspSeverity` variants share a wire
+        // code. Pairwise-distinct discriminants are load-bearing —
+        // an LSP JSON emitter routes on the wire code, so two
+        // variants sharing a code would collapse two distinct
+        // severities into one on the wire. A regression that
+        // duplicated a discriminant would fail HERE.
+        let variants = [
+            LspSeverity::Error,
+            LspSeverity::Warning,
+            LspSeverity::Information,
+            LspSeverity::Hint,
+        ];
+        for i in 0..variants.len() {
+            for j in (i + 1)..variants.len() {
+                assert_ne!(
+                    variants[i].code(),
+                    variants[j].code(),
+                    "wire-code collision between {:?} and {:?}",
+                    variants[i],
+                    variants[j],
+                );
+            }
+        }
     }
 
     #[test]

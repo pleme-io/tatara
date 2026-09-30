@@ -293,7 +293,126 @@ fn mirror_source_prefix_as_pad(line_text: &str, column: usize) -> String {
         .collect()
 }
 
-/// Render a `LispError` as a rustc-style diagnostic with a caret.
+/// Diagnostic severity level. Selects the header prefix
+/// (`error:` / `warning:` / `note:` / `help:`) a
+/// [`Level::format_diagnostic`] renders in front of the message —
+/// modelled directly on rustc's `Level` enum (translation through
+/// pleme-io primitives: the level is a Rust sum type instead of a
+/// string literal, so an invalid header prefix is unrepresentable).
+///
+/// Pre-lift [`format_diagnostic`] hardcoded `"error: {err}"`. Consumers
+/// wanting a `warning:`, `note:`, or `help:` header re-derived the
+/// header inline (`format!("warning: {err}") + render_snippet_body(...)`)
+/// — the header shape drifted at every callsite that spelled the
+/// prefix out. Post-lift this enum is the ONE substrate primitive
+/// every header-owning consumer binds to. A future JSON emitter
+/// serialises the enum discriminant rather than string-matching the
+/// prefix; an LSP surface maps `Level` onto `DiagnosticSeverity`; a
+/// terminal renderer picks the ANSI colour off the discriminant.
+/// Every downstream renderer inherits the header shape from the
+/// substrate mechanically.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform / constructive
+/// diagnostics. The header prefix is a typed enum discriminant so
+/// downstream consumers cannot silently drift the shape from the
+/// substrate. THEORY.md §VI.1 — generation over composition; the
+/// four spellings of the header prefix that would otherwise recur at
+/// every consumer are named as ONE closed sum every future emitter
+/// binds to rather than restates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Level {
+    /// `error:` — the failure the operator MUST fix; the shape
+    /// [`format_diagnostic`] renders.
+    Error,
+    /// `warning:` — the failure the operator SHOULD fix but the
+    /// build/check does not fail on; the shape a lint-style consumer
+    /// renders.
+    Warning,
+    /// `note:` — informational, typically a companion pinned under a
+    /// different column of the SAME source line an `error:` or
+    /// `warning:` already highlighted.
+    Note,
+    /// `help:` — a suggestion the operator can apply mechanically.
+    Help,
+}
+
+impl Level {
+    /// The prefix rendered in front of `: {err}` at the diagnostic's
+    /// first line. `Level::Error` → `"error"`, and so on for
+    /// `Warning`, `Note`, `Help`. `'static` so consumers can compose
+    /// the prefix into stack-allocated `write!`/`format_args!`
+    /// without cloning.
+    #[must_use]
+    pub const fn as_prefix(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+            Self::Note => "note",
+            Self::Help => "help",
+        }
+    }
+
+    /// Render the diagnostic header — `"{prefix}: {err}"` — WITHOUT a
+    /// trailing newline and WITHOUT a snippet body. Sibling of
+    /// [`SourceProjection::render_snippet_body`] on the header side
+    /// of the substrate: [`Self::format_diagnostic`] composes the two.
+    ///
+    /// Named at the substrate boundary so a downstream consumer that
+    /// wants ONLY the header (a positionless error whose snippet body
+    /// is empty; a JSON emitter placing `err` in a `message` field
+    /// separate from `level`; an LSP surface that renders the header
+    /// as a `Diagnostic.message` while the snippet body attaches as
+    /// `relatedInformation`) reaches ONE named primitive rather than
+    /// re-implementing `format!("{prefix}: {err}")`.
+    #[must_use]
+    pub fn render_header(self, err: &LispError) -> String {
+        format!("{}: {err}", self.as_prefix())
+    }
+
+    /// Render `err` as a rustc-style diagnostic with a caret,
+    /// prefixed with this level's header. Composes
+    /// [`Self::render_header`] with
+    /// [`SourceProjection::render_snippet_body`] at ONE call site.
+    ///
+    /// ```text
+    /// {level}: {err}
+    ///  --> file.lisp:1:4
+    ///   |
+    /// 1 |    )
+    ///   |    ^
+    /// ```
+    ///
+    /// `label` is the file path or any identifier the caller wants in
+    /// the `--> label:line:col` line; pass `None` when there is no
+    /// source name (the REPL, an in-memory string) and the location
+    /// renders as `--> line N, column M`.
+    ///
+    /// Errors whose `position()` is `None` (`Type`, `Compile`, …)
+    /// render as a single `{level}: <msg>` line — there is nothing to
+    /// point at. As more variants gain positions, those errors
+    /// automatically pick up the snippet rendering with no consumer
+    /// changes.
+    ///
+    /// The [`format_diagnostic`] free function is a compatibility
+    /// wrapper that delegates to `Level::Error.format_diagnostic`;
+    /// new call sites should reach for this method directly and pass
+    /// the level that matches the finding's severity.
+    #[must_use]
+    pub fn format_diagnostic(self, src: &str, err: &LispError, label: Option<&str>) -> String {
+        let mut out = self.render_header(err);
+        let Some(pos) = err.position() else {
+            return out;
+        };
+        out.push_str(&SourceProjection::at(src, pos).render_snippet_body(label));
+        out
+    }
+}
+
+/// Render a `LispError` as a rustc-style `error:` diagnostic with a
+/// caret. Equivalent to `Level::Error.format_diagnostic(src, err,
+/// label)` — kept as a free function for the two established call
+/// sites (`tatara-lispc`, `tatara-check`) that only ever emit
+/// `error:`-shaped diagnostics.
 ///
 /// ```text
 /// error: unmatched closing paren at position 3
@@ -314,18 +433,13 @@ fn mirror_source_prefix_as_pad(line_text: &str, column: usize) -> String {
 /// up the snippet rendering with no consumer changes.
 #[must_use]
 pub fn format_diagnostic(src: &str, err: &LispError, label: Option<&str>) -> String {
-    let mut out = format!("error: {err}");
-    let Some(pos) = err.position() else {
-        return out;
-    };
-    out.push_str(&SourceProjection::at(src, pos).render_snippet_body(label));
-    out
+    Level::Error.format_diagnostic(src, err, label)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        format_diagnostic, line_at, line_col, mirror_source_prefix_as_pad, LineCol,
+        format_diagnostic, line_at, line_col, mirror_source_prefix_as_pad, Level, LineCol,
         SourceProjection,
     };
     use crate::error::LispError;
@@ -998,6 +1112,238 @@ warning: unmatched closing paren at position 3
 1 |    )
   |    ^";
         assert_eq!(warning, expected, "got:\n{warning}");
+    }
+
+    // ── Level — the typed diagnostic severity lifted OUT of
+    // `format_diagnostic`'s hardcoded `"error: {err}"` header spelling.
+    // Sibling of [`SourceProjection`] on the HEADER side of the
+    // substrate: [`SourceProjection::render_snippet_body`] owns the
+    // snippet-body template, `Level` owns the header prefix, and
+    // [`Level::format_diagnostic`] composes the two at ONE call site.
+    // Pre-lift consumers wanting a non-`error:` header re-derived the
+    // prefix inline (`format!("warning: {err}") +
+    // render_snippet_body(...)`) — the header shape drifted at every
+    // callsite that spelled the prefix out. The pins below anchor
+    // the four-variant closed sum, the `render_header` primitive, the
+    // `format_diagnostic` composition law, the free-function
+    // delegation, and the positionless-error shape at the substrate
+    // boundary — fail-before-pass-after: the enum did not exist
+    // pre-lift, so these tests cannot even compile against the pre-
+    // lift API surface.
+
+    #[test]
+    fn level_as_prefix_maps_each_variant_to_its_rustc_style_prefix() {
+        // CLOSED-SUM PIN: each `Level` discriminant maps to its
+        // rustc-style prefix string. A regression that renamed one
+        // variant's prefix (e.g. `Warning` → `"warn"`) or specialised
+        // a variant to an owned `String` (dropping the `'static`
+        // discipline) would fail here. `'static` is load-bearing:
+        // downstream consumers compose the prefix into stack
+        // `write!`/`format_args!` sites without cloning.
+        let prefixes: [(Level, &'static str); 4] = [
+            (Level::Error, "error"),
+            (Level::Warning, "warning"),
+            (Level::Note, "note"),
+            (Level::Help, "help"),
+        ];
+        for (level, expected) in prefixes {
+            let got: &'static str = level.as_prefix();
+            assert_eq!(got, expected, "prefix drift for {level:?}");
+        }
+    }
+
+    #[test]
+    fn level_render_header_emits_prefix_colon_message_without_newline() {
+        // HEADER-ONLY PIN: `render_header` returns
+        // `"{prefix}: {err}"` with NO trailing newline and NO snippet
+        // body — a positionless emitter or a JSON emitter placing
+        // `err` in a `message` field separate from `level` reaches
+        // ONE named primitive rather than re-deriving
+        // `format!("{prefix}: {err}")`. Sweeps every variant so a
+        // regression that specialised ONE branch (e.g. `Error` got a
+        // trailing newline the others did not) surfaces per-variant.
+        let err = read(")").unwrap_err();
+        let expected_err_msg = "unmatched closing paren at position 0";
+        // Sanity: our fixture prints as we expect (independent of the
+        // header rendering).
+        assert_eq!(err.to_string(), expected_err_msg);
+        for level in [Level::Error, Level::Warning, Level::Note, Level::Help] {
+            let header = level.render_header(&err);
+            assert_eq!(
+                header,
+                format!("{}: {expected_err_msg}", level.as_prefix()),
+                "header drift for {level:?}"
+            );
+            assert!(
+                !header.contains('\n'),
+                "render_header must NOT emit a newline; got {header:?} for {level:?}"
+            );
+            assert!(
+                !header.contains('^'),
+                "render_header must NOT emit a caret; got {header:?} for {level:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn level_format_diagnostic_composes_header_with_snippet_body() {
+        // COMPOSITION LAW: `Level::format_diagnostic(src, err, label)`
+        // equals `Level::render_header(err) +
+        // SourceProjection::at(src, err.position()?).render_snippet_body(label)`.
+        // Pin the composition rule across every variant on the same
+        // source so the ONLY thing that changes between the four
+        // renderings is the header prefix — the snippet body stays
+        // byte-for-byte identical. A regression that specialised
+        // `format_diagnostic` to a per-level snippet body (e.g.
+        // `Warning` omitted the caret line) would surface here.
+        let src = "   )";
+        let err = read(src).unwrap_err();
+        let pos = err.position().expect("reader error carries a position");
+        let snippet = SourceProjection::at(src, pos).render_snippet_body(Some("x.lisp"));
+        for level in [Level::Error, Level::Warning, Level::Note, Level::Help] {
+            let rendered = level.format_diagnostic(src, &err, Some("x.lisp"));
+            let expected = format!("{}: {err}{snippet}", level.as_prefix());
+            assert_eq!(rendered, expected, "composition drift for {level:?}");
+        }
+    }
+
+    #[test]
+    fn level_format_diagnostic_renders_full_warning_snippet_end_to_end() {
+        // END-TO-END PIN: pin the exact rendered `warning:` snippet
+        // for a stray-paren fixture — the same fixture pinned by
+        // `render_snippet_body_composes_under_warning_header` at the
+        // snippet-body level. A regression that mis-composed the
+        // header + body (e.g. dropped the leading `\n` on the snippet
+        // side when routed through the header path) surfaces on the
+        // rendered fixture, not on an abstract equivalence.
+        let src = "   )";
+        let err = read(src).unwrap_err();
+        let rendered = Level::Warning.format_diagnostic(src, &err, Some("x.lisp"));
+        let expected = "\
+warning: unmatched closing paren at position 3
+ --> x.lisp:1:4
+  |
+1 |    )
+  |    ^";
+        assert_eq!(rendered, expected, "got:\n{rendered}");
+    }
+
+    #[test]
+    fn level_format_diagnostic_falls_back_to_header_only_for_positionless_errors() {
+        // POSITIONLESS PIN: a `Compile` error has no position; every
+        // `Level` variant renders as a clean single line — the header
+        // alone, no snippet body appended. Sibling of
+        // `format_diagnostic_falls_back_to_single_line_for_positionless_errors`
+        // at the level-parametric layer.
+        let err = LispError::Compile {
+            form: ":threshold".into(),
+            message: "expected number".into(),
+        };
+        let src = "(defmonitor :threshold #t)";
+        for level in [Level::Error, Level::Warning, Level::Note, Level::Help] {
+            let rendered = level.format_diagnostic(src, &err, Some("m.lisp"));
+            let expected = format!(
+                "{}: compile error in :threshold: expected number",
+                level.as_prefix()
+            );
+            assert_eq!(rendered, expected, "positionless drift for {level:?}");
+            assert!(
+                !rendered.contains('\n'),
+                "positionless render must not introduce newlines for {level:?}; got {rendered:?}"
+            );
+            assert!(
+                !rendered.contains('^'),
+                "no caret allowed without a position for {level:?}; got {rendered:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn level_format_diagnostic_omits_label_when_none() {
+        // LABELLESS PIN: `label = None` renders the location line as
+        // `--> line N, column M` on the snippet body, and the header
+        // prefix still reads `{level}:`. Per-variant sweep to catch a
+        // specialisation that only threaded the label under one
+        // variant.
+        for level in [Level::Error, Level::Warning, Level::Note, Level::Help] {
+            let err = read(")").unwrap_err();
+            let rendered = level.format_diagnostic(")", &err, None);
+            let expected = format!(
+                "{}: unmatched closing paren at position 0\n --> line 1, column 1\n  |\n1 | )\n  | ^",
+                level.as_prefix()
+            );
+            assert_eq!(rendered, expected, "labelless drift for {level:?}");
+        }
+    }
+
+    #[test]
+    fn free_function_format_diagnostic_delegates_to_level_error() {
+        // DELEGATION PIN: the free `format_diagnostic` free function
+        // is byte-for-byte equivalent to
+        // `Level::Error.format_diagnostic`. Pin the delegation on
+        // representative fixtures (labelled + labelless, positionless
+        // + positioned, tab-indented) so a regression that re-inlined
+        // the free function (rather than routing through the enum)
+        // would silently drift the header between the two paths.
+        let cases: [(&str, Option<&str>); 5] = [
+            ("   )", Some("x.lisp")),
+            ("(a b)\n(c d)\n   )\n", Some("nested.lisp")),
+            ("\t)", Some("tabby.lisp")),
+            (")", None),
+            ("(a b) '", Some("dangle.lisp")),
+        ];
+        for (src, label) in cases {
+            let err = read(src).unwrap_err();
+            let via_free = format_diagnostic(src, &err, label);
+            let via_enum = Level::Error.format_diagnostic(src, &err, label);
+            assert_eq!(
+                via_free, via_enum,
+                "delegation drift for src={src:?} label={label:?}"
+            );
+        }
+        // Positionless fixture too — a `Compile` error hits the
+        // early-return branch and must still agree between the two
+        // paths.
+        let compile_err = LispError::Compile {
+            form: ":threshold".into(),
+            message: "expected number".into(),
+        };
+        assert_eq!(
+            format_diagnostic("(_)", &compile_err, Some("c.lisp")),
+            Level::Error.format_diagnostic("(_)", &compile_err, Some("c.lisp")),
+        );
+    }
+
+    #[test]
+    fn level_note_and_help_compose_under_the_same_snippet_body() {
+        // NOTE/HELP PIN: `note:` and `help:` are the two variants a
+        // future rustc-style companion-line consumer reaches for most
+        // (an `error:` finding with a `note:` pinned under a different
+        // column of the SAME source line; a `warning:` finding with a
+        // `help:` suggestion). Pin the rendered shape for both on the
+        // same fixture so a regression that transposed their prefixes
+        // surfaces here, not at a downstream consumer that composed
+        // the two together.
+        let src = "   )";
+        let err = read(src).unwrap_err();
+        let note_rendered = Level::Note.format_diagnostic(src, &err, Some("x.lisp"));
+        let help_rendered = Level::Help.format_diagnostic(src, &err, Some("x.lisp"));
+        assert!(
+            note_rendered.starts_with("note: "),
+            "note: prefix drift; got {note_rendered:?}"
+        );
+        assert!(
+            help_rendered.starts_with("help: "),
+            "help: prefix drift; got {help_rendered:?}"
+        );
+        // Same snippet body — the two renderings differ ONLY in the
+        // header prefix.
+        let note_body = note_rendered.strip_prefix("note").unwrap();
+        let help_body = help_rendered.strip_prefix("help").unwrap();
+        assert_eq!(
+            note_body, help_body,
+            "note: and help: differ beyond the header prefix"
+        );
     }
 
     #[test]

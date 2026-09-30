@@ -73,6 +73,92 @@ pub struct LineCol {
     pub column: usize,
 }
 
+/// Projection of a byte offset into a source string onto the four
+/// rendered components a diagnostic renderer needs to place a caret
+/// under the offending byte on a fixed-width terminal: 1-based line,
+/// 1-based column (UTF-8 scalars, not bytes), the containing source
+/// line, and the tab-mirrored caret pad whose rendered width equals
+/// the first `column - 1` chars of the source line.
+///
+/// [`format_diagnostic`] composes on top of this projection — every
+/// consumer that renders diagnostics into its own writer (an LSP
+/// surfacing structured `Diagnostic` records, an IDE painting a
+/// custom underline, a `tatara-check` variant routing to a JSON
+/// emitter instead of a rustc-style snippet) reaches the four typed
+/// components in ONE call rather than composing three inline helpers,
+/// and the tab-mirror discipline that keeps carets aligned under
+/// tab-indented sources is inherited from the substrate automatically.
+///
+/// Pre-lift the four components were computed inline at
+/// [`format_diagnostic`]'s body via three sibling helpers ([`line_col`],
+/// a private `line_at`, a private `mirror_source_prefix_as_pad`).
+/// Consumers wanting the same projection outside `format_diagnostic`
+/// had no first-class named projection to reach for — they either
+/// re-implemented `line_at` + `mirror_source_prefix_as_pad` (silently
+/// drifting the tab-mirror discipline) or called `format_diagnostic`
+/// and substring-parsed its rendered snippet. This struct + its
+/// [`Self::at`] constructor is the ONE named projection every renderer
+/// binds to; a regression in the substrate's tab-mirror discipline,
+/// column-counting semantics (chars vs bytes), or EOF-clamp corner
+/// reaches every consumer through ONE edit.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform / constructive
+/// diagnostics. The byte-offset → rendered-components projection is
+/// exposed as ONE typed value so downstream renderers cannot silently
+/// drift the tab-mirror discipline or the 1-based origin from the
+/// substrate. THEORY.md §VI.1 — generation over composition; the
+/// three-helper composition inside `format_diagnostic` is named as
+/// ONE typed projection every future emitter binds to rather than
+/// re-derives.
+#[derive(Debug, Clone)]
+pub struct SourceProjection<'a> {
+    /// 1-based line number of the line containing `byte_offset`.
+    pub line: usize,
+    /// 1-based column (UTF-8 scalars, not bytes) of `byte_offset`
+    /// within the containing line.
+    pub column: usize,
+    /// The containing source line, without its trailing `\n`.
+    pub line_text: &'a str,
+    /// A pad whose rendered visual width on a fixed-width terminal
+    /// equals the first `column - 1` chars of [`Self::line_text`].
+    /// Each source `\t` mirrors through as `\t`; every other char
+    /// becomes a space. The pad and the source line consume the same
+    /// tab-stops, so a caret placed after the pad lands under the
+    /// offending byte regardless of the terminal's tab-stop setting.
+    pub caret_pad: String,
+}
+
+impl<'a> SourceProjection<'a> {
+    /// Project `byte_offset` into `src` onto the four rendered
+    /// components. Offsets past EOF clamp to the final position; the
+    /// column counts UTF-8 scalar characters, not bytes (an `é` is
+    /// one column, two bytes) so the caret renders under the visible
+    /// character a human sees.
+    ///
+    /// Composes [`line_col`] with the containing-line slice
+    /// (`line_at`) and the tab-mirrored caret pad
+    /// (`mirror_source_prefix_as_pad`) at ONE call site. A regression
+    /// that swapped ONE component's implementation (e.g. sliced
+    /// [`Self::line_text`] by byte offset rather than char offset,
+    /// or padded the caret with spaces rather than mirroring tabs)
+    /// would silently drift the caret placement on tab-indented
+    /// sources — the sibling `format_diagnostic_caret_pad_mirrors_*`
+    /// tests below AND the new `SourceProjection`-level tests both
+    /// bind that invariant at the substrate boundary.
+    #[must_use]
+    pub fn at(src: &'a str, byte_offset: usize) -> Self {
+        let LineCol { line, column } = line_col(src, byte_offset);
+        let line_text = line_at(src, byte_offset);
+        let caret_pad = mirror_source_prefix_as_pad(line_text, column);
+        Self {
+            line,
+            column,
+            line_text,
+            caret_pad,
+        }
+    }
+}
+
 /// Convert a byte offset into a 1-based `LineCol`. Offsets past EOF
 /// clamp to the final position. `column` counts UTF-8 scalar
 /// characters, not bytes — an `é` is one column, two bytes — so the
@@ -166,11 +252,14 @@ pub fn format_diagnostic(src: &str, err: &LispError, label: Option<&str>) -> Str
     let Some(pos) = err.position() else {
         return out;
     };
-    let LineCol { line, column } = line_col(src, pos);
-    let line_text = line_at(src, pos);
+    let SourceProjection {
+        line,
+        column,
+        line_text,
+        caret_pad,
+    } = SourceProjection::at(src, pos);
     let line_str = line.to_string();
     let gutter = " ".repeat(line_str.len());
-    let caret_pad = mirror_source_prefix_as_pad(line_text, column);
 
     out.push('\n');
     match label {
@@ -185,7 +274,10 @@ pub fn format_diagnostic(src: &str, err: &LispError, label: Option<&str>) -> Str
 
 #[cfg(test)]
 mod tests {
-    use super::{format_diagnostic, line_at, line_col, mirror_source_prefix_as_pad, LineCol};
+    use super::{
+        format_diagnostic, line_at, line_col, mirror_source_prefix_as_pad, LineCol,
+        SourceProjection,
+    };
     use crate::error::LispError;
     use crate::reader::read;
 
@@ -525,5 +617,164 @@ error: unmatched opening paren at position 3
 1 |  \t (a b
   |  \t ^";
         assert_eq!(rendered, expected, "got:\n{rendered}");
+    }
+
+    // ── SourceProjection::at — the byte-offset → rendered-components
+    // typed projection every diagnostic renderer needs. Sibling of
+    // `line_col` (the LineCol-only projection); `SourceProjection::at`
+    // is the composed 4-tuple projection that stacks the containing-
+    // line slice + the tab-mirrored caret pad ON TOP of the LineCol
+    // walk in ONE typed call. Pre-lift these components were computed
+    // inline at `format_diagnostic`'s body; consumers wanting the same
+    // projection outside `format_diagnostic` had no first-class named
+    // projection and either re-implemented `line_at` +
+    // `mirror_source_prefix_as_pad` (silently drifting the tab-mirror
+    // discipline) or substring-parsed `format_diagnostic`'s snippet.
+    // The pins below anchor each component and the composition law at
+    // the substrate boundary — fail-before-pass-after: the struct +
+    // constructor did not exist pre-lift, so these tests cannot even
+    // compile against the pre-lift API surface.
+
+    #[test]
+    fn source_projection_at_binds_each_field_to_its_sibling_helper() {
+        // COMPOSITION LAW: `SourceProjection::at(src, pos)` returns a
+        // struct whose four fields agree BYTE-FOR-BYTE with the three
+        // sibling helpers evaluated at the same (src, pos). Pin the
+        // composition rule end-to-end so a regression that specialized
+        // ONE component (added a per-fleet salt to `line`, sliced
+        // `line_text` by byte offset rather than through `line_at`,
+        // padded the caret with spaces rather than mirroring tabs)
+        // would surface HERE rather than as silent caret drift at
+        // every downstream consumer. Sweeps representative shapes:
+        // tab-free, tab-leading, multi-line, multibyte character.
+        for (src, pos) in [
+            ("   )", 3),                  // stray `)`, column 4 line 1
+            ("(a b)\n(c d)\n   )\n", 15), // stray `)`, line 3
+            ("\t)", 1),                   // tab-indent, column 2 line 1
+            ("é)", 2),                    // multibyte prefix
+            (" \t (a b", 3),              // mixed tab+space
+        ] {
+            let proj = SourceProjection::at(src, pos);
+            let LineCol { line, column } = line_col(src, pos);
+            assert_eq!(proj.line, line, "line drift for src={src:?} pos={pos}");
+            assert_eq!(
+                proj.column, column,
+                "column drift for src={src:?} pos={pos}"
+            );
+            assert_eq!(
+                proj.line_text,
+                line_at(src, pos),
+                "line_text drift for src={src:?} pos={pos}",
+            );
+            assert_eq!(
+                proj.caret_pad,
+                mirror_source_prefix_as_pad(line_at(src, pos), column),
+                "caret_pad drift for src={src:?} pos={pos}",
+            );
+        }
+    }
+
+    #[test]
+    fn source_projection_at_preserves_tab_mirror_discipline_end_to_end() {
+        // DISCIPLINE PIN: a `\t)` source projected at byte 1 (the `)`)
+        // MUST yield a caret_pad whose leading char is `\t`, not a
+        // space. Pre-lift consumers reaching for the same projection
+        // OUTSIDE `format_diagnostic` had to reimplement the tab-
+        // mirror rule; post-lift they compose through this projection
+        // and inherit the discipline mechanically. A regression that
+        // silently reverted to `" ".repeat(column - 1)` (the pre-lift
+        // caret pad's shape) would slide the caret left of the `)` on
+        // every real terminal — this pin surfaces the drift AT the
+        // typed projection rather than only at `format_diagnostic`'s
+        // rendered-snippet consumer.
+        let proj = SourceProjection::at("\t)", 1);
+        assert_eq!(proj.line, 1);
+        assert_eq!(proj.column, 2);
+        assert_eq!(proj.line_text, "\t)");
+        assert_eq!(proj.caret_pad, "\t");
+    }
+
+    #[test]
+    fn source_projection_at_clamps_offsets_past_eof_to_final_position() {
+        // EOF-CLAMP PIN: `SourceProjection::at` inherits the clamp
+        // corner from `line_col` + `line_at`. An offset past the end
+        // of the source returns the projection at the final position,
+        // NOT a panic. Every downstream consumer that renders an
+        // `Eof`-shaped diagnostic (a dangling quote, an unterminated
+        // string) relies on this corner.
+        let src = "(a b) '";
+        let proj = SourceProjection::at(src, 999);
+        assert_eq!(proj.line, 1);
+        assert_eq!(proj.column, 8); // one past the trailing `'`
+        assert_eq!(proj.line_text, "(a b) '");
+        assert_eq!(proj.caret_pad, "       "); // seven spaces, no tab
+    }
+
+    #[test]
+    fn source_projection_at_projects_multibyte_column_as_char_count_not_byte_count() {
+        // MULTIBYTE PIN: `é` is one char, two bytes. A projection at
+        // byte 2 (immediately after `é`) MUST land on column 2 on
+        // line 1 — and the caret_pad MUST hold exactly ONE space, not
+        // two (which the pre-lift byte-count spelling would have
+        // produced). Sibling of `line_col_counts_chars_not_bytes_for_
+        // multibyte` at the composed-projection level.
+        let proj = SourceProjection::at("é)", 2);
+        assert_eq!(proj.line, 1);
+        assert_eq!(proj.column, 2);
+        assert_eq!(proj.line_text, "é)");
+        assert_eq!(proj.caret_pad, " ");
+    }
+
+    #[test]
+    fn source_projection_at_borrows_line_text_from_source_lifetime() {
+        // LIFETIME PIN: `line_text` borrows from `src` verbatim (same
+        // lifetime as `line_at`), so a consumer that holds the source
+        // string can retain the projection without copying the line.
+        // A regression that specialized `line_text` to an owned
+        // `String` (a defensive `.to_string()`) would break this pin
+        // via the type system — this test only compiles when the
+        // borrow lifetime holds. Pin the invariant explicitly so
+        // future refactors that widen the field's shape fail-loud at
+        // rustc rather than silently forcing a per-projection
+        // allocation on every diagnostic renderer.
+        let src = String::from("alpha\nbeta");
+        let proj = SourceProjection::at(&src, 0);
+        let borrowed: &str = proj.line_text;
+        assert_eq!(borrowed, "alpha");
+        assert!(
+            std::ptr::eq(borrowed.as_ptr(), src.as_ptr()),
+            "line_text must borrow directly from src, not allocate"
+        );
+    }
+
+    #[test]
+    fn format_diagnostic_composes_over_source_projection_at() {
+        // END-TO-END COMPOSITION PIN: `format_diagnostic` routes
+        // through `SourceProjection::at` for its four rendered
+        // components. Pin the composition by rendering the same
+        // diagnostic BOTH through `format_diagnostic` AND by hand
+        // through `SourceProjection::at`'s fields — the two must
+        // agree on the snippet body. A regression that split the
+        // composition (e.g. `format_diagnostic` re-inlined the three
+        // sibling helpers rather than routing through the projection)
+        // would silently drift the caret placement or the containing-
+        // line slice between the two paths.
+        let src = "\t)";
+        let err = read(src).unwrap_err();
+        let rendered = format_diagnostic(src, &err, Some("tabby.lisp"));
+        let pos = err.position().expect("reader error carries a position");
+        let proj = SourceProjection::at(src, pos);
+        let expected_body = format!(
+            "\n --> tabby.lisp:{line}:{col}\n  |\n{line} | {text}\n  | {pad}^",
+            line = proj.line,
+            col = proj.column,
+            text = proj.line_text,
+            pad = proj.caret_pad,
+        );
+        assert!(
+            rendered.ends_with(&expected_body),
+            "format_diagnostic snippet drifted from SourceProjection::at:\n\
+             got:\n{rendered}\n\nexpected suffix:\n{expected_body}",
+        );
     }
 }

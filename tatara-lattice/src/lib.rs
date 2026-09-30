@@ -5594,6 +5594,270 @@ pub trait Lattice: Sized + Clone + PartialEq {
         let vs: Vec<&'a Self> = iter.into_iter().collect();
         vs.windows(2).any(|w| w[0].is_strictly_comparable(w[1]))
     }
+    /// Direction-free ∃-consecutive-pair peer of [`Lattice::
+    /// is_incomparable_sequence`] on the QUANTIFIER axis AND the ∃-∨ dual
+    /// of [`Lattice::any_comparable_pair`] one COMPARABLE-VS-INCOMPARABLE
+    /// axis over — the iterated set contains AT LEAST ONE INCOMPARABLE
+    /// consecutive pair on the lattice's partial order.
+    /// `T::any_incomparable_pair([&a, &b, &c])` holds iff
+    /// `a.is_incomparable(&b) || b.is_incomparable(&c)`: SOME consecutive
+    /// pair `(vs[i], vs[i + 1])` satisfies `vs[i].is_incomparable(
+    /// &vs[i + 1])`.
+    ///
+    /// Closes the (∀, ∃) × (comparable, incomparable) × (direction-free
+    /// consecutive-pair) 2×2×1 face at the LAST unpinned ∃-incomparable-
+    /// direction-free corner — where [`Lattice::is_incomparable_sequence`]
+    /// decides the ∀-∧ conjunction (are ALL consecutive pairs incomparable),
+    /// this decides the ∃-∨ disjunction (is SOME consecutive pair
+    /// incomparable) on the SAME direction-free [`Lattice::is_incomparable`]
+    /// arm. Also the ∃-∨ dual of [`Lattice::any_comparable_pair`] one
+    /// COMPARABLE-VS-INCOMPARABLE axis over — the negation of "some pair is
+    /// incomparable" is "every pair is comparable" and conversely, so
+    /// `!T::any_incomparable_pair(iter) && iter has at least 2 elements
+    /// ⟺ T::is_comparable_sequence(iter)` on EVERY lattice as a direct De
+    /// Morgan seal (holding at every partial order, not just totally-
+    /// ordered ones). STRICTNESS axis is ABSORBED on the incomparable arm
+    /// via [`Lattice::is_incomparable`]'s irreflexivity (`a.is_incomparable(
+    /// &a) == false` because [`Lattice::is_comparable`] is reflexive and
+    /// [`Lattice::is_incomparable`] is definitionally
+    /// `!self.is_comparable(other)`), so there is no distinct strict peer
+    /// to pin at this face — the SAME strictness absorption
+    /// [`Lattice::is_incomparable_sequence`]'s docstring pins on the ∀ arm
+    /// one QUANTIFIER axis over.
+    ///
+    /// **Empty-iterator vacuous falsehood**: `T::any_incomparable_pair(std::
+    /// iter::empty()) == false` on every lattice — [`slice::windows`] on a
+    /// zero-length slice yields no pair, so [`Iterator::any`] on the empty
+    /// iterator is `false`. DIVERGES from [`Lattice::
+    /// is_incomparable_sequence`]'s vacuous-TRUE arm at the empty case —
+    /// the (∀, ∃) axis toggles the empty-arity verdict on the direction-
+    /// free incomparable arm exactly as it does on every direction-fixed
+    /// arm and on the direction-free comparable arm. Shared vacuous-∃-
+    /// falsehood arm with [`Lattice::any_ascending_pair`], [`Lattice::
+    /// any_descending_pair`], [`Lattice::any_strict_ascending_pair`],
+    /// [`Lattice::any_strict_descending_pair`], [`Lattice::
+    /// any_comparable_pair`], and [`Lattice::any_strictly_comparable_pair`]
+    /// at the empty case — every ∃-consecutive-pair peer on the sequence-
+    /// shape face fires false on the empty iterator.
+    ///
+    /// **Singleton vacuous falsehood**: `T::any_incomparable_pair([&a]) ==
+    /// false` for every `a` — a singleton has no consecutive pair, so
+    /// [`slice::windows`] yields no pair on the length-1 slice and
+    /// [`Iterator::any`] fires false. Shared vacuous-∃-falsehood arm with
+    /// every existing ∃-consecutive-pair peer at every singleton — every
+    /// arity-0-and-arity-1 slice rejects every ∃-consecutive-pair walk.
+    /// DIVERGES from every ∀-consecutive-pair sequence-shape predicate's
+    /// singleton vacuous-TRUE arm.
+    ///
+    /// **Pair-identity**: `T::any_incomparable_pair([&a, &b]) ==
+    /// a.is_incomparable(&b)` — the 2-input direction-free ∃-incomparable-
+    /// pair predicate reduces to the pairwise [`Lattice::is_incomparable`]
+    /// primitive on the sole consecutive pair, AGREEING with [`Lattice::
+    /// is_incomparable_sequence`]'s pair-identity at arity 2 (both
+    /// quantifiers collapse to the same per-pair predicate when the slice
+    /// yields exactly one consecutive pair). No duplicate-filter is needed
+    /// (the primitive already rejects the reflexive diagonal on its own via
+    /// irreflexivity).
+    ///
+    /// **Reflexive-diagonal rejection**: `T::any_incomparable_pair([&a,
+    /// &a]) == false` for every `a` — [`Lattice::is_incomparable`] is
+    /// IRREFLEXIVE (routes through `!self.is_comparable(other)` and
+    /// [`Lattice::is_comparable`] is REFLEXIVE), so the sole consecutive
+    /// pair `(a, a)` fails `a.is_incomparable(&a)` and [`Iterator::any`]
+    /// fires false. Shared irreflexive-diagonal rejection arm with
+    /// [`Lattice::any_strict_ascending_pair`]'s and [`Lattice::
+    /// any_strict_descending_pair`]'s and [`Lattice::
+    /// any_strictly_comparable_pair`]'s consecutive-duplicate rejection —
+    /// every irreflexive-primitive ∃-consecutive-pair peer rejects any
+    /// slice whose EVERY consecutive pair is a reflexive self-pair.
+    /// DIVERGES from [`Lattice::any_comparable_pair`]'s reflexive-diagonal
+    /// ACCEPTANCE via reflexive [`Lattice::is_comparable`] one COMPARABLE-
+    /// VS-INCOMPARABLE axis over — the COMPARABLE-VS-INCOMPARABLE axis
+    /// toggles the reflexive-diagonal verdict on the direction-free arm
+    /// exactly as the STRICTNESS axis does on the comparable arm at the
+    /// (comparable, non-strict) → (comparable, strict) step.
+    ///
+    /// **Refines FROM [`Lattice::is_incomparable_sequence`] on iterables
+    /// with at least one consecutive pair**: `T::is_incomparable_sequence(
+    /// iter) && iter has at least 2 elements ⇒ T::any_incomparable_pair(
+    /// iter)` — every witnessing pair in the ∀-conjunction also witnesses
+    /// the ∃-disjunction. The (∀ ⇒ ∃) implication holds ONLY on slices
+    /// with at least one consecutive pair (arity ≥ 2) since the empty and
+    /// singleton arms split (∀ true, ∃ false). Peer of the same (∀ ⇒ ∃)
+    /// refinement on every direction-fixed and direction-free comparable
+    /// arm one COMPARABLE-VS-INCOMPARABLE / DIRECTION-COLLAPSE axis over.
+    ///
+    /// **Refined BY [`Lattice::is_strict_antichain`] AND [`Lattice::
+    /// is_antichain`] on iterables with at least one consecutive pair**:
+    /// `T::is_strict_antichain(iter) && iter has at least 2 elements ⇒
+    /// T::any_incomparable_pair(iter)` — the O(N²) all-pairs
+    /// incomparability sweep of [`Lattice::is_strict_antichain`] dominates
+    /// the O(N) consecutive-pair walk (every consecutive pair is a
+    /// distinct pair the strict antichain's per-pair incomparability
+    /// witnesses). [`Lattice::is_antichain`]'s duplicate-tolerating
+    /// multiset acceptance does NOT refine into this ∃-consecutive-pair
+    /// arm on all-duplicate slices (both sides of the implication fail
+    /// vacuously — `is_antichain` accepts a consecutive-duplicate multiset,
+    /// this rejects it via irreflexivity — so the refinement holds only on
+    /// iterables where `is_antichain` fires WITHOUT the duplicate-tolerant
+    /// arm firing). Composes the STRUCTURAL-VS-CONSECUTIVE refinement
+    /// (all-pairs ⇒ consecutive-pair) with the QUANTIFIER-AXIS refinement
+    /// (∀ ⇒ ∃) at ONE ∃-arm aggregate.
+    ///
+    /// **Complements [`Lattice::is_comparable_sequence`] on iterables with
+    /// at least one consecutive pair**: `!T::any_incomparable_pair(iter) &&
+    /// iter has at least 2 elements ⟺ T::is_comparable_sequence(iter)` on
+    /// EVERY lattice (holding at every partial order, not just totally-
+    /// ordered ones — this is a direct De Morgan negation seal between the
+    /// ∃-incomparable ∨ and the ∀-comparable ∧). The negation of "some
+    /// consecutive pair is incomparable" is "every consecutive pair is
+    /// comparable" — and [`Lattice::is_incomparable`] is definitionally
+    /// `!self.is_comparable(other)`, so the ∀-∧ of the negated per-pair
+    /// predicate is exactly [`Lattice::is_comparable_sequence`]. The exact
+    /// ⟺ complement identity holds on every lattice at every arity ≥ 2 —
+    /// AGREES with the dual complement [`Lattice::any_comparable_pair`] ⟺
+    /// !`is_incomparable_sequence` pinned one COMPARABLE-VS-INCOMPARABLE
+    /// axis over on the (∃-comparable, ∀-incomparable) De Morgan face at
+    /// the second (∀-comparable, ∃-incomparable) De Morgan face — the two
+    /// De Morgan seals close the (∀, ∃) × (comparable, incomparable)
+    /// 2×2 face's diagonal boolean-complement pair at ONE substrate
+    /// algebra owner.
+    ///
+    /// **Any-witnessing-consecutive-pair acceptance**: if any consecutive
+    /// pair `(vs[i], vs[i + 1])` satisfies `vs[i].is_incomparable(&vs[i +
+    /// 1])`, then `T::any_incomparable_pair(iter) == true` — [`Iterator::
+    /// any`] on [`slice::windows`] short-circuits at the first witnessing
+    /// pair. Dual short-circuit behaviour to [`Lattice::
+    /// is_comparable_sequence`]'s any-incomparable-pair rejection on the
+    /// ∀ arm one COMPARABLE-VS-INCOMPARABLE axis over.
+    ///
+    /// **Total-order universal REJECTION on iterables with at least one
+    /// consecutive pair**: on any totally-ordered lattice (e.g.
+    /// [`DataClassification`], [`baseline::Baseline`],
+    /// [`CalmClassification`]), the predicate REJECTS every slice with at
+    /// least one consecutive pair — every pair on a total order is
+    /// comparable, so [`Lattice::is_incomparable`] fires false on every
+    /// consecutive pair unconditionally and [`Iterator::any`] fires false
+    /// on any non-empty [`slice::windows`] iterator. Dual of [`Lattice::
+    /// any_comparable_pair`]'s total-order universal ACCEPTANCE one
+    /// COMPARABLE-VS-INCOMPARABLE axis over — both quantifier corners on
+    /// the incomparable arm collapse to universal falsity on total orders,
+    /// exactly as both quantifier corners on the comparable arm collapse
+    /// to universal truth. This makes [`Lattice::any_incomparable_pair`]
+    /// indistinguishable from the constant `false` predicate on any total-
+    /// order lattice at every arity, and the WIDEST accepting sequence-
+    /// shape ∃-consecutive-pair incomparable predicate on partial-order
+    /// lattices (accepts every slice with at least one incomparable
+    /// adjacency).
+    ///
+    /// **Reversal invariance**: `T::any_incomparable_pair(iter) ==
+    /// T::any_incomparable_pair(iter.rev())` on every collection —
+    /// [`Lattice::is_incomparable`] is SYMMETRIC (its default
+    /// `!(self.leq(other) || other.leq(self))` is a swap-invariant negated
+    /// disjunction) AND [`Iterator::any`]'s disjunction is order-
+    /// insensitive, so reversing the slice reverses each consecutive pair
+    /// and preserves the aggregated verdict. AGREES with [`Lattice::
+    /// is_incomparable_sequence`]'s, [`Lattice::is_comparable_sequence`]'s,
+    /// [`Lattice::any_comparable_pair`]'s, and [`Lattice::
+    /// any_strictly_comparable_pair`]'s reversal invariance on the
+    /// direction-free arm — every direction-free sequence-shape predicate
+    /// on the [`Lattice`] trait inherits the pair-level primitive's
+    /// symmetry.
+    ///
+    /// **NOT permutation-invariant** (contrasts with [`Lattice::
+    /// is_antichain`]'s / [`Lattice::is_strict_antichain`]'s FULL
+    /// permutation invariance on the sibling structural face): depends on
+    /// CONSECUTIVE-ADJACENCY structure, so a permutation that re-groups the
+    /// same multiset into different adjacencies can flip the verdict —
+    /// witness on the pointed-top antichain [`SubstrateType`]: `[Compute,
+    /// Compute, Storage]` steps along a reflexive `(Compute, Compute)`
+    /// consecutive pair that fails [`Lattice::is_incomparable`] and then a
+    /// distinct-non-top `(Compute, Storage)` consecutive pair that
+    /// witnesses it, so the ∃-walk fires true; the permutation `[Compute,
+    /// Storage, Compute]` continues to fire true (both consecutive pairs
+    /// are distinct-non-top incomparable), while the permutation `[Storage,
+    /// Compute, Compute]` fires true too via the leading `(Storage,
+    /// Compute)` pair. But `[Compute, Compute, Compute]` on the same
+    /// multiset (a repeat-restricted permutation of any three-element
+    /// multiset containing `Compute`) fires false at every consecutive
+    /// self-pair via irreflexivity. Peer of [`Lattice::
+    /// is_incomparable_sequence`]'s permutation-non-invariance witness on
+    /// the ∃ arm one QUANTIFIER axis over.
+    ///
+    /// **Antichain projection**: on the pointed-top antichain (e.g.
+    /// [`SubstrateType`]), the ∃-∨ predicate accepts a slice iff it
+    /// contains AT LEAST ONE consecutive pair `(a, b)` with `a != top && b
+    /// != top && a != b` — the two are distinct non-top substrates and the
+    /// pointed-top antichain's [`Lattice::is_incomparable`] primitive fires
+    /// true only on that arm. Rejects both reflexive diagonals (via
+    /// irreflexivity) AND top-touching pairs (via the pointed-top axiom
+    /// that top is comparable with every element). Dual to [`Lattice::
+    /// any_comparable_pair`]'s antichain projection one COMPARABLE-VS-
+    /// INCOMPARABLE axis over: the two direction-free ∃-consecutive-pair
+    /// duals partition the pointed-top antichain's consecutive-pair space
+    /// into (top-touching-or-reflexive, distinct-non-top) at ONE algebra
+    /// owner.
+    ///
+    /// Default routes through `iter.into_iter().collect::<Vec<&Self>>()`
+    /// followed by `.windows(2).any(|w| w[0].is_incomparable(w[1]))` — one
+    /// [`Lattice::is_incomparable`] delegation per consecutive pair on the
+    /// collected buffer with [`Iterator::any`] short-circuiting at the
+    /// first witness, mirroring [`Lattice::any_comparable_pair`]'s walk
+    /// with the pair-level primitive swapped from [`Lattice::is_comparable`]
+    /// to [`Lattice::is_incomparable`] (which itself decomposes into
+    /// `!(self.leq(other) || other.leq(self))`). The collect materializes
+    /// the iterator once so the walk operates on a stable slice — an
+    /// [`IntoIterator`] that yields distinct values on distinct calls would
+    /// otherwise break the walk's determinism. A future normalization at
+    /// [`Lattice::is_incomparable`] (or at the underlying [`Lattice::leq`]
+    /// the negated direction-collapse disjunction routes through) lands at
+    /// ONE site and this default inherits mechanically.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the direction-free ∃-consecutive-pair incomparability
+    /// predicate is itself a typed named `bool` composing [`Lattice::
+    /// is_incomparable`] via [`slice::windows`] plus [`Iterator::any`];
+    /// every downstream lattice-law consumer inherits the predicate
+    /// through the default mechanically) + THEORY.md §III (typescape — the
+    /// direction-free ∃-consecutive-pair incomparability arm on every
+    /// classification-axis lattice binds at ONE substrate owner on the
+    /// [`Lattice`] algebra rather than at each consumer's hand-authored
+    /// `vs.windows(2).any(|w| w[0].is_incomparable(&w[1]))` walk).
+    ///
+    /// Frontier inspiration: order-theory's incomparability-graph
+    /// existential walks — the direction-free ∃-consecutive-pair
+    /// incomparability predicate is the natural characterization of "the
+    /// sequence has at least one incomparability edge (i.e. a non-
+    /// comparable adjacency) somewhere in its adjacency graph, i.e. the
+    /// sequence witnesses a break in the comparability structure of the
+    /// poset". Racket's `ormap` and Haskell's `any` composed with the
+    /// pairwise partial-order incomparability relation. Rust's stdlib
+    /// carries neither the incomparability primitive nor an existential
+    /// consecutive-pair predicate over it on [`PartialOrd`]
+    /// (incomparability is a partial-order predicate that does not survive
+    /// the total-order projection at all — on a total order the
+    /// incomparability primitive collapses to the constant `false`, so
+    /// stdlib has no need to expose it). Translated: threaded the same
+    /// ∃-consecutive-pair shape through the [`Lattice`] trait's default-
+    /// method surface as the QUANTIFIER-AXIS peer of [`Lattice::
+    /// is_incomparable_sequence`] AND the COMPARABLE-VS-INCOMPARABLE
+    /// dual of [`Lattice::any_comparable_pair`] on the direction-free
+    /// arm — the seventh ∃-consecutive-pair peer on the sequence-shape
+    /// face, closing the (∀, ∃) × (comparable, incomparable) × (direction-
+    /// free consecutive-pair) 2×2×1 face at the LAST unpinned
+    /// ∃-incomparable-direction-free corner, the same face-completion
+    /// move MLIR's dialect-conversion library performs when it saturates
+    /// a transformation dialect's op-signature combinator surface at one
+    /// canonical rewriter, and that Lean's mathlib performs when it seals
+    /// an order-theoretic predicate face at one `instance` definition.
+    fn any_incomparable_pair<'a, I>(iter: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        let vs: Vec<&'a Self> = iter.into_iter().collect();
+        vs.windows(2).any(|w| w[0].is_incomparable(w[1]))
+    }
     /// N-ary interval-containment predicate — EVERY element the iterator
     /// yields sits inside the closed bracket `[low, high]` on the
     /// lattice's partial order. `T::all_between(&low, &high, [&a, &b,
@@ -19257,6 +19521,431 @@ mod tests {
             "any_strictly_comparable_pair([top, top]) must be false — even the \
              top-to-top pair fails strict-arm irreflexivity (it is still a \
              reflexive self-pair)",
+        );
+    }
+
+    /// [`Lattice::any_incomparable_pair`] is VACUOUSLY FALSE on the empty
+    /// iterator over [`DataClassification`] and [`SubstrateType`] — a
+    /// zero-length slice yields no [`slice::windows`]-of-2 pair, so
+    /// [`Iterator::any`] fires false on the empty ∃-disjunction. DIVERGES
+    /// from [`Lattice::is_incomparable_sequence`]'s vacuous-TRUE arm at the
+    /// empty case — the (∀, ∃) quantifier axis toggles the empty-arity
+    /// verdict on the direction-free incomparable arm exactly as it does
+    /// on every direction-fixed arm and on the direction-free comparable
+    /// arm. Shared vacuous-∃-falsehood with every existing ∃-consecutive-
+    /// pair peer on the sequence-shape face.
+    #[test]
+    fn any_incomparable_pair_is_vacuously_false_at_the_empty_iterator_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        let empty_dc: [&DataClassification; 0] = [];
+        assert!(
+            !DataClassification::any_incomparable_pair(empty_dc.iter().copied()),
+            "any_incomparable_pair([]) must be false — the empty ∃-disjunction has no \
+             consecutive pair to witness",
+        );
+        assert!(
+            DataClassification::is_incomparable_sequence(empty_dc.iter().copied()),
+            "is_incomparable_sequence([]) must be true — the (∀, ∃) axis diverges at \
+             the empty case on the direction-free incomparable arm too",
+        );
+        let empty_st: [&SubstrateType; 0] = [];
+        assert!(
+            !SubstrateType::any_incomparable_pair(empty_st.iter().copied()),
+            "any_incomparable_pair([]) must be false on the pointed-top antichain too — \
+             the empty ∃-disjunction has no consecutive pair to witness on any lattice",
+        );
+    }
+
+    /// [`Lattice::any_incomparable_pair`] is VACUOUSLY FALSE on every
+    /// singleton over [`DataClassification`] and [`SubstrateType`] — a
+    /// length-1 slice yields no [`slice::windows`]-of-2 pair, so
+    /// [`Iterator::any`] fires false. Shared singleton vacuous-falsehood
+    /// arm with every existing ∃-consecutive-pair peer — the (∀, ∃)
+    /// quantifier axis toggles the singleton verdict. Pinned exhaustively
+    /// over `DataClassification::ALL` (6 singletons) and
+    /// `SubstrateType::ALL` (7 singletons).
+    #[test]
+    fn any_incomparable_pair_is_vacuously_false_on_every_singleton_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            assert!(
+                !DataClassification::any_incomparable_pair([&a]),
+                "any_incomparable_pair([&{a:?}]) must be false — a singleton has no \
+                 consecutive pair, so the direction-free ∃-disjunction fires vacuously \
+                 false",
+            );
+            assert!(
+                DataClassification::is_incomparable_sequence([&a]),
+                "is_incomparable_sequence([&{a:?}]) must be true — the (∀, ∃) axis \
+                 diverges at every singleton on the direction-free incomparable arm too",
+            );
+        }
+        for s in SubstrateType::ALL {
+            assert!(
+                !SubstrateType::any_incomparable_pair([&s]),
+                "any_incomparable_pair([&{s:?}]) must be false on the pointed-top \
+                 antichain — a singleton has no consecutive pair on any lattice",
+            );
+        }
+    }
+
+    /// [`Lattice::any_incomparable_pair`] at arity 2 reduces to the pairwise
+    /// [`Lattice::is_incomparable`] on the sole consecutive pair — the 2-
+    /// input direction-free ∃-consecutive-pair incomparable predicate is
+    /// the pairwise `is_incomparable` primitive on the sole pair. AGREES
+    /// with [`Lattice::is_incomparable_sequence`]'s pair-identity at arity
+    /// 2 — both quantifiers collapse to the same per-pair predicate when
+    /// the slice yields exactly one consecutive pair. Pinned exhaustively
+    /// over `SubstrateType::ALL^2` (49 pairs on the pointed-top antichain
+    /// where the incomparable primitive is non-trivially mixed).
+    #[test]
+    fn any_incomparable_pair_arity_2_reduces_to_is_incomparable_over_substrate_type_all_pairs() {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                assert_eq!(
+                    SubstrateType::any_incomparable_pair([&a, &b]),
+                    a.is_incomparable(&b),
+                    "any_incomparable_pair([{a:?}, {b:?}]) drifted from \
+                     is_incomparable({a:?}, {b:?}) — the arity-2 direction-free \
+                     ∃-consecutive-pair incomparable predicate must reduce to the \
+                     pairwise is_incomparable primitive on the sole consecutive pair",
+                );
+                assert_eq!(
+                    SubstrateType::any_incomparable_pair([&a, &b]),
+                    SubstrateType::is_incomparable_sequence([&a, &b]),
+                    "any_incomparable_pair([{a:?}, {b:?}]) drifted from \
+                     is_incomparable_sequence([{a:?}, {b:?}]) — the two direction-free \
+                     quantifiers must agree at arity 2 by collapsing to the same \
+                     per-pair is_incomparable",
+                );
+            }
+        }
+    }
+
+    /// [`Lattice::any_incomparable_pair`] REJECTS every slice whose EVERY
+    /// consecutive pair is a reflexive self-pair over both
+    /// [`DataClassification`] and [`SubstrateType`] — the IRREFLEXIVE
+    /// [`Lattice::is_incomparable`] arm rejects `(a, a)` unconditionally
+    /// at every element (via the definitional `!self.is_comparable(other)`
+    /// with reflexive [`Lattice::is_comparable`]), so any all-duplicate
+    /// slice fails every consecutive pair AND [`Iterator::any`] fires
+    /// false. Shared irreflexive-diagonal rejection arm with [`Lattice::
+    /// any_strict_ascending_pair`], [`Lattice::any_strict_descending_pair`]
+    /// and [`Lattice::any_strictly_comparable_pair`] on every all-duplicate
+    /// slice. DIVERGES from [`Lattice::any_comparable_pair`]'s reflexive
+    /// diagonal ACCEPTANCE via reflexive is_comparable one COMPARABLE-VS-
+    /// INCOMPARABLE axis over.
+    #[test]
+    fn any_incomparable_pair_rejects_every_all_duplicate_slice_over_data_classification_and_substrate_type(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            assert!(
+                !DataClassification::any_incomparable_pair([&a, &a]),
+                "any_incomparable_pair([{a:?}, {a:?}]) must be false — is_incomparable \
+                 is irreflexive so the sole self-pair fails the direction-free \
+                 ∃-consecutive-pair walk",
+            );
+            assert!(
+                !DataClassification::any_incomparable_pair([&a, &a, &a]),
+                "any_incomparable_pair([{a:?}, {a:?}, {a:?}]) must be false — every \
+                 consecutive pair is a reflexive self-pair the irreflexive comparator \
+                 rejects",
+            );
+        }
+        for s in SubstrateType::ALL {
+            assert!(
+                !SubstrateType::any_incomparable_pair([&s, &s]),
+                "any_incomparable_pair([{s:?}, {s:?}]) must be false on the pointed-top \
+                 antichain too — irreflexive is_incomparable rejects every self-pair on \
+                 every lattice",
+            );
+        }
+    }
+
+    /// [`Lattice::is_incomparable_sequence`] REFINES
+    /// [`Lattice::any_incomparable_pair`] on iterables with at least one
+    /// consecutive pair over [`SubstrateType`] — `T::is_incomparable_sequence(
+    /// iter) && iter.len() ≥ 2 ⇒ T::any_incomparable_pair(iter)` because
+    /// every witnessing pair in the ∀-conjunction also witnesses the
+    /// ∃-disjunction. The (∀, ∃) axis SPLITS on the empty and singleton
+    /// arms: the ∀ arm fires vacuously true, the ∃ arm fires vacuously
+    /// false, so the implication fails only on arity-0-and-arity-1 slices.
+    /// Peer of the same (∀ ⇒ ∃) refinement on every direction-fixed and
+    /// direction-free comparable arm one COMPARABLE-VS-INCOMPARABLE /
+    /// DIRECTION-COLLAPSE axis over. Pinned exhaustively over
+    /// `SubstrateType::ALL^3` (343 triples on the pointed-top antichain
+    /// where the incomparable arm is non-trivially populated).
+    #[test]
+    fn is_incomparable_sequence_refines_any_incomparable_pair_on_nonsingleton_iterables_over_substrate_type(
+    ) {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                let pair: [&SubstrateType; 2] = [&a, &b];
+                if SubstrateType::is_incomparable_sequence(pair) {
+                    assert!(
+                        SubstrateType::any_incomparable_pair(pair),
+                        "is_incomparable_sequence([{a:?}, {b:?}]) ⇒ \
+                         any_incomparable_pair([{a:?}, {b:?}]) refinement failed on a \
+                         2-element slice — the ∀ ⇒ ∃ implication is universal on \
+                         iterables with at least one consecutive pair",
+                    );
+                }
+                for c in SubstrateType::ALL {
+                    let triple: [&SubstrateType; 3] = [&a, &b, &c];
+                    if SubstrateType::is_incomparable_sequence(triple) {
+                        assert!(
+                            SubstrateType::any_incomparable_pair(triple),
+                            "is_incomparable_sequence([{a:?}, {b:?}, {c:?}]) ⇒ \
+                             any_incomparable_pair([{a:?}, {b:?}, {c:?}]) refinement \
+                             failed on a triple — the direction-free ∀ ⇒ ∃ implication \
+                             is universal on iterables with at least one consecutive \
+                             pair",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::is_strict_antichain`] REFINES
+    /// [`Lattice::any_incomparable_pair`] on iterables with at least one
+    /// consecutive pair over [`SubstrateType`] — `T::is_strict_antichain(
+    /// iter) && iter.len() ≥ 2 ⇒ T::any_incomparable_pair(iter)` because
+    /// the O(N²) all-pairs incomparability sweep dominates the O(N)
+    /// consecutive-pair walk (every consecutive pair is a distinct pair
+    /// the strict antichain's per-pair incomparability witnesses).
+    /// Composes the STRUCTURAL-VS-CONSECUTIVE refinement (all-pairs ⇒
+    /// consecutive-pair) with the QUANTIFIER-AXIS refinement (∀ ⇒ ∃) at
+    /// ONE ∃-arm aggregate. Pinned exhaustively over `SubstrateType::
+    /// ALL^3` (343 triples on the pointed-top antichain where the strict
+    /// antichain shape is non-trivially populated).
+    #[test]
+    fn is_strict_antichain_refines_any_incomparable_pair_on_nonsingleton_iterables_over_substrate_type(
+    ) {
+        use tatara_process::classification::SubstrateType;
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                let pair: [&SubstrateType; 2] = [&a, &b];
+                if SubstrateType::is_strict_antichain(pair) {
+                    assert!(
+                        SubstrateType::any_incomparable_pair(pair),
+                        "is_strict_antichain([{a:?}, {b:?}]) ⇒ any_incomparable_pair([\
+                         {a:?}, {b:?}]) refinement failed on a 2-element slice — the \
+                         O(N²) strict antichain sweep dominates the O(N) consecutive-\
+                         pair walk",
+                    );
+                }
+                for c in SubstrateType::ALL {
+                    let triple: [&SubstrateType; 3] = [&a, &b, &c];
+                    if SubstrateType::is_strict_antichain(triple) {
+                        assert!(
+                            SubstrateType::any_incomparable_pair(triple),
+                            "is_strict_antichain([{a:?}, {b:?}, {c:?}]) ⇒ \
+                             any_incomparable_pair([{a:?}, {b:?}, {c:?}]) refinement \
+                             failed on a triple — every consecutive pair is a distinct \
+                             pair the strict antichain's per-pair incomparability \
+                             witnesses",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_incomparable_pair`] and [`Lattice::
+    /// is_comparable_sequence`] are BOOLEAN COMPLEMENTS on iterables with
+    /// at least one consecutive pair over EVERY lattice —
+    /// `!T::any_incomparable_pair(iter) && iter.len() ≥ 2 ⟺
+    /// T::is_comparable_sequence(iter)`. This is a direct De Morgan
+    /// negation seal between the ∃-incomparable ∨ and the ∀-comparable ∧
+    /// via [`Lattice::is_incomparable`]'s definitional
+    /// `!self.is_comparable(other)`, so the ⟺ complement holds on EVERY
+    /// partial order (not just totally-ordered ones). Dual of [`Lattice::
+    /// any_comparable_pair`] ⟺ !`is_incomparable_sequence` pinned one
+    /// COMPARABLE-VS-INCOMPARABLE axis over — the two De Morgan seals
+    /// close the (∀, ∃) × (comparable, incomparable) 2×2 face's diagonal
+    /// boolean-complement pair at ONE substrate algebra owner. Pinned
+    /// exhaustively over `DataClassification::ALL^3` (216 triples on the
+    /// total-order arm) AND over `SubstrateType::ALL^3` (343 triples on
+    /// the pointed-top antichain where the partial-order incomparable
+    /// arm is non-trivial).
+    #[test]
+    fn any_incomparable_pair_complements_is_comparable_sequence_on_nonsingleton_iterables_over_every_lattice(
+    ) {
+        use tatara_process::classification::{DataClassification, SubstrateType};
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                let pair: [&DataClassification; 2] = [&a, &b];
+                assert_eq!(
+                    !DataClassification::any_incomparable_pair(pair),
+                    DataClassification::is_comparable_sequence(pair),
+                    "!any_incomparable_pair([{a:?}, {b:?}]) drifted from \
+                     is_comparable_sequence([{a:?}, {b:?}]) — the direction-free \
+                     ∃-incomparable ∨ and the ∀-comparable ∧ must agree by De Morgan",
+                );
+                for c in DataClassification::ALL {
+                    let triple: [&DataClassification; 3] = [&a, &b, &c];
+                    assert_eq!(
+                        !DataClassification::any_incomparable_pair(triple),
+                        DataClassification::is_comparable_sequence(triple),
+                        "!any_incomparable_pair([{a:?}, {b:?}, {c:?}]) drifted from \
+                         is_comparable_sequence([{a:?}, {b:?}, {c:?}]) — the ⟺ \
+                         complement identity must hold at every arity ≥ 2 on every \
+                         lattice",
+                    );
+                }
+            }
+        }
+        for a in SubstrateType::ALL {
+            for b in SubstrateType::ALL {
+                let pair: [&SubstrateType; 2] = [&a, &b];
+                assert_eq!(
+                    !SubstrateType::any_incomparable_pair(pair),
+                    SubstrateType::is_comparable_sequence(pair),
+                    "!any_incomparable_pair([{a:?}, {b:?}]) drifted from \
+                     is_comparable_sequence([{a:?}, {b:?}]) — the De Morgan complement \
+                     must hold on the pointed-top antichain too, where the partial-\
+                     order incomparable arm is non-trivial",
+                );
+                for c in SubstrateType::ALL {
+                    let triple: [&SubstrateType; 3] = [&a, &b, &c];
+                    assert_eq!(
+                        !SubstrateType::any_incomparable_pair(triple),
+                        SubstrateType::is_comparable_sequence(triple),
+                        "!any_incomparable_pair([{a:?}, {b:?}, {c:?}]) drifted from \
+                         is_comparable_sequence([{a:?}, {b:?}, {c:?}]) — the ⟺ \
+                         complement identity generalises to every partial order, not \
+                         just totally-ordered ones",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_incomparable_pair`] UNIVERSALLY REJECTS every slice
+    /// with at least one consecutive pair on the totally-ordered
+    /// [`DataClassification`] lattice — every pair on a total order is
+    /// comparable, so [`Lattice::is_incomparable`] fires false on every
+    /// consecutive pair unconditionally and [`Iterator::any`] fires false
+    /// on any non-empty [`slice::windows`] iterator. Dual of [`Lattice::
+    /// any_comparable_pair`]'s total-order universal ACCEPTANCE one
+    /// COMPARABLE-VS-INCOMPARABLE axis over — both quantifier corners on
+    /// the incomparable arm collapse to universal falsity on total orders,
+    /// exactly as both quantifier corners on the comparable arm collapse
+    /// to universal truth. Pinned exhaustively over
+    /// `DataClassification::ALL^2` (36 pairs) and `DataClassification::
+    /// ALL^3` (216 triples).
+    #[test]
+    fn any_incomparable_pair_universally_rejects_nonsingleton_data_classification_slices() {
+        use tatara_process::classification::DataClassification;
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert!(
+                    !DataClassification::any_incomparable_pair([&a, &b]),
+                    "any_incomparable_pair([{a:?}, {b:?}]) must be false — every pair on \
+                     a total order is comparable so the ∃-incomparable walk fires \
+                     universally false on any non-empty consecutive-pair iterator",
+                );
+                for c in DataClassification::ALL {
+                    assert!(
+                        !DataClassification::any_incomparable_pair([&a, &b, &c]),
+                        "any_incomparable_pair([{a:?}, {b:?}, {c:?}]) must be false — \
+                         the ∃-incomparable walk fires false on any total-order triple \
+                         at every consecutive pair via is_incomparable's universal-\
+                         false projection",
+                    );
+                }
+            }
+        }
+    }
+
+    /// [`Lattice::any_incomparable_pair`] projects the pointed-top antichain
+    /// over [`SubstrateType`] — a slice on the antichain fires the
+    /// direction-free ∃-∨ predicate iff it contains AT LEAST ONE
+    /// consecutive pair `(a, b)` with `a.is_incomparable(&b)`, which on the
+    /// pointed-top antichain fires exactly when `a != top && b != top &&
+    /// a != b` (the two are distinct non-top substrates). Rejects both
+    /// reflexive diagonals (via irreflexivity) AND top-touching pairs (via
+    /// the pointed-top axiom that top is comparable with every element).
+    /// Dual to [`Lattice::any_comparable_pair`]'s antichain projection one
+    /// COMPARABLE-VS-INCOMPARABLE axis over: the two direction-free
+    /// ∃-consecutive-pair duals partition the pointed-top antichain's
+    /// consecutive-pair space into (top-touching-or-reflexive, distinct-
+    /// non-top) at ONE algebra owner.
+    #[test]
+    fn any_incomparable_pair_projects_the_pointed_top_antichain_over_substrate_type() {
+        use tatara_process::classification::SubstrateType;
+        let top = SubstrateType::top();
+        let compute = SubstrateType::Compute;
+        let storage = SubstrateType::Storage;
+        // Distinct-non-top incomparable pair — accepted on the antichain
+        // (neither leq nor geq holds; is_incomparable fires true).
+        assert!(
+            SubstrateType::any_incomparable_pair([&compute, &storage]),
+            "any_incomparable_pair([{compute:?}, {storage:?}]) must be true — the pair \
+             is distinct-non-top incomparable on the pointed-top antichain",
+        );
+        // Reflexive diagonal — REJECTED by irreflexivity of is_incomparable
+        // (DIVERGES from any_comparable_pair's non-strict reflexive-diagonal
+        // ACCEPTANCE one COMPARABLE-VS-INCOMPARABLE axis over).
+        assert!(
+            !SubstrateType::any_incomparable_pair([&compute, &compute]),
+            "any_incomparable_pair([{compute:?}, {compute:?}]) must be false — the \
+             direction-free incomparable arm rejects the reflexive self-pair by \
+             is_incomparable's irreflexivity",
+        );
+        // Top-touching pair in EITHER direction — rejected because the top
+        // is comparable with every element (via reflexive/pointed-top axiom
+        // of is_comparable), so is_incomparable fires false.
+        assert!(
+            !SubstrateType::any_incomparable_pair([&top, &compute]),
+            "any_incomparable_pair([top, {compute:?}]) must be false — the top-\
+             originating pair is comparable on the pointed-top antichain, so \
+             is_incomparable fires false",
+        );
+        assert!(
+            !SubstrateType::any_incomparable_pair([&compute, &top]),
+            "any_incomparable_pair([{compute:?}, top]) must be false — the top-\
+             directed pair is comparable in the reverse direction too",
+        );
+        // Slice of all-distinct-non-top-incomparable pairs — accepted at
+        // every consecutive pair (short-circuits at the first).
+        assert!(
+            SubstrateType::any_incomparable_pair([&compute, &storage, &compute]),
+            "any_incomparable_pair([{compute:?}, {storage:?}, {compute:?}]) must be \
+             true — every consecutive pair is a distinct-non-top incomparable pair on \
+             the pointed-top antichain",
+        );
+        // Slice with a top-touching pair anywhere in it, and no other
+        // incomparable pair — rejected (all consecutive pairs are
+        // comparable via the top's reachability, so no witness).
+        assert!(
+            !SubstrateType::any_incomparable_pair([&top, &compute, &top]),
+            "any_incomparable_pair([top, {compute:?}, top]) must be false — every \
+             consecutive pair is top-touching so both are comparable, and the \
+             ∃-incomparable walk finds no witness",
+        );
+        // Mixed slice — a top-touching pair AND a distinct-non-top
+        // incomparable pair. Accepted via the distinct-non-top witness.
+        assert!(
+            SubstrateType::any_incomparable_pair([&top, &compute, &storage]),
+            "any_incomparable_pair([top, {compute:?}, {storage:?}]) must be true — the \
+             second consecutive pair witnesses is_incomparable via distinct-non-top \
+             substrates even though the first is-top-touching-comparable",
+        );
+        // Reflexive-diagonal slice — rejected at every consecutive pair by
+        // irreflexivity (DIVERGES from any_comparable_pair's acceptance of
+        // the same slice via reflexive is_comparable).
+        assert!(
+            !SubstrateType::any_incomparable_pair([&compute, &compute, &compute]),
+            "any_incomparable_pair([{compute:?}, {compute:?}, {compute:?}]) must be \
+             false — every consecutive pair is a reflexive self-pair the irreflexive \
+             incomparable primitive rejects",
         );
     }
 

@@ -1,7 +1,10 @@
 use anyhow::{bail, Context, Result};
+use kazari::Print;
 
 use super::context::{active_endpoint, endpoint_to_server};
-use super::output::{build_table, human_duration_since, render_value, status_cell, OutputFormat};
+use super::output::{
+    build_table, cell, human_duration_since, render_value, status_cell, OutputFormat,
+};
 
 pub async fn list(
     kind: Option<&str>,
@@ -51,12 +54,12 @@ pub async fn list(
             let mut table = build_table(&["TIME", "KIND", "DETAILS"]);
             for event in &events {
                 let kind_str = event["kind"].as_str().unwrap_or("?");
-                table.add_row(vec![
-                    comfy_table::Cell::new(human_duration_since(
+                table = table.row_fragments(vec![
+                    cell(human_duration_since(
                         event["timestamp"].as_str().unwrap_or(""),
                     )),
                     status_cell(kind_str),
-                    comfy_table::Cell::new(
+                    cell(
                         serde_json::to_string(&event["payload"])
                             .unwrap_or_default()
                             .chars()
@@ -65,7 +68,7 @@ pub async fn list(
                     ),
                 ]);
             }
-            println!("{table}");
+            table.print()?;
         }
     }
     Ok(())
@@ -94,7 +97,6 @@ pub async fn stream(kind: Option<&str>, endpoint: Option<&str>) -> Result<()> {
     }
 
     // Read SSE stream line by line
-    use futures_core::Stream;
     use tokio_stream::StreamExt;
     let mut stream = resp.bytes_stream();
     let mut buffer = String::new();

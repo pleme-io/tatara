@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
+use kazari::Print;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::output::{build_table, render_value, status_cell, OutputFormat};
+use super::output::{build_table, cell, render_value, status_cell, OutputFormat};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ContextConfig {
@@ -54,7 +55,7 @@ pub fn active_endpoint(endpoint_override: Option<&str>) -> String {
     }
     if let Ok(config) = load_config() {
         // Find the context marked as default
-        for (_name, entry) in &config.contexts {
+        for entry in config.contexts.values() {
             if entry.default {
                 return entry.endpoint.clone();
             }
@@ -96,13 +97,13 @@ pub async fn list(output: OutputFormat) -> Result<()> {
             for name in names {
                 let entry = &config.contexts[name];
                 let marker = if entry.default { "*" } else { "" };
-                table.add_row(vec![
+                table = table.row_fragments(vec![
                     status_cell(if entry.default { "active" } else { "" }),
-                    comfy_table::Cell::new(format!("{}{}", marker, name)),
-                    comfy_table::Cell::new(&entry.endpoint),
+                    cell(format!("{}{}", marker, name)),
+                    cell(&entry.endpoint),
                 ]);
             }
-            println!("{table}");
+            table.print()?;
         }
     }
     Ok(())

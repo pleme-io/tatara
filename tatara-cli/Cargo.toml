@@ -59,7 +59,7 @@ async-graphql-axum = "7.0"
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
 
 # CLI output formatting + TUI
-comfy-table = "7"
+kazari = { package = "pleme-io-kazari", version = "0.2" }
 crossterm = "0.28"
 egaku-term = "0.3"
 egaku = "0.1"

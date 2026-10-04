@@ -2,8 +2,9 @@
 //!
 //! Three layers, every one content-addressable:
 //!
-//! 1. **Palette** ([`palette`]) — canonical Nord values + semantic `Role` vocabulary
-//!    mapped via `RoleMap::default()`.
+//! 1. **Palette** ([`palette`]) — Nord values from `irodori` + semantic `Role`
+//!    vocabulary resolved through kazari's theme via `RoleMap::default()`;
+//!    emission goes through kazari's capability wall.
 //! 2. **Sigils** ([`sigil`]) — typed Unicode glyphs (❄ ✓ ✗ ⟡ → ● ◇ ⚡ ⚙ …) each
 //!    bound to a default `Role`.
 //! 3. **Events** ([`event`]) — `UiEvent` is a typed enum that serializes to

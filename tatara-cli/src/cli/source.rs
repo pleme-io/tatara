@@ -1,7 +1,10 @@
 use anyhow::{bail, Context, Result};
+use kazari::Print;
 
 use super::context::{active_endpoint, endpoint_to_server};
-use super::output::{build_table, human_duration_since, render_value, status_cell, OutputFormat};
+use super::output::{
+    build_table, cell, human_duration_since, render_value, status_cell, OutputFormat,
+};
 
 pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
     let server = endpoint_to_server(&active_endpoint(endpoint));
@@ -51,19 +54,19 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
                     .as_object()
                     .map(|m| m.len())
                     .unwrap_or(0);
-                table.add_row(vec![
-                    comfy_table::Cell::new(short_id),
-                    comfy_table::Cell::new(src["name"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(src["flake_ref"].as_str().unwrap_or("?")),
+                table = table.row_fragments(vec![
+                    cell(short_id),
+                    cell(src["name"].as_str().unwrap_or("?")),
+                    cell(src["flake_ref"].as_str().unwrap_or("?")),
                     status_cell(src["status"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(rev),
-                    comfy_table::Cell::new(job_count.to_string()),
-                    comfy_table::Cell::new(human_duration_since(
+                    cell(rev),
+                    cell(job_count.to_string()),
+                    cell(human_duration_since(
                         src["last_reconciled_at"].as_str().unwrap_or(""),
                     )),
                 ]);
             }
-            println!("{table}");
+            table.print()?;
         }
     }
     Ok(())

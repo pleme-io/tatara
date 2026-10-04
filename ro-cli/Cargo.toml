@@ -30,8 +30,7 @@ serde_json = "1"
 shikumi = "0.1"
 
 # Output
-comfy-table = "7"
-colored = "3"
+kazari = { package = "pleme-io-kazari", version = "0.2" }
 
 # Filesystem
 dirs = "6"

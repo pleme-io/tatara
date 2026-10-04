@@ -1,7 +1,10 @@
 use anyhow::{bail, Context, Result};
+use kazari::Print;
 
 use super::context::{active_endpoint, endpoint_to_server};
-use super::output::{build_table, human_duration_since, render_value, status_cell, OutputFormat};
+use super::output::{
+    build_table, cell, human_duration_since, render_value, status_cell, OutputFormat,
+};
 
 pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
     let server = endpoint_to_server(&active_endpoint(endpoint));
@@ -36,18 +39,18 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
             for rel in &releases {
                 let id_str = rel["id"].as_str().unwrap_or("?");
                 let short_id = id_str.get(..8).unwrap_or(id_str);
-                table.add_row(vec![
-                    comfy_table::Cell::new(short_id),
-                    comfy_table::Cell::new(rel["name"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(rel["flake_ref"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(rel["version"].as_u64().unwrap_or(0).to_string()),
+                table = table.row_fragments(vec![
+                    cell(short_id),
+                    cell(rel["name"].as_str().unwrap_or("?")),
+                    cell(rel["flake_ref"].as_str().unwrap_or("?")),
+                    cell(rel["version"].as_u64().unwrap_or(0).to_string()),
                     status_cell(rel["status"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(human_duration_since(
+                    cell(human_duration_since(
                         rel["created_at"].as_str().unwrap_or(""),
                     )),
                 ]);
             }
-            println!("{table}");
+            table.print()?;
         }
     }
     Ok(())

@@ -1,7 +1,10 @@
 use anyhow::{bail, Context, Result};
+use kazari::Print;
 
 use super::context::{active_endpoint, endpoint_to_server};
-use super::output::{build_table, human_duration_since, render_value, status_cell, OutputFormat};
+use super::output::{
+    build_table, cell, human_duration_since, render_value, status_cell, OutputFormat,
+};
 
 pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
     let server = endpoint_to_server(&active_endpoint(endpoint));
@@ -51,27 +54,27 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
                     .unwrap_or("ready");
 
                 let mut row = vec![
-                    comfy_table::Cell::new(
+                    cell(
                         node["node_id"]
                             .as_u64()
                             .map(|id| id.to_string())
                             .unwrap_or_else(|| node["id"].as_str().unwrap_or("?").to_string()),
                     ),
-                    comfy_table::Cell::new(node["hostname"].as_str().unwrap_or("?")),
+                    cell(node["hostname"].as_str().unwrap_or("?")),
                     status_cell(status),
-                    comfy_table::Cell::new(
+                    cell(
                         node["total_resources"]["cpu_mhz"]
                             .as_u64()
                             .unwrap_or(0)
                             .to_string(),
                     ),
-                    comfy_table::Cell::new(
+                    cell(
                         node["total_resources"]["memory_mb"]
                             .as_u64()
                             .unwrap_or(0)
                             .to_string(),
                     ),
-                    comfy_table::Cell::new(
+                    cell(
                         node["allocations_running"]
                             .as_u64()
                             .unwrap_or(0)
@@ -80,7 +83,7 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
                 ];
 
                 if wide {
-                    row.push(comfy_table::Cell::new(
+                    row.push(cell(
                         node["drivers"]
                             .as_array()
                             .map(|d| {
@@ -91,21 +94,21 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
                             })
                             .unwrap_or_default(),
                     ));
-                    row.push(comfy_table::Cell::new(node["os"].as_str().unwrap_or("?")));
-                    row.push(comfy_table::Cell::new(node["arch"].as_str().unwrap_or("?")));
-                    row.push(comfy_table::Cell::new(
+                    row.push(cell(node["os"].as_str().unwrap_or("?")));
+                    row.push(cell(node["arch"].as_str().unwrap_or("?")));
+                    row.push(cell(
                         node["eligible"]
                             .as_bool()
                             .map(|b| if b { "yes" } else { "no" })
                             .unwrap_or("yes"),
                     ));
-                    row.push(comfy_table::Cell::new(human_duration_since(
+                    row.push(cell(human_duration_since(
                         node["joined_at"].as_str().unwrap_or(""),
                     )));
                 }
-                table.add_row(row);
+                table = table.row_fragments(row);
             }
-            println!("{table}");
+            table.print()?;
         }
     }
     Ok(())

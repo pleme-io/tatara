@@ -1,8 +1,11 @@
 use anyhow::{bail, Context, Result};
+use kazari::Print;
 use std::path::PathBuf;
 
 use super::context::{active_endpoint, endpoint_to_server};
-use super::output::{build_table, human_duration_since, render_value, status_cell, OutputFormat};
+use super::output::{
+    build_table, cell, human_duration_since, render_value, status_cell, OutputFormat,
+};
 use tatara_engine::nix_eval::evaluator::NixEvaluator;
 
 pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
@@ -42,30 +45,28 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
 
             for job in &jobs {
                 let mut row = vec![
-                    comfy_table::Cell::new(job["id"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(job["job_type"].as_str().unwrap_or("?")),
+                    cell(job["id"].as_str().unwrap_or("?")),
+                    cell(job["job_type"].as_str().unwrap_or("?")),
                     status_cell(job["status"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(
+                    cell(
                         job["groups"]
                             .as_array()
                             .map(|g| g.len().to_string())
                             .unwrap_or_else(|| "0".to_string()),
                     ),
-                    comfy_table::Cell::new(human_duration_since(
+                    cell(human_duration_since(
                         job["submitted_at"].as_str().unwrap_or(""),
                     )),
                 ];
                 if wide {
-                    row.push(comfy_table::Cell::new(
-                        job["version"].as_u64().unwrap_or(0).to_string(),
-                    ));
-                    row.push(comfy_table::Cell::new(
+                    row.push(cell(job["version"].as_u64().unwrap_or(0).to_string()));
+                    row.push(cell(
                         serde_json::to_string(&job["meta"]).unwrap_or_default(),
                     ));
                 }
-                table.add_row(row);
+                table = table.row_fragments(row);
             }
-            println!("{table}");
+            table.print()?;
         }
     }
     Ok(())
@@ -115,19 +116,17 @@ pub async fn get(job_id: &str, output: OutputFormat, endpoint: Option<&str>) -> 
                     println!();
                     let mut table = build_table(&["ALLOC ID", "GROUP", "STATE", "NODE", "CREATED"]);
                     for alloc in allocs {
-                        table.add_row(vec![
-                            comfy_table::Cell::new(
-                                alloc["id"].as_str().unwrap_or("?").get(..8).unwrap_or("?"),
-                            ),
-                            comfy_table::Cell::new(alloc["group_name"].as_str().unwrap_or("?")),
+                        table = table.row_fragments(vec![
+                            cell(alloc["id"].as_str().unwrap_or("?").get(..8).unwrap_or("?")),
+                            cell(alloc["group_name"].as_str().unwrap_or("?")),
                             status_cell(alloc["state"].as_str().unwrap_or("?")),
-                            comfy_table::Cell::new(alloc["node_id"].as_str().unwrap_or("?")),
-                            comfy_table::Cell::new(human_duration_since(
+                            cell(alloc["node_id"].as_str().unwrap_or("?")),
+                            cell(human_duration_since(
                                 alloc["created_at"].as_str().unwrap_or(""),
                             )),
                         ]);
                     }
-                    println!("{table}");
+                    table.print()?;
                 }
             }
         }
@@ -257,21 +256,21 @@ pub async fn history(job_id: &str, output: OutputFormat, endpoint: Option<&str>)
             }
             let mut table = build_table(&["VERSION", "STATUS", "GROUPS", "SUBMITTED"]);
             for entry in &history {
-                table.add_row(vec![
-                    comfy_table::Cell::new(entry["version"].as_u64().unwrap_or(0).to_string()),
+                table = table.row_fragments(vec![
+                    cell(entry["version"].as_u64().unwrap_or(0).to_string()),
                     status_cell(entry["status"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(
+                    cell(
                         entry["groups"]
                             .as_array()
                             .map(|g| g.len().to_string())
                             .unwrap_or_else(|| "0".to_string()),
                     ),
-                    comfy_table::Cell::new(human_duration_since(
+                    cell(human_duration_since(
                         entry["submitted_at"].as_str().unwrap_or(""),
                     )),
                 ]);
             }
-            println!("{table}");
+            table.print()?;
         }
     }
     Ok(())

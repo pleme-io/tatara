@@ -129,7 +129,7 @@ impl Cli {
 
             Command::Sources => {
                 let sources = client.list_sources().await?;
-                output::print_sources(&sources);
+                output::print_sources(&sources)?;
                 Ok(())
             }
 
@@ -154,7 +154,7 @@ impl Cli {
             Command::Init => {
                 println!("Connecting to ro platform...");
                 let config = client.get_config().await?;
-                nix_config::save_cached(&config, &client.base_url())?;
+                nix_config::save_cached(&config, client.base_url())?;
                 let result = nix_config::apply_nix_config(&config)?;
                 output::print_init_result(&result);
                 Ok(())
@@ -168,7 +168,7 @@ impl Cli {
                 } else {
                     println!("No cached config, fetching from API...");
                     let config = client.get_config().await?;
-                    nix_config::save_cached(&config, &client.base_url())?;
+                    nix_config::save_cached(&config, client.base_url())?;
                     config
                 };
 
@@ -186,7 +186,7 @@ impl Cli {
                 let old = nix_config::load_cached()?;
                 println!("Fetching latest platform config...");
                 let config = client.get_config().await?;
-                nix_config::save_cached(&config, &client.base_url())?;
+                nix_config::save_cached(&config, client.base_url())?;
                 let result = nix_config::apply_nix_config(&config)?;
                 output::print_refresh_result(&result, old.as_ref());
                 Ok(())

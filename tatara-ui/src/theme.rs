@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
-use crate::palette::{Rgb, RoleMap, NORD};
+use crate::palette::{Rgb, RoleMap};
 
 /// A theme is a named palette binding + sigil overrides + a BLAKE3-stable
 /// identity. Themes compose (`extends`) and snapshot to disk.
@@ -60,6 +60,7 @@ pub struct SemanticOverrides {
 impl ThemeSpec {
     /// Built-in Nord-arctic theme — the default every tatara tool starts with.
     pub fn nord_arctic() -> Self {
+        let d = RoleMap::default();
         Self {
             name: "nord-arctic".into(),
             description: Some(
@@ -67,13 +68,13 @@ impl ThemeSpec {
             ),
             extends: None,
             semantic: SemanticOverrides {
-                primary: Some(NORD.nord8.as_hex()),
-                accent: Some(NORD.nord15.as_hex()),
-                info: Some(NORD.nord9.as_hex()),
-                success: Some(NORD.nord14.as_hex()),
-                warn: Some(NORD.nord13.as_hex()),
-                error: Some(NORD.nord11.as_hex()),
-                dim: Some(NORD.nord3.as_hex()),
+                primary: Some(d.primary.as_hex()),
+                accent: Some(d.accent.as_hex()),
+                info: Some(d.info.as_hex()),
+                success: Some(d.success.as_hex()),
+                warn: Some(d.warn.as_hex()),
+                error: Some(d.error.as_hex()),
+                dim: Some(d.dim.as_hex()),
             },
         }
     }

@@ -1,5 +1,5 @@
 use clap::ValueEnum;
-use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};
+use kazari::{Capability, Fragment, Print, Role, Table};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, ValueEnum, Default)]
@@ -26,39 +26,34 @@ pub fn render_value<T: Serialize>(value: &T, format: OutputFormat) -> anyhow::Re
 
 /// Build a styled table with headers.
 pub fn build_table(headers: &[&str]) -> Table {
-    let mut table = Table::new();
-    table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS);
+    Table::new(headers.iter().copied())
+}
 
-    let header_cells: Vec<Cell> = headers
-        .iter()
-        .map(|h| Cell::new(h).fg(Color::Cyan))
-        .collect();
-    table.set_header(header_cells);
-    table
+pub fn cell(text: impl std::fmt::Display) -> Fragment {
+    Fragment::styled(text.to_string(), Role::Text)
 }
 
 /// Color a status string based on its value.
-pub fn status_cell(status: &str) -> Cell {
-    let color = match status {
-        "running" | "ready" | "active" => Color::Green,
-        "pending" | "draining" => Color::Yellow,
-        "dead" | "failed" | "lost" | "down" => Color::Red,
-        "complete" | "completed" | "superseded" => Color::Blue,
-        _ => Color::White,
+pub fn status_cell(status: &str) -> Fragment {
+    let role = match status {
+        "running" | "ready" | "active" => Role::Ok,
+        "pending" | "draining" => Role::Pending,
+        "dead" | "failed" | "lost" | "down" => Role::Error,
+        "complete" | "completed" | "superseded" => Role::Info,
+        _ => Role::Text,
     };
-    Cell::new(status).fg(color)
+    Fragment::styled(status, role)
 }
 
 /// Render a list of items as a table string.
 pub fn render_table(headers: &[&str], rows: Vec<Vec<String>>) -> String {
-    let mut table = build_table(headers);
-    for row in rows {
-        let cells: Vec<comfy_table::Cell> = row.into_iter().map(comfy_table::Cell::new).collect();
-        table.add_row(cells);
-    }
-    table.to_string()
+    let table = rows.into_iter().fold(build_table(headers), |t, row| {
+        t.row_fragments(row.into_iter().map(cell))
+    });
+    table
+        .to_string_at(Capability::probe())
+        .trim_end_matches('\n')
+        .to_string()
 }
 
 /// Format a chrono timestamp as a human-readable relative duration.
@@ -102,7 +97,7 @@ mod tests {
     #[test]
     fn test_build_table_has_headers() {
         let table = build_table(&["ID", "NAME", "STATUS"]);
-        let output = table.to_string();
+        let output = table.to_string_at(Capability::plain());
         assert!(output.contains("ID"));
         assert!(output.contains("NAME"));
         assert!(output.contains("STATUS"));
@@ -118,6 +113,24 @@ mod tests {
         assert!(output.contains("job1"));
         assert!(output.contains("job2"));
         assert!(output.contains("running"));
+    }
+
+    #[test]
+    fn test_plain_table_has_no_escapes() {
+        let table =
+            build_table(&["ID", "STATUS"]).row_fragments([cell("1"), status_cell("failed")]);
+        let output = table.to_string_at(Capability::plain());
+        assert!(!output.contains('\u{1b}'));
+        assert!(output.contains("failed"));
+    }
+
+    #[test]
+    fn test_status_cell_roles() {
+        assert_eq!(status_cell("running").role, Some(Role::Ok));
+        assert_eq!(status_cell("pending").role, Some(Role::Pending));
+        assert_eq!(status_cell("lost").role, Some(Role::Error));
+        assert_eq!(status_cell("completed").role, Some(Role::Info));
+        assert_eq!(status_cell("other").role, Some(Role::Text));
     }
 
     #[test]

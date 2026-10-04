@@ -1,39 +1,28 @@
 //! ANSI renderer — turns an `EventStream` into colored text with Nord styling.
 //!
-//! Honors `NO_COLOR`, auto-detects non-tty streams, and always writes
-//! deterministic output (same events + same theme → identical bytes).
+//! Emission goes through kazari: its capability wall decides the color depth
+//! (truecolor → 256 → 16 → none on pipes, `NO_COLOR`, dumb terminals), and its
+//! typed SGR atom writes every escape byte. Same events + same theme + same
+//! capability → identical bytes.
 
 use std::io::Write;
 
-use owo_colors::{OwoColorize, Style};
+use kazari::{Capability, ColorLevel, Stream};
 
 use crate::event::{ArtifactState, Cell, EventStream, LogLevel, UiEvent};
 use crate::palette::{Rgb, Role, RoleMap};
 use crate::sigil::Sigil;
 
-/// Auto-detect whether to emit ANSI escapes.
-/// `true` if stderr is a tty and `NO_COLOR` is not set.
+/// Auto-detect whether to emit ANSI escapes on stderr, through kazari's
+/// capability probe (`CLICOLOR_FORCE` > `NO_COLOR` > tty > `COLORTERM` > `TERM`).
 pub fn should_color() -> bool {
-    if std::env::var_os("NO_COLOR").is_some() {
-        return false;
-    }
-    // Crate's unix-only isatty probe. Stays conservative on non-Unix.
-    #[cfg(unix)]
-    {
-        use std::os::fd::AsRawFd;
-        let fd = std::io::stderr().as_raw_fd();
-        // SAFETY: isatty is a libc call on an owned fd.
-        (unsafe { libc::isatty(fd) }) == 1
-    }
-    #[cfg(not(unix))]
-    {
-        true
-    }
+    Capability::probe_stream(Stream::Stderr).level.is_colored()
 }
 
 pub struct Renderer {
     pub role_map: RoleMap,
     pub color: bool,
+    pub caps: Capability,
 }
 
 impl Default for Renderer {
@@ -44,9 +33,11 @@ impl Default for Renderer {
 
 impl Renderer {
     pub fn new(role_map: RoleMap) -> Self {
+        let caps = Capability::probe_stream(Stream::Stderr);
         Self {
             role_map,
-            color: should_color(),
+            color: caps.level.is_colored(),
+            caps,
         }
     }
 
@@ -54,12 +45,30 @@ impl Renderer {
         Self {
             role_map,
             color: false,
+            caps: Capability::plain(),
         }
     }
 
     pub fn with_color(mut self, on: bool) -> Self {
         self.color = on;
         self
+    }
+
+    pub fn with_caps(mut self, caps: Capability) -> Self {
+        self.color = caps.level.is_colored();
+        self.caps = caps;
+        self
+    }
+
+    fn emit_caps(&self) -> Capability {
+        if self.caps.level.is_colored() {
+            self.caps
+        } else {
+            Capability {
+                level: ColorLevel::Truecolor,
+                ..self.caps
+            }
+        }
     }
 
     pub fn render(&self, events: &EventStream, w: &mut impl Write) -> std::io::Result<()> {
@@ -231,15 +240,11 @@ impl Renderer {
         if !self.color {
             return s.to_string();
         }
-        let rgb = self.role_map.color_of(role);
-        self.apply(s, rgb)
+        self.apply(s, self.role_map.color_of(role))
     }
 
     fn apply(&self, s: &str, rgb: Rgb) -> String {
-        // owo-colors uses a 24-bit truecolor sequence — works in any
-        // modern terminal (kitty, ghostty, iterm2, terminal.app 14+, tmux 3.2+).
-        let style = Style::new().color(rgb.owo());
-        s.style(style).to_string()
+        kazari::paint_rgb_at(rgb.to_kazari(), s, false, false, &self.emit_caps())
     }
 
     fn dim_elapsed(&self, ms: u64) -> String {
@@ -330,6 +335,64 @@ mod tests {
         assert!(s.contains('⟡'));
         assert!(s.contains("synthesize"));
         assert!(s.contains('─'));
+    }
+
+    fn render_log(r: &Renderer) -> String {
+        let mut out: Vec<u8> = Vec::new();
+        r.render_one(
+            &UiEvent::Log {
+                level: LogLevel::Info,
+                message: "m".into(),
+            },
+            &mut out,
+        )
+        .unwrap();
+        String::from_utf8(out).unwrap()
+    }
+
+    #[test]
+    fn plain_capability_emits_zero_escape_bytes() {
+        let r = Renderer::new(RoleMap::default()).with_caps(Capability::plain());
+        assert!(!r.color);
+        assert!(!render_log(&r).contains('\u{1b}'));
+    }
+
+    #[test]
+    fn truecolor_emits_the_role_rgb() {
+        let caps = Capability::fixed(ColorLevel::Truecolor, 80, true);
+        let r = Renderer::plain(RoleMap::default()).with_caps(caps);
+        let s = render_log(&r);
+        let info = RoleMap::default().info;
+        assert!(
+            s.contains(&format!("38;2;{};{};{}", info.0, info.1, info.2)),
+            "{s:?}"
+        );
+    }
+
+    #[test]
+    fn ansi256_degrades_through_kazari() {
+        let caps = Capability::fixed(ColorLevel::Ansi256, 80, true);
+        let r = Renderer::plain(RoleMap::default()).with_caps(caps);
+        let s = render_log(&r);
+        assert!(s.contains("38;5;"), "{s:?}");
+        assert!(!s.contains("38;2;"), "{s:?}");
+    }
+
+    #[test]
+    fn forced_color_on_a_pipe_stays_truecolor() {
+        let r = Renderer::plain(RoleMap::default()).with_color(true);
+        assert!(render_log(&r).contains("38;2;"));
+    }
+
+    #[test]
+    fn theme_override_rgb_reaches_the_bytes() {
+        let rm = RoleMap {
+            info: Rgb(0x12, 0x34, 0x56),
+            ..RoleMap::default()
+        };
+        let caps = Capability::fixed(ColorLevel::Truecolor, 80, true);
+        let r = Renderer::plain(rm).with_caps(caps);
+        assert!(render_log(&r).contains("38;2;18;52;86"));
     }
 
     #[test]

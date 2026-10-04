@@ -1,7 +1,10 @@
 use anyhow::{bail, Context, Result};
+use kazari::Print;
 
 use super::context::{active_endpoint, endpoint_to_server};
-use super::output::{build_table, human_duration_since, render_value, status_cell, OutputFormat};
+use super::output::{
+    build_table, cell, human_duration_since, render_value, status_cell, OutputFormat,
+};
 
 pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
     let server = endpoint_to_server(&active_endpoint(endpoint));
@@ -34,18 +37,18 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
             for alloc in &allocs {
                 let id_str = alloc["id"].as_str().unwrap_or("?");
                 let short_id = id_str.get(..8).unwrap_or(id_str);
-                table.add_row(vec![
-                    comfy_table::Cell::new(short_id),
-                    comfy_table::Cell::new(alloc["job_id"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(alloc["group_name"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(alloc["node_id"].as_str().unwrap_or("?")),
+                table = table.row_fragments(vec![
+                    cell(short_id),
+                    cell(alloc["job_id"].as_str().unwrap_or("?")),
+                    cell(alloc["group_name"].as_str().unwrap_or("?")),
+                    cell(alloc["node_id"].as_str().unwrap_or("?")),
                     status_cell(alloc["state"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(human_duration_since(
+                    cell(human_duration_since(
                         alloc["created_at"].as_str().unwrap_or(""),
                     )),
                 ]);
             }
-            println!("{table}");
+            table.print()?;
         }
     }
     Ok(())
@@ -88,27 +91,25 @@ pub async fn get(alloc_id: &str, output: OutputFormat, endpoint: Option<&str>) -
                     println!();
                     let mut table = build_table(&["TASK", "STATE", "PID", "EXIT CODE", "RESTARTS"]);
                     for (name, state) in tasks {
-                        table.add_row(vec![
-                            comfy_table::Cell::new(name),
+                        table = table.row_fragments(vec![
+                            cell(name),
                             status_cell(state["state"].as_str().unwrap_or("?")),
-                            comfy_table::Cell::new(
+                            cell(
                                 state["pid"]
                                     .as_u64()
                                     .map(|p| p.to_string())
                                     .unwrap_or_else(|| "-".to_string()),
                             ),
-                            comfy_table::Cell::new(
+                            cell(
                                 state["exit_code"]
                                     .as_i64()
                                     .map(|c| c.to_string())
                                     .unwrap_or_else(|| "-".to_string()),
                             ),
-                            comfy_table::Cell::new(
-                                state["restarts"].as_u64().unwrap_or(0).to_string(),
-                            ),
+                            cell(state["restarts"].as_u64().unwrap_or(0).to_string()),
                         ]);
                     }
-                    println!("{table}");
+                    table.print()?;
                 }
             }
         }

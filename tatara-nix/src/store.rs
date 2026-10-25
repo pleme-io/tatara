@@ -18,7 +18,7 @@ impl StoreHash {
     /// Delegates the two-line
     /// `serde_json::to_vec(value).unwrap_or_default()` +
     /// `hex::encode(blake3::hash(&bytes).as_bytes())` chain to
-    /// [`tatara_lisp::hash::hex_blake3_of_json`] — the workspace-wide
+    /// [`tatara_core::hash::hex_blake3_of_json`] — the workspace-wide
     /// ONE substrate owner of the `T: Serialize` → 64-lowercase-hex
     /// BLAKE3 identity-string projection. The `StoreHash(...)` newtype
     /// wrap stays here (this slot owns its identity shape; the
@@ -31,7 +31,7 @@ impl StoreHash {
     /// pre-lift `hex::encode(blake3::hash(...).as_bytes())` reference
     /// surfaces HERE at fail-before-pass-after granularity.
     pub fn of<T: Serialize>(value: &T) -> Self {
-        Self(tatara_lisp::hash::hex_blake3_of_json(value))
+        Self(tatara_core::hash::hex_blake3_of_json(value))
     }
 
     /// Truncated form — 20 hex chars (~80 bits) for human display only.
@@ -105,7 +105,7 @@ mod tests {
     }
 
     /// Fail-before-pass-after: [`StoreHash::of`]'s post-lift delegation
-    /// to [`tatara_lisp::hash::hex_blake3_of_json`] MUST produce
+    /// to [`tatara_core::hash::hex_blake3_of_json`] MUST produce
     /// byte-identical output to the pre-lift hand-authored two-line
     /// `serde_json::to_vec(value).unwrap_or_default()` +
     /// `hex::encode(blake3::hash(&bytes).as_bytes())` chain that lived
@@ -154,7 +154,7 @@ mod tests {
     }
 
     /// Cross-substrate parity: `StoreHash::of` and the
-    /// `tatara_lisp::hash::hex_blake3_of_json` substrate resolve to
+    /// `tatara_core::hash::hex_blake3_of_json` substrate resolve to
     /// byte-identical hex strings — the newtype wrap is the ONLY
     /// difference between them. Pins the wrapper's invariant so a
     /// future reshape of the newtype (a `#[repr(transparent)]` swap,
@@ -168,7 +168,7 @@ mod tests {
         let v = Fixture { k: "same" };
         assert_eq!(
             StoreHash::of(&v).0,
-            tatara_lisp::hash::hex_blake3_of_json(&v)
+            tatara_core::hash::hex_blake3_of_json(&v)
         );
     }
 }

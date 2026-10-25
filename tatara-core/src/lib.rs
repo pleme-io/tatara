@@ -3,6 +3,7 @@ pub mod catalog;
 pub mod cluster;
 pub mod config;
 pub mod domain;
+pub mod hash;
 
 /// Prelude — import everything needed for convergence computing.
 ///

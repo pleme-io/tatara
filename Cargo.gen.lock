@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "2569ff1c12a5235542e44971df4f43ad5d32acc53c70ee3b6c56e8662488fdd2",
+  "cargo_lock_sha256": "3bea2c25b3aa668a6dfad4627065ed75c841ec1922e4a6eb1ee18bfdc15b744e",
   "manifest_sha256": {
     "Cargo.toml": "ced2c1b3046ce9cef5260893034424636a2c28709aa8922b0790720caf672d44",
     "ro-cli/Cargo.toml": "788b06ea1b09d94e42c8e1faa8b23fa173b673dc51955908214afce96746fcff",
@@ -23,7 +23,7 @@
     "tatara-lisp/Cargo.toml": "c337354738668adc831e35ca3b1fcf53d7cc1ef1724592aa65c24e00aca06f8f",
     "tatara-mcp/Cargo.toml": "440588ce76923a7902356aa86292d1a50190a75bb91c75b7c14a18b7f675091c",
     "tatara-net/Cargo.toml": "ab7fa28c8d8ad4d843672fb63e96e7fdae5e151f07eb7930e59c32f659925a62",
-    "tatara-nix/Cargo.toml": "c3cddbd3ec6e06054d78e20a7e88e1945f60a560fb0ba1aa2a2081f629d5bedb",
+    "tatara-nix/Cargo.toml": "0bf6309c7c1a340476275f85c379ead1ab71b17bb3805cb2a91c6e4a4dd879f8",
     "tatara-operator/Cargo.toml": "f199eb6464d2c002bedbef7b5cb1a693f2d484ba042de9d429aba107ee8cac76",
     "tatara-os/Cargo.toml": "b4fa80f59595fb1147a9492af167e38758895cd003d7e1b43b14be0c2a5c38f3",
     "tatara-pkgs/Cargo.toml": "5f25a11a250cfa1f154640e2e81a95d001806dff4a708307c0be034eef082bca",
@@ -32,7 +32,7 @@
     "tatara-reconciler/Cargo.toml": "76c2ce261b4999840619581087c05a0b4c3297b4308f20a64d791b8dd50493ac",
     "tatara-terreiro/Cargo.toml": "03b96b6ff1942cf97eb2c9c1b38c80258cdb56fbabe74b132d0048eb2020c053",
     "tatara-testing/Cargo.toml": "711da4ca4ce6b28b51af7b368442ea042079b9389defc0ce8691937712d51c49",
-    "tatara-ui/Cargo.toml": "835359246c832202f4519714d6418ffc05b395e13ddbcfc86692ddefb336d9e7",
+    "tatara-ui/Cargo.toml": "7bb49801c13f8f1ea2d4d2ff45612217895b696ea53fd2edc70169c2e4dd4797",
     "tatara-vm/Cargo.toml": "5d297b87076be28aa4d29df30176b7698d1e376e40ea90fcd273d6e184150a2c",
     "tatara-wasm/Cargo.toml": "f12f2c2a2c6bf54058cf359d7d75b37a9d4debcee3ee4675388f914bb6e3a353"
   },
@@ -17334,6 +17334,26 @@
             "tree": "target"
           },
           {
+            "name": "tatara_closed_set",
+            "package_key": "tatara-closed-set-0.3.37",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "tatara_core",
+            "package_key": "tatara-core-0.2.826",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "tatara_lattice",
             "package_key": "tatara-lattice-0.2.826",
             "kind": "normal",
@@ -18784,6 +18804,16 @@
           {
             "name": "serde_json",
             "package_key": "serde_json-1.0.150",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "tatara_core",
+            "package_key": "tatara-core-0.2.826",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,

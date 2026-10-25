@@ -1,4 +1,4 @@
-//! Thin delegate onto [`tatara_lisp::hash::hex_blake3_of_json`] — the
+//! Thin delegate onto [`tatara_core::hash::hex_blake3_of_json`] — the
 //! workspace-wide ONE substrate owner of the `serde_json::to_vec(v)
 //! .unwrap_or_default()` + `hex::encode(blake3::hash(&bytes).as_bytes())`
 //! two-line chain every `T: Serialize` → BLAKE3-hex identity slot in
@@ -33,7 +33,7 @@
 //! Since a follow-up round routed `tatara-terreiro::compute_id` and
 //! `tatara-nix::store::StoreHash::of` — the third and fourth
 //! consumers of the same identity-projection shape — the substrate is
-//! now owned at `tatara_lisp::hash::hex_blake3_of_json`, upstream of
+//! now owned at `tatara_core::hash::hex_blake3_of_json`, upstream of
 //! every current consumer (`tatara-lisp` is depended on by every
 //! `#[derive(TataraDomain)]` crate). This function stays here as a
 //! thin re-export delegate so in-crate callsites keep their local
@@ -53,7 +53,7 @@
 //! the hex-BLAKE3 tail). Those two live in `tatara-process` because
 //! that crate owns the three-pillar attestation surface; the workspace-
 //! wide value-to-hex-BLAKE3 identity projector lives at
-//! `tatara_lisp::hash` because every downstream consumer already
+//! `tatara_core::hash` because every downstream consumer already
 //! depends on `tatara-lisp` for its `#[derive(TataraDomain)]`.
 //!
 //! ### `T: Serialize + ?Sized`
@@ -87,7 +87,7 @@
 use serde::Serialize;
 
 /// The canonical `"blake3:"` scheme prefix — a thin `pub use`
-/// re-export delegate onto [`tatara_lisp::hash::BLAKE3_SCHEME_PREFIX`],
+/// re-export delegate onto [`tatara_core::hash::BLAKE3_SCHEME_PREFIX`],
 /// the workspace-wide ONE substrate owner of the scheme literal on
 /// the READ (predicate) AND WRITE (compose) axes.
 ///
@@ -110,21 +110,21 @@ use serde::Serialize;
 /// The lift now places the constant at the ONE crate every current +
 /// future consumer of the identity-projection axis already depends on
 /// — [`hex_blake3_of_json`] (the bare-hex sibling) already lives at
-/// `tatara_lisp::hash` for the exact same reason, and this constant
+/// `tatara_core::hash` for the exact same reason, and this constant
 /// now lives alongside it. `tatara-ui`'s existing spelling
 /// (`crate::hash::BLAKE3_SCHEME_PREFIX`) is preserved via this
 /// `pub use` re-export so no in-crate consumer has to change its
 /// import path.
 ///
 /// See the substrate owner's docstring at
-/// [`tatara_lisp::hash::BLAKE3_SCHEME_PREFIX`] for the full
+/// [`tatara_core::hash::BLAKE3_SCHEME_PREFIX`] for the full
 /// `tatara-engine::pillar_hash` (compute-and-wrap) axis-partition
 /// discussion.
-pub use tatara_lisp::hash::BLAKE3_SCHEME_PREFIX;
+pub use tatara_core::hash::BLAKE3_SCHEME_PREFIX;
 
 /// The [`BLAKE3_SCHEME_PREFIX`]-prefixed wire form of an already-
 /// computed BLAKE3 hex handle — a thin `pub use` re-export delegate
-/// onto [`tatara_lisp::hash::blake3_scheme_display`], the
+/// onto [`tatara_core::hash::blake3_scheme_display`], the
 /// workspace-wide ONE substrate owner of the `format!("blake3:{<hex>}")`
 /// one-line wrap chain the render surface restated at TWO WRITE sites
 /// pre-lift ([`crate::render::Renderer::artifact`] +
@@ -135,15 +135,15 @@ pub use tatara_lisp::hash::BLAKE3_SCHEME_PREFIX;
 /// canonical owner sits at the same layer as the bare-hex sibling
 /// [`hex_blake3_of_json`] that every downstream identity-projection
 /// consumer already reaches through. See the substrate owner's
-/// docstring at [`tatara_lisp::hash::blake3_scheme_display`] for the
+/// docstring at [`tatara_core::hash::blake3_scheme_display`] for the
 /// pre-lift consumer inventory, the `H: Display` polymorphism
 /// rationale, and the `tatara-engine::pillar_hash` (compute-and-wrap)
 /// axis-partition.
-pub use tatara_lisp::hash::blake3_scheme_display;
+pub use tatara_core::hash::blake3_scheme_display;
 
 /// The lowercase-64-hex BLAKE3 digest of `v`'s canonical JSON
 /// serialization — a thin delegate onto
-/// [`tatara_lisp::hash::hex_blake3_of_json`], the workspace-wide ONE
+/// [`tatara_core::hash::hex_blake3_of_json`], the workspace-wide ONE
 /// substrate owner of the two-line
 /// `serde_json::to_vec(v).unwrap_or_default()` +
 /// `hex::encode(blake3::hash(&bytes).as_bytes())` chain every
@@ -175,7 +175,7 @@ pub use tatara_lisp::hash::blake3_scheme_display;
 /// the OBSERVABLE contract.
 #[must_use]
 pub fn hex_blake3_of_json<T: Serialize + ?Sized>(v: &T) -> String {
-    tatara_lisp::hash::hex_blake3_of_json(v)
+    tatara_core::hash::hex_blake3_of_json(v)
 }
 
 #[cfg(test)]

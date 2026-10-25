@@ -44,7 +44,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// ## Sibling owner in `tatara-lisp`
 ///
-/// [`tatara_lisp::hash::BLAKE3_SCHEME_PREFIX`] owns the SAME canonical
+/// [`tatara_core::hash::BLAKE3_SCHEME_PREFIX`] owns the SAME canonical
 /// literal at the workspace layer as the substrate owner every
 /// `tatara-lisp`-depending crate reaches for. That owner cannot fold
 /// into this one because `tatara-engine` does not depend on
@@ -918,7 +918,7 @@ mod tests {
         // drifted the case (`BLAKE3:`) surfaces HERE and every
         // downstream READ / WRITE consumer sees the change through
         // the ONE substrate owner. Sibling to
-        // `tatara_lisp::hash::tests::blake3_scheme_prefix_is_the_canonical_seven_byte_ascii_literal`
+        // `tatara_core::hash::tests::blake3_scheme_prefix_is_the_canonical_seven_byte_ascii_literal`
         // at the workspace-layer scheme owner — the two crate-layer
         // owners MUST hold the same value + shape, since a cross-crate
         // consumer (a `sekiban` admission webhook, a `kensa`

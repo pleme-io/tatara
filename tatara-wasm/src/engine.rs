@@ -181,6 +181,212 @@ pub struct WasiGrant {
     /// filesystem at all, which is the default.
     #[serde(default)]
     pub preopens: Vec<Preopen>,
+    /// The sockets the guest may use. Deny-all by default: no bind, no
+    /// connect, no name lookup. Honoured by engines that host components
+    /// (`wasi:sockets`, and the authority check on outgoing `wasi:http`).
+    #[serde(default)]
+    pub network: NetworkGrant,
+}
+
+/// What network a guest may reach.
+///
+/// **`Default` is deny-all.** A guest with no grant cannot bind a port,
+/// connect anywhere or resolve a name; there is no "inherit the host's
+/// network" form, because a pod's reach is declared, never ambient.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkGrant {
+    /// Ports the guest may bind and listen on, on any local address.
+    #[serde(default)]
+    pub bind: Vec<u16>,
+    /// The peers the guest may connect to. A peer named by host name is
+    /// resolved when the guest connects, so a connection is admitted only to
+    /// an address that name resolves to, on the declared port.
+    #[serde(default)]
+    pub connect: Vec<Peer>,
+}
+
+impl NetworkGrant {
+    /// Whether this grant admits nothing at all.
+    #[must_use]
+    pub fn is_closed(&self) -> bool {
+        self.bind.is_empty() && self.connect.is_empty()
+    }
+
+    /// Whether the guest may bind `port`. Port 0 (an ephemeral port, what
+    /// a client socket binds implicitly) is admitted once any peer is.
+    #[must_use]
+    pub fn admits_bind(&self, port: u16) -> bool {
+        self.bind.contains(&port) || (port == 0 && !self.connect.is_empty())
+    }
+
+    /// Whether a peer with exactly this host and port is declared.
+    #[must_use]
+    pub fn names_peer(&self, host: &str, port: u16) -> bool {
+        self.connect
+            .iter()
+            .any(|p| p.port == port && p.host.eq_ignore_ascii_case(host))
+    }
+}
+
+/// One peer a guest may connect to.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Peer {
+    /// A host name or an IP address literal.
+    pub host: String,
+    /// The port on that host.
+    pub port: u16,
+}
+
+impl Peer {
+    /// Build one from a host and a port.
+    pub fn new(host: impl Into<String>, port: u16) -> Self {
+        Self {
+            host: host.into(),
+            port,
+        }
+    }
+}
+
+/// The bounds a long-running guest runs under.
+///
+/// `Default` is unbounded, which is a caller's explicit choice: a pod that
+/// declares no memory limit runs without one, as Kubernetes specifies.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WasmLimits {
+    /// The most linear memory the guest may hold, summed over every memory
+    /// in the store. A growth past it traps and the guest exits with
+    /// [`WasmExit::MemoryLimit`].
+    #[serde(default)]
+    pub memory_bytes: Option<u64>,
+    /// The longest one run may take. For a command component it bounds the
+    /// whole run; for an HTTP proxy component it bounds each request. Past
+    /// it the guest is interrupted and exits with [`WasmExit::Deadline`].
+    #[serde(default)]
+    pub deadline: Option<Duration>,
+}
+
+/// A long-running guest to start: what [`WasmEngine::spawn`] takes.
+#[derive(Debug, Clone)]
+pub struct WasmSpawn {
+    /// The component, its preview, and what it is granted.
+    pub boot: WasmBoot,
+    /// Its bounds.
+    pub limits: WasmLimits,
+    /// For a component that exports `wasi:http/incoming-handler`, the port
+    /// the host serves it on. It must be in the grant's `bind` list.
+    pub serve_http: Option<u16>,
+}
+
+/// Which of a guest's output streams some bytes came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GuestStream {
+    /// The guest's stdout.
+    Stdout,
+    /// The guest's stderr.
+    Stderr,
+}
+
+/// Where a long-running guest's output goes, as it is written.
+///
+/// A run-to-completion guest's output is captured into its [`WasmHandle`];
+/// a long-running one never completes, so its bytes are handed over as the
+/// guest writes them.
+pub trait OutputSink: Send + Sync + 'static {
+    /// The guest wrote `bytes` to `stream`.
+    fn write(&self, stream: GuestStream, bytes: &[u8]);
+    /// The guest has exited and will write nothing more.
+    fn finish(&self) {}
+}
+
+/// How a long-running guest ended.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum WasmExit {
+    /// The guest returned, or called `exit`, with this code.
+    Code {
+        /// The exit code. A command whose `run` returned an error is 1.
+        code: i32,
+    },
+    /// The guest trapped.
+    Trapped {
+        /// The trap, as the engine reported it.
+        message: String,
+    },
+    /// The guest grew its memory past [`WasmLimits::memory_bytes`].
+    MemoryLimit {
+        /// The limit it hit.
+        limit_bytes: u64,
+    },
+    /// The guest ran past [`WasmLimits::deadline`].
+    Deadline {
+        /// The deadline it passed.
+        after: Duration,
+    },
+    /// [`WasmProcess::stop`] ended it.
+    Stopped,
+}
+
+/// A running long-lived guest.
+///
+/// Dropping the handle does not stop the guest; [`Self::stop`] does.
+#[derive(Debug, Clone)]
+pub struct WasmProcess {
+    name: String,
+    exit: tokio::sync::watch::Receiver<Option<WasmExit>>,
+    stop: std::sync::Arc<tokio::sync::watch::Sender<bool>>,
+}
+
+impl WasmProcess {
+    /// A handle over an exit channel the engine writes once, and the stop
+    /// signal the engine watches.
+    #[must_use]
+    pub fn new(
+        name: impl Into<String>,
+        exit: tokio::sync::watch::Receiver<Option<WasmExit>>,
+        stop: tokio::sync::watch::Sender<bool>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            exit,
+            stop: std::sync::Arc::new(stop),
+        }
+    }
+
+    /// The name the guest was spawned under.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// How the guest ended, or `None` while it runs.
+    #[must_use]
+    pub fn exit(&self) -> Option<WasmExit> {
+        self.exit.borrow().clone()
+    }
+
+    /// Ask the guest to end. Idempotent; the exit is [`WasmExit::Stopped`]
+    /// unless the guest had already ended some other way.
+    pub fn stop(&self) {
+        self.stop.send_replace(true);
+    }
+
+    /// Wait for the guest to end.
+    pub async fn wait(&mut self) -> WasmExit {
+        loop {
+            if let Some(exit) = self.exit.borrow_and_update().clone() {
+                return exit;
+            }
+            if self.exit.changed().await.is_err() {
+                return self.exit.borrow().clone().unwrap_or(WasmExit::Trapped {
+                    message: "the engine dropped the guest without an exit".to_string(),
+                });
+            }
+        }
+    }
 }
 
 /// One directory mapped from host to guest.
@@ -275,6 +481,10 @@ pub struct EngineFacts {
     /// Whether this engine wires a WASI context. `false` means a
     /// `wasi_snapshot_preview1` import cannot be satisfied here.
     pub provides_wasi: bool,
+    /// The previews [`WasmEngine::spawn`] accepts: long-running guests with
+    /// streamed output, limits and stop. Empty means this engine runs guests
+    /// to completion only.
+    pub spawns: &'static [WasiPreview],
 }
 
 impl EngineFacts {
@@ -294,14 +504,16 @@ impl EngineFacts {
 #[must_use]
 pub const fn facts_of(runtime: WasmRuntime) -> EngineFacts {
     match runtime {
-        // Wires `wasmtime_wasi::preview1`, so it takes P1 and provides WASI.
-        // P2 (component model) is deliberately absent: the impl builds a
-        // `WasiP1Ctx` and calls `_start`, which is the p1 entry convention.
+        // `run` wires `wasmtime_wasi::preview1` and calls `_start`, the p1
+        // entry convention, so it takes P1. `spawn` hosts P2 components
+        // (`wasi:cli/run`, and `wasi:http/incoming-handler` with the
+        // `wasi-http` feature) on the async engine in `component.rs`.
         WasmRuntime::Wasmtime => EngineFacts {
             runtime,
             implemented: true,
             previews: &[WasiPreview::P1],
             provides_wasi: true,
+            spawns: &[WasiPreview::P2],
         },
         // Compiles + runs, but instantiates against an empty import object:
         // no WASI bridge. Pure-compute guests only.
@@ -310,6 +522,7 @@ pub const fn facts_of(runtime: WasmRuntime) -> EngineFacts {
             implemented: true,
             previews: &[WasiPreview::P1],
             provides_wasi: false,
+            spawns: &[],
         },
         // Same shape as wasmer: a real interpreter, an empty `Linker`.
         WasmRuntime::Wasmi => EngineFacts {
@@ -317,6 +530,7 @@ pub const fn facts_of(runtime: WasmRuntime) -> EngineFacts {
             implemented: true,
             previews: &[WasiPreview::P1],
             provides_wasi: false,
+            spawns: &[],
         },
         // No body in this crate — needs C++ SDK linking.
         WasmRuntime::WasmEdge => EngineFacts {
@@ -324,6 +538,7 @@ pub const fn facts_of(runtime: WasmRuntime) -> EngineFacts {
             implemented: false,
             previews: &[],
             provides_wasi: false,
+            spawns: &[],
         },
         // No body in this crate — needs a C build harness.
         WasmRuntime::Wamr => EngineFacts {
@@ -331,6 +546,7 @@ pub const fn facts_of(runtime: WasmRuntime) -> EngineFacts {
             implemented: false,
             previews: &[],
             provides_wasi: false,
+            spawns: &[],
         },
     }
 }
@@ -421,6 +637,79 @@ pub trait WasmEngine {
     ) -> Result<(), WasmEngineError> {
         Ok(())
     }
+
+    /// Start a long-running guest and return at once. Its output goes to
+    /// `sink` as it is written; [`WasmProcess`] reports its exit and stops
+    /// it. Must be called inside a tokio runtime, which the guest runs on.
+    ///
+    /// # Errors
+    /// [`WasmEngineError::SpawnNotSupported`] from an engine whose facts list
+    /// no spawn preview (the default); otherwise as [`check_spawn`], and any
+    /// compile or instantiate failure.
+    fn spawn(
+        &self,
+        spawn: &WasmSpawn,
+        sink: std::sync::Arc<dyn OutputSink>,
+    ) -> Result<WasmProcess, WasmEngineError> {
+        let _ = (spawn, sink);
+        Err(WasmEngineError::SpawnNotSupported(self.runtime()))
+    }
+}
+
+/// Validate a spawn against an engine's facts, before any compilation.
+///
+/// # Errors
+/// - [`WasmEngineError::SpawnNotSupported`] if the engine spawns nothing.
+/// - [`WasmEngineError::PreviewNotSupported`] if it does not spawn this preview.
+/// - [`WasmEngineError::ServePortNotGranted`] if `serve_http` names a port the
+///   grant does not let the guest bind.
+pub fn check_spawn(facts: &EngineFacts, spawn: &WasmSpawn) -> Result<(), WasmEngineError> {
+    if facts.spawns.is_empty() {
+        return Err(WasmEngineError::SpawnNotSupported(facts.runtime));
+    }
+    if !facts.spawns.contains(&spawn.boot.preview) {
+        return Err(WasmEngineError::PreviewNotSupported(spawn.boot.preview));
+    }
+    if let Some(port) = spawn.serve_http {
+        let granted = spawn
+            .boot
+            .capabilities
+            .wasi
+            .as_ref()
+            .is_some_and(|g| g.network.bind.contains(&port));
+        if !granted {
+            return Err(WasmEngineError::ServePortNotGranted(port));
+        }
+    }
+    Ok(())
+}
+
+/// Refuse a component import the capability declaration does not grant.
+///
+/// The component counterpart of [`check_imports_granted`]: a `wasi:`
+/// interface needs a WASI grant, a `wasi:http/` interface also needs an
+/// engine built with HTTP (`http_linked`), and no other import can be
+/// supplied to a component at all.
+///
+/// # Errors
+/// [`WasmEngineError::CapabilityNotGranted`] naming the first such import.
+pub fn check_component_imports<'a>(
+    caps: &WasmCapabilities,
+    http_linked: bool,
+    imports: impl Iterator<Item = &'a str>,
+) -> Result<(), WasmEngineError> {
+    for name in imports {
+        let admitted = name.starts_with("wasi:")
+            && caps.wasi.is_some()
+            && (http_linked || !name.starts_with("wasi:http/"));
+        if !admitted {
+            return Err(WasmEngineError::CapabilityNotGranted {
+                module: name.to_string(),
+                field: String::new(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Validate a boot against an engine's facts, before any compilation.
@@ -541,6 +830,21 @@ pub enum WasmEngineError {
 
     #[error("io: {0}")]
     Io(String),
+
+    #[error("runtime {0:?} runs guests to completion only; it spawns nothing")]
+    SpawnNotSupported(WasmRuntime),
+
+    #[error("spawn needs a tokio runtime to run the guest on, and there is none")]
+    NoAsyncRuntime,
+
+    #[error("the component exports neither wasi:cli/run nor wasi:http/incoming-handler; it exports {exports:?}")]
+    NoEntry { exports: Vec<String> },
+
+    #[error("the component serves wasi:http/incoming-handler, and the spawn names no port to serve it on")]
+    ServePortMissing,
+
+    #[error("port {0} is not in the grant's bind list, so it cannot be served")]
+    ServePortNotGranted(u16),
 }
 
 /// Factory: return a boxed engine for the requested runtime. Errors if
@@ -627,7 +931,7 @@ mod tests {
             let facts = facts_of(runtime);
             if !facts.implemented {
                 assert!(
-                    facts.previews.is_empty() && !facts.provides_wasi,
+                    facts.previews.is_empty() && !facts.provides_wasi && facts.spawns.is_empty(),
                     "{runtime:?} has no implementation but claims capabilities"
                 );
             }

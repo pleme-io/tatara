@@ -21,8 +21,9 @@
 //! 2026-08-13 against the tree.
 //!
 //! What is true: **three of the five runtimes have bodies** — wasmtime
-//! (WASI preview 1, real `WasiCtxBuilder`), wasmer and wasmi (compile +
-//! instantiate + `_start`, no WASI bridge). `WasmEdge` and `Wamr` have no
+//! (WASI preview 1 run to completion, and WASI preview 2 components spawned
+//! long-running with sockets, HTTP, memory and time limits: [`component`]),
+//! wasmer and wasmi (compile + instantiate + `_start`, no WASI bridge). `WasmEdge` and `Wamr` have no
 //! implementation in this crate and [`engine_for`] returns
 //! `RuntimeNotCompiled` for both.
 //!
@@ -39,6 +40,12 @@ pub mod engine;
 #[cfg(feature = "runtime-wasmtime")]
 pub mod wasmtime_impl;
 
+#[cfg(feature = "runtime-wasmtime")]
+pub mod component;
+
+#[cfg(feature = "fixtures")]
+pub mod fixtures;
+
 #[cfg(feature = "runtime-wasmer")]
 pub mod wasmer_impl;
 
@@ -46,9 +53,11 @@ pub mod wasmer_impl;
 pub mod wasmi_impl;
 
 pub use engine::{
-    check_boot, check_imports_granted, engine_for, facts_of, implemented_runtimes, read_module,
-    EngineFacts, HostImport, Preopen, WasiGrant, WasmBoot, WasmCapabilities, WasmEngine,
-    WasmEngineError, WasmHandle, WasmModuleSource, ALL_RUNTIMES, WASI_P1_MODULE,
+    check_boot, check_component_imports, check_imports_granted, check_spawn, engine_for,
+    facts_of, implemented_runtimes, read_module, EngineFacts, GuestStream, HostImport,
+    NetworkGrant, OutputSink, Peer, Preopen, WasiGrant, WasmBoot, WasmCapabilities, WasmEngine,
+    WasmEngineError, WasmExit, WasmHandle, WasmLimits, WasmModuleSource, WasmProcess, WasmSpawn,
+    ALL_RUNTIMES, WASI_P1_MODULE,
 };
 
 use serde::{Deserialize, Serialize};
@@ -91,11 +100,12 @@ impl Default for WasmRuntime {
 #[serde(rename_all = "kebab-case")]
 pub enum WasiPreview {
     /// WASI Preview 1 — long-standing compatibility target, and the only
-    /// preview any engine here implements today.
+    /// preview any engine here runs to completion.
     #[default]
     P1,
-    /// WASI Preview 2 — component model. **No engine in this crate accepts
-    /// this yet**; `engine::facts_of` is the authority on which do.
+    /// WASI Preview 2 — component model. Spawned, never run to completion:
+    /// `engine::facts_of` lists it under `spawns` for wasmtime and under
+    /// `previews` for no engine.
     P2,
 }
 

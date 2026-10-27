@@ -15,7 +15,7 @@ path = "src/lib.rs"
 default = ["runtime-wasmtime"]
 
 # Runtime backends — each pluggable, each can coexist at consumer choice.
-runtime-wasmtime = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:wat"]
+runtime-wasmtime = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:wat", "dep:anyhow", "dep:hyper"]
 runtime-wasmer   = ["dep:wasmer", "dep:wat"]
 runtime-wasmi    = ["dep:wasmi", "dep:wat"]
 runtime-wamr     = []       # H.4 follow-up — needs C build harness.
@@ -25,14 +25,19 @@ runtime-wasmedge = []       # H.4 follow-up — needs C++ SDK.
 all-rust-runtimes = ["runtime-wasmtime", "runtime-wasmer", "runtime-wasmi"]
 
 # Optional WASI feature gates — runtime support varies.
+fixtures   = []
 wasi-nn    = []   # Neural network interface.
-wasi-http  = []   # HTTP imports.
+wasi-http  = ["runtime-wasmtime", "dep:wasmtime-wasi-http", "dep:http-body-util"]
 wasi-clocks = []  # Clocks (baseline p2 — enabled by default per runtime).
 wasi-sockets = [] # Raw socket imports.
 
 [dependencies]
-wasmtime      = { version = "25", optional = true }
-wasmtime-wasi = { version = "25", optional = true }
+wasmtime      = { version = "36", optional = true, default-features = false, features = ["runtime", "cranelift", "component-model", "async", "std", "wat", "parallel-compilation", "addr2line"] }
+wasmtime-wasi = { version = "36", optional = true }
+wasmtime-wasi-http = { version = "36", optional = true }
+anyhow        = { version = "1", optional = true }
+hyper         = { version = "1", optional = true, features = ["server", "http1"] }
+http-body-util = { version = "0.1", optional = true }
 wasmer        = { version = "5", optional = true, default-features = false, features = ["cranelift", "sys"] }
 wasmi         = { version = "0.40", optional = true }
 wat           = { version = "1", optional = true }
@@ -40,3 +45,7 @@ wat           = { version = "1", optional = true }
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror  = "1"
+tokio      = { version = "1", features = ["sync", "rt", "time", "macros", "net"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "time", "macros", "net", "io-util"] }

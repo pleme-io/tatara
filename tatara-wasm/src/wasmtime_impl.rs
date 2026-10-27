@@ -1,9 +1,9 @@
 //! wasmtime backend. Compiled in with `runtime-wasmtime`.
 //!
-//! Today: WASI Preview 1, sync-run. Component Model + WASI Preview 2 land
-//! when the rest of the stack asks for them (cheap — wasmtime already
-//! supports both; it's a matter of wiring the linker). What this engine
-//! accepts is declared in `engine::facts_of`, not repeated here.
+//! `run` is WASI Preview 1, sync, to completion. `spawn` hands a WASI
+//! Preview 2 component to [`crate::component::ComponentHost`], which runs it
+//! long-lived on its own async engine. What this engine accepts is declared
+//! in `engine::facts_of`, not repeated here.
 //!
 //! **Stdio is granted, never inherited.** This impl used to build its
 //! `WasiCtxBuilder` with stdout+stderr unconditionally; it now derives the
@@ -12,21 +12,24 @@
 
 #![cfg(feature = "runtime-wasmtime")]
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use wasmtime::{Config, Engine, Linker, Module, Store};
+use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 use wasmtime_wasi::preview1::WasiP1Ctx;
-use wasmtime_wasi::{pipe::MemoryOutputPipe, DirPerms, FilePerms, WasiCtxBuilder};
+use wasmtime_wasi::WasiCtxBuilder;
 
+use crate::component::{apply_grant, ComponentHost};
 use crate::engine::{
-    check_boot, check_imports_granted, read_module, WasmBoot, WasmEngine, WasmEngineError,
-    WasmHandle,
+    check_boot, check_imports_granted, check_spawn, read_module, OutputSink, WasmBoot,
+    WasmEngine, WasmEngineError, WasmHandle, WasmProcess, WasmSpawn,
 };
 use crate::WasmRuntime;
 
 pub struct WasmtimeEngine {
     engine: Engine,
+    components: OnceLock<Result<ComponentHost, String>>,
 }
 
 impl Default for WasmtimeEngine {
@@ -34,7 +37,19 @@ impl Default for WasmtimeEngine {
         let mut config = Config::new();
         config.async_support(false);
         let engine = Engine::new(&config).expect("wasmtime engine init");
-        Self { engine }
+        Self {
+            engine,
+            components: OnceLock::new(),
+        }
+    }
+}
+
+impl WasmtimeEngine {
+    fn components(&self) -> Result<&ComponentHost, WasmEngineError> {
+        self.components
+            .get_or_init(|| ComponentHost::new().map_err(|e| e.to_string()))
+            .as_ref()
+            .map_err(|e| WasmEngineError::Instantiate(e.clone()))
     }
 }
 
@@ -76,29 +91,7 @@ impl WasmEngine for WasmtimeEngine {
             if g.stderr {
                 builder.stderr(stderr_pipe.clone());
             }
-            for (k, v) in &g.env {
-                builder.env(k, v);
-            }
-            if !g.argv.is_empty() {
-                builder.args(&g.argv);
-            }
-            for p in &g.preopens {
-                let dir_perms = if p.writable {
-                    DirPerms::all()
-                } else {
-                    DirPerms::READ
-                };
-                let file_perms = if p.writable {
-                    FilePerms::all()
-                } else {
-                    FilePerms::READ
-                };
-                builder
-                    .preopened_dir(&p.host_path, &p.guest_path, dir_perms, file_perms)
-                    .map_err(|e| {
-                        WasmEngineError::Io(format!("preopen {}: {e}", p.host_path.display()))
-                    })?;
-            }
+            apply_grant(&mut builder, g)?;
         }
         let wasi = builder.build_p1();
 
@@ -145,18 +138,20 @@ impl WasmEngine for WasmtimeEngine {
     }
 
     fn shutdown(&self, _handle: &mut WasmHandle, _grace: Duration) -> Result<(), WasmEngineError> {
-        // Sync-run means guest has already exited by the time we observe
-        // a handle. Async/long-running support lands with H.6 hospedeiro.
+        // A `run` guest has already exited by the time a handle exists; a
+        // spawned one is stopped through its `WasmProcess`.
         Ok(())
+    }
+
+    fn spawn(
+        &self,
+        spawn: &WasmSpawn,
+        sink: Arc<dyn OutputSink>,
+    ) -> Result<WasmProcess, WasmEngineError> {
+        check_spawn(&self.facts(), spawn)?;
+        self.components()?.spawn(spawn, sink)
     }
 }
 
 // `read_module` lived here, byte-identical to the copies in wasmi_impl and
 // wasmer_impl. It is `engine::read_module` now — one implementation.
-
-// Silence unused-import lint for Arc/Mutex that we'll use once
-// hospedeiro adds concurrent handle state.
-#[allow(dead_code)]
-fn _unused_lint_suppressor() -> Option<Arc<Mutex<()>>> {
-    None
-}

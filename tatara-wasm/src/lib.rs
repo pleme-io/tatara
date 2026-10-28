@@ -54,7 +54,7 @@ pub mod wasmer_impl;
 pub mod wasmi_impl;
 
 pub use engine::{
-    check_boot, check_component_imports, check_imports_granted, check_spawn, engine_for,
+    check_boot, check_component_imports, check_imports_granted, check_spawn, engine_for, Halt,
     facts_of, implemented_runtimes, read_module, EngineFacts, GuestStream, HostImport,
     NetworkGrant, OutputSink, Peer, Preopen, WasiGrant, WasmBoot, WasmCapabilities, WasmEngine,
     WasmEngineError, WasmExit, WasmHandle, WasmLimits, WasmModuleSource, WasmProcess, WasmSpawn,

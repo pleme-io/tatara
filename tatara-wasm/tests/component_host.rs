@@ -450,6 +450,65 @@ async fn a_guest_exit_code_is_reported_whole_through_exit_with_code() {
     assert_eq!(ended(&mut p).await, WasmExit::Code { code: 7 });
 }
 
+/// An origin that accepts one connection, waits `delay`, then answers 200:
+/// a request to it is in flight for that long.
+fn slow_origin(delay: Duration) -> u16 {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().expect("addr").port();
+    std::thread::spawn(move || {
+        if let Ok((mut s, _)) = listener.accept() {
+            std::thread::sleep(delay);
+            let mut buf = [0u8; 4096];
+            let _ = s.read(&mut buf);
+            let _ = s.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n");
+        }
+    });
+    port
+}
+
+/// RED RUN (2026-10-28): `stop_within` sending `Halt::Now` → the in-flight
+/// request is cut off and the client reads no `fetched 200`.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_proxy_finishes_in_flight_requests_within_its_grace() {
+    let origin = slow_origin(Duration::from_millis(800));
+    let port = free_port();
+    let net = NetworkGrant {
+        bind: vec![port],
+        connect: vec![Peer::new("127.0.0.1", origin)],
+    };
+    let mut spawn = spawn_of(fixtures::GREETER, grant(&[], net, vec![]), WasmLimits::default());
+    spawn.serve_http = Some(port);
+    let (mut proxy, _) = start(&spawn);
+    let _ = get_when_up(port, "/up").await;
+
+    let in_flight = tokio::task::spawn_blocking(move || get(port, &format!("/fetch/127.0.0.1:{origin}")));
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let asked = std::time::Instant::now();
+    proxy.stop_within(Duration::from_secs(10));
+    let answer = in_flight.await.expect("join").expect("the in-flight request is answered");
+    assert!(answer.contains("fetched 200"), "{answer}");
+    assert_eq!(ended(&mut proxy).await, WasmExit::Stopped);
+    assert!(
+        asked.elapsed() < Duration::from_secs(5),
+        "the drain waited out the grace instead of ending when the requests did"
+    );
+    assert!(get(port, "/after").is_err(), "a drained proxy took a new connection");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_command_reads_a_graceful_stop_as_a_stop() {
+    let (mut p, _) = start(&spawn_of(
+        fixtures::PROBE,
+        grant(&["spin"], NetworkGrant::default(), vec![]),
+        WasmLimits::default(),
+    ));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let asked = std::time::Instant::now();
+    p.stop_within(Duration::from_secs(30));
+    assert_eq!(ended(&mut p).await, WasmExit::Stopped);
+    assert!(asked.elapsed() < Duration::from_secs(2));
+}
+
 #[test]
 fn spawn_outside_a_runtime_is_a_typed_refusal() {
     let spawn = spawn_of(

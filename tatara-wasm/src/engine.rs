@@ -335,6 +335,20 @@ pub enum WasmExit {
     Stopped,
 }
 
+/// What a running guest has been asked to do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Halt {
+    /// Keep running.
+    Run,
+    /// Finish what is in flight within this grace, take nothing new, then
+    /// end. A command component has no signal to receive in WASI 0.2, so it
+    /// reads this as [`Self::Now`]; a proxy component closes its listener,
+    /// shuts its connections down gracefully and lets its requests finish.
+    Drain(Duration),
+    /// End at the next epoch tick.
+    Now,
+}
+
 /// A running long-lived guest.
 ///
 /// Dropping the handle does not stop the guest; [`Self::stop`] does.
@@ -342,22 +356,22 @@ pub enum WasmExit {
 pub struct WasmProcess {
     name: String,
     exit: tokio::sync::watch::Receiver<Option<WasmExit>>,
-    stop: std::sync::Arc<tokio::sync::watch::Sender<bool>>,
+    halt: std::sync::Arc<tokio::sync::watch::Sender<Halt>>,
 }
 
 impl WasmProcess {
-    /// A handle over an exit channel the engine writes once, and the stop
+    /// A handle over an exit channel the engine writes once, and the halt
     /// signal the engine watches.
     #[must_use]
     pub fn new(
         name: impl Into<String>,
         exit: tokio::sync::watch::Receiver<Option<WasmExit>>,
-        stop: tokio::sync::watch::Sender<bool>,
+        halt: tokio::sync::watch::Sender<Halt>,
     ) -> Self {
         Self {
             name: name.into(),
             exit,
-            stop: std::sync::Arc::new(stop),
+            halt: std::sync::Arc::new(halt),
         }
     }
 
@@ -376,7 +390,23 @@ impl WasmProcess {
     /// Ask the guest to end. Idempotent; the exit is [`WasmExit::Stopped`]
     /// unless the guest had already ended some other way.
     pub fn stop(&self) {
-        self.stop.send_replace(true);
+        self.halt.send_replace(Halt::Now);
+    }
+
+    /// Ask the guest to end within `grace`: see [`Halt::Drain`]. A zero grace
+    /// is [`Self::stop`]; a drain never replaces a stop already asked for.
+    pub fn stop_within(&self, grace: Duration) {
+        if grace.is_zero() {
+            self.stop();
+            return;
+        }
+        self.halt.send_if_modified(|h| {
+            let asked = *h == Halt::Run;
+            if asked {
+                *h = Halt::Drain(grace);
+            }
+            asked
+        });
     }
 
     /// Wait for the guest to end.

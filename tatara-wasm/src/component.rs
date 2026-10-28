@@ -35,7 +35,7 @@ use wasmtime_wasi::{
 };
 
 use crate::engine::{
-    check_component_imports, read_module, GuestStream, NetworkGrant, OutputSink, WasiGrant,
+    check_component_imports, read_module, GuestStream, Halt, NetworkGrant, OutputSink, WasiGrant,
     WasmCapabilities, WasmEngineError, WasmExit, WasmLimits, WasmProcess, WasmSpawn,
 };
 
@@ -115,7 +115,7 @@ impl ComponentHost {
         let pre = linker.instantiate_pre(&component).map_err(instantiate)?;
 
         let (exit_tx, exit_rx) = watch::channel(None);
-        let (stop_tx, stop_rx) = watch::channel(false);
+        let (stop_tx, stop_rx) = watch::channel(Halt::Run);
         let recipe = Arc::new(Recipe {
             capabilities: spawn.boot.capabilities.clone(),
             limits: spawn.limits,
@@ -456,17 +456,28 @@ async fn elapsed(deadline: Option<Duration>) -> Duration {
     }
 }
 
-/// Resolves once a stop is asked for. A dropped handle is not a stop.
-async fn stopped(mut stop: watch::Receiver<bool>) {
-    if stop.wait_for(|s| *s).await.is_err() {
-        std::future::pending::<()>().await;
+/// Resolves with the halt once one `accept` takes is asked for. A dropped
+/// handle is not a halt.
+async fn asked(mut halt: watch::Receiver<Halt>, accept: fn(Halt) -> bool) -> Halt {
+    let seen = halt.wait_for(|h| accept(*h)).await.map(|h| *h);
+    match seen {
+        Ok(h) => h,
+        Err(_) => std::future::pending().await,
     }
+}
+
+fn any_halt(h: Halt) -> bool {
+    h != Halt::Run
+}
+
+fn halt_now(h: Halt) -> bool {
+    h == Halt::Now
 }
 
 async fn run_command(
     pre: CommandPre<Guest>,
     recipe: Arc<Recipe>,
-    stop: watch::Receiver<bool>,
+    stop: watch::Receiver<Halt>,
     exit: watch::Sender<Option<WasmExit>>,
 ) {
     let outcome = match recipe.store(pre.engine()) {
@@ -481,7 +492,7 @@ async fn run_command(
             tokio::select! {
                 result = run => classify(result),
                 after = elapsed(recipe.limits.deadline) => WasmExit::Deadline { after },
-                () = stopped(stop) => WasmExit::Stopped,
+                _ = asked(stop, any_halt) => WasmExit::Stopped,
             }
         }
     };
@@ -508,8 +519,8 @@ mod proxy {
     };
     use wasmtime_wasi_http::{HttpResult, WasiHttpCtx, WasiHttpView};
 
-    use super::{classify, elapsed, instantiate, stopped, Guest, Recipe};
-    use crate::engine::{GuestStream, WasmEngineError, WasmExit};
+    use super::{any_halt, asked, classify, elapsed, halt_now, instantiate, Guest, Recipe};
+    use crate::engine::{GuestStream, Halt, WasmEngineError, WasmExit};
 
     impl WasiHttpView for Guest {
         fn ctx(&mut self) -> &mut WasiHttpCtx {
@@ -542,7 +553,7 @@ mod proxy {
         pre: InstancePre<Guest>,
         recipe: Arc<Recipe>,
         port: Option<u16>,
-        stop: watch::Receiver<bool>,
+        stop: watch::Receiver<Halt>,
         exit: watch::Sender<Option<WasmExit>>,
     ) -> Result<(), WasmEngineError> {
         let port = port.ok_or(WasmEngineError::ServePortMissing)?;
@@ -561,48 +572,82 @@ mod proxy {
         listener: tokio::net::TcpListener,
         pre: ProxyPre<Guest>,
         recipe: Arc<Recipe>,
-        stop: watch::Receiver<bool>,
+        stop: watch::Receiver<Halt>,
         exit: watch::Sender<Option<WasmExit>>,
     ) {
+        let (kill_tx, kill) = watch::channel(Halt::Run);
         let mut connections = tokio::task::JoinSet::new();
-        let outcome = loop {
+        let end = loop {
             tokio::select! {
-                () = stopped(stop.clone()) => break WasmExit::Stopped,
+                h = asked(stop.clone(), any_halt) => break Ok(h),
                 accepted = listener.accept() => match accepted {
                     Ok((socket, _)) => {
-                        let pre = pre.clone();
-                        let recipe = Arc::clone(&recipe);
-                        let stop = stop.clone();
-                        connections.spawn(async move {
-                            let service = hyper::service::service_fn(move |req| {
-                                let pre = pre.clone();
-                                let recipe = Arc::clone(&recipe);
-                                let stop = stop.clone();
-                                async move { Ok::<_, Infallible>(handle(pre, recipe, stop, req).await) }
-                            });
-                            let _ = hyper::server::conn::http1::Builder::new()
-                                .keep_alive(true)
-                                .serve_connection(TokioIo::new(socket), service)
-                                .await;
-                        });
+                        connections.spawn(connection(
+                            socket,
+                            pre.clone(),
+                            Arc::clone(&recipe),
+                            stop.clone(),
+                            kill.clone(),
+                        ));
                     }
-                    Err(e) => break WasmExit::Trapped { message: format!("accept: {e}") },
+                    Err(e) => break Err(format!("accept: {e}")),
                 },
             }
         };
-        connections.abort_all();
         drop(listener);
+        let outcome = match end {
+            Ok(Halt::Drain(grace)) => {
+                let drained = async { while connections.join_next().await.is_some() {} };
+                tokio::select! {
+                    _ = tokio::time::timeout(grace, drained) => {}
+                    _ = asked(stop.clone(), halt_now) => {}
+                }
+                WasmExit::Stopped
+            }
+            Ok(_) => WasmExit::Stopped,
+            Err(message) => WasmExit::Trapped { message },
+        };
+        kill_tx.send_replace(Halt::Now);
+        connections.abort_all();
         recipe.sink.finish();
         exit.send_replace(Some(outcome));
+    }
+
+    async fn connection(
+        socket: tokio::net::TcpStream,
+        pre: ProxyPre<Guest>,
+        recipe: Arc<Recipe>,
+        stop: watch::Receiver<Halt>,
+        kill: watch::Receiver<Halt>,
+    ) {
+        let requests = kill.clone();
+        let service = hyper::service::service_fn(move |req| {
+            let pre = pre.clone();
+            let recipe = Arc::clone(&recipe);
+            let kill = requests.clone();
+            async move { Ok::<_, Infallible>(handle(pre, recipe, kill, req).await) }
+        });
+        let conn = hyper::server::conn::http1::Builder::new()
+            .keep_alive(true)
+            .serve_connection(TokioIo::new(socket), service);
+        tokio::pin!(conn);
+        tokio::select! {
+            _ = conn.as_mut() => return,
+            _ = asked(stop, any_halt) => conn.as_mut().graceful_shutdown(),
+        }
+        tokio::select! {
+            _ = conn.as_mut() => {}
+            _ = asked(kill, halt_now) => {}
+        }
     }
 
     async fn handle(
         pre: ProxyPre<Guest>,
         recipe: Arc<Recipe>,
-        stop: watch::Receiver<bool>,
+        kill: watch::Receiver<Halt>,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> hyper::Response<HyperOutgoingBody> {
-        match answer(pre, Arc::clone(&recipe), stop, req).await {
+        match answer(pre, Arc::clone(&recipe), kill, req).await {
             Ok(response) => response,
             Err(message) => {
                 recipe
@@ -618,7 +663,7 @@ mod proxy {
     async fn answer(
         pre: ProxyPre<Guest>,
         recipe: Arc<Recipe>,
-        stop: watch::Receiver<bool>,
+        kill: watch::Receiver<Halt>,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> Result<hyper::Response<HyperOutgoingBody>, String> {
         let mut store = recipe.store(pre.engine()).map_err(|e| e.to_string())?;
@@ -644,7 +689,7 @@ mod proxy {
             tokio::select! {
                 result = run => classify(result),
                 after = elapsed(deadline) => WasmExit::Deadline { after },
-                () = stopped(stop) => WasmExit::Stopped,
+                _ = asked(kill, halt_now) => WasmExit::Stopped,
             }
         });
         match receiver.await {

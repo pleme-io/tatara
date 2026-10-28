@@ -132,7 +132,7 @@ async fn main() -> Result<()> {
         Some(&process_ref),
     )
     .context("compose receipt")?;
-    let receipt_yaml = serde_yaml::to_string(&receipt).context("serialize receipt")?;
+    let receipt_yaml = serde_norway::to_string(&receipt).context("serialize receipt")?;
 
     write_receipt(
         &kube,

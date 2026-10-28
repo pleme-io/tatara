@@ -309,7 +309,7 @@ fn check_yaml_parses(args: &[Sexp], root: &Path, report: &mut Report) {
     // lives at ONE substrate owner across BOTH yaml-executor family
     // members past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
     report_result_prefixed(
-        serde_yaml::from_str::<serde_yaml::Value>(&src),
+        serde_norway::from_str::<serde_norway::Value>(&src),
         label,
         "YAML",
         report,
@@ -4321,14 +4321,14 @@ fn min_defs_shortfall_msg(defs_len: usize, min_defs: usize) -> Option<String> {
 ///
 /// * [`check_yaml_parses`] — the `(yaml-parses "path")` executor.
 ///   Reads the operator-supplied YAML file before handing the source
-///   to `serde_yaml::from_str::<serde_yaml::Value>` for a schema-free
+///   to `serde_norway::from_str::<serde_norway::Value>` for a schema-free
 ///   parse. Pre-lift wrapped the pass arm inline through
 ///   `match fs::read_to_string(&path) { Ok(src) => <inline-pass>,
 ///   Err(e) => report.fail(label, format!("read: {e}")) }` — the
 ///   fourth site the earlier lift missed because the match shape
 ///   diverged from the peer sites' let-else early-return shape.
 ///   Post-lift the executor early-returns through the substrate and
-///   its pass path (`serde_yaml::from_str` + `report.pass` /
+///   its pass path (`serde_norway::from_str` + `report.pass` /
 ///   `report.fail(label, format!("YAML: {e}"))`) stays inline.
 /// * [`check_yaml_parses_as`] — the `(yaml-parses-as <Kind> "path")`
 ///   executor. Reads the operator-supplied YAML file before handing
@@ -4423,8 +4423,8 @@ fn read_or_fail(path: &Path, label: &str, report: &mut Report) -> Option<String>
 /// PRIME-DIRECTIVE ≥ 2 duplication threshold:
 ///
 /// * [`check_yaml_parses`] — the `(yaml-parses "path")` executor.
-///   Consumes `Result<serde_yaml::Value, serde_yaml::Error>` from
-///   `serde_yaml::from_str`. Prefix literal `"YAML"`. Pre-lift
+///   Consumes `Result<serde_norway::Value, serde_norway::Error>` from
+///   `serde_norway::from_str`. Prefix literal `"YAML"`. Pre-lift
 ///   the `Err(e)` arm hand-authored `format!("YAML: {e}")`.
 /// * [`check_yaml_parses_as`] — the `(yaml-parses-as <Kind> "path")`
 ///   executor. Consumes `Result<(), Box<dyn std::error::Error>>`
@@ -4435,8 +4435,8 @@ fn read_or_fail(path: &Path, label: &str, report: &mut Report) -> Option<String>
 /// Both sites walked the SAME four-link chain — match the typed
 /// result, `report.pass(label)` on the `Ok` arm, `report.fail(label,
 /// format!("<prefix>: {e}"))` on the `Err` arm — differing only in
-/// the caller's `<T>` payload (`serde_yaml::Value` vs `()`), the
-/// caller's `<E>` carrier (`serde_yaml::Error` vs the boxed error
+/// the caller's `<T>` payload (`serde_norway::Value` vs `()`), the
+/// caller's `<E>` carrier (`serde_norway::Error` vs the boxed error
 /// [`KnownCrd::parse_yaml_as`] returns), and the diagnostic prefix
 /// literal (`"YAML"` vs `"parse"`). Post-lift each callsite reads
 /// `report_result_prefixed(<result>, label, "<prefix>", report);`
@@ -4475,7 +4475,7 @@ fn read_or_fail(path: &Path, label: &str, report: &mut Report) -> Option<String>
 /// # `E` carrier
 ///
 /// `E: std::fmt::Display` — accepts both consumer's carriers:
-/// `serde_yaml::Error` implements [`std::fmt::Display`] directly,
+/// `serde_norway::Error` implements [`std::fmt::Display`] directly,
 /// and the `Box<dyn std::error::Error>` [`KnownCrd::parse_yaml_as`]
 /// returns implements it through the [`std::error::Error`] super-
 /// trait bound. The `format!("{err_prefix}: {e}")` composition
@@ -4489,7 +4489,7 @@ fn read_or_fail(path: &Path, label: &str, report: &mut Report) -> Option<String>
 /// for post-hoc audit; a structured-log emit alongside the pass /
 /// fail entry; a per-executor histogram of pass vs fail counts; a
 /// swap to a typed error taxonomy that distinguishes
-/// serde_yaml::Error kinds instead of the current
+/// serde_norway::Error kinds instead of the current
 /// stringly-typed Display) lands at THIS ONE substrate owner and
 /// every downstream yaml-executor consumer — the two current
 /// callsites plus every future `check_<name>` executor whose
@@ -19177,12 +19177,12 @@ mod tests {
         // trailing whitespace strip, a `to_uppercase` transform) or
         // dropped the pass push altogether would surface here rather
         // than as silent drift at each downstream yaml-executor
-        // callsite. Uses `Result<serde_yaml::Value, serde_yaml::Error>`
+        // callsite. Uses `Result<serde_norway::Value, serde_norway::Error>`
         // to exercise the same `<T, E>` axis
         // [`check_yaml_parses`] threads through in production.
         let mut report = Report::default();
-        let result: Result<serde_yaml::Value, serde_yaml::Error> =
-            serde_yaml::from_str("kind: Process\n");
+        let result: Result<serde_norway::Value, serde_norway::Error> =
+            serde_norway::from_str("kind: Process\n");
         assert!(result.is_ok(), "test fixture must construct an Ok result");
         report_result_prefixed(result, "sample label".to_owned(), "YAML", &mut report);
         assert!(
@@ -19207,13 +19207,13 @@ mod tests {
         // report.fail(label, format!("<prefix>: {e}"))` arm. A
         // regression that dropped the `<prefix>: ` mid-clause,
         // swapped the separator, or dropped the `report.fail` side-
-        // effect surfaces here. Uses `serde_yaml::from_str` on a
+        // effect surfaces here. Uses `serde_norway::from_str` on a
         // malformed source so the `E` carrier is the same
-        // `serde_yaml::Error` production sees at
+        // `serde_norway::Error` production sees at
         // [`check_yaml_parses`].
         let mut report = Report::default();
-        let result: Result<serde_yaml::Value, serde_yaml::Error> =
-            serde_yaml::from_str("{unbalanced: [");
+        let result: Result<serde_norway::Value, serde_norway::Error> =
+            serde_norway::from_str("{unbalanced: [");
         assert!(result.is_err(), "test fixture must construct an Err result",);
         let displayed = match &result {
             Ok(_) => unreachable!(),
@@ -19478,7 +19478,7 @@ mod tests {
     // fs::read_to_string(&path) { Ok(src) => <inline-pass>, Err(e) =>
     // report.fail(label, format!("read: {e}")) }` chain whose failure
     // arm was byte-identical to the substrate's owned prose but whose
-    // pass arm wrapped `serde_yaml::from_str` INSIDE the `Ok(src)`
+    // pass arm wrapped `serde_norway::from_str` INSIDE the `Ok(src)`
     // branch rather than early-returning through a let-else. That
     // shape divergence hid the fourth consumer from the earlier lift.
     // Post-lift the executor routes through [`read_or_fail`] and the
@@ -19538,7 +19538,7 @@ mod tests {
             "check_yaml_parses miss-path prose must route through the read_or_fail substrate — the diagnostic prefix MUST match `<label>: read: <io_error>` where `<label> = \"YAML parses: <rel>\"`; got {failure:?}, expected prefix {expected_prefix:?}",
         );
         // Belt-and-braces: NO `YAML: ` sentinel — that prefix means
-        // `serde_yaml::from_str` errored, i.e. the executor mis-
+        // `serde_norway::from_str` errored, i.e. the executor mis-
         // routed a read failure through the yaml-parse path.
         assert!(
             !failure.contains(": YAML: "),
@@ -19551,7 +19551,7 @@ mod tests {
         // Pass-path pin: an existing UTF-8 file with valid YAML must
         // still ride through both substrate primitives cleanly. Pre-
         // lift the pass path lived inside `Ok(src) => match
-        // serde_yaml::from_str(&src) { ... }`; post-lift it lives on
+        // serde_norway::from_str(&src) { ... }`; post-lift it lives on
         // the callsite after the substrate's let-else. A regression
         // that swapped the pass-path shape (drifted the `YAML parses:
         // <rel>` label prose, dropped the pass push, or accidentally

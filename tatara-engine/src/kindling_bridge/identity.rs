@@ -97,7 +97,7 @@ pub fn load_identity(path: Option<&Path>) -> Result<Option<KindlingIdentity>> {
     let content = std::fs::read_to_string(&identity_path)
         .with_context(|| format!("Failed to read {}", identity_path.display()))?;
 
-    let identity: KindlingIdentity = serde_yaml::from_str(&content)
+    let identity: KindlingIdentity = serde_norway::from_str(&content)
         .with_context(|| format!("Failed to parse {}", identity_path.display()))?;
 
     info!(

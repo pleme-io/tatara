@@ -104,7 +104,7 @@ fn parse_yaml_documents(data: &[u8], chart: &str) -> Result<Vec<serde_json::Valu
         if trimmed.is_empty() || trimmed == "null" {
             continue;
         }
-        match serde_yaml_ng::from_str::<serde_json::Value>(trimmed) {
+        match serde_norway::from_str::<serde_json::Value>(trimmed) {
             Ok(val) if val.get("kind").is_some() => resources.push(val),
             Ok(_) => {} // skip non-resource documents
             Err(e) => {

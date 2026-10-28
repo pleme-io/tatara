@@ -204,7 +204,7 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
     // without re-parsing the embedded JSON.
     data.insert(
         RECEIPT_YAML_KEY.to_string(),
-        serde_yaml::to_string(envelope)?,
+        serde_norway::to_string(envelope)?,
     );
 
     // Try create-or-patch — idempotent across re-runs.

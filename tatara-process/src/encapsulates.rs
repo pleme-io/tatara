@@ -871,11 +871,11 @@ mod tests {
     #[test]
     fn serde_round_trip_via_yaml() {
         let s = demo_adopt();
-        let yaml = serde_yaml::to_string(&s).unwrap();
+        let yaml = serde_norway::to_string(&s).unwrap();
         assert!(yaml.contains("existingHelmRelease:"));
         assert!(yaml.contains("releaseName: demo-app-consolidated"));
         assert!(yaml.contains("mode: Adopt"));
-        let back: EncapsulatesSpec = serde_yaml::from_str(&yaml).unwrap();
+        let back: EncapsulatesSpec = serde_norway::from_str(&yaml).unwrap();
         assert!(back.kind.existing_helm_release.is_some());
         assert_eq!(back.mode, EncapsulationMode::Adopt);
     }
@@ -895,11 +895,11 @@ mod tests {
             },
             mode: EncapsulationMode::Observe,
         };
-        let yaml = serde_yaml::to_string(&s).unwrap();
+        let yaml = serde_norway::to_string(&s).unwrap();
         assert!(yaml.contains("bareWorkload:"));
         assert!(yaml.contains("app: demo-app"));
         assert!(yaml.contains("mode: Observe"));
-        let back: EncapsulatesSpec = serde_yaml::from_str(&yaml).unwrap();
+        let back: EncapsulatesSpec = serde_norway::from_str(&yaml).unwrap();
         match back.kind.variant().unwrap() {
             EncapsulationKindVariant::BareWorkload(b) => {
                 assert_eq!(b.selector.len(), 2);

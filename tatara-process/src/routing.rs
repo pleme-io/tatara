@@ -1035,7 +1035,7 @@ mod tests {
         // sentinels to non-empty values would leak them into every
         // rendered wire form; this pin fails first.
         let b = RoutingBackend::plain("svc", 80);
-        let yaml = serde_yaml::to_string(&b).unwrap();
+        let yaml = serde_norway::to_string(&b).unwrap();
         assert!(!yaml.contains("tlsIssuer:"));
         assert!(!yaml.contains("ingressAnnotations:"));
         assert!(yaml.contains("service: svc"));
@@ -1045,7 +1045,7 @@ mod tests {
     #[test]
     fn serde_round_trip_via_yaml() {
         let r = demo_routing();
-        let yaml = serde_yaml::to_string(&r).unwrap();
+        let yaml = serde_norway::to_string(&r).unwrap();
         // camelCase wire form — what FluxCD / kubectl users see.
         assert!(yaml.contains("hostnames:"));
         assert!(yaml.contains("app: api"));
@@ -1056,7 +1056,7 @@ mod tests {
         assert!(yaml.contains("stableNameClaim: true"));
         assert!(yaml.contains("priority: 100"));
 
-        let back: RoutingSpec = serde_yaml::from_str(&yaml).unwrap();
+        let back: RoutingSpec = serde_norway::from_str(&yaml).unwrap();
         assert_eq!(back.hostnames.len(), 2);
         assert!(back.stable_name_claim);
         assert_eq!(back.priority, 100);
@@ -1072,7 +1072,7 @@ mod tests {
             stable_name_claim: false,
             priority: 0,
         };
-        let yaml = serde_yaml::to_string(&r).unwrap();
+        let yaml = serde_norway::to_string(&r).unwrap();
         // Optional + empty fields must NOT appear in the wire form.
         assert!(!yaml.contains("instance:"));
         assert!(!yaml.contains("cluster:"));
@@ -1508,10 +1508,10 @@ mod tests {
             stable_name_claim: false,
             priority: 0,
         };
-        let yaml = serde_yaml::to_string(&r).unwrap();
+        let yaml = serde_norway::to_string(&r).unwrap();
         assert!(yaml.contains("tlsIssuer: letsencrypt-prod"));
         assert!(yaml.contains("rate-limit"));
-        let back: RoutingSpec = serde_yaml::from_str(&yaml).unwrap();
+        let back: RoutingSpec = serde_norway::from_str(&yaml).unwrap();
         assert_eq!(back.backend.tls_issuer.as_deref(), Some("letsencrypt-prod"));
         assert_eq!(back.backend.ingress_annotations.len(), 2);
     }

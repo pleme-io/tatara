@@ -1509,12 +1509,12 @@ mod tests {
             max_concurrent: 4,
             exports: vec![],
         });
-        let yaml = serde_yaml::to_string(&l).unwrap();
+        let yaml = serde_norway::to_string(&l).unwrap();
         assert!(yaml.contains("ttl: 30m"));
         assert!(yaml.contains("teardownPolicy: OnAttested"));
         // Empty exports skip-serialize — explicit zero-trace default.
         assert!(!yaml.contains("exports"));
-        let back: Lifetime = serde_yaml::from_str(&yaml).unwrap();
+        let back: Lifetime = serde_norway::from_str(&yaml).unwrap();
         assert!(back.is_ephemeral());
         assert!(back.ephemeral.unwrap().exports.is_empty());
     }
@@ -2075,11 +2075,11 @@ mod tests {
                 experiment_id_override: None,
             }],
         });
-        let yaml = serde_yaml::to_string(&l).unwrap();
+        let yaml = serde_norway::to_string(&l).unwrap();
         assert!(yaml.contains("exports:"));
         assert!(yaml.contains("receipts: {}"));
         assert!(yaml.contains("signalType: receipt"));
-        let back: Lifetime = serde_yaml::from_str(&yaml).unwrap();
+        let back: Lifetime = serde_norway::from_str(&yaml).unwrap();
         let e = back.ephemeral.unwrap();
         assert_eq!(e.exports.len(), 1);
         assert!(e.exports[0].source.receipts.is_some());
@@ -2446,7 +2446,7 @@ aplicacao:
   valuesOverlay: null
 ";
         let spec: crate::ephemeral::EphemeralSpec =
-            serde_yaml::from_str(yaml).expect("EphemeralSpec YAML parses");
+            serde_norway::from_str(yaml).expect("EphemeralSpec YAML parses");
         assert_eq!(
             spec.ttl,
             default_ephemeral_ttl(),
@@ -2538,7 +2538,7 @@ aplicacao:
   valuesOverlay: null
 ";
         let spec: crate::ephemeral::EphemeralSpec =
-            serde_yaml::from_str(yaml).expect("EphemeralSpec parses");
+            serde_norway::from_str(yaml).expect("EphemeralSpec parses");
         let lifetime = EphemeralLifetime::default();
         assert_eq!(
             spec.ttl, lifetime.ttl,

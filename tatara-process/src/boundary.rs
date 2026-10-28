@@ -9045,7 +9045,7 @@ mod tests {
             kind: ConditionKind::ProcessPhase,
             params: json!({ "processRef": "secret-injection", "phase": "Attested" }),
         };
-        let yaml = serde_yaml::to_string(&c).unwrap();
+        let yaml = serde_norway::to_string(&c).unwrap();
         assert!(yaml.contains("kind: ProcessPhase"));
         assert!(yaml.contains("processRef: secret-injection"));
     }
@@ -9060,10 +9060,10 @@ mod tests {
                 "probeImage": "ghcr.io/pleme-io/closed-loop-probe:0.1.0",
             }),
         };
-        let yaml = serde_yaml::to_string(&c).unwrap();
+        let yaml = serde_norway::to_string(&c).unwrap();
         assert!(yaml.contains("kind: ClosedLoopAuth"));
         assert!(yaml.contains("probeImage: ghcr.io/pleme-io/closed-loop-probe:0.1.0"));
-        let back: Condition = serde_yaml::from_str(&yaml).unwrap();
+        let back: Condition = serde_norway::from_str(&yaml).unwrap();
         assert_eq!(back.kind, ConditionKind::ClosedLoopAuth);
     }
 
@@ -9073,7 +9073,7 @@ mod tests {
             kind: ConditionKind::JobAttested,
             params: json!({ "name": "seed-job", "namespace": "demo-test" }),
         };
-        let yaml = serde_yaml::to_string(&c).unwrap();
+        let yaml = serde_norway::to_string(&c).unwrap();
         assert!(yaml.contains("kind: JobAttested"));
     }
 

@@ -3946,11 +3946,11 @@ mod tests {
         // this shape — the pin fences a regression that added a
         // private field or a `#[serde(skip)]` accidentally.
         let r = AllocationRef::new("pr-42-demo", "ephemeral-pools");
-        let yaml = serde_yaml::to_string(&r).expect("AllocationRef serializes to yaml");
+        let yaml = serde_norway::to_string(&r).expect("AllocationRef serializes to yaml");
         assert!(yaml.contains("name: pr-42-demo"), "{yaml}");
         assert!(yaml.contains("namespace: ephemeral-pools"), "{yaml}");
         let back: AllocationRef =
-            serde_yaml::from_str(&yaml).expect("AllocationRef round-trips through yaml");
+            serde_norway::from_str(&yaml).expect("AllocationRef round-trips through yaml");
         assert_eq!(back, r);
     }
 

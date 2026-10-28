@@ -238,7 +238,7 @@ pub fn resolve_receipt_config_map_name(override_name: Option<&str>, job_name: &s
 /// the JSON form is the machine-canonical wire (the closed-loop probe
 /// emits `serde_json::to_string(envelope)` as the source-of-truth
 /// payload), the YAML twin is the operator-facing readable projection
-/// (`serde_yaml::to_string(envelope)`) — both round-trip through the
+/// (`serde_norway::to_string(envelope)`) — both round-trip through the
 /// SAME [`ReceiptEnvelope::parse_either`] parser, so the primary/fallback
 /// ordering is a payload-format preference, not a semantic distinction.
 /// A future third wire form (CBOR, MessagePack, sigstore-signed JSON)
@@ -272,7 +272,7 @@ pub const RECEIPT_JSON_KEY: &str = "receipt.json";
 ///
 /// See [`RECEIPT_JSON_KEY`] for the full lift rationale and the four
 /// consumer sites this pair owns. The YAML form is the readable
-/// operator projection (`serde_yaml::to_string(envelope)`) the closed-
+/// operator projection (`serde_norway::to_string(envelope)`) the closed-
 /// loop probe writes alongside the JSON form so `kubectl get cm -o
 /// yaml` returns a human-readable payload without an inner JSON
 /// re-parse; the reader accepts it as a fallback when the JSON form is
@@ -651,7 +651,7 @@ pub enum ReceiptWireForm {
     /// form and the shape `serde_json::to_string(&env)` produces.
     Json,
     /// YAML — the shape a ConfigMap authored via `kubectl apply -f`
-    /// carries, and what `serde_yaml::to_string(&env)` produces.
+    /// carries, and what `serde_norway::to_string(&env)` produces.
     Yaml,
 }
 
@@ -705,7 +705,7 @@ impl ReceiptWireForm {
                 serde_json::from_str(payload).map_err(|e| ReceiptError::InvalidJson(e.to_string()))
             }
             Self::Yaml => {
-                serde_yaml::from_str(payload).map_err(|e| ReceiptError::InvalidYaml(e.to_string()))
+                serde_norway::from_str(payload).map_err(|e| ReceiptError::InvalidYaml(e.to_string()))
             }
         }
     }

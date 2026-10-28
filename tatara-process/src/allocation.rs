@@ -1262,10 +1262,10 @@ mod tests {
             pr_labels: vec!["needs-ephemeral".into()],
             actor: Some("drzln".into()),
         };
-        let yaml = serde_yaml::to_string(&r).unwrap();
+        let yaml = serde_norway::to_string(&r).unwrap();
         assert!(yaml.contains("kind: github-pr"));
         assert!(yaml.contains("prNumber: 123"));
-        let back: Requestor = serde_yaml::from_str(&yaml).unwrap();
+        let back: Requestor = serde_norway::from_str(&yaml).unwrap();
         assert_eq!(back.kind, "github-pr");
         assert_eq!(back.pr_number, Some(123));
     }
@@ -1289,8 +1289,8 @@ mod tests {
             AllocationPhase::NoMatchingPool,
             AllocationPhase::Failed,
         ] {
-            let s = serde_yaml::to_string(&p).unwrap();
-            let back: AllocationPhase = serde_yaml::from_str(&s).unwrap();
+            let s = serde_norway::to_string(&p).unwrap();
+            let back: AllocationPhase = serde_norway::from_str(&s).unwrap();
             assert_eq!(back, p);
         }
     }
@@ -1600,8 +1600,8 @@ mod tests {
                 pr_labels: vec![],
                 actor: None,
             };
-            let via_yaml = serde_yaml::to_string(&via_primitive).unwrap();
-            let hand_yaml = serde_yaml::to_string(&hand_authored).unwrap();
+            let via_yaml = serde_norway::to_string(&via_primitive).unwrap();
+            let hand_yaml = serde_norway::to_string(&hand_authored).unwrap();
             assert_eq!(
                 via_yaml, hand_yaml,
                 "kind_only({kind:?}) must be YAML-identical to the pre-lift struct literal"
@@ -2264,7 +2264,7 @@ mod tests {
         // = "Option::is_none"` + default-vec serde attributes elide
         // every optional slot from the YAML output.
         let s = AllocationSpec::requestor_only(Requestor::kind_only("manual"));
-        let yaml = serde_yaml::to_string(&s).unwrap();
+        let yaml = serde_norway::to_string(&s).unwrap();
         assert!(!yaml.contains("poolRef"));
         assert!(!yaml.contains("ttl"));
         assert!(!yaml.contains("note"));

@@ -178,7 +178,7 @@ fn closed_loop_receipt_round_trips_and_lowers_to_attestation() {
     assert_eq!(parsed, probe_receipt);
 
     // YAML wire form also works.
-    let yaml = serde_yaml::to_string(&probe_receipt).unwrap();
+    let yaml = serde_norway::to_string(&probe_receipt).unwrap();
     let parsed_yaml = ReceiptEnvelope::parse_either(&yaml).expect("parse yaml");
     assert_eq!(parsed_yaml, probe_receipt);
 

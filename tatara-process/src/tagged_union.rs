@@ -7811,7 +7811,7 @@ where
 /// A fifth sibling picks up the alignment check through ONE call site.
 ///
 /// The primitive projects through `serde_json::to_value` rather than
-/// `serde_yaml::to_string` for two reasons: (1) the check is
+/// `serde_norway::to_string` for two reasons: (1) the check is
 /// structural (exactly-one-key + name equality), not textual (substring
 /// against a `"{key}:"` YAML fragment), so a future site that gains
 /// non-tagged-union metadata fields is caught HERE at the exactly-one

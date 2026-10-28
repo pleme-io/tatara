@@ -2419,7 +2419,7 @@ mod tests {
             encapsulates: None,
             suspended: false,
         };
-        let yaml = serde_yaml::to_string(&spec).unwrap();
+        let yaml = serde_norway::to_string(&spec).unwrap();
         assert!(yaml.contains("pointType: Gate"));
         assert!(yaml.contains("substrate: Observability"));
         assert!(yaml.contains("flakeRef: github:pleme-io/k8s"));

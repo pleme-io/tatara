@@ -16,12 +16,12 @@
 //! * `tatara-reconciler::bin::tatara-check::check_crd_in_sync` — a
 //!   4-arm `match kind { "Process" => …, "ProcessTable" => …,
 //!   "EphemeralPool" => …, "EphemeralAllocation" => … }` dispatcher
-//!   restating each `serde_yaml::to_string(&<Kind>::crd())` chain by
+//!   restating each `serde_norway::to_string(&<Kind>::crd())` chain by
 //!   hand. Same 4-CRD closed set, third peer surface with the SAME
 //!   drift risk.
 //! * `tatara-reconciler::bin::tatara-check::check_yaml_parses_as` — a
 //!   TWO-arm `match kind { "Process" => …, "ProcessTable" => … }`
-//!   dispatcher restating the `serde_yaml::from_str::<<Kind>>` chain
+//!   dispatcher restating the `serde_norway::from_str::<<Kind>>` chain
 //!   by hand — but ONLY for two of the four CRDs. That's the
 //!   pre-lift coverage drift: an operator authoring
 //!   `(yaml-parses-as EphemeralPool "…")` in `checks.lisp` got
@@ -226,7 +226,7 @@ impl KnownCrd {
     }
 
     /// Emit this CRD's `CustomResourceDefinition` as YAML — the ONE
-    /// substrate site every `serde_yaml::to_string(&<Kind>::crd())`
+    /// substrate site every `serde_norway::to_string(&<Kind>::crd())`
     /// dispatch across the two reconciler binaries routes through.
     ///
     /// Dispatches on the typed variant to the underlying
@@ -236,19 +236,19 @@ impl KnownCrd {
     /// generation, a per-CRD YAML style pass) lands at THIS ONE method
     /// and both `crd_gen` + `check_crd_in_sync` inherit the upgrade
     /// mechanically.
-    pub fn emit_crd_yaml(self) -> Result<String, serde_yaml::Error> {
+    pub fn emit_crd_yaml(self) -> Result<String, serde_norway::Error> {
         match self {
-            Self::Process => serde_yaml::to_string(&Process::crd()),
-            Self::ProcessTable => serde_yaml::to_string(&ProcessTable::crd()),
-            Self::EphemeralPool => serde_yaml::to_string(&EphemeralPool::crd()),
-            Self::EphemeralAllocation => serde_yaml::to_string(&EphemeralAllocation::crd()),
+            Self::Process => serde_norway::to_string(&Process::crd()),
+            Self::ProcessTable => serde_norway::to_string(&ProcessTable::crd()),
+            Self::EphemeralPool => serde_norway::to_string(&EphemeralPool::crd()),
+            Self::EphemeralAllocation => serde_norway::to_string(&EphemeralAllocation::crd()),
         }
     }
 
     /// Parse `src` as a YAML document of this CRD's shape, returning
-    /// `Ok(())` on success and the underlying `serde_yaml::Error` on
+    /// `Ok(())` on success and the underlying `serde_norway::Error` on
     /// parse failure — the ONE substrate site every
-    /// `serde_yaml::from_str::<<Kind>>(&src).map(drop)` dispatch across
+    /// `serde_norway::from_str::<<Kind>>(&src).map(drop)` dispatch across
     /// the workspace's `yaml-parses-as` checker routes through.
     ///
     /// Extends coverage from the pre-lift two-arm dispatcher to all
@@ -257,12 +257,12 @@ impl KnownCrd {
     /// `(yaml-parses-as EphemeralAllocation "…")` in `checks.lisp` now
     /// gets a typed parse rather than a runtime `"unknown kind"`
     /// diagnostic.
-    pub fn parse_yaml_as(self, src: &str) -> Result<(), serde_yaml::Error> {
+    pub fn parse_yaml_as(self, src: &str) -> Result<(), serde_norway::Error> {
         match self {
-            Self::Process => serde_yaml::from_str::<Process>(src).map(drop),
-            Self::ProcessTable => serde_yaml::from_str::<ProcessTable>(src).map(drop),
-            Self::EphemeralPool => serde_yaml::from_str::<EphemeralPool>(src).map(drop),
-            Self::EphemeralAllocation => serde_yaml::from_str::<EphemeralAllocation>(src).map(drop),
+            Self::Process => serde_norway::from_str::<Process>(src).map(drop),
+            Self::ProcessTable => serde_norway::from_str::<ProcessTable>(src).map(drop),
+            Self::EphemeralPool => serde_norway::from_str::<EphemeralPool>(src).map(drop),
+            Self::EphemeralAllocation => serde_norway::from_str::<EphemeralAllocation>(src).map(drop),
         }
     }
 }
@@ -370,7 +370,7 @@ mod tests {
         // `examples/process/observability-stack.yaml` fixture
         // (already parsed by `checks.lisp`'s `(yaml-parses-as Process
         // …)` primitive) parses through [`KnownCrd::parse_yaml_as`]
-        // byte-identically to the pre-lift `serde_yaml::from_str::
+        // byte-identically to the pre-lift `serde_norway::from_str::
         // <Process>(&src)` chain. A regression that mis-routed the
         // [`KnownCrd::Process`] arm through a peer variant's
         // deserializer would fail HERE.
@@ -417,7 +417,7 @@ mod tests {
         // the "unknown kind" fall-through in [`Self::from_kind`]:
         // mistyping the caller's dispatch string yields `None`;
         // feeding a malformed document yields the underlying
-        // `serde_yaml::Error` unchanged (which the caller's diagnostic
+        // `serde_norway::Error` unchanged (which the caller's diagnostic
         // wraps as `"parse: {e}"` at the callsite).
         //
         // Note: the substrate CRDs deliberately DO NOT set
@@ -747,8 +747,8 @@ mod tests {
         // structural check.
         for k in KnownCrd::ALL {
             let yaml = k.emit_crd_yaml().expect("emit succeeds");
-            let v: serde_yaml::Value =
-                serde_yaml::from_str(&yaml).expect("emitted YAML must be valid YAML");
+            let v: serde_norway::Value =
+                serde_norway::from_str(&yaml).expect("emitted YAML must be valid YAML");
             assert_eq!(
                 v.get("kind").and_then(|v| v.as_str()),
                 Some("CustomResourceDefinition"),

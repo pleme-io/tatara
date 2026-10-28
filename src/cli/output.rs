@@ -16,7 +16,7 @@ pub enum OutputFormat {
 pub fn render_value<T: Serialize>(value: &T, format: OutputFormat) -> anyhow::Result<String> {
     match format {
         OutputFormat::Json => Ok(serde_json::to_string_pretty(value)?),
-        OutputFormat::Yaml => Ok(serde_yaml::to_string(value)?),
+        OutputFormat::Yaml => Ok(serde_norway::to_string(value)?),
         OutputFormat::Table | OutputFormat::Wide => {
             // Fallback to JSON for generic values in table mode
             Ok(serde_json::to_string_pretty(value)?)

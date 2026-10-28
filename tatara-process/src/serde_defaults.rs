@@ -359,7 +359,7 @@ mod tests {
 dimensions: []
 ";
         let spec: crate::matrix::BreatheEnvelope =
-            serde_yaml::from_str(yaml).expect("BreatheEnvelope YAML parses");
+            serde_norway::from_str(yaml).expect("BreatheEnvelope YAML parses");
         assert_eq!(
             spec.dry_run,
             default_true(),
@@ -383,7 +383,7 @@ dimensions: []
         // tripping.
         let yaml = "";
         let sp: crate::spec::SignalPolicy =
-            serde_yaml::from_str(yaml).expect("SignalPolicy YAML parses");
+            serde_norway::from_str(yaml).expect("SignalPolicy YAML parses");
         assert_eq!(
             sp.sigkill_force,
             default_true(),
@@ -405,7 +405,7 @@ dimensions: []
         // tripping.
         let yaml = "";
         let ts: crate::table::ProcessTableSpec =
-            serde_yaml::from_str(yaml).expect("ProcessTableSpec YAML parses");
+            serde_norway::from_str(yaml).expect("ProcessTableSpec YAML parses");
         assert_eq!(
             ts.orphan_reaping_enabled,
             default_true(),
@@ -486,7 +486,7 @@ dimensions: []
         // and the ProcessTable-plane default that peers with it.
         let yaml = "";
         let sp: crate::spec::SignalPolicy =
-            serde_yaml::from_str(yaml).expect("SignalPolicy YAML parses");
+            serde_norway::from_str(yaml).expect("SignalPolicy YAML parses");
         assert_eq!(
             sp.sigterm_grace_seconds,
             default_sigterm_grace_seconds(),
@@ -513,7 +513,7 @@ dimensions: []
         // escalation window.
         let yaml = "";
         let ts: crate::table::ProcessTableSpec =
-            serde_yaml::from_str(yaml).expect("ProcessTableSpec YAML parses");
+            serde_norway::from_str(yaml).expect("ProcessTableSpec YAML parses");
         assert_eq!(
             ts.sigterm_timeout_seconds,
             default_sigterm_grace_seconds(),
@@ -620,7 +620,7 @@ dimensions: []
         // the reconciler-composer Zombie force-reap window.
         let yaml = "";
         let ts: crate::table::ProcessTableSpec =
-            serde_yaml::from_str(yaml).expect("ProcessTableSpec YAML parses");
+            serde_norway::from_str(yaml).expect("ProcessTableSpec YAML parses");
         assert_eq!(
             ts.zombie_timeout_seconds,
             default_zombie_timeout_seconds(),

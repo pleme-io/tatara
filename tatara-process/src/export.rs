@@ -1840,7 +1840,7 @@ mod tests {
             experiment_id_override: Some("demo-run-2026-05-20".into()),
         };
 
-        let yaml = serde_yaml::to_string(&spec).unwrap();
+        let yaml = serde_norway::to_string(&spec).unwrap();
         // camelCase wire format — what FluxCD / kubectl users see.
         assert!(yaml.contains("source:"));
         assert!(yaml.contains("testReport:"));
@@ -1852,7 +1852,7 @@ mod tests {
         assert!(yaml.contains("when: Always"));
         assert!(yaml.contains("experimentIdOverride: demo-run-2026-05-20"));
 
-        let back: ExportSpec = serde_yaml::from_str(&yaml).unwrap();
+        let back: ExportSpec = serde_norway::from_str(&yaml).unwrap();
         assert!(back.source.test_report.is_some());
         assert!(back.channel.http_event.is_some());
         assert_eq!(back.when, ExportTrigger::Always);
@@ -1875,10 +1875,10 @@ mod tests {
             when: ExportTrigger::Always,
             experiment_id_override: None,
         };
-        let yaml = serde_yaml::to_string(&spec).unwrap();
+        let yaml = serde_norway::to_string(&spec).unwrap();
         assert!(yaml.contains("runMarker:"));
         assert!(yaml.contains("run-id: demo-run-2026-05-20"));
-        let back: ExportSpec = serde_yaml::from_str(&yaml).unwrap();
+        let back: ExportSpec = serde_norway::from_str(&yaml).unwrap();
         let rm = back.source.run_marker.unwrap();
         assert_eq!(rm.labels["phase"], "end");
     }

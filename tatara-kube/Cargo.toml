@@ -46,7 +46,7 @@ clap = { version = "4.5", features = ["derive"], optional = true }
 hostname = "0.4"
 
 # YAML parsing (for helm template output)
-serde_yaml_ng = "0.10"
+serde_norway = "0.9"
 
 [[bin]]
 name = "tatara-kube"

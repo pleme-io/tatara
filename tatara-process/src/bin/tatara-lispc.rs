@@ -31,7 +31,7 @@ fn emit_value(v: &serde_json::Value) -> Result<(), ()> {
 }
 
 fn emit_yaml<T: serde::Serialize>(v: &T, what: &str) -> Result<(), ()> {
-    match serde_yaml::to_string(v) {
+    match serde_norway::to_string(v) {
         Ok(y) => {
             println!("---");
             println!("{}", y.trim_end());

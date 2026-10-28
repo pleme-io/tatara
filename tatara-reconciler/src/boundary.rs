@@ -1849,7 +1849,7 @@ mod tests {
     #[test]
     fn yaml_payload_parses_via_either() {
         let env = ReceiptEnvelope::build(ReceiptKind::DbMigration, "aaaa", "bbbb", "cccc", None);
-        let yaml = serde_yaml::to_string(&env).unwrap();
+        let yaml = serde_norway::to_string(&env).unwrap();
         let v = parse_receipt_payload(&yaml, None);
         assert!(matches!(v, ReceiptVerdict::Ok(_)));
     }

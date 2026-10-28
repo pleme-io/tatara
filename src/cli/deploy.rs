@@ -165,7 +165,7 @@ async fn resolve_flake_ref(flake_ref: &str) -> Result<serde_json::Value> {
         }
         if flake_ref.ends_with(".yaml") || flake_ref.ends_with(".yml") {
             let content = tokio::fs::read_to_string(&path).await?;
-            let value: serde_json::Value = serde_yaml::from_str(&content)?;
+            let value: serde_json::Value = serde_norway::from_str(&content)?;
             return Ok(value);
         }
     }

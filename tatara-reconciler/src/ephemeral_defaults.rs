@@ -243,7 +243,7 @@ mod tests {
         // that still pointed at a re-added local shim) would silently
         // resurrect the pre-lift skew corner.
         let yaml = "{}";
-        let d: EphemeralDefaults = serde_yaml::from_str(yaml).unwrap();
+        let d: EphemeralDefaults = serde_norway::from_str(yaml).unwrap();
         assert_eq!(
             d.emit_oci_repository,
             tatara_process::serde_defaults::default_true(),
@@ -263,8 +263,8 @@ mod tests {
             default_chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-demo-app".into(),
             emit_oci_repository: false,
         };
-        let yaml = serde_yaml::to_string(&d).unwrap();
-        let back: EphemeralDefaults = serde_yaml::from_str(&yaml).unwrap();
+        let yaml = serde_norway::to_string(&d).unwrap();
+        let back: EphemeralDefaults = serde_norway::from_str(&yaml).unwrap();
         assert_eq!(back, d);
     }
 
@@ -274,14 +274,14 @@ mod tests {
 default_ttl: "1h"
 forged_extra: "boom"
 "#;
-        let err: Result<EphemeralDefaults, _> = serde_yaml::from_str(yaml);
+        let err: Result<EphemeralDefaults, _> = serde_norway::from_str(yaml);
         assert!(err.is_err());
     }
 
     #[test]
     fn empty_yaml_resolves_to_defaults() {
         let yaml = "{}";
-        let d: EphemeralDefaults = serde_yaml::from_str(yaml).unwrap();
+        let d: EphemeralDefaults = serde_norway::from_str(yaml).unwrap();
         assert_eq!(d, EphemeralDefaults::default());
     }
 }

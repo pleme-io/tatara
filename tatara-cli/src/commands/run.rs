@@ -20,7 +20,7 @@ pub async fn run(job_file: &str, eval: bool, server_addr: &str) -> Result<()> {
             .context("Failed to read job file")?;
 
         if job_file.ends_with(".yaml") || job_file.ends_with(".yml") {
-            serde_yaml::from_str(&content).context("Failed to parse YAML job spec")?
+            serde_norway::from_str(&content).context("Failed to parse YAML job spec")?
         } else {
             serde_json::from_str(&content).context("Failed to parse JSON job spec")?
         }

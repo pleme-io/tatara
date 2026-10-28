@@ -1,35 +1,35 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "f6ccb70a27d0f40b3644222e24cd4709ede53615e68fed2d54b89548b6571881",
+  "cargo_lock_sha256": "77ba400f089a458446e92a6fdc3c37fe7efda871c8de0585716948b4b6c3f698",
   "manifest_sha256": {
     "Cargo.toml": "e51c7d06f54d973b00bd21ef6f5e8e2c5fea26c1f5c20e08c6af1cef4cdc37b5",
     "ro-cli/Cargo.toml": "788b06ea1b09d94e42c8e1faa8b23fa173b673dc51955908214afce96746fcff",
     "tatara-api/Cargo.toml": "c2759baa9eb88214d9e3508d2d554ccbda1d93474cabb55b191e127df5494455",
     "tatara-build-remote/Cargo.toml": "7776829282e273760233f534f2216b72c21742b7ff13bd267cb598fcc5fe0625",
-    "tatara-cli/Cargo.toml": "5a5918ae71061bf1524d6c81841798209ed2b36c96937e3f8a3de1d688fb5739",
-    "tatara-closed-loop-probe/Cargo.toml": "97eb3b62cdf2153e32941ef83aadb87a1750b19364dc69fae648f7af3f44ef9c",
+    "tatara-cli/Cargo.toml": "57cb9b3d0d8566007d581673ea8b6faacc815137302e4e0e02e10da5ba61fe97",
+    "tatara-closed-loop-probe/Cargo.toml": "8fec08fea16f65b4cbe2d4a6586422f1914d7ad1faf0655013f0fe642e06d02f",
     "tatara-core/Cargo.toml": "ba6d7571adbbe1407b95e2a206ea1bb64d12db25f60f9446e31bc9ffdbde20f7",
     "tatara-domains/Cargo.toml": "92d2ea1d2f1474111edaa232ca1c35984babba335122df2190be8f2856531b98",
-    "tatara-engine/Cargo.toml": "1127a17a42dd20b0fb6ce92ca08d65f5ff9665009e2b85e8d1687a83b26fbb60",
+    "tatara-engine/Cargo.toml": "a3ffbc67248b969370ba7a79673efaeeb08b689f4b14d6b072eef991f6d0448b",
     "tatara-eval/Cargo.toml": "c47c19095bd8bf062de57c7b0f429e6eacd4d2c9149724404a0903a48e54b502",
-    "tatara-export-worker/Cargo.toml": "6ad1496481364f66b1dbf75004bb7bb6ff10042d197ffcc38f365b54891f8027",
+    "tatara-export-worker/Cargo.toml": "253734c7e5e08847c7db2c9a1f1e0b91b7203fbe8efa7117ce4cb3ab598907c9",
     "tatara-github-watcher/Cargo.toml": "94e9a47db6f4dbbe5596e1277a3557c08455a56387fb2523daa325750ad7e24c",
     "tatara-hospedeiro/Cargo.toml": "f575c8842a2051255bd8e9c0cc4cfd53478e9706ff8c7bdf3d4a9cc534bad069",
     "tatara-hvf/Cargo.toml": "530773f973730eb59adf72c6d359ae63ac6bed6713086fab7bb39d5c953066fc",
     "tatara-init/Cargo.toml": "97e412f8b7f92fbd0d7fafb6d3330d98b87b1014b92db62644e3579b59ca5a34",
-    "tatara-kube/Cargo.toml": "58e7ec45fb54fddb985bde8f440b48aac8d2210fb9970fb14a975b1d8597c141",
+    "tatara-kube/Cargo.toml": "d1bf0cd9d9c53999d988261b4900268cb8212a8d1cd58ec0fcb0d1698f658ce1",
     "tatara-lattice/Cargo.toml": "2824e194c5dc4cffb6c09d11bc49831fcfdc044b1a430c15929b6462c9672682",
     "tatara-lisp-derive/Cargo.toml": "c93fe5fafe97a7f46f465c779b207b957fb03c92e593fd1974be3d2d8d617ad3",
     "tatara-lisp/Cargo.toml": "c337354738668adc831e35ca3b1fcf53d7cc1ef1724592aa65c24e00aca06f8f",
     "tatara-mcp/Cargo.toml": "440588ce76923a7902356aa86292d1a50190a75bb91c75b7c14a18b7f675091c",
     "tatara-net/Cargo.toml": "ab7fa28c8d8ad4d843672fb63e96e7fdae5e151f07eb7930e59c32f659925a62",
     "tatara-nix/Cargo.toml": "0bf6309c7c1a340476275f85c379ead1ab71b17bb3805cb2a91c6e4a4dd879f8",
-    "tatara-operator/Cargo.toml": "f199eb6464d2c002bedbef7b5cb1a693f2d484ba042de9d429aba107ee8cac76",
+    "tatara-operator/Cargo.toml": "7992a29df31bfaef2450dc4adace46b40311b1618192a0d02240ea06dcc7387b",
     "tatara-os/Cargo.toml": "b4fa80f59595fb1147a9492af167e38758895cd003d7e1b43b14be0c2a5c38f3",
     "tatara-pkgs/Cargo.toml": "5f25a11a250cfa1f154640e2e81a95d001806dff4a708307c0be034eef082bca",
-    "tatara-pool-reconciler/Cargo.toml": "e81beb9c132404726a52a6645ed478cb271690852dce04dab349d937f839115b",
-    "tatara-process/Cargo.toml": "c38400dc8d51dd8641032b4155746bb4f4e469f84e4cb54d6aec90611bd1b556",
-    "tatara-reconciler/Cargo.toml": "76c2ce261b4999840619581087c05a0b4c3297b4308f20a64d791b8dd50493ac",
+    "tatara-pool-reconciler/Cargo.toml": "961850e3698713820114023d254ff0c5ead3acf03f5f3f548210cbf57722fd88",
+    "tatara-process/Cargo.toml": "4222fe5fba5cca353b30505af82f3eb7e255b77b1d02fde189867ef9468293cf",
+    "tatara-reconciler/Cargo.toml": "1be80bd19dd210a52c6ca7729d5f9d3692b42a593a8f7e12f4f9d8bd9946159a",
     "tatara-terreiro/Cargo.toml": "03b96b6ff1942cf97eb2c9c1b38c80258cdb56fbabe74b132d0048eb2020c053",
     "tatara-testing/Cargo.toml": "711da4ca4ce6b28b51af7b368442ea042079b9389defc0ce8691937712d51c49",
     "tatara-ui/Cargo.toml": "7bb49801c13f8f1ea2d4d2ff45612217895b696ea53fd2edc70169c2e4dd4797",
@@ -5290,16 +5290,6 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml",
-            "package_key": "serde_yaml-0.9.34+deprecated",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": true,
-            "target": null,
-            "tree": "target"
-          },
-          {
             "name": "toml",
             "package_key": "toml-0.8.23",
             "kind": "normal",
@@ -5336,9 +5326,7 @@
           "env",
           "parse-value",
           "pear",
-          "serde_yaml",
-          "toml",
-          "yaml"
+          "toml"
         ]
       },
       "find-msvc-tools-0.1.9": {
@@ -5831,7 +5819,7 @@
           "std"
         ]
       },
-      "gen-macros-0.1.33": {
+      "gen-macros-0.1.54": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -5870,11 +5858,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "gen-platform-0.1.33": {
+      "gen-platform-0.1.54": {
         "runtime_dependencies": [
           {
             "name": "gen_macros",
-            "package_key": "gen-macros-0.1.33",
+            "package_key": "gen-macros-0.1.54",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -5884,7 +5872,7 @@
           },
           {
             "name": "gen_types",
-            "package_key": "gen-types-0.1.33",
+            "package_key": "gen-types-0.1.54",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -5938,7 +5926,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "gen-types-0.1.33": {
+      "gen-types-0.1.54": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -7389,7 +7377,7 @@
           },
           {
             "name": "socket2",
-            "package_key": "socket2-0.6.4",
+            "package_key": "socket2-0.5.10",
             "kind": "normal",
             "features": [
               "all"
@@ -11152,7 +11140,7 @@
           },
           {
             "name": "socket2",
-            "package_key": "socket2-0.6.4",
+            "package_key": "socket2-0.5.10",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -11356,7 +11344,7 @@
           },
           {
             "name": "socket2",
-            "package_key": "socket2-0.6.4",
+            "package_key": "socket2-0.5.10",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -12531,7 +12519,7 @@
           },
           {
             "name": "shikumi",
-            "package_key": "shikumi-0.1.455",
+            "package_key": "shikumi-0.1.1084",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -12992,6 +12980,16 @@
             "tree": "target"
           },
           {
+            "name": "schemars_derive",
+            "package_key": "schemars_derive-1.2.1",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": true,
+            "target": null,
+            "tree": "host"
+          },
+          {
             "name": "serde",
             "package_key": "serde-1.0.228",
             "kind": "normal",
@@ -13018,6 +13016,9 @@
         ],
         "build_dependencies": [],
         "features": [
+          "default",
+          "derive",
+          "schemars_derive",
           "std"
         ]
       },
@@ -13060,6 +13061,52 @@
             "features": [
               "extra-traits"
             ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": []
+      },
+      "schemars_derive-1.2.1": {
+        "runtime_dependencies": [
+          {
+            "name": "proc_macro2",
+            "package_key": "proc-macro2-1.0.106",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "quote",
+            "package_key": "quote-1.0.45",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde_derive_internals",
+            "package_key": "serde_derive_internals-0.29.1",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "syn",
+            "package_key": "syn-2.0.117",
+            "kind": "normal",
+            "features": [],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -13347,6 +13394,62 @@
         "build_dependencies": [],
         "features": []
       },
+      "serde_norway-0.9.42": {
+        "runtime_dependencies": [
+          {
+            "name": "indexmap",
+            "package_key": "indexmap-2.14.0",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "itoa",
+            "package_key": "itoa-1.0.18",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "ryu",
+            "package_key": "ryu-1.0.23",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde",
+            "package_key": "serde-1.0.228",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "unsafe_libyaml_norway",
+            "package_key": "unsafe-libyaml-norway-0.2.15",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": []
+      },
       "serde_path_to_error-0.1.20": {
         "runtime_dependencies": [
           {
@@ -13476,62 +13579,6 @@
         "features": []
       },
       "serde_yaml-0.9.34+deprecated": {
-        "runtime_dependencies": [
-          {
-            "name": "indexmap",
-            "package_key": "indexmap-2.14.0",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "itoa",
-            "package_key": "itoa-1.0.18",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "ryu",
-            "package_key": "ryu-1.0.23",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "serde",
-            "package_key": "serde-1.0.228",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "unsafe_libyaml",
-            "package_key": "unsafe-libyaml-0.2.11",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": []
-      },
-      "serde_yaml_ng-0.10.0": {
         "runtime_dependencies": [
           {
             "name": "indexmap",
@@ -13717,7 +13764,7 @@
           },
           {
             "name": "gen_platform",
-            "package_key": "gen-platform-0.1.33",
+            "package_key": "gen-platform-0.1.54",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -13727,7 +13774,7 @@
           },
           {
             "name": "gen_types",
-            "package_key": "gen-types-0.1.33",
+            "package_key": "gen-types-0.1.54",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -13793,7 +13840,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "shikumi-0.1.455": {
+      "shikumi-0.1.1084": {
         "runtime_dependencies": [
           {
             "name": "arc_swap",
@@ -13833,8 +13880,7 @@
             "kind": "normal",
             "features": [
               "env",
-              "toml",
-              "yaml"
+              "toml"
             ],
             "uses_default_features": true,
             "optional": false,
@@ -13843,7 +13889,7 @@
           },
           {
             "name": "gen_platform",
-            "package_key": "gen-platform-0.1.33",
+            "package_key": "gen-platform-0.1.54",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -13853,7 +13899,7 @@
           },
           {
             "name": "gen_types",
-            "package_key": "gen-types-0.1.33",
+            "package_key": "gen-types-0.1.54",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -13884,6 +13930,16 @@
             "tree": "target"
           },
           {
+            "name": "schemars",
+            "package_key": "schemars-1.2.1",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "serde",
             "package_key": "serde-1.0.228",
             "kind": "normal",
@@ -13906,8 +13962,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml",
-            "package_key": "serde_yaml-0.9.34+deprecated",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -14183,6 +14239,24 @@
         ],
         "build_dependencies": [],
         "features": []
+      },
+      "socket2-0.5.10": {
+        "runtime_dependencies": [
+          {
+            "name": "libc",
+            "package_key": "libc-0.2.186",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": "cfg(unix)",
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": [
+          "all"
+        ]
       },
       "socket2-0.6.4": {
         "runtime_dependencies": [
@@ -15037,8 +15111,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml",
-            "package_key": "serde_yaml-0.9.34+deprecated",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15048,7 +15122,7 @@
           },
           {
             "name": "shikumi",
-            "package_key": "shikumi-0.1.455",
+            "package_key": "shikumi-0.1.1084",
             "kind": "normal",
             "features": [
               "cli"
@@ -15323,8 +15397,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml",
-            "package_key": "serde_yaml-0.9.34+deprecated",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15391,11 +15465,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-closed-set-0.3.37": {
+      "tatara-closed-set-0.3.64": {
         "runtime_dependencies": [
           {
             "name": "tatara_closed_set_derive",
-            "package_key": "tatara-closed-set-derive-0.3.37",
+            "package_key": "tatara-closed-set-derive-0.3.64",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15407,7 +15481,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-closed-set-derive-0.3.37": {
+      "tatara-closed-set-derive-0.3.64": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -15556,7 +15630,7 @@
           },
           {
             "name": "shikumi",
-            "package_key": "shikumi-0.1.455",
+            "package_key": "shikumi-0.1.1084",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15856,8 +15930,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml",
-            "package_key": "serde_yaml-0.9.34+deprecated",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16157,8 +16231,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml",
-            "package_key": "serde_yaml-0.9.34+deprecated",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16725,8 +16799,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml_ng",
-            "package_key": "serde_yaml_ng-0.10.0",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17180,7 +17254,7 @@
           },
           {
             "name": "tatara_closed_set",
-            "package_key": "tatara-closed-set-0.3.37",
+            "package_key": "tatara-closed-set-0.3.64",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17402,8 +17476,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml",
-            "package_key": "serde_yaml-0.9.34+deprecated",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17819,8 +17893,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml",
-            "package_key": "serde_yaml-0.9.34+deprecated",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18032,8 +18106,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml",
-            "package_key": "serde_yaml-0.9.34+deprecated",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18043,7 +18117,7 @@
           },
           {
             "name": "tatara_closed_set",
-            "package_key": "tatara-closed-set-0.3.37",
+            "package_key": "tatara-closed-set-0.3.64",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18265,8 +18339,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml",
-            "package_key": "serde_yaml-0.9.34+deprecated",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18276,7 +18350,7 @@
           },
           {
             "name": "shikumi",
-            "package_key": "shikumi-0.1.455",
+            "package_key": "shikumi-0.1.1084",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18286,7 +18360,7 @@
           },
           {
             "name": "tatara_closed_set",
-            "package_key": "tatara-closed-set-0.3.37",
+            "package_key": "tatara-closed-set-0.3.64",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18714,7 +18788,7 @@
           },
           {
             "name": "gen_platform",
-            "package_key": "gen-platform-0.1.33",
+            "package_key": "gen-platform-0.1.54",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18724,7 +18798,7 @@
           },
           {
             "name": "gen_types",
-            "package_key": "gen-types-0.1.33",
+            "package_key": "gen-types-0.1.54",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21074,6 +21148,11 @@
         ]
       },
       "unsafe-libyaml-0.2.11": {
+        "runtime_dependencies": [],
+        "build_dependencies": [],
+        "features": []
+      },
+      "unsafe-libyaml-norway-0.2.15": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
@@ -32497,14 +32576,14 @@
     "futures-util-0.3.32": {
       "edition": "2018"
     },
-    "gen-macros-0.1.33": {
+    "gen-macros-0.1.54": {
       "edition": "2024",
       "proc_macro": true
     },
-    "gen-platform-0.1.33": {
+    "gen-platform-0.1.54": {
       "edition": "2024"
     },
-    "gen-types-0.1.33": {
+    "gen-types-0.1.54": {
       "edition": "2024"
     },
     "generic-array-0.14.7": {
@@ -33160,6 +33239,10 @@
       "edition": "2021",
       "proc_macro": true
     },
+    "schemars_derive-1.2.1": {
+      "edition": "2021",
+      "proc_macro": true
+    },
     "scopeguard-1.2.0": {
       "edition": "2015"
     },
@@ -33210,6 +33293,9 @@
     "serde_nanos-0.1.4": {
       "edition": "2018"
     },
+    "serde_norway-0.9.42": {
+      "edition": "2021"
+    },
     "serde_path_to_error-0.1.20": {
       "edition": "2021"
     },
@@ -33226,9 +33312,6 @@
     "serde_yaml-0.9.34+deprecated": {
       "edition": "2021"
     },
-    "serde_yaml_ng-0.10.0": {
-      "edition": "2021"
-    },
     "sha1-0.10.6": {
       "edition": "2018"
     },
@@ -33241,7 +33324,7 @@
     "shigoto-types-0.1.13": {
       "edition": "2024"
     },
-    "shikumi-0.1.455": {
+    "shikumi-0.1.1084": {
       "edition": "2024"
     },
     "shlex-2.0.1": {
@@ -33274,6 +33357,9 @@
     },
     "socket-pktinfo-0.3.2": {
       "edition": "2018"
+    },
+    "socket2-0.5.10": {
+      "edition": "2021"
     },
     "socket2-0.6.4": {
       "edition": "2021"
@@ -33359,10 +33445,10 @@
         }
       ]
     },
-    "tatara-closed-set-0.3.37": {
+    "tatara-closed-set-0.3.64": {
       "edition": "2021"
     },
-    "tatara-closed-set-derive-0.3.37": {
+    "tatara-closed-set-derive-0.3.64": {
       "edition": "2021",
       "proc_macro": true
     },
@@ -33795,6 +33881,19 @@
       "edition": "2015"
     },
     "unsafe-libyaml-0.2.11": {
+      "edition": "2021",
+      "binaries": [
+        {
+          "name": "run-emitter-test-suite",
+          "path": "src/bin/run-emitter-test-suite.rs"
+        },
+        {
+          "name": "run-parser-test-suite",
+          "path": "src/bin/run-parser-test-suite.rs"
+        }
+      ]
+    },
+    "unsafe-libyaml-norway-0.2.15": {
       "edition": "2021",
       "binaries": [
         {

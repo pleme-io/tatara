@@ -7,7 +7,7 @@
 //! component does.
 
 /// A `wasi:cli/command` driven by its first argument: `serve <port>`,
-/// `exit <code>`, `spin`, `grow <mib>`, `connect <host:port>`, `bind <port>`,
+/// `count <ms>`, `exit <code>`, `spin`, `grow <mib>`, `connect <host:port>`, `bind <port>`,
 /// `read <path>`, `write <path>`.
 pub const PROBE: &[u8] = include_bytes!("../fixtures/probe.wasm");
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "d31dc25f5f1500355d3b5efdff5fec8bbfad9775ca5860e7ac265706ed413b49",
+  "cargo_lock_sha256": "a259e1dd00e6f65428ea45b71caf9b2aa1c8c43e179e893311eba7cfe7526760",
   "manifest_sha256": {
     "Cargo.toml": "75ca7c9d6e9f8e6677641e6d50e8653d5b4c35e33b6c742160266a622fe3732f",
     "ro-cli/Cargo.toml": "788b06ea1b09d94e42c8e1faa8b23fa173b673dc51955908214afce96746fcff",
@@ -34,7 +34,7 @@
     "tatara-testing/Cargo.toml": "711da4ca4ce6b28b51af7b368442ea042079b9389defc0ce8691937712d51c49",
     "tatara-ui/Cargo.toml": "7bb49801c13f8f1ea2d4d2ff45612217895b696ea53fd2edc70169c2e4dd4797",
     "tatara-vm/Cargo.toml": "5d297b87076be28aa4d29df30176b7698d1e376e40ea90fcd273d6e184150a2c",
-    "tatara-wasm/Cargo.toml": "36a526ec11ba7e66dac2c390e403392dfabfd40af22d29a574a09e4e49ee48e6"
+    "tatara-wasm/Cargo.toml": "78b04bce829cc25484b990c6b7465357077fa2fb05663d3787caab38523ef156"
   },
   "target_resolves": {
     "base": {
@@ -18956,7 +18956,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": true,
+            "optional": false,
             "target": null,
             "tree": "target"
           }

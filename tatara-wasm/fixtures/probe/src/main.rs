@@ -4,6 +4,7 @@
 //! - `serve <port>`: listen, answer `GET /healthz` with 200, `GET /crash`
 //!   with 200 and then exit 3, `GET /connect/<host:port>` with whether a
 //!   connection opened; log each request line to stdout.
+//! - `count <ms>`: spin for `ms` of wall time and print how many rounds ran.
 //! - `exit <code>`, `spin`, `grow <mib>`, `connect <host:port>`,
 //!   `bind <port>`, `read <path>`, `write <path>`: one action, then exit
 //!   0 on success and 2 on refusal.
@@ -20,6 +21,7 @@ fn main() {
         "serve" => serve(arg(1).parse().unwrap_or(8080)),
         "exit" => arg(1).parse().unwrap_or(0),
         "spin" => spin(),
+        "count" => count(arg(1).parse().unwrap_or(500)),
         "grow" => grow(arg(1).parse().unwrap_or(64)),
         "connect" => report(TcpStream::connect(arg(1)).map(drop)),
         "bind" => report(TcpListener::bind(("0.0.0.0", arg(1).parse().unwrap_or(0))).map(drop)),
@@ -48,6 +50,18 @@ fn spin() -> i32 {
     loop {
         n = std::hint::black_box(n.wrapping_add(1));
     }
+}
+
+fn count(ms: u64) -> i32 {
+    let until = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+    let mut rounds: u64 = 0;
+    while std::time::Instant::now() < until {
+        for _ in 0..10_000 {
+            rounds = std::hint::black_box(rounds.wrapping_add(1));
+        }
+    }
+    println!("rounds {rounds}");
+    0
 }
 
 fn grow(mib: usize) -> i32 {

@@ -11,7 +11,8 @@
 //! Every bound is enforced by the engine, not asked of the guest: memory by a
 //! store limiter that traps the growth past [`WasmLimits::memory_bytes`],
 //! time by epoch interruption (a guest spinning in pure compute still yields
-//! every tick, so a deadline or a stop always lands), and the network by the
+//! every tick, so a deadline or a stop always lands), CPU by a pause after
+//! each tick sized to [`WasmLimits::cpu_millis`], and the network by the
 //! socket address check and the outgoing-HTTP authority check, both read off
 //! the grant's [`NetworkGrant`].
 
@@ -26,7 +27,7 @@ use std::time::Duration;
 use tokio::io::AsyncWrite;
 use tokio::sync::watch;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Config, Engine, ResourceLimiter, Store};
+use wasmtime::{Config, Engine, ResourceLimiter, Store, UpdateDeadline};
 use wasmtime_wasi::cli::{IsTerminal, StdoutStream};
 use wasmtime_wasi::p2::bindings::CommandPre;
 use wasmtime_wasi::{
@@ -103,7 +104,10 @@ impl ComponentHost {
 
         let mut linker = Linker::<Guest>::new(&self.engine);
         if spawn.boot.capabilities.wasi.is_some() {
-            wasmtime_wasi::p2::add_to_linker_async(&mut linker).map_err(instantiate)?;
+            let mut options = wasmtime_wasi::p2::bindings::LinkOptions::default();
+            options.cli_exit_with_code(true);
+            wasmtime_wasi::p2::add_to_linker_with_options_async(&mut linker, &options)
+                .map_err(instantiate)?;
             #[cfg(feature = "wasi-http")]
             wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)
                 .map_err(instantiate)?;
@@ -184,7 +188,12 @@ impl Recipe {
         let mut store = Store::new(engine, guest);
         store.limiter(|g| &mut g.memory);
         store.set_epoch_deadline(1);
-        store.epoch_deadline_async_yield_and_update(1);
+        match throttle_pause(self.limits.cpu_millis) {
+            None => store.epoch_deadline_async_yield_and_update(1),
+            Some(pause) => store.epoch_deadline_callback(move |_| {
+                Ok(UpdateDeadline::YieldCustom(1, Box::pin(tokio::time::sleep(pause))))
+            }),
+        }
         Ok(store)
     }
 }
@@ -395,6 +404,19 @@ impl ResourceLimiter for Ceiling {
     ) -> anyhow::Result<bool> {
         Ok(true)
     }
+}
+
+/// The pause after each epoch tick that holds a guest to `cpu_millis`
+/// thousandths of a core: a tick of running, then `tick * (1000 - m) / m` of
+/// waiting. `None` when the share is a whole core or more.
+fn throttle_pause(cpu_millis: Option<u32>) -> Option<Duration> {
+    let m = cpu_millis?;
+    if m >= 1000 {
+        return None;
+    }
+    let m = u64::from(m.max(1));
+    let tick = u64::try_from(EPOCH_TICK.as_micros()).unwrap_or(u64::MAX);
+    Some(Duration::from_micros(tick.saturating_mul(1000 - m) / m))
 }
 
 /// Read a run's result into an exit.
@@ -719,6 +741,15 @@ mod tests {
             .expect_err("growth past the ceiling was allowed");
         assert!(err.downcast_ref::<CeilingHit>().is_some());
         assert!(c.memory_growing(60, 100, None).expect("growth to the limit fits"));
+    }
+
+    #[test]
+    fn the_cpu_share_sets_the_pause_after_each_tick() {
+        assert_eq!(throttle_pause(None), None);
+        assert_eq!(throttle_pause(Some(1000)), None);
+        assert_eq!(throttle_pause(Some(500)), Some(EPOCH_TICK));
+        assert_eq!(throttle_pause(Some(100)), Some(EPOCH_TICK * 9));
+        assert_eq!(throttle_pause(Some(0)), Some(EPOCH_TICK * 999));
     }
 
     #[test]

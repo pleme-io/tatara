@@ -21,16 +21,9 @@ use crate::engine::{
 };
 use crate::WasmRuntime;
 
+#[derive(Default)]
 pub struct WasmiEngine {
     engine: Engine,
-}
-
-impl Default for WasmiEngine {
-    fn default() -> Self {
-        Self {
-            engine: Engine::default(),
-        }
-    }
 }
 
 impl WasmEngine for WasmiEngine {

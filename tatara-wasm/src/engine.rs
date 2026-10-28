@@ -266,6 +266,11 @@ pub struct WasmLimits {
     /// it the guest is interrupted and exits with [`WasmExit::Deadline`].
     #[serde(default)]
     pub deadline: Option<Duration>,
+    /// The CPU the guest may use, in thousandths of one core. Each epoch
+    /// tick the guest runs is followed by a pause that holds it to this
+    /// share; `None`, or 1000 and above, is one whole core.
+    #[serde(default)]
+    pub cpu_millis: Option<u32>,
 }
 
 /// A long-running guest to start: what [`WasmEngine::spawn`] takes.
@@ -859,7 +864,7 @@ pub fn engine_for(runtime: WasmRuntime) -> Result<Box<dyn WasmEngine>, WasmEngin
         WasmRuntime::Wasmtime => Ok(Box::new(crate::wasmtime_impl::WasmtimeEngine::default())),
 
         #[cfg(feature = "runtime-wasmer")]
-        WasmRuntime::Wasmer => Ok(Box::new(crate::wasmer_impl::WasmerEngine::default())),
+        WasmRuntime::Wasmer => Ok(Box::new(crate::wasmer_impl::WasmerEngine)),
 
         #[cfg(feature = "runtime-wasmi")]
         WasmRuntime::Wasmi => Ok(Box::new(crate::wasmi_impl::WasmiEngine::default())),

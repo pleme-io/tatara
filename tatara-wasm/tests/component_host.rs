@@ -3,9 +3,10 @@
 //! pins one bound the host enforces, with the differential that proves the
 //! bound and not a broken guest is what refused.
 //!
-//! WASI preview 2's `wasi:cli/exit` carries only success or failure, so a
-//! guest's `exit(n)` for any non-zero `n` reads as code 1. The refusals are
-//! told apart by what the probe printed.
+//! The probe fixture is built with Rust's std, whose `exit(n)` goes through
+//! `wasi:cli/exit#exit` and carries only success or failure, so any non-zero
+//! `n` reads as code 1; the refusals are told apart by what the probe
+//! printed. A guest that calls `exit-with-code` reports its code whole.
 
 #![cfg(all(feature = "wasi-http", feature = "fixtures"))]
 
@@ -385,6 +386,68 @@ async fn a_component_with_no_wasi_grant_is_refused_by_import_name() {
         WasmEngineError::CapabilityNotGranted { module, .. } => assert!(module.starts_with("wasi:")),
         other => panic!("wrong error: {other:?}"),
     }
+}
+
+fn rounds(text: &str) -> u64 {
+    text.lines()
+        .find_map(|l| l.strip_prefix("rounds "))
+        .and_then(|n| n.trim().parse().ok())
+        .expect("the probe printed its rounds")
+}
+
+/// RED RUN (2026-10-28): `throttle_pause` always `None` → the 100-millicore
+/// guest ran as many rounds as the whole-core one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cpu_limit_holds_the_guest_to_its_share() {
+    let run = |cpu_millis| async move {
+        let limits = WasmLimits {
+            cpu_millis,
+            ..WasmLimits::default()
+        };
+        let (mut p, sink) = start(&spawn_of(
+            fixtures::PROBE,
+            grant(&["count", "600"], NetworkGrant::default(), vec![]),
+            limits,
+        ));
+        assert_eq!(ended(&mut p).await, WasmExit::Code { code: 0 });
+        rounds(&sink.text(GuestStream::Stdout))
+    };
+    let whole = run(None).await;
+    let tenth = run(Some(100)).await;
+    assert!(
+        tenth * 3 < whole,
+        "a 100-millicore guest ran {tenth} rounds against {whole} on a whole core"
+    );
+}
+
+/// A command that calls the unstable `wasi:cli/exit#exit-with-code` with 7.
+/// Rust's std never calls it (it exits through `exit(err)`, read as 1), so
+/// the guest is written in the component text format.
+const EXIT_SEVEN: &str = r#"
+(component
+  (import "wasi:cli/exit@0.2.6" (instance $exit
+    (export "exit-with-code" (func (param "status-code" u8)))))
+  (core func $exit_with_code (canon lower (func $exit "exit-with-code")))
+  (core module $m
+    (import "host" "exit-with-code" (func $e (param i32)))
+    (func (export "run") (result i32)
+      (call $e (i32.const 7))
+      (i32.const 0)))
+  (core instance $i (instantiate $m
+    (with "host" (instance (export "exit-with-code" (func $exit_with_code))))))
+  (func $run (result (result)) (canon lift (core func $i "run")))
+  (instance $runner (export "run" (func $run)))
+  (export "wasi:cli/run@0.2.6" (instance $runner)))
+"#;
+
+/// RED RUN (2026-10-28): the host linked without `cli_exit_with_code` →
+/// the spawn is refused: `wasi:cli/exit@0.2.6` has no `exit-with-code`.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_guest_exit_code_is_reported_whole_through_exit_with_code() {
+    let mut spawn = spawn_of(&[], grant(&[], NetworkGrant::default(), vec![]), WasmLimits::default());
+    spawn.boot.module = WasmModuleSource::Wat(EXIT_SEVEN.to_string());
+    let (mut p, _) = start(&spawn);
+    assert_eq!(ended(&mut p).await, WasmExit::Code { code: 7 });
 }
 
 #[test]

@@ -22,7 +22,8 @@
 //!
 //! What is true: **three of the five runtimes have bodies** — wasmtime
 //! (WASI preview 1 run to completion, and WASI preview 2 components spawned
-//! long-running with sockets, HTTP, memory and time limits: [`component`]),
+//! long-running with sockets, HTTP, memory, time and CPU-share limits, and
+//! whole exit codes through `exit-with-code`: [`component`]),
 //! wasmer and wasmi (compile + instantiate + `_start`, no WASI bridge). `WasmEdge` and `Wamr` have no
 //! implementation in this crate and [`engine_for`] returns
 //! `RuntimeNotCompiled` for both.
@@ -63,10 +64,11 @@ pub use engine::{
 use serde::{Deserialize, Serialize};
 
 /// Which WASM runtime hosts this guest.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum WasmRuntime {
     /// Bytecode Alliance, Rust-native, WASI Preview 2 reference impl.
+    #[default]
     Wasmtime,
     /// CNCF project, C++, strong K8s story.
     WasmEdge,
@@ -76,12 +78,6 @@ pub enum WasmRuntime {
     Wasmi,
     /// WebAssembly Micro Runtime — AOT/JIT, tiny footprint.
     Wamr,
-}
-
-impl Default for WasmRuntime {
-    fn default() -> Self {
-        Self::Wasmtime
-    }
 }
 
 /// WASI version the guest expects.

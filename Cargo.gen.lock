@@ -19,8 +19,8 @@
     "tatara-init/Cargo.toml": "97e412f8b7f92fbd0d7fafb6d3330d98b87b1014b92db62644e3579b59ca5a34",
     "tatara-kube/Cargo.toml": "58e7ec45fb54fddb985bde8f440b48aac8d2210fb9970fb14a975b1d8597c141",
     "tatara-lattice/Cargo.toml": "2824e194c5dc4cffb6c09d11bc49831fcfdc044b1a430c15929b6462c9672682",
-    "tatara-lisp-derive/Cargo.toml": "c93fe5fafe97a7f46f465c779b207b957fb03c92e593fd1974be3d2d8d617ad3",
-    "tatara-lisp/Cargo.toml": "c337354738668adc831e35ca3b1fcf53d7cc1ef1724592aa65c24e00aca06f8f",
+    "tatara-lisp-derive/Cargo.toml": "2857f704f0a03d7c780070673cfeda0fa96f90542cc92868147c201f064b4de0",
+    "tatara-lisp/Cargo.toml": "254484cc78b920471e3918b1b672232e7075e8f56764900e80a01a2bc95f5632",
     "tatara-mcp/Cargo.toml": "440588ce76923a7902356aa86292d1a50190a75bb91c75b7c14a18b7f675091c",
     "tatara-net/Cargo.toml": "ab7fa28c8d8ad4d843672fb63e96e7fdae5e151f07eb7930e59c32f659925a62",
     "tatara-nix/Cargo.toml": "0bf6309c7c1a340476275f85c379ead1ab71b17bb3805cb2a91c6e4a4dd879f8",
@@ -33,7 +33,7 @@
     "tatara-terreiro/Cargo.toml": "03b96b6ff1942cf97eb2c9c1b38c80258cdb56fbabe74b132d0048eb2020c053",
     "tatara-testing/Cargo.toml": "711da4ca4ce6b28b51af7b368442ea042079b9389defc0ce8691937712d51c49",
     "tatara-ui/Cargo.toml": "7bb49801c13f8f1ea2d4d2ff45612217895b696ea53fd2edc70169c2e4dd4797",
-    "tatara-vm/Cargo.toml": "5d297b87076be28aa4d29df30176b7698d1e376e40ea90fcd273d6e184150a2c",
+    "tatara-vm/Cargo.toml": "c5c76757f35fb1bea39b16ad67176a2aa0529c189b868a0dd434188039147986",
     "tatara-wasm/Cargo.toml": "78b04bce829cc25484b990c6b7465357077fa2fb05663d3787caab38523ef156"
   },
   "target_resolves": {

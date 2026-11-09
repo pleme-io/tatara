@@ -25,7 +25,7 @@ pub enum Hypervisor {
     Kasou,
     /// pleme-io's Rust-native libkrun (Hypervisor.framework) wrapper — the
     /// lowest blessed macOS VM interface, driven in-process via `tateru`, no
-    /// CLI shell-out. The default máquina engine (see `theory/MAQUINA.md`).
+    /// CLI shell-out. The default máquina engine.
     Libkrun,
 }
 
@@ -38,8 +38,7 @@ impl Default for Hypervisor {
 // Fleet-wide dispatcher-catalog registration. Tatara becomes
 // the TENTH consumer class adopting gen-platform's typed-
 // dispatcher catamorphism (after gen / caixa / wasm-platform /
-// cofre / shigoto / engenho / magma / kura / pangea). See
-// theory/UNIFIED-COMPUTING-MODEL.md §VI.
+// cofre / shigoto / engenho / magma / kura / pangea).
 gen_platform::register_dispatcher!("tatara.hypervisor", Hypervisor);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

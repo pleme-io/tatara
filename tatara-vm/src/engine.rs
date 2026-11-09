@@ -4,7 +4,7 @@
 //! Only the Rust-native backends are real engines (zero shell-out): `Libkrun`
 //! (`tateru`) and `Kasou` (VZ). `Vfkit` / `VfkitDarwin` / `Qemu` are CLI
 //! emitters (the `vfkit` module) with no in-process engine — selecting them
-//! here is an error by design (see `theory/MAQUINA.md` § zero-shell-out).
+//! here is an error by design (zero shell-out).
 //!
 //! The real engines live behind tatara-vm's `engines` feature (macOS), which
 //! forwards to `maquina-engine`'s `tateru-backend` + `kasou-backend`. Without

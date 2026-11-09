@@ -132,9 +132,8 @@ concepts.
 > What hanabi actually is: Urdume's **L4 BFF** — ~51K lines of
 > Apollo-Federation-v2 GraphQL gateway (HivePlanner, PlanExecutor, two-tier
 > cache, load shedding), OAuth/session auth, live websocket subscriptions,
-> webhooks, image proxy and `X-Product` multi-tenancy. Canonical descriptions:
-> [`theory/URDUME.md`](https://github.com/pleme-io/theory/blob/main/URDUME.md)
-> (L4) and `hanabi/README.md`. If hanabi ever belongs in a tatara map, it is as
+> webhooks, image proxy and `X-Product` multi-tenancy. Canonical description:
+> `hanabi/README.md`. If hanabi ever belongs in a tatara map, it is as
 > a *consumer* of this substrate, not a layer of it.
 
 ### Identity & Secrets (Security + Identity Substrates)

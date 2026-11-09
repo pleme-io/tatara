@@ -223,12 +223,11 @@ pub fn decide_pool_reconcile(
 ///   matches the pre-lift shape where each of the 11 hand-authored
 ///   sites computed its own `chrono::Utc::now()` at its own line.
 ///
-/// Theory anchor: `theory/THEORY.md` §VI.1 (generation over
-/// composition — the 3-arg call with `chrono::Utc::now()` as the
-/// third argument recurred at 11 hand-authored sites past the ★★
-/// PRIME-DIRECTIVE ≥ 2 duplication trigger, lifted onto the ONE
-/// crate-wide substrate owner here). `theory/THEORY.md` §II.1
-/// invariant 5 (composition preserves proofs — the wall-clock
+/// Anchors: generation over composition (the 3-arg call with
+/// `chrono::Utc::now()` as the third argument recurred at 11
+/// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger, lifted onto the ONE crate-wide substrate owner here), and
+/// invariant 5 of the pattern (composition preserves proofs — the wall-clock
 /// projection lives at ONE site so a future clock swap reaches
 /// every pool-reconcile consumer through one edit).
 #[must_use]

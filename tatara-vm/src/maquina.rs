@@ -1,7 +1,6 @@
 //! Bridge: the tatara-lisp `(defvm …)` envelope (`VmSpec`) → the runtime
 //! `maquina_engine::VmShape` that a `MaquinaEngine` programs. The
-//! authoring→runtime seam of the máquina primitive (see
-//! `theory/MAQUINA.md`).
+//! authoring→runtime seam of the máquina primitive.
 //!
 //! The orphan rule forbids `impl From<VmSpec> for maquina_engine::VmShape`
 //! (both `From` and `VmShape` are foreign to this crate), so the projection

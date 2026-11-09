@@ -36,8 +36,8 @@
 //! The load-bearing property, which is why the grant is `Option` and not a set
 //! of booleans: when `wasi` is `None` the WASI linker is **never added**, so a
 //! `wasi_snapshot_preview1` import has no symbol to resolve. That is absence,
-//! not a policy check — the distinction `theory/BLUE-EXECUTION.md` §V rests its
-//! `truly-unrep` capability rows on.
+//! not a policy check — the distinction the `truly-unrep`
+//! capability rows rest on.
 
 use std::collections::BTreeSet;
 use std::io::Read;

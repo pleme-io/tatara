@@ -5,7 +5,7 @@ version = "0.3.27"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-# Phase 0 freeze, other half (theory/TATARA-LISP-CONSOLIDATION.md). The
+# Phase 0 freeze, other half. The
 # sibling ../tatara-lisp-derive/Cargo.toml was frozen for exactly this
 # reason and this crate was missed, so the seal read as applied while the
 # larger half of the pair stayed publishable. Both halves of the name

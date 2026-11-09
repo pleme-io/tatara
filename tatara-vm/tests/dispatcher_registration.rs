@@ -11,7 +11,7 @@
 //!   - Qemu        (KVM/HVF portable fallback)
 //!   - Kasou       (pleme-io Rust-native VZ wrapper, in-process)
 //!   - Libkrun     (pleme-io Rust-native libkrun wrapper, in-process — the
-//!                  default máquina engine, see theory/MAQUINA.md)
+//!                  default máquina engine)
 
 use gen_platform::{catalog, TypedDispatcherTrait};
 use tatara_vm::Hypervisor;

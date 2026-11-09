@@ -15,12 +15,11 @@ tatara-ui = { path = "../tatara-ui" , version = "0.2.65" }
 tatara-wasm = { path = "../tatara-wasm" , version = "0.2.65" }
 tatara-build-remote = { path = "../tatara-build-remote" , version = "0.2.65" }
 
-# Typed-dispatcher catalog integration
-# (theory/UNIFIED-COMPUTING-MODEL.md §VI).
+# Typed-dispatcher catalog integration.
 gen-platform = "0.1"
 gen-types = "0.1"
 
-# Backend-neutral máquina VM lifecycle trait (theory/MAQUINA.md §X M0). The
+# Backend-neutral máquina VM lifecycle trait (M0). The
 # core (MaquinaEngine trait, VmShape, NetworkMode, ShareMount, …) is
 # host-agnostic and dependency-light — always present. The heavy,
 # macOS-only FFI backends (tateru/libkrun, kasou/VZ) are pulled in only via

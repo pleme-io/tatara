@@ -1,6 +1,6 @@
 # Tatara (粋) — Programmable Convergence Computer
 
-> **★★★ CSE / Knowable Construction.** This repo operates under **Constructive Substrate Engineering** — canonical specification at [`pleme-io/theory/CONSTRUCTIVE-SUBSTRATE-ENGINEERING.md`](https://github.com/pleme-io/theory/blob/main/CONSTRUCTIVE-SUBSTRATE-ENGINEERING.md). The Compounding Directive (operational rules: solve once, load-bearing fixes only, idiom-first, models stay current, direction beats velocity) is in the org-level pleme-io/CLAUDE.md ★★★ section. Read both before non-trivial changes.
+> **★★★ CSE / Knowable Construction.** This repo operates under **Constructive Substrate Engineering**. The Compounding Directive (operational rules: solve once, load-bearing fixes only, idiom-first, models stay current, direction beats velocity) is in the org-level pleme-io/CLAUDE.md ★★★ section. Read it before non-trivial changes.
 
 > **skip-format-ban: migration in progress.** The workspace has 81
 > pre-existing `format!(…)` callsites that pre-date the ★★ Typed Emission
@@ -16,21 +16,18 @@
 <!-- Blackmatter alignment: pillars 1, 6, 10 -->
 <!-- See ~/code/github/pleme-io/BLACKMATTER.md for pillar definitions. -->
 
-## Theory (canonical elsewhere)
+## The frame
 
-The theoretical frame lives in
-[`pleme-io/theory/THEORY.md`](../theory/THEORY.md):
-
-- **§II.1** — the Rust + Lisp pattern, five invariants, six-line
+- **The Rust + Lisp pattern** — five invariants, six-line
   contract. Tatara IS the Lisp half; `#[derive(TataraDomain)]` is the
   boundary other repos plug into.
-- **§II.2** — the Four Lisps. tatara-lisp is the strictest reference.
-- **§III** — the typescape. Tatara's registry gives every new typed
+- **The Four Lisps** — tatara-lisp is the strictest reference.
+- **The typescape.** Tatara's registry gives every new typed
   domain a deterministic BLAKE3 identity + workspace-wide coherence
   check.
-- **§IV** — convergence (lattice and process), controllers, the
+- **Convergence** (lattice and process), controllers, the
   eight-phase loop, Unix-process-cluster model, seven questions.
-- **§V.3** — three-pillar attestation (`artifact_hash ⊕ control_hash ⊕
+- **Three-pillar attestation** (`artifact_hash ⊕ control_hash ⊕
   intent_hash → BLAKE3 Merkle`). Tatara writes `ProcessAttestation`
   using this exact shape.
 
@@ -93,10 +90,9 @@ manifesto + anti-patterns for the pattern.
 
 ## K8s-as-Processes model (v1alpha1 — repo specifics)
 
-For the _why_ (Unix process model applied to clusters, hierarchical
-PIDs, fork/exec/wait/kill semantics, inception isolation, self-hosting),
-see [`theory/THEORY.md` §IV.4](../theory/THEORY.md). This section
-documents what is specific to `tatara-reconciler`.
+The _why_ is the Unix process model applied to clusters: hierarchical
+PIDs, fork/exec/wait/kill semantics, inception isolation, self-hosting.
+This section documents what is specific to `tatara-reconciler`.
 
 ### State machine
 
@@ -313,8 +309,7 @@ S-expr (lisp)   ──┘
 Each surface produces the same `ProcessSpec`. The S-expr form is
 homoiconic — macros can compose proven Process templates into new
 Processes. All four surfaces are projections of the same typescape
-slice (see [`theory/THEORY.md` §II.2](../theory/THEORY.md) for the
-Four-Lisps framing).
+slice (the Four-Lisps framing).
 
 ### Three-pillar attestation (repo-specific composition)
 
@@ -329,8 +324,7 @@ composed_root = BLAKE3(
 ```
 
 `previous_root` chains each generation; `sekiban` + `kensa` consume the
-composed root as the audit-trail anchor. Canonical three-pillar form
-defined in [`theory/THEORY.md` §V.3](../theory/THEORY.md).
+composed root as the audit-trail anchor.
 
 ## Homoiconic Lisp surface — the authoring / rewriting layer
 
@@ -362,7 +356,7 @@ Lisp → Process YAML → kubectl.
 
 The five invariants of the pattern (typed entry, free middle, typed
 exit, deterministic identity, composition preserves proofs) are
-canonical in [`theory/THEORY.md` §II.1](../theory/THEORY.md). Tatara
+the contract of the pattern. Tatara
 is the reference implementation.
 
 ### `checks.lisp` — workspace coherence, Lisp-driven
@@ -454,8 +448,6 @@ enum WorkloadPhase<W, E, C, T> {
 | State | Content-addressed (immutable) | Live convergence (mutable) |
 | Distribution | sui-cache binary cache | Raft + gossip |
 | API | REST + GraphQL + gRPC | REST + GraphQL + SSE |
-
-For the duality, see [`theory/THEORY.md` §VIII.5](../theory/THEORY.md).
 
 ## REST API
 

@@ -120,11 +120,11 @@ use kube::{Api, Client, Resource};
 /// no per-site edit at any of the four listed callers or at future
 /// consumers.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the 1-link `Api::all::<K>(<client>)` chain recurred at 4 hand-
 /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// trigger and is lifted onto the ONE workspace-wide substrate
-/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// owner here). Invariant 5 (composition preserves
 /// proofs — the pin block below binds the primitive at fail-before-
 /// pass-after granularity, so a regression that drifted the scope
 /// slot from `Api::all` to `Api::namespaced` — silently narrowing a
@@ -206,11 +206,11 @@ where
 /// the ns-scoped typed-handle binding lives at ONE substrate owner
 /// across every CRD binding.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 1-link `Api::namespaced::<K>(<client>, <ns>)` chain recurred at 6
 /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// trigger and is lifted onto the ONE workspace-wide substrate owner
-/// here). THEORY.md §II.1 invariant 5 (composition preserves proofs —
+/// here). Invariant 5 (composition preserves proofs —
 /// the pin block below binds the primitive at fail-before-pass-after
 /// granularity, so a regression that drifted the scope slot from
 /// `Api::namespaced` to `Api::all` — silently widening a
@@ -302,11 +302,11 @@ where
 /// the function body and pass it by reference; no consumer needs to
 /// consume the descriptor at binding time.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 1-link `Api::namespaced_with::<DynamicObject>(<client>, <ns>, <&ar>)`
 /// chain recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE
 /// ≥ 2 duplication trigger and is lifted onto the ONE workspace-wide
-/// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+/// substrate owner here). Invariant 5 (composition
 /// preserves proofs — the pin block below binds the primitive at
 /// fail-before-pass-after granularity, so a regression that drifted
 /// the scope slot away from `Api::namespaced_with` — a stray `Api::all_with`

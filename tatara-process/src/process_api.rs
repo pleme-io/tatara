@@ -124,11 +124,11 @@ use crate::crd::Process;
 /// snapshot reader) at its own callsite, so no wire-side posture
 /// is baked in at the primitive.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the 1-link `Api::namespaced::<Process>(<client>, <ns>)` chain
 /// recurred at 3 hand-authored sites past the ★★ PRIME-DIRECTIVE
 /// ≥ 2 duplication trigger and is lifted onto the ONE workspace-
-/// wide substrate owner here). THEORY.md §II.1 invariant 5
+/// wide substrate owner here). Invariant 5
 /// (composition preserves proofs — the pin block below binds the
 /// primitive at fail-before-pass-after granularity, so a regression
 /// that swapped the fixed `K = Process` type parameter for a
@@ -238,11 +238,11 @@ pub fn namespaced(client: Client, ns: &str) -> Api<Process> {
 /// Ingress alias) inherit the primitive at their own callsites with
 /// no per-site drift surface.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 3-slot `format!(…)` chain recurred at 2 hand-authored sites past
 /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is lifted onto
-/// the ONE workspace-wide substrate owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — the pin block below
+/// the ONE workspace-wide substrate owner here).
+/// Invariant 5 (composition preserves proofs — the pin block below
 /// binds the composer at fail-before-pass-after granularity, so a
 /// regression that reordered the head slots, drifted the fixed
 /// `"Process"` resource-kind literal back to lowercase (or off

@@ -174,11 +174,11 @@ pub fn hex_blake3(bytes: &[u8]) -> String {
 /// caller finalized a `Hasher` for no observable reason — the
 /// attribute surfaces that as a warning at every call site.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// streaming-input `blake3::Hash → 64-hex` encoding step now lives at
 /// ONE substrate owner across the workspace, and this crate's peer
 /// delegates through it rather than re-authoring the spelling).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// Invariant 5 (composition preserves proofs — the
 /// pin
 /// [`tests::hex_blake3_hash_matches_pre_lift_hex_encode_spelling_bytewise`]
 /// binds the streaming corner byte-identically to the pre-lift

@@ -91,11 +91,11 @@
 //! underlying failure entirely, which is never the intended
 //! semantic.
 //!
-//! Theory anchor: THEORY.md §VI.1 (generation over composition — the
+//! Anchor: (generation over composition — the
 //! generic display-prefix wrap-shape recurred at two byte-identical
 //! hand-authored sites in `tatara-export-worker/src/main.rs` past
 //! the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
-//! ONE substrate owner here). THEORY.md §II.1 invariant 5
+//! ONE substrate owner here). Invariant 5
 //! (composition preserves proofs — a regression that drifts the
 //! display-prefix separator or the byte-shape surfaces here at the
 //! substrate pin rather than as silent operator-facing skew across

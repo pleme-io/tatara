@@ -105,10 +105,10 @@ pub async fn patch_process_table_spec(
 /// slot — a per-Process override, a debug-build sub-10s override for
 /// local development) inherits the upgrade mechanically.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; every
+/// Anchor: generation over composition; every
 /// termination-window slot in production code routes through ONE
 /// workspace-canonical substrate owner per axis rather than through a
-/// bare-literal restatement at each consumer. THEORY.md §II.1 invariant
+/// bare-literal restatement at each consumer. Invariant
 /// 5 — composition preserves proofs; the factory's byte-shape is pinned
 /// at fail-before-pass-after granularity at
 /// [`tests::bootstrap_process_table_spec_*`], so a regression that
@@ -188,10 +188,10 @@ pub async fn ensure_process_table(
 /// (which would bypass the third-slot discipline the siblings enforce
 /// by construction).
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// two-slot phase+phaseSince base shape recurred at all THREE sibling
 /// patch-builders past the PRIME-DIRECTIVE ≥ 2 trigger, and is lifted
-/// to ONE substrate primitive here). THEORY.md §II.1 invariant 5
+/// to ONE substrate primitive here). Invariant 5
 /// (composition preserves proofs — post-lift the "base shape at
 /// phase_status == base shape at phase_status_msg == base shape at
 /// phase_status_with" invariant holds by construction rather than by

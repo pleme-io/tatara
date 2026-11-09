@@ -86,12 +86,12 @@
 /// while this primitive owns the axis-agnostic `-> bool { true }`
 /// scalar-constant default.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// `fn default_true() -> bool { true }` 3-line body recurred at FIVE
 /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// trigger, spanning two workspace crates + four `tatara-process`
 /// modules, and is lifted onto ONE workspace-wide substrate owner
-/// here). THEORY.md §II.1 invariant 5 (composition preserves proofs —
+/// here). Invariant 5 (composition preserves proofs —
 /// the pins bind the wire-form at fail-before-pass-after granularity
 /// so a regression that drifted the returned bool surfaces at
 /// [`tests::default_true_returns_true_bytewise`] rather than as silent
@@ -165,11 +165,11 @@ pub const DEFAULT_TRUE: bool = true;
 /// on-by-default scalar shape, this primitive owns the `-> u32
 /// { 480 }` SIGTERM-grace scalar shape.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// `fn default_<slot>() -> u32 { 480 }` 3-line body recurred at TWO
 /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// trigger, and is lifted onto ONE workspace-wide substrate owner
-/// here). THEORY.md §II.1 invariant 5 (composition preserves proofs —
+/// here). Invariant 5 (composition preserves proofs —
 /// the pins bind the wire-form at fail-before-pass-after granularity
 /// so a regression that drifted the returned u32 surfaces at
 /// [`tests::default_sigterm_grace_seconds_returns_480_bytewise`]
@@ -256,11 +256,11 @@ pub const DEFAULT_SIGTERM_GRACE_SECONDS: u32 = 480;
 /// [`default_zombie_timeout_seconds`] seconds in Zombie, then is
 /// force-reaped and cascaded via ownerRefs.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// bare `600u32` constant recurred at TWO hand-authored sites past
 /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, spanning two
 /// workspace crates, and is lifted onto ONE workspace-wide substrate
-/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// owner here). Invariant 5 (composition preserves
 /// proofs — the pins bind the wire-form at fail-before-pass-after
 /// granularity so a regression that drifted the returned u32 surfaces
 /// at [`tests::default_zombie_timeout_seconds_returns_600_bytewise`]

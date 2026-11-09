@@ -76,10 +76,10 @@
 //! hash was computed for no observable reason; the attribute surfaces
 //! that as a warning at every consumer site.
 //!
-//! Theory anchor: THEORY.md §V.3 (three-pillar attestation — the
+//! Anchor: (three-pillar attestation — the
 //! canonical `serde_json → BLAKE3 → hex` value-identity projection is
 //! defined at the substrate; this composer routes `tatara-ui`'s two
-//! run/theme-identity slots onto the SAME shape). THEORY.md §VI.1
+//! run/theme-identity slots onto the SAME shape).
 //! (generation over composition — the two-line chain recurred at TWO
 //! hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 //! trigger, and is lifted to ONE substrate owner here).

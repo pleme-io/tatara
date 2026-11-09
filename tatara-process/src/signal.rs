@@ -242,7 +242,7 @@ impl SighupStrategy {
     /// serves as the arity gate that a compiler catches at the
     /// exhaustiveness check.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-Option-child presence-probe body
     /// lives at ONE substrate site so every downstream (the future
     /// `sighup-target-<phase>` require-tag family in tatara-check,
@@ -250,7 +250,7 @@ impl SighupStrategy {
     /// future variant additions on either closed set) binds through
     /// the SAME `has_target(phase)` shape rather than restating the
     /// `self.sighup_target() == Some(phase)` chain at each callsite.
-    /// THEORY.md §VI.1 — generation over composition; the closed-set
+    /// Generation over composition; the closed-set
     /// match in [`Self::sighup_target`] is the ONE per-variant edit
     /// site a future strategy variant reaches through.
     #[must_use]

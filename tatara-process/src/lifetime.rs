@@ -196,11 +196,11 @@ impl Lifetime {
     /// Sibling composer: [`Self::ephemeral`] on the `Ephemeral` arm of
     /// the same `LifetimeKind` closed set.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `Lifetime { permanent: Some(PermanentLifetime {}), .. }`
     /// shape recurred at four hand-authored sites past the ★★
     /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
-    /// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// owner here). Invariant 5 (composition preserves
     /// proofs — the pins bind the resolved-variant corner AND the
     /// discriminator kind AND the round-trip through [`Self::variant`]
     /// so a regression that drifted any surface fails at
@@ -255,7 +255,7 @@ impl Lifetime {
     /// Sibling composer: [`Self::permanent`] on the `Permanent` arm of
     /// the same `LifetimeKind` closed set.
     ///
-    /// Theory anchor: same as [`Self::permanent`] — THEORY.md §VI.1
+    /// Anchor: same as [`Self::permanent`]
     /// (generation over composition) + §II.1 invariant 5 (composition
     /// preserves proofs).
     #[must_use]
@@ -346,11 +346,11 @@ impl Lifetime {
     /// lands as ONE peer trait alongside [`crate::tagged_union::TaggedUnion`]
     /// with both sites picking up the trait default in lockstep.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the presence-probe body lives at ONE substrate site so
     /// every downstream `<xxx>-<kind>` requires-tag surface, closed-set
     /// audit dispatcher, and future variant addition binds through the
-    /// SAME shape). THEORY.md §VI.1 (generation over composition — a
+    /// SAME shape). (generation over composition — a
     /// third [`LifetimeKind`] variant lands at ONE `ALL` + ONE
     /// [`LifetimeKind::select`] arm and the presence probe picks it
     /// up mechanically without further per-consumer edits).
@@ -476,10 +476,10 @@ impl Lifetime {
     /// [`ExportSpecSliceExt`] compose without an intermediate
     /// `.is_some_and(...)` step.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the Option-carrier collapse lives at ONE
     /// substrate site so every downstream `export-<kind>` require-tag
-    /// family binds through the SAME shape). THEORY.md §VI.1
+    /// family binds through the SAME shape).
     /// (generation over composition — a new slice-level probe on
     /// [`ExportSpec`] reaches this projection through the SAME
     /// trait-method shape without a bespoke Option-arm at the caller).
@@ -614,11 +614,11 @@ impl EphemeralLifetime {
     /// composes with THIS primitive to produce an `elapsed >= ttl` /
     /// `ttl.checked_sub(elapsed)` comparison.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `humantime::parse_duration(&<eph>.ttl).ok()` chain recurred
     /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the parse-failure corner AND the empty-ttl corner
     /// AND the humantime edge shapes AND the return-form parity with
     /// [`crate::time::elapsed_since`], so a regression that drifts any
@@ -717,14 +717,14 @@ impl EphemeralLifetime {
     /// consumer restatement of the `self.teardown_policy == kind`
     /// closure body.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the scalar-carrier presence-probe body lives
     /// at ONE substrate site so every downstream (`teardown-policy-<kind>`
     /// require-tag family in tatara-check, closed-set audit
     /// dispatchers, future variant additions on [`TeardownPolicy`])
     /// binds through the SAME `has(kind)` shape rather than restating
     /// the `<eph>.teardown_policy == kind` closure body at each call
-    /// site. THEORY.md §VI.1 — generation over composition; a future
+    /// site. Generation over composition; a future
     /// variant lands at ONE `ALL` entry + one `as_str` arm on the
     /// closed set and the probe picks it up mechanically without
     /// further per-consumer edits.
@@ -840,7 +840,7 @@ impl EphemeralLifetime {
     /// extending the `should_teardown_on` match — again ONE substrate
     /// edit and every downstream inherits the shift.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-bool-predicate presence-probe
     /// composition (`self.teardown_policy.should_teardown_on(phase)`)
     /// lives at ONE substrate site so every downstream
@@ -850,7 +850,7 @@ impl EphemeralLifetime {
     /// [`crate::phase::ProcessPhase`]) binds through the SAME
     /// `has_teardown_firing_on(phase)` shape rather than restating the
     /// `<eph>.teardown_policy.should_teardown_on(phase)` chain at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; the
+    /// callsite. Generation over composition; the
     /// [`TeardownPolicy::should_teardown_on`] match is the ONE per-
     /// (variant, phase) edit site every future policy or phase variant
     /// reaches through, and this method inherits the shift
@@ -933,11 +933,11 @@ impl Default for EphemeralLifetime {
 /// const partition the same axis on the "typed handle over the
 /// wire-form default" side.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// `"1h".to_string()` wire-form default recurred at THREE hand-authored
 /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, spanning
 /// two workspace crates, and is lifted onto ONE workspace-wide
-/// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+/// substrate owner here). Invariant 5 (composition
 /// preserves proofs — the pins bind the default at fail-before-pass-
 /// after granularity so a regression that drifted the wire-form
 /// surfaces at [`tests::default_ephemeral_ttl_matches_pre_lift_1h_string`]

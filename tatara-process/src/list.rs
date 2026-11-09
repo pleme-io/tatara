@@ -96,11 +96,11 @@ use std::fmt::Debug;
 /// future paginated / watch-continuing consumer needs without a
 /// per-site widening.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 2-link `api.list(&ListParams::default())` chain recurred at 4
 /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// trigger and is lifted onto the ONE workspace-wide substrate owner
-/// here). THEORY.md §II.1 invariant 5 (composition preserves proofs
+/// here). Invariant 5 (composition preserves proofs
 /// — the pin block below binds the primitive at fail-before-pass-
 /// after granularity, so a regression that drifts `ListParams::
 /// default()` to a non-default posture — a stray `label_selector`, an
@@ -184,11 +184,11 @@ where
 /// [`crate::k8s_builtin_resource::K8sBuiltinResource`] variant rides
 /// through the same composer without a widening.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 2-slot `format!(...)` chain recurred at 2 hand-authored sites past
 /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is lifted onto
-/// the ONE workspace-wide substrate owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — the pin block below
+/// the ONE workspace-wide substrate owner here).
+/// Invariant 5 (composition preserves proofs — the pin block below
 /// binds the composer at fail-before-pass-after granularity, so a
 /// regression that reordered the head slots, dropped the `"in "`
 /// preposition, or drifted the kind slot from the caller's typed

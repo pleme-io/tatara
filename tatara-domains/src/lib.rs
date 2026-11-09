@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn monitor_rejects_typoed_keyword() {
-        // Typed-entry invariant (THEORY.md §II.1.1) — a misspelled keyword
+        // Typed-entry invariant — a misspelled keyword
         // (`:tthreshold` instead of `:threshold`) must error, not parse
         // silently with `threshold` defaulted/missing.
         let forms =

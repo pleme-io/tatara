@@ -693,11 +693,11 @@ pub fn at_epoch_second(secs: i64) -> DateTime<Utc> {
 /// site and every downstream wall-clock parity pin inherits the
 /// shift by construction.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// same `chrono::Duration::milliseconds(100)` literal recurred at
 /// EIGHT test-scaffold sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication trigger, and is lifted to ONE substrate owner here).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// Invariant 5 (composition preserves proofs — the
 /// pins
 /// [`tests::scheduler_jitter_matches_pre_lift_100ms_bound_by_construction`]
 /// and [`tests::scheduler_jitter_is_a_non_negative_window`] bind the
@@ -713,7 +713,7 @@ pub(crate) const SCHEDULER_JITTER_MS: i64 = 100;
 /// callsites read on the RHS of their `delta <= ...` assertions.
 ///
 /// See [`SCHEDULER_JITTER_MS`] for the substrate's charter, the
-/// enumerated pre-lift callsites, and the theory grounding.
+/// enumerated pre-lift callsites, and the grounding.
 #[cfg(test)]
 #[must_use]
 pub(crate) fn scheduler_jitter() -> chrono::Duration {

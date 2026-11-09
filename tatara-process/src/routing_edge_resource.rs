@@ -57,10 +57,10 @@
 //! through the same `RoutingEdgeResource::X.api_version()` / `.kind()`
 //! dispatch pair.
 //!
-//! Theory grounding: THEORY.md §VI.1 (generation over composition —
+//! Grounding: (generation over composition —
 //! the (apiVersion, kind) pairing recurred at six hand-authored sites
 //! past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
-//! ONE closed-set owner per axis here). THEORY.md §II.1 invariant 5
+//! ONE closed-set owner per axis here). Invariant 5
 //! (composition preserves proofs — the two per-axis mappings live at
 //! ONE typed algebra projection apiece; a regression that drifted the
 //! apiVersion at ONE consumer would fail-loudly at this module's byte-

@@ -82,11 +82,11 @@ impl ProcessCondition {
     /// composer owns the K8s-Condition struct-literal composition
     /// that binds two typed variants onto the wire.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 5-slot struct-literal backbone recurred at 3 hand-authored
     /// sibling constructor sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger and is lifted onto the ONE substrate
-    /// composer here). THEORY.md §II.1 invariant 5 (composition
+    /// composer here). Invariant 5 (composition
     /// preserves proofs — the pin block below binds the composer at
     /// fail-before-pass-after granularity, so a regression that drifted
     /// any slot's default — `Utc::now()` swapped for a fixed-anchor
@@ -195,11 +195,11 @@ impl ProcessCondition {
     /// observable reason — the attribute surfaces that as a warning
     /// at every call site.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 5-slot struct-literal backbone that recurred at three
     /// sibling constructors' pre-lift bodies is now the SINGLE
     /// substrate site every clock-injected AND every wall-clock-
-    /// anchored composer routes through). THEORY.md §II.1 invariant 5
+    /// anchored composer routes through). Invariant 5
     /// (composition preserves proofs — the pair `Self::new_at` +
     /// `Self::new_at_now` mirrors the four peer clock-anchored
     /// composer families across the crate, so the workspace's
@@ -326,11 +326,11 @@ impl FluxResourceRef {
     /// loudly here rather than as a silent wire-time 404 at every
     /// downstream fetch consumer.
     ///
-    /// Theory grounding: THEORY.md §II.1 invariant 5 (composition
+    /// Grounding: invariant 5 (composition
     /// preserves proofs — the 4-tuple slot order binds at ONE typed
     /// projection so a regression across the two fields of the same
     /// `String` type fails at the projection's positional pin rather
-    /// than at every downstream fetch consumer). THEORY.md §VI.1
+    /// than at every downstream fetch consumer).
     /// (generation over composition — the 5-slot splat recurred at
     /// two hand-authored sites past the ≥ 2 duplication trigger, and
     /// is lifted to ONE typed borrow-projection here).
@@ -379,12 +379,12 @@ impl FluxResourceRef {
     /// fails-loudly here rather than as a silent wire-time 404 at
     /// every downstream fetch consumer.
     ///
-    /// Theory grounding: THEORY.md §II.1 invariant 5 (composition
+    /// Grounding: invariant 5 (composition
     /// preserves proofs — the 6-slot positional binding + the
     /// `last_check` stamp compose at ONE typed owner, so a
     /// regression across the four `String` coordinate slots fails
     /// at the composer's positional pin rather than at every
-    /// downstream Flux status writer). THEORY.md §VI.1 (generation
+    /// downstream Flux status writer). (generation
     /// over composition — the 7-slot struct-literal recurred at two
     /// hand-authored sites past the ≥ 2 duplication trigger, and is
     /// lifted to ONE typed composer here).
@@ -468,12 +468,12 @@ impl FluxResourceRef {
     /// pre-observation fixture, a mirror-audit drift-probe test
     /// helper).
     ///
-    /// Theory grounding: THEORY.md §II.1 invariant 5 (composition
+    /// Grounding: invariant 5 (composition
     /// preserves proofs — the 4-slot positional binding + the three
     /// defaulted status slots compose at ONE typed owner, so a
     /// regression across the four `String` coordinate slots fails at
     /// the composer's positional pin rather than at every downstream
-    /// fixture consumer). THEORY.md §VI.1 (generation over
+    /// fixture consumer). (generation over
     /// composition — the 7-slot struct-literal recurred at three
     /// hand-authored fixture sites past the ≥ 2 duplication trigger,
     /// and is lifted to ONE typed composer here).
@@ -678,12 +678,12 @@ impl RenderedResourceCoords {
     /// footprint per faulted slot, not four differently-worded
     /// diagnostics per absent-shape variant.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 4-link `.get_str(<key>).ok_or_else(|| anyhow!("rendered
     /// resource missing <slot>"))?.to_string()` shape recurred at 3
     /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE substrate owner
-    /// here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// here). Invariant 5 (composition preserves
     /// proofs — a regression that drifted the diagnostic prefix
     /// wording at ONE site would silently pass the two sibling
     /// pins and fail HERE; post-lift the wire form is owned once
@@ -799,10 +799,10 @@ impl CheckedCondition {
     /// post-lift call — every downstream consumer would still
     /// short-circuit but on inverted semantics.
     ///
-    /// Theory grounding: THEORY.md §VI.1 (generation over composition
+    /// Grounding: (generation over composition
     /// — the 1-line `.iter().all(...)` chain recurred at two hand-
     /// authored sites past the ≥ 2 duplication trigger, and is lifted
-    /// to ONE typed fold here). THEORY.md §II.1 invariant 5
+    /// to ONE typed fold here). Invariant 5
     /// (composition preserves proofs — the empty-slice vacuous-truth
     /// corner + the fold direction + the projected bit's polarity all
     /// bind at ONE substrate site, so a regression across any of the

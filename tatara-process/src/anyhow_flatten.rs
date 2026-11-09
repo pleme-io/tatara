@@ -79,11 +79,11 @@
 //! the underlying failure entirely, which is never the intended
 //! semantic at any of the five pre-lift consumers.
 //!
-//! Theory anchor: THEORY.md §VI.1 (generation over composition — the
+//! Anchor: (generation over composition — the
 //! anyhow-with-display-prefix wrap-shape recurred at five hand-
 //! authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-//! trigger, and is lifted to ONE substrate owner here). THEORY.md
-//! §II.1 invariant 5 (composition preserves proofs — a regression
+//! trigger, and is lifted to ONE substrate owner here).
+//! Invariant 5 (composition preserves proofs — a regression
 //! that drifts the display-prefix separator or the byte-shape at
 //! ONE site surfaces here at the substrate pin rather than as
 //! silent operator-facing skew across every reconciler phase tick).

@@ -42,7 +42,7 @@ impl Baseline {
     /// (a new variant that omits its `parse` alias entry surfaces at
     /// the round-trip inverse rather than as silent
     /// `parse(canonical_name(v)) == None`). Closes the compliance-lattice
-    /// axis that [`THEORY.md §III.3`] names as the fifth typescape
+    /// axis named as the fifth typescape
     /// dimension every controller and morphism carries — sibling of
     /// `DataClassification::ALL` (sensitivity axis) and
     /// `CalmClassification::ALL` (CALM axis) that the top-of-lib

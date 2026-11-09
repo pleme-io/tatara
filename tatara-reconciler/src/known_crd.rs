@@ -52,13 +52,13 @@
 //! ports the pattern to the CRD-plane axis where the "arms" are entire
 //! CRD types rather than scalar wire kinds.
 //!
-//! Theory anchor: THEORY.md §III (the typescape — the substrate's own
+//! Anchor: (the typescape — the substrate's own
 //! CRDs become a TYPE rather than four `&'static str` literals + four
 //! hand-typed `<Kind>::crd()` calls repeated at every dispatcher);
-//! THEORY.md §VI.1 (generation over composition — the CRD-kind→
+//! (generation over composition — the CRD-kind→
 //! CRD-type dispatch shape recurred at THREE hand-authored sites past
 //! the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is lifted to
-//! ONE owner here); THEORY.md §II.1 invariant 5 (composition preserves
+//! ONE owner here); invariant 5 (composition preserves
 //! proofs — a regression that drifted the (kind-string, CRD-type)
 //! association at only one dispatcher surfaces at [`tests`] rather
 //! than as silent operator-visible skew across the three peer
@@ -198,11 +198,11 @@ impl KnownCrd {
     /// with zero runtime overhead, matching the three peer axes'
     /// `.wire_identity()` posture.
     ///
-    /// Theory anchor: THEORY.md §III (the typescape — the tatara-CRD
+    /// Anchor: (the typescape — the tatara-CRD
     /// axis becomes a TYPED wire-form identity peer of the three
     /// pre-existing closed sets rather than a lone const on one variant
-    /// plus a bare `.kind()` literal on the other three); THEORY.md
-    /// §II.1 invariant 5 (composition preserves proofs — a regression
+    /// plus a bare `.kind()` literal on the other three);
+    /// invariant 5 (composition preserves proofs — a regression
     /// that drifted the `(apiVersion, kind)` pair at ONE tatara-CRD
     /// emit site would surface at this module's byte-shape pins rather
     /// than as silent operator-visible wire-form skew).

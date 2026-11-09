@@ -57,12 +57,12 @@
 //! set inherits the composer through [`K8sWireIdentity::object_ref`]
 //! without a new primitive per axis.
 //!
-//! Theory grounding: THEORY.md §II.1 invariant 5 (composition
+//! Grounding: invariant 5 (composition
 //! preserves proofs — the three-slot cross-reference composition
 //! lives at ONE typed algebra composer here; a regression that
 //! drifted any one slot at ONE consumer would fail-loudly at this
 //! module's byte-shape pins rather than as silent wire-form skew
-//! at the K8s API server). THEORY.md §VI.1 (generation over
+//! at the K8s API server). (generation over
 //! composition — the 3-slot shape recurred at three hand-authored
 //! sites past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
 //! lifted to ONE composer here).

@@ -66,12 +66,12 @@
 //! through the same `K8sBuiltinResource::X.api_version()` / `.kind()`
 //! / `.wire_identity()` dispatch chain.
 //!
-//! Theory grounding: THEORY.md §VI.1 (generation over composition —
+//! Grounding: (generation over composition —
 //! the (apiVersion, kind) pairing recurred at three hand-authored
 //! sites past the PRIME-DIRECTIVE ≥ 2 duplication trigger — including
 //! two Job-axis sites split across the fetch/emit boundary — and is
-//! lifted to ONE closed-set owner per axis here). THEORY.md §II.1
-//! invariant 5 (composition preserves proofs — the per-axis mappings
+//! lifted to ONE closed-set owner per axis here).
+//! Invariant 5 (composition preserves proofs — the per-axis mappings
 //! live at ONE typed algebra projection apiece; a regression that
 //! drifted the apiVersion at ONE consumer would fail-loudly at this
 //! module's byte-shape pins rather than as silent

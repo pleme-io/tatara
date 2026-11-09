@@ -57,12 +57,12 @@ use crate::derivation::Derivation;
 /// four-piece shape (`ALL` const + inherent projection method + `Unknown`
 /// carrier + [`std::str::FromStr`] delegation).
 ///
-/// Theory anchor: THEORY.md §III (typescape — the overlay-target
+/// Anchor: (typescape — the overlay-target
 /// closed set is a first-class Rust enum with a compile-time-enforced
-/// arity, not a stringly-typed serde tag). THEORY.md §V.1 (knowable
+/// arity, not a stringly-typed serde tag). (knowable
 /// platform — the closed set exposes a typed vocabulary every
 /// consumer routes through, so a rename or a variant addition
-/// propagates mechanically). THEORY.md §VI.1 (generation over
+/// propagates mechanically). (generation over
 /// composition — the four-piece shape is auto-derived through
 /// [`tatara_closed_set::DeriveClosedSet`] rather than hand-rolled per
 /// implementor).

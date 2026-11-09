@@ -287,10 +287,10 @@ impl Process {
     /// family report the same "first-missing-slot" slug at the paired
     /// missing-both corner).
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the paired `.metadata.<slot>.clone().ok_or_else(...)` chain
     /// restated two hand-authored gates past the ★★ PRIME-DIRECTIVE
-    /// ≥ 2 duplication trigger). THEORY.md §II.1 invariant 5
+    /// ≥ 2 duplication trigger). Invariant 5
     /// (composition preserves proofs — a regression that swapped the
     /// two gates, drifted the wire-form back to the lowercase-verb
     /// spelling, reshaped the axis order of the return tuple, or
@@ -422,11 +422,11 @@ impl Process {
     /// resources, `holder = <ref>` on claim-registry queries) match
     /// bytewise post-lift.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 2-step paired-projection + shape-composer chain recurred at
     /// three hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted onto ONE workspace-wide
-    /// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// owner here). Invariant 5 (composition preserves
     /// proofs — a regression that inserted a normalization step at
     /// only two of three sites, or that drifted the fallback strings
     /// between the paired projection and the shape composer, surfaces
@@ -497,11 +497,11 @@ impl Process {
     /// `has_annotation(&str) -> bool` boolean gate for presence-
     /// only consumers) land as peer methods on this same axis.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// Anchor: (generation over composition
     /// — the 3-line annotation-lookup chain recurred at three
     /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the missing-`annotations` corner + the
     /// missing-key corner + the borrow-form `&str` lifetime + the
     /// byte-identical parity with the pre-lift 3-line chain, so a
@@ -597,11 +597,11 @@ impl Process {
     /// pick up the upgrade mechanically — no per-callsite hand-edit
     /// at `render_routing` / `render_export_jobs`.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.metadata.uid.as_deref().unwrap_or("")` chain recurred at
     /// two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the missing-uid corner + the empty-string
     /// sentinel byte-shape + the borrow-form `&str` lifetime + the
     /// byte-identical parity with the pre-lift chain + the composition
@@ -685,11 +685,11 @@ impl Process {
     /// seeds pick up the upgrade mechanically — no per-callsite hand-
     /// edit at `reconcile_pool`.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.metadata.name.clone().unwrap_or_default()` chain recurred
     /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the missing-name corner + the empty-string
     /// sentinel byte-shape + the owned-form `String` return type +
     /// the byte-identical parity with the pre-lift chain + the
@@ -781,11 +781,11 @@ impl Process {
     /// axis, a paired `declared_identity` composite that returns both
     /// halves) land as peer methods on this same axis.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.spec.identity.parent.as_deref()` chain recurred at two
     /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
-    /// invariant 5 (composition preserves proofs — the pins bind the
+    /// trigger, and is lifted to ONE owner here).
+    /// Invariant 5 (composition preserves proofs — the pins bind the
     /// empty-slot corner + the borrow-form `&str` lifetime + the
     /// byte-identical parity with the pre-lift `.as_deref()` chain,
     /// so a regression that drifted any surface at
@@ -872,11 +872,11 @@ impl Process {
     /// `declared_identity` composite that returns both halves
     /// together) land as peer methods on this same axis.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.spec.identity.name_override.as_deref()` chain recurred
     /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the empty-slot corner + the borrow-form `&str`
     /// lifetime + the byte-identical parity with the pre-lift
     /// `.as_deref()` chain + the invariance under
@@ -951,11 +951,11 @@ impl Process {
     /// `observed_children` on the child-fan-out axis) land as peer
     /// methods on this same axis.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 5-line status-projection chain recurred at two hand-
     /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
-    /// invariant 5 (composition preserves proofs — the pins bind the
+    /// trigger, and is lifted to ONE owner here).
+    /// Invariant 5 (composition preserves proofs — the pins bind the
     /// missing-`status` corner + the slice-lifetime borrow discipline
     /// + the byte-identical parity with the pre-lift 5-line chain, so
     /// a regression that drifted any of the three surfaces at
@@ -1037,11 +1037,11 @@ impl Process {
     /// `observed_attestation` on the attestation-chain axis) land
     /// as peer methods on this same axis.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over
+    /// Anchor: (generation over
     /// composition — the 3-line status-projection chain recurred
     /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the missing-`status` corner + the empty-slot
     /// corner + the borrow-form `&str` lifetime + the
     /// byte-identical parity with the pre-lift 3-line chain, so a
@@ -1120,11 +1120,11 @@ impl Process {
     /// `observed_message` on the human-readable-status axis) land
     /// as peer methods on this same axis.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// Anchor: (generation over composition
     /// — the 3-line status-projection chain recurred at two hand-
     /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
-    /// invariant 5 (composition preserves proofs — the pins bind
+    /// trigger, and is lifted to ONE owner here).
+    /// Invariant 5 (composition preserves proofs — the pins bind
     /// the missing-`status` corner + the empty-slot corner + the
     /// borrow-form `&ProcessAttestation` lifetime + the byte-
     /// identical parity with the pre-lift 3-line chain, so a
@@ -1220,11 +1220,11 @@ impl Process {
     /// readable-status axis) land as peer methods on this same
     /// axis.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// Anchor: (generation over composition
     /// — the 3-line status-projection chain recurred at two hand-
     /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
-    /// invariant 5 (composition preserves proofs — the pins bind
+    /// trigger, and is lifted to ONE owner here).
+    /// Invariant 5 (composition preserves proofs — the pins bind
     /// the missing-`status` corner + the empty-slot corner + the
     /// borrow-form `&Identity` lifetime + the byte-identical parity
     /// with the pre-lift 3-line chain, so a regression that drifted
@@ -1312,11 +1312,11 @@ impl Process {
     /// fan-out axis, `observed_exit_code` on the terminal-exit
     /// axis) land as peer methods on this same axis.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over
+    /// Anchor: (generation over
     /// composition — the 3-line status-projection chain recurred
     /// at FIVE hand-authored sites past the ★★ PRIME-DIRECTIVE
     /// ≥ 2 duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs
+    /// Invariant 5 (composition preserves proofs
     /// — the pins bind the missing-`status` corner + the
     /// per-variant enum round-trip + the byte-identical parity
     /// with the pre-lift 3-line chain, so a regression that
@@ -1417,11 +1417,11 @@ impl Process {
     /// `observed_exit_code_or_zero` on the terminal-exit axis) land
     /// as peer methods on this same axis.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the two-link `.observed_phase().unwrap_or(Pending)` chain
     /// recurred at four hand-authored sites past the ★★
     /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
-    /// owner here). THEORY.md §II.1 invariant 5 (composition
+    /// owner here). Invariant 5 (composition
     /// preserves proofs — the pins bind the missing-`status` sink to
     /// `Pending` + populated-status pass-through + every
     /// `ProcessPhase` variant round-trip + byte-identical parity
@@ -1513,7 +1513,7 @@ impl Process {
     /// picks up the upgrade mechanically — no per-callsite hand-edit
     /// at `reconcile_inner`'s member-seed builder.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the paired `.status.as_ref().and_then(|s| s.phase_since)` chain
     /// closes the last raw `.status.as_ref()` chain in
     /// `tatara-pool-reconciler`'s production reconciler code on
@@ -1521,7 +1521,7 @@ impl Process {
     /// the sibling `observed_phase` / `observed_phase_or_pending` /
     /// `observed_identity` / `observed_pid` / `observed_attestation` /
     /// `observed_flux_resources` primitives that closed their axes
-    /// previously). THEORY.md §II.1 invariant 5 (composition preserves
+    /// previously). Invariant 5 (composition preserves
     /// proofs — the pins bind the missing-`status` corner + the empty-
     /// slot corner + the populated-slot pass-through + the pure-
     /// projection discipline + the byte-identical parity with the pre-
@@ -1623,12 +1623,12 @@ impl Process {
     /// arbiter age tie-break on the status-transition anchor, a
     /// per-pool dwell-time reap probe on the same slot).
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the paired `.observed_phase_since().unwrap_or_else(Utc::now)`
     /// chain recurred at three hand-authored sites past the ★★
     /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
     /// owner here alongside the sibling [`Self::created_at_or`] on
-    /// the metadata-timestamp axis). THEORY.md §II.1 invariant 5
+    /// the metadata-timestamp axis). Invariant 5
     /// (composition preserves proofs — the pins bind the missing-slot
     /// fallback corner + the populated-slot pass-through + the pure-
     /// composer discipline + the byte-identical parity with the
@@ -1716,11 +1716,11 @@ impl Process {
     /// mechanically — no per-callsite hand-edit at
     /// `controller::reconcile` / `phase_machine::handle_exiting`.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.metadata.deletion_timestamp.is_some()` chain recurred at
     /// two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the missing-tombstone corner + the present-
     /// tombstone corner + the copy-form `bool` return + the byte-
     /// identical parity with the pre-lift `.is_some()` chain, so a
@@ -1808,11 +1808,11 @@ impl Process {
     /// upgrade mechanically — no per-callsite hand-edit at `evaluate`
     /// / `requeue_with_ttl` / `reconcile_process_table`.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.metadata.creation_timestamp.as_ref().map(|t| t.0)` chain
     /// recurred at three hand-authored sites past the ★★
     /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
-    /// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// owner here). Invariant 5 (composition preserves
     /// proofs — the pins bind the missing-timestamp corner + the
     /// present-timestamp corner + the copy-form `DateTime<Utc>` return
     /// + the byte-identical parity with the pre-lift `.as_ref().map(|t|
@@ -1897,11 +1897,11 @@ impl Process {
     /// per-callsite hand-edit at `reconcile_process_table` /
     /// `reconcile_inner`.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the paired `.created_at().unwrap_or_else(Utc::now)` chain
     /// recurred at two hand-authored sites past the ★★
     /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
-    /// owner here). THEORY.md §II.1 invariant 5 (composition
+    /// owner here). Invariant 5 (composition
     /// preserves proofs — the pins bind the missing-slot fallback
     /// corner + the populated-slot pass-through + the pure-composer
     /// discipline + the byte-identical parity with the pre-lift
@@ -1997,11 +1997,11 @@ impl Process {
     /// computed for no observable reason — the attribute surfaces that
     /// as a warning at every call site.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 2-arg call with `Utc::now()` as the fallback argument
     /// recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE
     /// ≥ 2 duplication trigger, lifted onto the ONE workspace-wide
-    /// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+    /// substrate owner here). Invariant 5 (composition
     /// preserves proofs — the wall-clock projection lives at ONE site
     /// so a future clock swap reaches both consumers through one
     /// edit).
@@ -2069,7 +2069,7 @@ impl Process {
     /// mechanically — no per-callsite hand-edit at `evaluate` /
     /// `requeue_with_ttl` / `render_export_jobs`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the pins bind the Permanent-only corner, the
     /// Ephemeral-only corner, the Both-set-ambiguous corner, the
     /// empty-default corner, and the byte-identity parity with the
@@ -2077,8 +2077,8 @@ impl Process {
     /// so a regression that silently swapped the projection back to
     /// the raw `.ephemeral.as_ref()` field would surface here rather
     /// than as operator-facing drift between the export-render arm
-    /// and the teardown/TTL arm on the SAME `Process`). THEORY.md
-    /// §VI.1 (generation over composition — the ambiguity-aware
+    /// and the teardown/TTL arm on the SAME `Process`).
+    /// (generation over composition — the ambiguity-aware
     /// projection recurred at three hand-authored sites past the ★★
     /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
     /// owner here).
@@ -2162,10 +2162,10 @@ impl ProcessSpec {
     /// similar named variant lands as a sibling method here when a
     /// second unremarkable-baseline shape opens.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+    /// Anchor: (generation over composition — the
     /// 12-line struct-literal shape recurred at EIGHT hand-authored sites
     /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is lifted
-    /// onto ONE workspace-wide owner here). THEORY.md §II.1 invariant 5
+    /// onto ONE workspace-wide owner here). Invariant 5
     /// (composition preserves proofs — a regression that drifted the
     /// baseline axis choice at only one consumer, or that broke the
     /// sibling-default correspondence with [`Classification::gate_compute`],
@@ -2227,11 +2227,11 @@ impl ProcessSpec {
     /// primitive mechanically — no `spec.classification.<new-axis> =
     /// value;` restatement per site.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the [`ClassificationAxis::overlay`] trait owns the axis-
     /// dispatch proof at ONE site, and this primitive extends that ONE-
     /// site guarantee to the (fresh-`gate_compute_defaults`-spec × single-
-    /// axis-overlay) construction shape). THEORY.md §VI.1 (generation
+    /// axis-overlay) construction shape). (generation
     /// over composition — the 2-line loop-body `let mut spec = …; spec.
     /// classification.<axis> = populated;` shape recurred at FIFTEEN
     /// hand-authored callsites past the ★★ PRIME-DIRECTIVE ≥ 2
@@ -2358,12 +2358,12 @@ impl ProcessStatus {
     /// Process rides through the same composer as the pool-reconciler's
     /// two phase-decision pins).
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 3-line `ProcessStatus { phase, ..Default::default() }`
     /// struct-literal recurred at 2 hand-authored sites past the ★★
     /// PRIME-DIRECTIVE ≥ 2 duplication trigger inside one workspace
-    /// crate, and is lifted onto ONE substrate owner here). THEORY.md
-    /// §II.1 invariant 5 (composition preserves proofs — the pin block
+    /// crate, and is lifted onto ONE substrate owner here).
+    /// Invariant 5 (composition preserves proofs — the pin block
     /// binds the primitive at fail-before-pass-after granularity so a
     /// regression that drifted the phase slot pass-through, leaked a
     /// sibling slot away from `Default`, or hijacked the composer to

@@ -148,11 +148,11 @@ where
 /// slots surfaces here rather than as silent primary-resource writer
 /// skew across the two consumer crates.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 3-link primary-resource merge chain recurred at 6 hand-authored
 /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
-/// lifted onto the ONE workspace-wide substrate owner here). THEORY.md
-/// §II.1 invariant 5 (composition preserves proofs — the pin block
+/// lifted onto the ONE workspace-wide substrate owner here).
+/// Invariant 5 (composition preserves proofs — the pin block
 /// binds the `Patch::Merge` posture + the default `PatchParams` slot +
 /// the pass-through body composition + the byte-identical parity with
 /// the pre-lift 3-link chain, so a regression that drifted any surface
@@ -223,11 +223,11 @@ where
 /// the primitive exists to be consumed at a wire-side write, not to
 /// probe field-manager state.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// `.apply(<mgr>).force()` chain recurred at 3 hand-authored sites
 /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, spanning three
 /// workspace crates, and is lifted to ONE workspace-wide substrate
-/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// owner here). Invariant 5 (composition preserves
 /// proofs — the pin block below binds the primitive at
 /// fail-before-pass-after granularity, so a regression that drops
 /// `.force()`, drifts the field-manager pass-through, or widens the
@@ -296,11 +296,11 @@ pub fn apply_patch_params(field_manager: &str) -> PatchParams {
 /// the reconciled `resourceVersion` / `generation` from the same wire
 /// round-trip read it without a re-fetch.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 2-link `apply_patch_params + api.patch(&Patch::Apply(...))` chain
 /// recurred at 3 hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication trigger, spanning two workspace crates, and is lifted
-/// onto ONE substrate owner here). THEORY.md §II.1 invariant 5
+/// onto ONE substrate owner here). Invariant 5
 /// (composition preserves proofs — the pin block below binds the
 /// `Patch::Apply` posture + the [`apply_patch_params`] pass-through +
 /// the byte-identical parity with the pre-lift chain, so a regression
@@ -413,13 +413,13 @@ where
 /// `generation` from the same wire round-trip read it without a
 /// re-fetch.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// two-link `apply_patch_params(<mgr>) + api.patch(name, &pp,
 /// &Patch::Merge(&body))` chain recurred at 2 hand-authored sites past
 /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger inside one workspace
 /// crate, and is lifted onto ONE substrate owner here, closing the
 /// (Patch-strategy × PatchParams-posture) matrix's remaining hand-
-/// authored corner). THEORY.md §II.1 invariant 5 (composition preserves
+/// authored corner). Invariant 5 (composition preserves
 /// proofs — the pin block below binds the `Patch::Merge` posture + the
 /// [`apply_patch_params`] pass-through + the byte-identical parity with
 /// the pre-lift two-link chain, so a regression that drifts any surface
@@ -468,9 +468,9 @@ where
 /// consumers still hand the produced body to [`merge`] for the round-
 /// trip.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// two-arm `json!({ "spec": { "suspended": <bool> } })` restatement is
-/// lifted onto ONE substrate composer). THEORY.md §II.1 invariant 5
+/// lifted onto ONE substrate composer). Invariant 5
 /// (composition preserves proofs — the pin block below binds the shape
 /// at fail-before-pass-after granularity so a regression that drifts the
 /// top-level `spec` slot, the inner `suspended` slot, or the JSON bool
@@ -537,12 +537,12 @@ pub fn spec_suspended_body(suspended: bool) -> serde_json::Value {
 /// `Api<Process>` — this matches the primitive's most-general accepted
 /// bound with no widening at the callsite.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 2-link `merge(&api, &name, &spec_suspended_body(<bool>))` compose+
 /// dispatch chain recurred at 2 hand-authored sites past the ★★
 /// PRIME-DIRECTIVE ≥ 2 duplication trigger inside one workspace crate,
-/// and is lifted onto ONE substrate owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — the pin block below
+/// and is lifted onto ONE substrate owner here).
+/// Invariant 5 (composition preserves proofs — the pin block below
 /// binds the composer choice + the dispatcher choice + byte-identical
 /// parity with the pre-lift 2-link chain, so a regression that drifts
 /// either surface — a swap of [`spec_suspended_body`] for a hand-
@@ -656,12 +656,12 @@ where
 /// keeps a caller from building the body and dropping it un-passed to
 /// a wire dispatcher.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 3-link `json!({"metadata": {"annotations": {<key>: <value>}}})` merge-
 /// body composition recurred at 3 hand-authored sites past the ★★
 /// PRIME-DIRECTIVE ≥ 2 duplication trigger, spanning two active
 /// workspace crates, and is lifted onto ONE substrate owner here).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the pin
+/// Invariant 5 (composition preserves proofs — the pin
 /// block below binds the composer at fail-before-pass-after granularity,
 /// so a regression that drifts the top-level `metadata` slot, the nested
 /// `annotations` slot, the caller-passed key spelling, or the value-slot
@@ -761,11 +761,11 @@ pub fn annotation_body(key: &str, value: impl Serialize) -> serde_json::Value {
 ///
 /// [`pillar_bytes`]: crate::three_pillar::pillar_bytes
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 3-link `serde_json::to_value(<T>).unwrap_or(Value::Null)` chain
 /// recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication trigger inside two workspace crates, and is lifted onto
-/// ONE substrate owner here). THEORY.md §II.1 invariant 5 (composition
+/// ONE substrate owner here). Invariant 5 (composition
 /// preserves proofs — the pin block below binds the composer at
 /// fail-before-pass-after granularity, so a regression that drifts the
 /// serialiser choice, flips the fallback constant, reshapes the return

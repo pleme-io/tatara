@@ -185,11 +185,11 @@ pub fn is_not_found(err: &Error) -> bool {
 /// the 25+ pre-lift consumers (each threads the `?` short-circuit onto
 /// its handler's `Result<Action, anyhow::Error>` return).
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// KubeError → anyhow-with-display-prefix wrap-shape recurred at 25+
 /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-/// trigger, and is lifted to ONE substrate owner here). THEORY.md
-/// §II.1 invariant 5 (composition preserves proofs — a regression
+/// trigger, and is lifted to ONE substrate owner here).
+/// Invariant 5 (composition preserves proofs — a regression
 /// that drifts the display-prefix separator or the byte-shape at ONE
 /// site surfaces here at the substrate pin rather than as silent
 /// operator-facing skew across every reconciler / signal / pool tick).

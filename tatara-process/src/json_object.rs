@@ -87,11 +87,11 @@
 //! `md.entry(...).or_insert_with(...)` / `annot.insert(...)` mutation
 //! depends on the returned `&mut Map` reference).
 //!
-//! Theory anchor: THEORY.md §VI.1 (generation over composition — the
+//! Anchor: (generation over composition — the
 //! `.as_object_mut().ok_or_else(|| anyhow!("<slot> is not an
 //! object"))` guard-shape recurred at three hand-authored sites past
 //! the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
-//! ONE substrate owner here). THEORY.md §II.1 invariant 5 (composition
+//! ONE substrate owner here). Invariant 5 (composition
 //! preserves proofs — a regression that drifts the guard message
 //! wording at ONE site surfaces here at the substrate pin rather than
 //! as silent operator-facing skew across every SSA-time
@@ -208,11 +208,11 @@ impl ValueObjectExt for Value {
 /// map under a different `Value` variant. The `_str` suffix names the
 /// intent: the value slot IS the `Value::String` arm at this write.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// `.insert(<k>.into(), Value::String(<v>.into()))` shape recurred at
 /// SEVENTEEN hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication trigger, and is lifted to ONE substrate owner here).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
+/// Invariant 5 (composition preserves proofs — a
 /// regression that drifts the string-slot write shape at ONE consumer
 /// surfaces at the substrate pin rather than as silent per-emit skew
 /// across every ssapply / render / edges JSON emit site).
@@ -327,12 +327,12 @@ impl JsonMapStrExt for Map<String, Value> {
 /// `.entry(...).or_insert_with(...)` / `.insert(...)` mutation
 /// depends on the returned `&mut Map` reference).
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 3-line `.entry(<slot>).or_insert_with(|| Value::Object(<empty>))
 /// .as_object_mut_or(<slot>)?` compound shape recurred at two
 /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-/// trigger, and is lifted to ONE substrate owner here). THEORY.md
-/// §II.1 invariant 5 (composition preserves proofs — a regression
+/// trigger, and is lifted to ONE substrate owner here).
+/// Invariant 5 (composition preserves proofs — a regression
 /// that drifted the entry-key slot vs. the guard-error slot at ONE
 /// site would silently pass one downstream pin and fail the other;
 /// post-lift the primitive stamps the slot ONCE per call so the
@@ -467,11 +467,11 @@ impl JsonMapObjectEntryExt for Map<String, Value> {
 /// Deployment `readyReplicas` projection, an HPA `currentReplicas`
 /// gate, a StatefulSet `updatedReplicas` freshness check).
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// two-link `.get(<key>).and_then(|v| v.as_i64())` chain recurred at
 /// three hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication trigger, and is lifted to ONE substrate owner here).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
+/// Invariant 5 (composition preserves proofs — a
 /// regression that drifted the projection axis at ONE site — a swap
 /// of `as_i64` for `as_u64` narrowing the accepted range, a swap of
 /// `.get(<key>)` for `.pointer("<key>")` losing the direct-child
@@ -562,13 +562,13 @@ pub trait ValueGetExt {
     /// `kind` / `metadata.name` / K8s-condition-string reader
     /// inherits the upgrade mechanically.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the two-link `.get(<key>).and_then(|v| v.as_str())` chain
     /// recurred at SEVEN production sites across two crates past the
     /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
     /// ONE substrate owner here on the string axis of the same
     /// READ-chain axis-family the `get_i64` sibling opened for the
-    /// integer axis). THEORY.md §II.1 invariant 5 (composition
+    /// integer axis). Invariant 5 (composition
     /// preserves proofs — a regression that drifted the projection
     /// axis at ONE site would silently pass every downstream
     /// composition and surface as a wrong slot at operator-facing
@@ -654,13 +654,13 @@ pub trait ValueGetExt {
     /// downstream K8s-Condition classifier / JWKS-array counter /
     /// future array-slot reader inherits the upgrade mechanically.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the two-link `.get(<key>).and_then(|v| v.as_array())` chain
     /// recurred at two production sites across two crates past the ★★
     /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
     /// substrate owner here on the array axis of the same READ-chain
     /// axis-family the `get_i64` + `get_str` siblings already own).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
+    /// Invariant 5 (composition preserves proofs — a
     /// regression that drifted the projection axis at ONE site would
     /// silently pass every downstream composition and surface as a
     /// wrong slot at operator-facing diagnostic wording; post-lift the
@@ -748,12 +748,12 @@ pub trait ValueGetExt {
     /// boolean-flag reader inherits the upgrade mechanically. No
     /// per-site edit at any consumer that adopts this primitive.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the projection lives at ONE typed owner on
     /// the same axis-family the three sibling axes already open; a
     /// regression that drifted the projection axis at ONE site would
     /// silently pass every downstream composition and surface as a
-    /// wrong flag at operator-facing gate wording). THEORY.md §III
+    /// wrong flag at operator-facing gate wording).
     /// (typescape — the axis-family completes coverage over the four
     /// most-common `Value` shapes any K8s status / spec / manifest
     /// reader projects, so a caller who imports `ValueGetExt` reaches
@@ -823,11 +823,11 @@ impl ValueGetExt for Value {
 /// and inherits both impls; there is no separate `MapGetExt` peer to
 /// keep in sync.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// two-link chain recurred at 30 `Map`-receiver sites past the ★★
 /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and rides through the
 /// same substrate owner the pre-existing `Value`-receiver impl above
-/// already pinned). THEORY.md §II.1 invariant 5 (composition preserves
+/// already pinned). Invariant 5 (composition preserves
 /// proofs — the receiver-shape widening carries the axis-family
 /// invariant across without splitting it into two traits).
 impl ValueGetExt for Map<String, Value> {
@@ -926,11 +926,11 @@ impl ValueGetExt for Map<String, Value> {
 /// there is no separate `OptGetExt` peer to keep in sync. Pinned at
 /// [`tests::option_ref_value_axis_family_reaches_all_four_axes_through_one_trait_import`].
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// outer-optionality `.and_then(|v| v.get_<T>(<key>))` closure recurred
 /// at three production sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication trigger, and is lifted to ONE substrate owner here).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// Invariant 5 (composition preserves proofs — the
 /// receiver-shape widening carries the axis-family invariant across
 /// without splitting it into two traits; a regression that specialised
 /// one axis at ONE receiver but not the other would silently split the

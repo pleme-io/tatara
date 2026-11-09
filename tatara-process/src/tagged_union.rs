@@ -1587,9 +1587,9 @@ pub trait TaggedUnion: Sized {
     /// slot at every downstream callsite without further per-caller
     /// edit.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The closed-set-complement projection lives at ONE substrate
     ///   site as a definitional negation of [`Self::has`]. The
     ///   complement law `lacks(kind) == !has(kind)` and the
@@ -1597,7 +1597,7 @@ pub trait TaggedUnion: Sized {
     ///   are pinned across every production tagged union at compile
     ///   time via the trait's default body composition, not
     ///   per-parent.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the delegated [`Self::has`]
     ///   — every downstream consumer sees the widened kind set
@@ -1670,15 +1670,15 @@ pub trait TaggedUnion: Sized {
     /// new entry) and every downstream consumer sees the wider set
     /// without further per-caller edit.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The closed-set-inversion refinement lives at ONE substrate
     ///   site as a typed projection of [`Self::has`] over the closed
     ///   set `<Self::Kind as ClosedSet>::ALL`. Every downstream
     ///   aggregate consumer binds through the SAME shape rather
     ///   than restating the `ALL`-filter closure body.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically and every downstream consumer sees the wider
     ///   set with no per-caller edit.
@@ -1749,14 +1749,14 @@ pub trait TaggedUnion: Sized {
     ///   through `itertools::join` without the allocation `Vec<Kind>
     ///   -> String` pays.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The load-bearing iterator projection lives at ONE substrate
     ///   site; every downstream aggregate consumer refines it through
     ///   a standard-library iterator fold rather than restating the
     ///   `Kind::ALL`-walk closure body.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches the walk
     ///   mechanically (the closed-set filter picks up the new entry)
     ///   and every downstream fold sees the wider set without further
@@ -1850,9 +1850,9 @@ pub trait TaggedUnion: Sized {
     ///   allocation cost, or the semantically-equivalent (but
     ///   parent-arm-projected) `parent.variant().is_ok()`.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The scalar cardinality lives at ONE substrate site as a
     ///   typed projection of [`Self::populated_kinds`] onto its
     ///   `.len()`, and the default body composes against
@@ -1861,7 +1861,7 @@ pub trait TaggedUnion: Sized {
     ///   without the intermediate `Vec`. Every downstream aggregate
     ///   consumer binds through the SAME shape rather than paying
     ///   for the allocation to reach the cardinality.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically (the closed-set walk picks up the new entry)
     ///   and every downstream consumer sees the wider cardinality
@@ -1945,15 +1945,15 @@ pub trait TaggedUnion: Sized {
     /// — any parent that doesn't yet populate the new slot sees it
     /// listed as missing at every downstream callsite).
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The closed-set complement lives at ONE substrate site as a
     ///   typed projection of [`Self::has`] over the closed set
     ///   `<Self::Kind as ClosedSet>::ALL` under negation. Every
     ///   downstream gap-analysis consumer binds through the SAME shape
     ///   rather than restating the negated `ALL`-filter closure body.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically and every downstream consumer sees the wider
     ///   complement without further per-caller edit.
@@ -2019,13 +2019,13 @@ pub trait TaggedUnion: Sized {
     ///   through `itertools::join` without the allocation `Vec<Kind>
     ///   -> String` pays.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The load-bearing iterator projection on the complement side
     ///   lives at ONE substrate site, byte-for-byte symmetrical with
     ///   [`Self::iter_populated_kinds`] under negated `has` predicate.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches the walk
     ///   mechanically (the closed-set filter picks up the new entry
     ///   on the missing side) and every downstream fold sees the
@@ -2110,9 +2110,9 @@ pub trait TaggedUnion: Sized {
     ///   allocation cost, or the semantically-equivalent (but
     ///   parent-arm-projected) `parent.variant().is_ok()`.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The scalar cardinality lives at ONE substrate site as a typed
     ///   projection of [`Self::missing_kinds`] onto its `.len()`, and
     ///   the default body composes against [`Self::has`] over the
@@ -2121,7 +2121,7 @@ pub trait TaggedUnion: Sized {
     ///   `Vec`. Every downstream aggregate consumer binds through the
     ///   SAME shape rather than paying for the allocation to reach the
     ///   cardinality.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically (the closed-set walk picks up the new entry on
     ///   the missing side WITHOUT further per-caller edit — any parent
@@ -2191,16 +2191,16 @@ pub trait TaggedUnion: Sized {
     ///   ONE call site rather than allocating a `Vec` through
     ///   `!populated_kinds().is_empty()`.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The earliest-element projection lives at ONE substrate site as
     ///   a typed projection of [`Self::has`] over the closed set
     ///   `<Self::Kind as ClosedSet>::ALL` under short-circuit walk
     ///   semantics. Every downstream consumer binds through the SAME
     ///   shape rather than reaching for
     ///   `populated_kinds().first().copied()` with its allocation cost.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically (the closed-set walk picks up the new entry) —
     ///   any parent that populates only the new variant returns
@@ -2265,14 +2265,14 @@ pub trait TaggedUnion: Sized {
     ///   `!missing_kinds().is_empty()` or paying for the full
     ///   `missing_kind_count() > 0` walk.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The complement-earliest-element projection lives at ONE
     ///   substrate site as a typed projection of [`Self::has`] over the
     ///   closed set `<Self::Kind as ClosedSet>::ALL` under negation
     ///   with short-circuit walk semantics.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically (the closed-set walk picks up the new entry on
     ///   the missing side) — every downstream consumer sees the wider
@@ -2339,15 +2339,15 @@ pub trait TaggedUnion: Sized {
     ///   the latest-populated slot's identity rather than the
     ///   earliest.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The latest-element projection lives at ONE substrate site as
     ///   a typed projection of [`Self::has`] over the closed set
     ///   `<Self::Kind as ClosedSet>::ALL` under REVERSED short-circuit
     ///   walk semantics — byte-for-byte time-reversed peer of the
     ///   earliest-element projection.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically (the reversed closed-set walk picks up the new
     ///   entry at its canonical `ALL` position) — every downstream
@@ -2417,14 +2417,14 @@ pub trait TaggedUnion: Sized {
     ///   the REVERSED walk) both returning the same Boolean
     ///   projection but committing to different endpoint disclosures.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The complement-latest-element projection lives at ONE
     ///   substrate site as a typed projection of [`Self::has`] over
     ///   the closed set `<Self::Kind as ClosedSet>::ALL` under
     ///   REVERSED negation-and-short-circuit walk semantics.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically (the reversed closed-set walk picks up the new
     ///   entry at its canonical `ALL` position on the missing side).
@@ -2506,16 +2506,16 @@ pub trait TaggedUnion: Sized {
     ///   ONE call site: `Some(k)` names the well-formed arm's kind,
     ///   `None` collapses the two failing arms together.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The exactly-one-hit projection lives at ONE substrate site as
     ///   a typed two-step-short-circuit walk over
     ///   `<Self::Kind as ClosedSet>::ALL` under [`Self::has`]. The
     ///   composition laws above compose the SAME shape as the endpoint
     ///   projections, differing only in the truth-table arm on the
     ///   malformed side.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically — any parent populating only the new variant
     ///   returns `Some(new_variant)` at every downstream callsite
@@ -2596,15 +2596,15 @@ pub trait TaggedUnion: Sized {
     ///   still empty" reads `parent.unique_missing_kind().is_some()`
     ///   at ONE call site.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The complement-exactly-one-hit projection lives at ONE
     ///   substrate site as a typed two-step-short-circuit walk over
     ///   `<Self::Kind as ClosedSet>::ALL` under a negated
     ///   [`Self::has`] predicate — byte-for-byte peer of the
     ///   populated-side primitive under complement.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically on the missing side.
     fn unique_missing_kind(&self) -> Option<Self::Kind> {
@@ -2695,9 +2695,9 @@ pub trait TaggedUnion: Sized {
     /// empty parent continues to return `true` past every entry
     /// including the new one).
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The Boolean cardinality-endpoint projection lives at ONE
     ///   substrate site as a typed short-circuiting closed-set walk
     ///   `!<Self::Kind as ClosedSet>::ALL.iter().any(has)` — byte-
@@ -2705,7 +2705,7 @@ pub trait TaggedUnion: Sized {
     ///   `== 0`, but without the counter allocation on every arm and
     ///   with a first-populated-slot short-circuit that neither
     ///   widened primitive offers.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the `any` short-circuit.
     fn is_empty(&self) -> bool {
@@ -2789,9 +2789,9 @@ pub trait TaggedUnion: Sized {
     /// parent that populates every slot including the new one
     /// continues to return `true`).
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The Boolean cardinality-top-endpoint projection lives at ONE
     ///   substrate site as a typed short-circuiting closed-set walk
     ///   `<Self::Kind as ClosedSet>::ALL.iter().all(has)` — byte-for-
@@ -2799,7 +2799,7 @@ pub trait TaggedUnion: Sized {
     ///   but without the counter allocation on every arm and with a
     ///   first-missing-slot short-circuit that neither widened
     ///   primitive offers.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the `all` short-circuit.
     fn is_saturated(&self) -> bool {
@@ -2901,9 +2901,9 @@ pub trait TaggedUnion: Sized {
     /// the new slot as an additional first-hit candidate at every
     /// downstream callsite without further per-caller edit.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The Boolean at-least-one projection on the populated axis
     ///   lives at ONE substrate site as a typed short-circuiting
     ///   closed-set walk `<Self::Kind as ClosedSet>::ALL.iter().any(has)`
@@ -2911,7 +2911,7 @@ pub trait TaggedUnion: Sized {
     ///   `!<ALL>.iter().any(has)`, semantically identical to
     ///   `populated_kind_count() > 0` on every arm with the same
     ///   first-hit short-circuit that [`Self::is_empty`] enjoys.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the `any` short-circuit.
     fn has_any_populated_kind(&self) -> bool {
@@ -3003,9 +3003,9 @@ pub trait TaggedUnion: Sized {
     /// the new slot as an additional first-hit candidate at every
     /// downstream callsite without further per-caller edit.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The Boolean at-least-one projection on the missing axis lives
     ///   at ONE substrate site as a typed short-circuiting closed-set
     ///   walk `<Self::Kind as ClosedSet>::ALL.iter().any(|k| !has(k))`
@@ -3014,7 +3014,7 @@ pub trait TaggedUnion: Sized {
     ///   Morgan dual), semantically identical to
     ///   `missing_kind_count() > 0` on every arm with the same first-
     ///   hit short-circuit that [`Self::is_saturated`] enjoys.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the `any` short-circuit.
     fn has_any_missing_kind(&self) -> bool {
@@ -3104,16 +3104,16 @@ pub trait TaggedUnion: Sized {
     /// the new variant returns `true` at every downstream callsite
     /// without further per-caller edit).
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The Boolean cardinality-mid-endpoint projection lives at ONE
     ///   substrate site as the `is_some` projection of the
     ///   `unique_populated_kind` two-step short-circuit walk — byte-
     ///   for-byte peer of `populated_kind_count()` composed against
     ///   `== 1`, but with a second-populated-slot short-circuit that
     ///   the scalar counter primitive does not offer.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the `unique_populated_kind` short-circuit.
     fn has_unique_populated_kind(&self) -> bool {
@@ -3190,16 +3190,16 @@ pub trait TaggedUnion: Sized {
     /// this primitive mechanically through the `unique_missing_kind`
     /// short-circuit.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The Boolean cardinality-mid-endpoint projection on the
     ///   missing axis lives at ONE substrate site as the `is_some`
     ///   projection of the `unique_missing_kind` two-step short-circuit
     ///   walk — byte-for-byte peer of `missing_kind_count()` composed
     ///   against `== 1`, but with a second-missing-slot short-circuit
     ///   that the scalar counter primitive does not offer.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the `unique_missing_kind` short-circuit.
     fn has_unique_missing_kind(&self) -> bool {
@@ -3278,16 +3278,16 @@ pub trait TaggedUnion: Sized {
     /// the new slot as an additional two-step-short-circuit
     /// candidate.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The Boolean cardinality many-arm projection lives at ONE
     ///   substrate site as a typed two-step-short-circuit walk over
     ///   `<Self::Kind as ClosedSet>::ALL` under [`Self::has`] — byte-
     ///   for-byte peer of `populated_kind_count()` composed against
     ///   `>= 2`, but with a second-populated-slot short-circuit that
     ///   the scalar counter primitive does not offer.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this
     ///   primitive mechanically.
     fn has_multiple_populated_kinds(&self) -> bool {
@@ -3348,10 +3348,10 @@ pub trait TaggedUnion: Sized {
     ///   symmetrical with `has_multiple_populated_kinds` under the
     ///   complement axis.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
-    /// - THEORY.md §VI.1 — generation over composition.
+    /// - Invariant 5 — composition preserves proofs.
+    /// - Generation over composition.
     fn has_multiple_missing_kinds(&self) -> bool {
         let mut iter = self.iter_missing_kinds();
         iter.next().is_some() && iter.next().is_some()
@@ -3440,9 +3440,9 @@ pub trait TaggedUnion: Sized {
     /// up the new slot as an additional short-circuit candidate at
     /// every downstream callsite without further per-caller edit.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The "≤ 1" Boolean projection lives at ONE substrate site as
     ///   a definitional negation of the "≥ 2" projection; the two
     ///   forms `!has_multiple_populated_kinds()`,
@@ -3450,7 +3450,7 @@ pub trait TaggedUnion: Sized {
     ///   `is_empty() || has_unique_populated_kind()` compose through
     ///   the SAME two-step-short-circuit walk shape, byte-for-byte
     ///   identical on every arm.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the delegated
     ///   [`Self::has_multiple_populated_kinds`].
@@ -3533,9 +3533,9 @@ pub trait TaggedUnion: Sized {
     ///   axis alongside its sibling `has-multiple-missing-kinds`
     ///   under the Boolean negation axis.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The "≤ 1" Boolean projection on the missing axis lives at
     ///   ONE substrate site as a definitional negation of the "≥ 2"
     ///   projection; the three composition forms
@@ -3544,7 +3544,7 @@ pub trait TaggedUnion: Sized {
     ///   `is_saturated() || has_unique_missing_kind()`) compose
     ///   through the SAME two-step-short-circuit walk shape,
     ///   byte-for-byte identical on every arm.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the delegated
     ///   [`Self::has_multiple_missing_kinds`].
@@ -3653,9 +3653,9 @@ pub trait TaggedUnion: Sized {
     /// becomes partially populated at every downstream callsite
     /// without further per-caller edit).
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The parent-state middle-arm projection lives at ONE
     ///   substrate site as a fused short-circuit walk over
     ///   `<Self::Kind as ClosedSet>::ALL` under [`Self::has`] with
@@ -3668,7 +3668,7 @@ pub trait TaggedUnion: Sized {
     ///   sweep — pinned across every production tagged union at
     ///   compile time via the trait's default body composition, not
     ///   per-parent.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the fused walk — the trichotomy holds
     ///   on the widened kind set without further per-caller edit.
@@ -3779,9 +3779,9 @@ pub trait TaggedUnion: Sized {
     /// slot as an additional short-circuit candidate at every
     /// downstream callsite without further per-caller edit.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The kind-scoped strict-refinement projection lives at ONE
     ///   substrate site as a fused short-circuit walk over
     ///   `<Self::Kind as ClosedSet>::ALL` under [`Self::has`] with
@@ -3789,7 +3789,7 @@ pub trait TaggedUnion: Sized {
     ///   `kind` — byte-for-byte cheaper than the widened composition
     ///   `unique_populated_kind() == Some(kind)`, semantically
     ///   identical on every arm.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the fused walk.
     fn has_only(&self, kind: Self::Kind) -> bool
@@ -3924,9 +3924,9 @@ pub trait TaggedUnion: Sized {
     /// slot as an additional short-circuit candidate at every
     /// downstream callsite without further per-caller edit.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The kind-scoped strict-refinement projection on the missing
     ///   axis lives at ONE substrate site as a fused short-circuit
     ///   walk over `<Self::Kind as ClosedSet>::ALL` under a negated
@@ -3935,7 +3935,7 @@ pub trait TaggedUnion: Sized {
     ///   [`Self::has_only`]'s fused walk under complement,
     ///   semantically identical to
     ///   `unique_missing_kind() == Some(kind)` on every arm.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the fused walk.
     fn lacks_only(&self, kind: Self::Kind) -> bool
@@ -5316,15 +5316,15 @@ where
 /// Same `Lifetime` exclusion as the sibling primitives — see
 /// [`assert_two_slots_ambiguous`].
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+/// - Invariant 5 — composition preserves proofs. The
 ///   Boolean zero-endpoint projection binds through the SAME shape
 ///   the scalar cardinality binds through (a closed-set walk under
 ///   `Self::has`), differing only in the return-type collapse
 ///   (`bool` vs. `usize`) and the short-circuit gate (`!any` vs.
 ///   `count`).
-/// - THEORY.md §VI.1 — generation over composition. A new
+/// - Generation over composition. A new
 ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
 ///   mechanically through the `any` short-circuit at the trait's
 ///   default body.
@@ -5431,15 +5431,15 @@ where
 ///
 /// Same `Lifetime` exclusion as the sibling primitives.
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+/// - Invariant 5 — composition preserves proofs. The
 ///   Boolean top-endpoint projection binds through the SAME shape
 ///   the scalar complement cardinality binds through (a closed-set
 ///   walk under `Self::has`), differing only in the return-type
 ///   collapse (`bool` vs. `usize`) and the short-circuit gate (`all`
 ///   vs. `count`).
-/// - THEORY.md §VI.1 — generation over composition. A new
+/// - Generation over composition. A new
 ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
 ///   mechanically through the `all` short-circuit at the trait's
 ///   default body.
@@ -5554,16 +5554,16 @@ where
 /// Same `Lifetime` exclusion as the sibling primitives — see
 /// [`assert_two_slots_ambiguous`].
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+/// - Invariant 5 — composition preserves proofs. The
 ///   Boolean at-least-one halfspace projection binds through the SAME
 ///   shape [`assert_is_empty_matches_populated_kind_count`] binds
 ///   through (a closed-set `any` walk under `Self::has`), differing
 ///   only in the final negation the zero-endpoint applies — pinned as
 ///   the definitional-complement law at ONE substrate site inside the
 ///   testkit's per-arm sweep.
-/// - THEORY.md §VI.1 — generation over composition. A new
+/// - Generation over composition. A new
 ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
 ///   mechanically through the `any` short-circuit at the trait's
 ///   default body.
@@ -5682,9 +5682,9 @@ pub fn assert_has_any_populated_kind_matches_populated_kind_count<T, F, G>(
 ///
 /// Same `Lifetime` exclusion as the sibling primitives.
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+/// - Invariant 5 — composition preserves proofs. The
 ///   Boolean at-least-one halfspace projection on the missing axis
 ///   binds through the SAME shape
 ///   [`assert_is_saturated_matches_missing_kind_count`] binds through
@@ -5694,7 +5694,7 @@ pub fn assert_has_any_populated_kind_matches_populated_kind_count<T, F, G>(
 ///   `any(|k| !has(k))` which is De-Morgan-equivalent to
 ///   `!all(|k| has(k))`, the exact expression `is_saturated()`
 ///   negates.
-/// - THEORY.md §VI.1 — generation over composition. A new
+/// - Generation over composition. A new
 ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
 ///   mechanically through the `any` short-circuit at the trait's
 ///   default body.
@@ -5817,15 +5817,15 @@ pub fn assert_has_any_missing_kind_matches_missing_kind_count<T, F, G>(
 /// Same `Lifetime` exclusion as the sibling primitives — see
 /// [`assert_two_slots_ambiguous`].
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+/// - Invariant 5 — composition preserves proofs. The
 ///   Boolean one-endpoint projection binds through the SAME shape
 ///   the scalar cardinality binds through (a closed-set walk under
 ///   `Self::has` composed with a two-step short-circuit), differing
 ///   only in the return-type collapse (`bool` vs. `usize`) and the
 ///   equality gate (`is_some` vs. `== 1`).
-/// - THEORY.md §VI.1 — generation over composition. A new
+/// - Generation over composition. A new
 ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
 ///   mechanically through the `unique_populated_kind` two-step short-
 ///   circuit at the trait's default body.
@@ -5932,10 +5932,10 @@ pub fn assert_has_unique_populated_kind_matches_populated_kind_count<T, F, G>(
 ///
 /// Same `Lifetime` exclusion as the sibling primitives.
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
-/// - THEORY.md §VI.1 — generation over composition.
+/// - Invariant 5 — composition preserves proofs.
+/// - Generation over composition.
 #[track_caller]
 pub fn assert_has_unique_missing_kind_matches_missing_kind_count<T, F, G>(
     single_slot: F,
@@ -6044,10 +6044,10 @@ pub fn assert_has_unique_missing_kind_matches_missing_kind_count<T, F, G>(
 /// Same [`crate::lifetime::Lifetime`] exclusion as the sibling
 /// primitives — `Lifetime` doesn't impl [`TaggedUnion`].
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
-/// - THEORY.md §VI.1 — generation over composition.
+/// - Invariant 5 — composition preserves proofs.
+/// - Generation over composition.
 #[track_caller]
 pub fn assert_has_multiple_populated_kinds_matches_populated_kind_count<T, F, G, H>(
     single_slot: F,
@@ -6185,10 +6185,10 @@ pub fn assert_has_multiple_populated_kinds_matches_populated_kind_count<T, F, G,
 /// `two_slot_X` factory plus ONE per-site `empty_X` factory plus ONE
 /// call site.
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
-/// - THEORY.md §VI.1 — generation over composition.
+/// - Invariant 5 — composition preserves proofs.
+/// - Generation over composition.
 #[track_caller]
 pub fn assert_has_multiple_missing_kinds_matches_missing_kind_count<T, F, G, H>(
     single_slot: F,
@@ -6343,15 +6343,15 @@ pub fn assert_has_multiple_missing_kinds_matches_missing_kind_count<T, F, G, H>(
 /// Same [`crate::lifetime::Lifetime`] exclusion as the sibling
 /// primitives — `Lifetime` doesn't impl [`TaggedUnion`].
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+/// - Invariant 5 — composition preserves proofs. The
 ///   three composition laws bind the ≤1-populated Boolean projection
 ///   to the widened `!has_multiple_populated_kinds`, the scalar
 ///   `populated_kind_count <= 1`, and the union of zero-arm ∪ one-arm
 ///   at ONE substrate site each — swept across every production
 ///   tagged union at the testkit's per-arm sweep, not per-parent.
-/// - THEORY.md §VI.1 — generation over composition. A new
+/// - Generation over composition. A new
 ///   [`Self::Kind`] variant added to `ALL` reaches the primitive
 ///   mechanically through the delegated
 ///   [`TaggedUnion::has_multiple_populated_kinds`].
@@ -6507,10 +6507,10 @@ pub fn assert_has_at_most_one_populated_kind_matches_populated_kind_count<T, F, 
 /// `two_slot_X` factory plus ONE per-site `empty_X` factory plus ONE
 /// call site.
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
-/// - THEORY.md §VI.1 — generation over composition.
+/// - Invariant 5 — composition preserves proofs.
+/// - Generation over composition.
 #[track_caller]
 pub fn assert_has_at_most_one_missing_kind_matches_missing_kind_count<T, F, G, H>(
     single_slot: F,
@@ -6703,9 +6703,9 @@ pub fn assert_has_at_most_one_missing_kind_matches_missing_kind_count<T, F, G, H
 /// Same `Lifetime` exclusion as the sibling primitives — see
 /// [`assert_two_slots_ambiguous`].
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+/// - Invariant 5 — composition preserves proofs. The
 ///   Boolean parent-state middle-arm projection binds through the
 ///   SAME shape the two endpoint primitives bind through (a closed-
 ///   set walk under `Self::has`), differing only in the fused
@@ -6715,7 +6715,7 @@ pub fn assert_has_at_most_one_missing_kind_matches_missing_kind_count<T, F, G, H
 ///   testkit's per-arm sweep — pinned across every production tagged
 ///   union at compile time via the trait's default body composition,
 ///   not per-parent.
-/// - THEORY.md §VI.1 — generation over composition. A new
+/// - Generation over composition. A new
 ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
 ///   mechanically through the fused walk at the trait's default body.
 #[track_caller]
@@ -6937,9 +6937,9 @@ pub fn assert_is_partially_populated_matches_cardinality<T, F, G, H>(
 /// Same [`crate::lifetime::Lifetime`] exclusion as the sibling
 /// primitives — the `T: TaggedUnion` bound doesn't reach it.
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+/// - Invariant 5 — composition preserves proofs. The
 ///   kind-scoped strict-refinement projection binds through the SAME
 ///   shape the arg-less uniqueness peer binds through (a closed-set
 ///   walk under `Self::has`), differing only in the argument-scoped
@@ -6949,7 +6949,7 @@ pub fn assert_is_partially_populated_matches_cardinality<T, F, G, H>(
 ///   inside the testkit's per-arm sweep — pinned across every
 ///   production tagged union at compile time via the trait's default
 ///   body composition, not per-parent.
-/// - THEORY.md §VI.1 — generation over composition. A new
+/// - Generation over composition. A new
 ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
 ///   mechanically through the fused walk at the trait's default body.
 #[track_caller]
@@ -7200,9 +7200,9 @@ pub fn assert_has_only_matches_unique_populated_kind<T, F, G, H>(
 /// Same [`crate::lifetime::Lifetime`] exclusion as the sibling
 /// primitives — the `T: TaggedUnion` bound doesn't reach it.
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+/// - Invariant 5 — composition preserves proofs. The
 ///   kind-scoped strict-refinement projection on the MISSING axis
 ///   binds through the SAME shape the populated-axis peer binds
 ///   through (a closed-set walk under `Self::has`), differing only in
@@ -7213,7 +7213,7 @@ pub fn assert_has_only_matches_unique_populated_kind<T, F, G, H>(
 ///   substrate site inside the testkit's per-arm sweep — pinned
 ///   across every production tagged union at compile time via the
 ///   trait's default body composition, not per-parent.
-/// - THEORY.md §VI.1 — generation over composition. A new
+/// - Generation over composition. A new
 ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
 ///   mechanically through the fused walk at the trait's default body.
 #[track_caller]
@@ -7486,9 +7486,9 @@ pub fn assert_lacks_only_matches_unique_missing_kind<T, F, G, H>(
 /// Same [`crate::lifetime::Lifetime`] exclusion as the sibling
 /// primitives — the `T: TaggedUnion` bound doesn't reach it.
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+/// - Invariant 5 — composition preserves proofs.
 ///   The kind-scoped closed-set-complement projection lives at ONE
 ///   substrate site as a definitional negation of
 ///   [`TaggedUnion::has`]. The five composition laws (definitional
@@ -7498,7 +7498,7 @@ pub fn assert_lacks_only_matches_unique_missing_kind<T, F, G, H>(
 ///   ONE substrate site inside the testkit's per-arm sweep — pinned
 ///   across every production tagged union at compile time via the
 ///   trait's default body composition, not per-parent.
-/// - THEORY.md §VI.1 — generation over composition. A new
+/// - Generation over composition. A new
 ///   [`Self::Kind`] variant added to `ALL` reaches this primitive
 ///   mechanically through the delegated [`Self::has`] — the five
 ///   laws hold on the widened kind set without further per-caller
@@ -8161,13 +8161,13 @@ where
 /// two adjacent panels — one per closed-set-carrying enum, one per
 /// tagged-union parent.
 ///
-/// Theory anchor: THEORY.md §V.1 (knowable platform) — the
+/// Anchor: (knowable platform) — the
 /// three-axis label-surface convention becomes ONE typed theorem
 /// provable generically over any
 /// `T: ClosedSet + Serialize + Display + PartialEq + Debug` bound
 /// rather than THREE hand-authored per-implementor one-line probes
-/// held coherent by test-module convention. THEORY.md §II.1
-/// invariant 5 (composition preserves proofs) — the three sub-
+/// held coherent by test-module convention.
+/// Invariant 5 (composition preserves proofs) — the three sub-
 /// assertions compose structurally through ONE primitive here, so a
 /// regression at ONE axis surfaces at the sub-assertion's own
 /// panic message rather than as silent drift at every consumer that
@@ -8301,12 +8301,12 @@ where
 /// / [`assert_variant_round_trip`]'s / [`assert_two_slots_ambiguous`]'s
 /// / [`assert_single_slot_key_matches_label`]'s exclusions.
 ///
-/// Theory anchor: THEORY.md §V.1 (knowable platform) — the
+/// Anchor: (knowable platform) — the
 /// four-axis parent-side tagged-union convention becomes ONE typed
 /// theorem provable generically over any
 /// `T: TaggedUnion + Serialize` bound rather than FOUR
 /// hand-authored per-parent tests held coherent by test-module
-/// convention. THEORY.md §II.1 invariant 5 (composition preserves
+/// convention. Invariant 5 (composition preserves
 /// proofs) — the four sub-assertions compose structurally through
 /// ONE primitive here, so a regression at ONE axis surfaces at the
 /// sub-assertion's own panic message rather than as silent drift
@@ -8386,7 +8386,7 @@ where
 /// sibling picks up the composition-law sweep through ONE call site —
 /// no re-authored per-peer assertion at the test surface.
 ///
-/// Theory grounding: THEORY.md §II.1 invariant 5 (composition preserves
+/// Grounding: invariant 5 (composition preserves
 /// proofs) — every scalar peer's default body composes through the
 /// load-bearing iterator peer at ONE substrate site; this testkit pins
 /// that composition as a first-class typed invariant. A future run that

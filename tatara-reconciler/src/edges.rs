@@ -89,10 +89,10 @@ impl<'a> EdgeContext<'a> {
     /// (`.routing_form().as_str()`) and any future consumer that
     /// needs the enum for closed-set matching at zero.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry —
+    /// Anchor: invariant 1 (typed entry —
     /// the raw `bool` slot on this context is projected through the
-    /// typed [`RoutingForm`] closed set at ONE owner). THEORY.md
-    /// §VI.1 (generation over composition — the two-line
+    /// typed [`RoutingForm`] closed set at ONE owner).
+    /// (generation over composition — the two-line
     /// `RoutingForm::from_is_stable(ctx.is_stable)` chain recurred
     /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
     /// lifted to ONE substrate owner here).
@@ -161,11 +161,11 @@ pub trait Edge {
 /// this ONE substrate function and every edge kind inherits the
 /// upgrade mechanically.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the 4-slot routing-edge labels shape recurred at two hand-
 /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-/// trigger, and is lifted to ONE owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — the pins in
+/// trigger, and is lifted to ONE owner here).
+/// Invariant 5 (composition preserves proofs — the pins in
 /// [`tests::routing_edge_labels_*`] bind the composed primitive to
 /// the pre-lift hand-authored shape byte-identically, so a
 /// regression that drifted the seed order, the APP slot value, or
@@ -230,10 +230,10 @@ pub(crate) fn routing_edge_labels(ctx: &EdgeContext<'_>) -> serde_json::Map<Stri
 /// concurrency) lands at this ONE substrate function and every
 /// routing edge inherits the upgrade mechanically.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the 5-slot metadata shape recurred at two hand-authored sites
 /// past the ★★ PRIME-DIRECTIVE trigger, and is lifted to ONE owner
-/// here). THEORY.md §II.1 invariant 5 (composition preserves
+/// here). Invariant 5 (composition preserves
 /// proofs — the pins in [`tests::routing_edge_metadata_*`] bind the
 /// composed primitive to the pre-lift hand-authored shape
 /// byte-identically, so a regression that drifted the slot naming
@@ -313,10 +313,10 @@ pub(crate) fn routing_edge_metadata(
 /// diverging on whether the stable form uses `"stable"` or something
 /// else.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the routing-edge name shape recurred at two hand-authored sites
 /// past the ★★ PRIME-DIRECTIVE trigger, and is lifted to ONE owner
-/// here). THEORY.md §II.1 invariant 5 (composition preserves
+/// here). Invariant 5 (composition preserves
 /// proofs — the pins in [`tests::routing_edge_resource_name_*`]
 /// bind the composed primitive to the pre-lift hand-authored shape
 /// byte-identically, and the cross-edge lockstep pin binds both

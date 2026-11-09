@@ -117,12 +117,12 @@ impl HostnameError {
     /// future validation site that plugs into the same rejection
     /// policy.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the three-slot struct-literal recurred at four hand-authored
     /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and
     /// lifts to ONE substrate owner here, matching the discipline
     /// [`validate_app`] and [`validate_fqdn_suffix`] already carry on
-    /// the peer composer axes). THEORY.md §II.1 invariant 5
+    /// the peer composer axes). Invariant 5
     /// (composition preserves proofs — post-lift every rejection site
     /// surfaces the byte-identical `HostnameError::InvalidLabel` variant
     /// by CONSTRUCTION rather than by four independent struct-literal
@@ -212,11 +212,11 @@ impl HostnameError {
 /// then no downstream Ingress / DNSEndpoint dispatcher can route to).
 /// The attribute surfaces that as a warning at every call site.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// [`HostnameError`] → anyhow-with-display-prefix wrap-shape recurred
 /// at three hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication trigger, and is lifted to ONE substrate owner here).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
+/// Invariant 5 (composition preserves proofs — a
 /// regression that drifts the display-prefix separator or the byte-
 /// shape at ONE site surfaces here at the substrate pin rather than
 /// as silent operator-facing skew across every render_routing tick).
@@ -412,10 +412,10 @@ fn validate_label(segment: &'static str, label: &str) -> Result<(), HostnameErro
 /// call site, no drift risk for a third future FQDN-shape composer
 /// that plugs into the same reservation policy.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 4-line two-step check recurred at two hand-authored composer
 /// preludes past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and
-/// lifts to ONE substrate owner here). THEORY.md §II.1 invariant 5
+/// lifts to ONE substrate owner here). Invariant 5
 /// (composition preserves proofs — the pin block below binds the
 /// primitive at fail-before-pass-after granularity so a regression
 /// that reorders the two steps, drops one, or drifts the typed error
@@ -502,12 +502,12 @@ fn validate_domain(segment: &'static str, domain: &str) -> Result<(), HostnameEr
 /// gateway form, a wildcard-cert-issuer probe form) that plugs into the
 /// same suffix policy.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 3-line three-step check recurred at two hand-authored composer
 /// preludes past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and
 /// lifts to ONE substrate owner here, matching the discipline
 /// [`validate_app`] already carries on the peer head-check axis).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// Invariant 5 (composition preserves proofs — the
 /// pin block below binds the primitive at fail-before-pass-after
 /// granularity so a regression that reorders the three steps, drops
 /// one, or drifts the typed `segment` slot surfaces at THESE pins

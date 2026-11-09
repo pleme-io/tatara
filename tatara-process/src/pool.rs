@@ -71,11 +71,11 @@ use crate::ephemeral::EphemeralSpec;
 /// consts on the same axis if either grows a production
 /// OwnerReference restatement.
 ///
-/// Theory grounding: THEORY.md §VI.1 (generation over composition —
+/// Grounding: (generation over composition —
 /// the `"EphemeralPool"` wire-form kind literal recurred at TWO
 /// hand-authored sites past the PRIME-DIRECTIVE ≥ 2 duplication
-/// trigger, and is lifted to ONE substrate const here). THEORY.md
-/// §II.1 invariant 5 (composition preserves proofs — the byte-shape
+/// trigger, and is lifted to ONE substrate const here).
+/// Invariant 5 (composition preserves proofs — the byte-shape
 /// pin below binds the const at fail-before-pass-after granularity;
 /// a regression that renamed the kube-derived kind projection would
 /// surface at this module's test rather than as silent skew at the
@@ -262,13 +262,13 @@ impl PoolSpec {
     /// hand-authored `humantime::parse_duration(&spec.free_ttl)
     /// .unwrap_or_default()` shape.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `humantime::parse_duration(&<field>).ok()` shape recurred
     /// at ONE substrate owner + ONE hand-authored peer site past the
     /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted onto
     /// TWO peer inherent methods on peer spec types here + on
     /// [`crate::lifetime::EphemeralLifetime::ttl_duration`]).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins below bind the parse-failure corner, the empty-ttl
     /// corner, the humantime edge shapes, the return-form parity with
     /// [`crate::lifetime::EphemeralLifetime::ttl_duration`], and the
@@ -339,11 +339,11 @@ impl PoolSpec {
     /// `PoolSpec { desired_size: 0, desired: 5, ..with_template(t) }`
     /// for the desired-count-loop shape one seed spelled.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+    /// Anchor: (generation over composition — the
     /// 11-slot [`PoolSpec`] struct-literal recurred at EIGHT hand-
     /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
     /// trigger and is lifted onto ONE workspace-wide owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
+    /// Invariant 5 (composition preserves proofs — a
     /// regression that drifted a wire-published default at only one
     /// consumer, or that broke the sibling-default correspondence with
     /// [`crate::crd::ProcessSpec::gate_compute_defaults`], surfaces at
@@ -425,11 +425,11 @@ impl EphemeralPool {
     /// mechanically — no per-callsite hand-edit at `pool_name` /
     /// `reconcile_inner`.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.metadata.name.as_deref().unwrap_or("")` chain recurred
     /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the missing-name corner + the empty-string
     /// sentinel byte-shape + the borrow-form `&str` lifetime + the
     /// byte-identical parity with the pre-lift chain + the fallback-
@@ -507,11 +507,11 @@ impl EphemeralPool {
     /// no per-callsite hand-edit at `reconcile_inner` /
     /// `AllocationConvergenceCtx::observe`.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.metadata.name.clone().unwrap_or_default()` chain recurred
     /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the missing-name corner + the empty-string
     /// sentinel byte-shape + the owned-form `String` return type + the
     /// byte-identical parity with the pre-lift chain + the fallback-
@@ -604,11 +604,11 @@ impl EphemeralPool {
     /// mechanically — no per-callsite hand-edit at
     /// `decide_pool_reconcile` / `pool_phase_from_members`.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.metadata.deletion_timestamp.is_some()` chain recurred at
     /// two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the missing-tombstone corner + the present-
     /// tombstone corner + the copy-form `bool` return + the byte-
     /// identical parity with the pre-lift `.is_some()` chain + the
@@ -709,11 +709,11 @@ impl EphemeralPool {
     /// pre-lift `.clone().unwrap_or_default()` shape verbatim so the
     /// downstream matcher's byte-comparison stays honest.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.metadata.namespace.clone().unwrap_or_default()` chain
     /// recurred at two hand-authored sites past the ★★ PRIME-DIRECTIVE
     /// ≥ 2 duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the missing-namespace corner + the empty-string
     /// sentinel byte-shape + the owned-form `String` return type + the
     /// byte-identical parity with the pre-lift chain + the fallback-
@@ -796,11 +796,11 @@ impl EphemeralPool {
     /// `apply_convergence_actions` consumers pick up the upgrade
     /// mechanically — no per-callsite hand-edit at `controller_pool`.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.metadata.uid.clone().unwrap_or_else(|| name.<into>())`
     /// chain recurred at two hand-authored sites past the ★★ PRIME-
     /// DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE owner
-    /// here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// here). Invariant 5 (composition preserves
     /// proofs — the pins bind the uid-present corner + the uid-absent
     /// name-fallback corner + the both-absent empty-sentinel corner +
     /// the owned-form `String` return type + the byte-identical parity
@@ -887,11 +887,11 @@ impl EphemeralPool {
     /// hand-edit at `resolve_pool` / `controller_allocation
     /// ::reconcile_inner`.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.metadata.name.as_deref() == Some(<candidate>)` chain
     /// recurred at two hand-authored sites past the ★★ PRIME-
     /// DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE owner
-    /// here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// here). Invariant 5 (composition preserves
     /// proofs — the pins bind the missing-slot corner (`None ⇒
     /// false`, even against a `""` candidate) + the populated-slot
     /// equal corner + the populated-slot unequal corner + the
@@ -962,12 +962,12 @@ impl EphemeralPool {
     /// namespaced value and dropping it un-passed to a reconciler-
     /// input slot or an assertion helper.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 2-line construct-then-set-namespace chain recurred at
     /// FOUR hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, spanning one crate but four modules, and
-    /// is lifted to ONE substrate owner here). THEORY.md §II.1
-    /// invariant 5 (composition preserves proofs — the pins below
+    /// is lifted to ONE substrate owner here).
+    /// Invariant 5 (composition preserves proofs — the pins below
     /// bind the (name-slot → metadata.name, ns-slot → metadata.
     /// namespace, spec-slot → spec) slot-projection triple + the
     /// byte-identical parity with the pre-lift 2-line chain across
@@ -1094,10 +1094,10 @@ impl EphemeralPool {
     /// operator-facing diagnostic. Dropping the return means the
     /// projection was computed for no observable reason.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 (typed exit — the
+    /// Anchor: invariant 3 (typed exit — the
     /// gate ladder's five arms partition the observed-phase space
     /// exhaustively and the closed-set match at each arm keeps the
-    /// exhaustiveness under compiler control). THEORY.md §III (the
+    /// exhaustiveness under compiler control). (the
     /// typescape — this projection is a typed accessor on
     /// `EphemeralPool`, coherent with the workspace-wide typed
     /// projection family the pool-side primitives already anchor).
@@ -1382,11 +1382,11 @@ impl PoolStatus {
     /// exhaustiveness check at this fold rather than silently sinking
     /// into `Failed`'s no-op arm.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 11-line status-seed incantation recurred at two hand-
     /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
-    /// invariant 5 (composition preserves proofs — the pins bind the
+    /// trigger, and is lifted to ONE owner here).
+    /// Invariant 5 (composition preserves proofs — the pins bind the
     /// 4-slot count fanout + the closed-set exhaustiveness on
     /// `MemberState` + the invariant defaults, so a regression that
     /// dropped a counter slot or swapped a variant surfaces at
@@ -1480,11 +1480,11 @@ impl PoolStatus {
     /// observation composed for no observable reason — the attribute
     /// surfaces that as a warning at every call site.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 4-arg call with `chrono::Utc::now()` as the third argument
     /// recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE
     /// ≥ 2 duplication trigger, lifted onto the ONE workspace-wide
-    /// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+    /// substrate owner here). Invariant 5 (composition
     /// preserves proofs — the wall-clock projection lives at ONE site
     /// so a future clock swap reaches both consumers through one edit).
     #[must_use]
@@ -1566,11 +1566,11 @@ impl PoolStatus {
     /// [`crate::pool::EphemeralPool::observed_phase_from`] on the
     /// (pure typed projection, compound-composer) axis.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 2-link `pool_phase_from_members + observed_now` chain
     /// recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE
     /// ≥ 2 duplication trigger, and is lifted to ONE substrate owner
-    /// here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// here). Invariant 5 (composition preserves
     /// proofs — the compound composer inherits the two component
     /// composers' invariants mechanically, so a regression at either
     /// component surfaces at the pinned tests here rather than as
@@ -1657,11 +1657,11 @@ impl PoolMember {
     /// reference so no caller has to reshape its `Vec<PoolMember>` or
     /// `Vec<PoolMember>` slice upstream.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `HashSet<String>` collision-set shape recurred at TWO
     /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the axis (`process_name`), the aggregate shape
     /// (`HashSet<String>`), the empty-slice corner, and the
     /// duplicate-name deduplication semantics `HashSet` provides
@@ -1728,11 +1728,11 @@ impl PoolMember {
     /// the (name, namespace) pair, this composer owns the four-slot
     /// unallocated-member seed.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 4-slot unallocated-`PoolMember` seed recurred at FIVE hand-
     /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
-    /// invariant 5 (composition preserves proofs — the pins bind the
+    /// trigger, and is lifted to ONE owner here).
+    /// Invariant 5 (composition preserves proofs — the pins bind the
     /// four-slot fill AND the `allocation_ref: None` invariant AND the
     /// caller-clock-injectability of `entered_state_at`, so a
     /// regression that drifts any surface fails at
@@ -1830,11 +1830,11 @@ impl AllocationRef {
     /// downstream consumer inherits the upgrade mechanically — no per-
     /// callsite hand-edit at the FOUR reconciler + factory sites.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `AllocationRef { name, namespace }` struct-literal shape
     /// recurred at four hand-authored sites past the ★★ PRIME-
     /// DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE owner
-    /// here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// here). Invariant 5 (composition preserves
     /// proofs — the pins bind the positional axis-order + the
     /// `Into<String>` provenance closure + byte-identical parity with
     /// the pre-lift struct-literal + `PartialEq` coherence with the

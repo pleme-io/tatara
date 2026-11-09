@@ -129,14 +129,14 @@ impl RealizedCompiler {
     /// the clone semantics; external consumers reach the same per-call
     /// clone posture through the public dispatcher methods.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; six
+    /// Anchor: generation over composition; six
     /// byte-identical inline copies of the `self.preloaded.clone()`
     /// projection across the dispatcher matrix is past the ≥2
     /// PRIME-DIRECTIVE trigger once the structural shape is named.
-    /// THEORY.md §V.1 — knowable platform; the per-call clone discipline
+    /// Knowable platform; the per-call clone discipline
     /// becomes a NAMED primitive on the `RealizedCompiler` algebra rather
     /// than a per-dispatcher inline projection that future emitters would
-    /// have had to re-derive. THEORY.md §II.1 invariant 2 — free middle;
+    /// have had to re-derive. Invariant 2 — free middle;
     /// every dispatcher routes through the SAME clone primitive, so a
     /// regression that drifts ONE dispatcher's clone posture from the
     /// others cannot reach the substrate's runtime.
@@ -254,18 +254,18 @@ impl RealizedCompiler {
     /// shared cache mirrors the existing [`compile`](Self::compile)
     /// method's posture verbatim.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the diminishing-returns theorem (`compiler_spec.rs`'s module
     /// preamble) says optimizing the base compiler pays less than
     /// producing good generated compilers — and lands as a typed
     /// dispatcher on `RealizedCompiler` rather than as an inline
     /// `iter_calls_to + map + collect` walk every consumer re-derives
-    /// after calling `compile(src)?`. THEORY.md §II.1 invariant 1 —
+    /// after calling `compile(src)?`. Invariant 1 —
     /// typed entry; the typed-keyword filter over the preloaded-
     /// expanded program IS the typed-entry-batch gate, and naming its
     /// preloaded posture lifts the gate from a per-consumer inline
     /// derivation to ONE method on `RealizedCompiler` the substrate's
-    /// diagnostic promotions hang off of. THEORY.md §II.1 invariant 2
+    /// diagnostic promotions hang off of. Invariant 2
     /// — free middle; both the fresh-expander posture and the
     /// preloaded-expander posture route through the SAME
     /// `expand_and_collect_calls_to` primitive, so a regression that
@@ -339,13 +339,13 @@ impl RealizedCompiler {
     /// (`compile_typed_from_forms::<T>(forms)`) instead of round-tripping
     /// through source serialization first.
     ///
-    /// Theory anchor: same as [`Self::compile_typed`]. THEORY.md §VI.1
+    /// Anchor: same as [`Self::compile_typed`].
     /// (generation over composition; the (preloaded × from-forms × typed)
     /// cell of the dispatcher matrix is bound in ONE place rather than
     /// re-derived inline at every from-forms preloaded consumer's call
-    /// site), THEORY.md §II.1 invariant 1 (typed entry; the typed-keyword
+    /// site), invariant 1 (typed entry; the typed-keyword
     /// filter paired with `T::compile_from_args` IS the from-forms
-    /// typed-entry-batch gate at the preloaded boundary), THEORY.md §II.1
+    /// typed-entry-batch gate at the preloaded boundary),
     /// invariant 2 (free middle; all four cells of the dispatcher matrix
     /// route through the SAME typed primitive on `Expander`).
     pub fn compile_typed_from_forms<T: TataraDomain>(&self, forms: Vec<Sexp>) -> Result<Vec<T>> {
@@ -392,10 +392,10 @@ impl RealizedCompiler {
     /// typed-keyword filter walks the expanded forms — exactly the
     /// pipeline `expand_and_collect_calls_to` composes.
     ///
-    /// Theory anchor: same as [`Self::compile_typed`]. THEORY.md §VI.1
+    /// Anchor: same as [`Self::compile_typed`].
     /// (diminishing-returns theorem + generation over composition),
-    /// THEORY.md §II.1 invariant 1 (typed entry on the preloaded
-    /// posture), THEORY.md §II.1 invariant 2 (free middle; both
+    /// invariant 1 (typed entry on the preloaded
+    /// posture), invariant 2 (free middle; both
     /// postures route through the SAME projection).
     pub fn compile_named<T: TataraDomain>(&self, src: &str) -> Result<Vec<NamedDefinition<T>>> {
         self.compile_named_from_forms::<T>(crate::reader::read(src)?)
@@ -513,21 +513,21 @@ impl RealizedCompiler {
     /// (the from-source delegation through
     /// [`Self::compile_typed_any_from_forms`]).
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the (preloaded × from-source × typed-decoded-classifier) cell
     /// of the RealizedCompiler dispatcher matrix is bound in ONE place
     /// rather than re-derived inline at every preloaded classifier
-    /// consumer's call site. THEORY.md §V.1 — knowable platform; the
+    /// consumer's call site. Knowable platform; the
     /// preloaded typed-decoded dispatch becomes a NAMED primitive on
     /// the substrate's `RealizedCompiler` surface rather than a
     /// re-derived `cloned_preloaded() +
     /// expand_source_and_collect_calls_to_any(…)` two-step chain at
-    /// every consumer. THEORY.md §II.1 invariant 1 — typed entry; the
+    /// every consumer. Invariant 1 — typed entry; the
     /// classifier-filtered + caller-projected walk over the preloaded-
     /// expanded program IS a typed-entry-batch gate at the preloaded
     /// boundary, and naming its single shape lifts the gate from a
     /// per-consumer inline derivation to ONE method on
-    /// `RealizedCompiler`. THEORY.md §II.1 invariant 2 — free middle;
+    /// `RealizedCompiler`. Invariant 2 — free middle;
     /// all four cells of the RealizedCompiler typed-dispatcher matrix
     /// route through `cloned_preloaded()` + the matching Expander
     /// primitive, so a regression that drifts ONE cell's pipeline from
@@ -609,14 +609,14 @@ impl RealizedCompiler {
     /// (`compile_typed_any_from_forms(forms, decode, project)`) instead
     /// of round-tripping through source serialization first.
     ///
-    /// Theory anchor: same as [`Self::compile_typed_any`]. THEORY.md
-    /// §VI.1 (generation over composition; the (preloaded × from-forms
+    /// Anchor: same as [`Self::compile_typed_any`].
+    /// (generation over composition; the (preloaded × from-forms
     /// × typed-decoded-classifier) cell is bound in ONE place rather
     /// than re-derived inline at every from-forms preloaded classifier
-    /// consumer's call site), THEORY.md §II.1 invariant 1 (typed
+    /// consumer's call site), invariant 1 (typed
     /// entry; the classifier-filtered + caller-projected walk IS a
-    /// typed-entry-batch gate at the preloaded boundary), THEORY.md
-    /// §II.1 invariant 2 (free middle; all four cells of the
+    /// typed-entry-batch gate at the preloaded boundary),
+    /// invariant 2 (free middle; all four cells of the
     /// RealizedCompiler typed-dispatcher matrix route through
     /// `cloned_preloaded()` + the matching Expander primitive).
     pub fn compile_typed_any_from_forms<R, F, D, T>(
@@ -676,13 +676,13 @@ impl RealizedCompiler {
     /// `:macros` library, decoded to its typed kind PAIRED with its
     /// canonical static keyword.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the (preloaded × from-source × typed-decoded-classifier ×
     /// named) cell is bound in ONE place rather than re-derived
     /// inline at every preloaded from-source named-classifier
-    /// consumer's call site. THEORY.md §V.1 — knowable platform; the
+    /// consumer's call site. Knowable platform; the
     /// preloaded named-classifier dispatch becomes a NAMED primitive
-    /// on the `RealizedCompiler` surface. THEORY.md §II.1 invariant 2
+    /// on the `RealizedCompiler` surface. Invariant 2
     /// — free middle; every cell of the (preloaded × {from-forms,
     /// from-source} × {constant, classifier} × {bare-kwargs, named})
     /// cube routes through ONE composition point.
@@ -704,7 +704,7 @@ impl RealizedCompiler {
     /// [`Self::compile_typed_any_from_forms`] (from-forms × bare-
     /// kwargs typed-decoded classifier).
     ///
-    /// Theory anchor: same as [`Self::compile_named_any`].
+    /// Anchor: same as [`Self::compile_named_any`].
     pub fn compile_named_any_from_forms<R, F, D, T>(
         &self,
         forms: Vec<Sexp>,

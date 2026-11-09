@@ -86,7 +86,7 @@ pub fn derive_identity<T: Serialize>(spec: &T, name_override: Option<&str>) -> I
 /// join axis before the [`join_pid_segment`] lift below routed them
 /// through the same const.
 ///
-/// Theory grounding: THEORY.md §II.1 invariant 4 (deterministic
+/// Grounding: invariant 4 (deterministic
 /// identity — hierarchical PIDs are ONE cluster-wide address space
 /// with ONE canonical separator; every producer + consumer of the
 /// address space binds through the same substrate slot).
@@ -126,10 +126,10 @@ pub const PID_PATH_SEPARATOR: char = '.';
 /// through this composer instead of another hand-authored `format!(
 /// "{head}.{tail}")` restatement.
 ///
-/// Theory grounding: THEORY.md §VI.1 (generation over composition —
+/// Grounding: (generation over composition —
 /// the shape recurred at three sites past the PRIME-DIRECTIVE ≥ 2
-/// duplication trigger, and is lifted to ONE owner here). THEORY.md
-/// §II.1 invariant 5 (composition preserves proofs — the three
+/// duplication trigger, and is lifted to ONE owner here).
+/// Invariant 5 (composition preserves proofs — the three
 /// callsites now compose structurally through ONE primitive; a
 /// regression that drifted the separator at ONE site surfaces at
 /// [`tests::join_pid_segment_*`] rather than as silent operator-

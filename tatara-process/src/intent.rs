@@ -298,14 +298,14 @@ impl Intent {
     ///
     /// # Theory
     ///
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// Invariant 5 — composition preserves proofs;
     /// the per-container `workload_kind` comparison lives at ONE
     /// substrate site so every downstream (require-tag classifier,
     /// coherence check, editor completion, future workload-kind-
     /// driven audit dispatcher) binds through the SAME
     /// `has_workload_kind(kind)` shape rather than restating the
     /// `spec.intent.container.as_ref().is_some_and(...)` closure body
-    /// at each callsite. THEORY.md §VI.1 — generation over
+    /// at each callsite. Generation over
     /// composition; a future [`WorkloadKind`] variant lands at ONE
     /// `ALL` entry + one `as_str` arm on the closed set and the
     /// presence probe picks it up mechanically without further
@@ -614,11 +614,11 @@ impl AplicacaoIntent {
     /// partition the `AplicacaoIntent` compose × derive surface at
     /// the substrate.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 5-slot default tail recurred at 14 hand-authored sites
     /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, spanning
     /// three workspace crates, and is lifted onto the ONE workspace-
-    /// wide substrate owner here). THEORY.md §II.1 invariant 5
+    /// wide substrate owner here). Invariant 5
     /// (composition preserves proofs — the pin block below binds the
     /// primitive at fail-before-pass-after granularity so a
     /// regression that drifted any of the five default-tail slots

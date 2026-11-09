@@ -61,12 +61,12 @@
 //! site in the workspace inherits the composer mechanically through
 //! the same `.wire_identity().resource_json(json!({...}))` idiom.
 //!
-//! Theory grounding: THEORY.md §II.1 invariant 5 (composition
+//! Grounding: invariant 5 (composition
 //! preserves proofs — the two-slot `(apiVersion, kind)` composition
 //! lives at ONE typed algebra projection here; a regression that
 //! drifted a variant mention at ONE consumer would fail-loudly at
 //! this module's byte-shape pins rather than as silent wire-form
-//! skew at the K8s API server). THEORY.md §VI.1 (generation over
+//! skew at the K8s API server). (generation over
 //! composition — the 2-slot shape recurred at five hand-authored
 //! sites past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
 //! lifted to ONE composer here).
@@ -196,11 +196,11 @@ impl K8sWireIdentity {
     /// inherit the upgrade mechanically — no per-site hand-edit at
     /// either [`Self::as_json`] or [`Self::resource_json`].
     ///
-    /// Theory grounding: THEORY.md §II.1 invariant 5 (composition
+    /// Grounding: invariant 5 (composition
     /// preserves proofs — the 2-line stamp shape lives at ONE typed
     /// owner here, so a regression that drifted the byte-shape at
-    /// ONE of the two public emit peers is unrepresentable). THEORY.md
-    /// §VI.1 (generation over composition — the SAME 2-line insertion
+    /// ONE of the two public emit peers is unrepresentable).
+    /// (generation over composition — the SAME 2-line insertion
     /// recurred at both public emit peers past the ≥ 2 duplication
     /// trigger, and is lifted to ONE substrate body here).
     #[inline]

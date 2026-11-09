@@ -758,11 +758,11 @@ impl HttpEventChannel {
     /// the upgrade mechanically — no per-site edit at any of the ten
     /// listed callers or at future test fixtures.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `HttpEventChannel { endpoint: None, signal_type: <s>.into() }`
     /// fixture literal recurred at ten hand-authored sites past the
     /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
-    /// ONE owner here). THEORY.md §II.1 invariant 5 (composition
+    /// ONE owner here). Invariant 5 (composition
     /// preserves proofs — a regression that drifted the default-
     /// endpoint sentinel from `None` to a hardcoded string, or
     /// reordered the two struct slots, surfaces at the
@@ -854,11 +854,11 @@ impl NatsSubjectChannel {
     /// per-site edit at any of the six listed callers or at future
     /// test fixtures.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `NatsSubjectChannel { subject, stream, url: None }`
     /// fixture literal recurred at six hand-authored sites past the
     /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
-    /// ONE owner here). THEORY.md §II.1 invariant 5 (composition
+    /// ONE owner here). Invariant 5 (composition
     /// preserves proofs — a regression that drifted the default-URL
     /// sentinel from `None` to a hardcoded string, or reordered the
     /// three struct slots, surfaces at the
@@ -1084,12 +1084,12 @@ impl fmt::Display for ExportTrigger {
 /// while `has_when` composes the closed-set discriminator equality
 /// on the raw `when` field.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// Anchor: invariant 5 — composition preserves
 /// proofs; the per-slice `when` walk lives at ONE substrate site so
 /// every downstream (require-tag classifier, coherence check, editor
 /// completion) binds through the SAME shape rather than restating the
 /// `.iter().any(|e| e.when == K)` closure body at each callsite.
-/// THEORY.md §VI.1 — generation over composition; a future
+/// Generation over composition; a future
 /// [`ExportTrigger`] variant lands at ONE `ALL` entry + ONE `as_str`
 /// arm on the closed set and the presence probe picks it up
 /// mechanically without further per-consumer edits.

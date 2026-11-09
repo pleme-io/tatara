@@ -325,7 +325,7 @@ fn parse<I: Iterator<Item = Spanned>>(
 /// in lockstep, with rustc binding the extension through exhaustiveness
 /// over the closed enum.
 ///
-/// Theory anchor: THEORY.md §VI.1 — three-times rule. The four
+/// Anchor: three-times rule. The four
 /// `Some((Token::Quote*, _))` arms in `parse` each ran `let inner =
 /// parse(it, eof_pos)?; Ok(Sexp::*(Box::new(inner)))` — byte-identical
 /// modulo the `Sexp::*` constructor. Lifted into ONE helper that routes

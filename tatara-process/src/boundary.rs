@@ -78,11 +78,11 @@ impl Boundary {
     /// provider) through the SAME closed-set walk with no per-caller
     /// edit.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the presence-probe body lives at ONE substrate site so
     /// every downstream `condition-<kind>` requires-tag surface,
     /// closed-set audit dispatcher, and future variant addition binds
-    /// through the SAME shape). THEORY.md §VI.1 (generation over
+    /// through the SAME shape). (generation over
     /// composition — a ninth [`ConditionKind`] variant lands at ONE
     /// `ALL` entry + ONE `as_str` arm and the presence probe picks it
     /// up mechanically without further per-consumer edits).
@@ -150,11 +150,11 @@ impl Boundary {
     /// tag prefix family byte-for-byte symmetrical (point surface
     /// through this method, ephemeral surface through its peer).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the per-slice presence-probe body lives at
     /// ONE substrate site so every downstream `precondition-<kind>`
     /// require-tag surface, closed-set audit dispatcher, and future
-    /// variant addition binds through the SAME shape). THEORY.md §VI.1
+    /// variant addition binds through the SAME shape).
     /// (generation over composition — the union primitive
     /// [`Self::has_condition_kind`] emerges from the composition of
     /// its two half-slice arms rather than as a hand-authored `||`
@@ -236,7 +236,7 @@ impl Boundary {
     /// (bool via `has_condition_kind`, `&Condition` via
     /// `find_condition_kind`) at ONE typed algebra surface per struct.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the widened return lives at ONE substrate
     /// site so every downstream diagnostic consumer + coherence check
     /// binds through the SAME shape rather than restating the
@@ -340,7 +340,7 @@ impl Boundary {
     /// for-byte peer of the same triad on
     /// [`crate::ephemeral::EphemeralSpec`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the widened stream lives at ONE substrate
     /// site so every downstream diagnostic + coherence consumer binds
     /// through the SAME shape rather than restating the two-half
@@ -437,7 +437,7 @@ impl Boundary {
     /// at ONE typed algebra surface per struct, byte-for-byte peer of
     /// the same tetrad on [`crate::ephemeral::EphemeralSpec`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the scalar cardinality lives at ONE
     /// substrate site so every downstream diagnostic + coherence
     /// consumer binds through the SAME shape rather than restating
@@ -540,11 +540,11 @@ impl Boundary {
     /// rather than restating the closed-set-inverted filter idiom at
     /// every callsite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the closed-set-inversion aggregate is a typed projection
     /// of [`Self::has_condition_kind`] over [`ConditionKind::ALL`], and
     /// every downstream aggregate consumer binds through the SAME shape).
-    /// THEORY.md §VI.1 (generation over composition — a new
+    /// (generation over composition — a new
     /// [`ConditionKind`] variant added to `ALL` reaches this method
     /// mechanically through the closed-set walk).
     #[must_use]
@@ -684,10 +684,10 @@ impl Boundary {
     /// hypothetical `condition-kinds-distinct-<n>` prefix family)
     /// reaches this ONE primitive without allocating.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs (the scalar cardinality composes the SAME
     /// closed-set walk on both this boundary surface and the
-    /// slice-level substrate primitive). THEORY.md §VI.1 — generation
+    /// slice-level substrate primitive). Generation
     /// over composition (a new [`ConditionKind`] variant added to
     /// `ALL` reaches this primitive mechanically through the closed-set
     /// walk).
@@ -791,12 +791,12 @@ impl Boundary {
     /// prefix family that publishes the missing-set cardinality as a
     /// scalar reaches `.missing_condition_kinds().len()`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the closed-set complement is a typed
     /// projection of [`Self::has_condition_kind`] over
     /// [`ConditionKind::ALL`] under negation, and every downstream
     /// gap-analysis consumer binds through the SAME shape).
-    /// THEORY.md §VI.1 (generation over composition — a new
+    /// (generation over composition — a new
     /// [`ConditionKind`] variant added to `ALL` reaches this method
     /// mechanically through the closed-set walk).
     #[must_use]
@@ -948,11 +948,11 @@ impl Boundary {
     /// `condition-kinds-missing-<n>` prefix family) reaches this ONE
     /// primitive without allocating.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs (the scalar cardinality composes the SAME
     /// closed-set walk under negation on both this boundary surface and
-    /// the slice-level substrate primitive). THEORY.md §VI.1 —
-    /// generation over composition (a new [`ConditionKind`] variant
+    /// the slice-level substrate primitive).
+    /// Generation over composition (a new [`ConditionKind`] variant
     /// added to `ALL` reaches this primitive mechanically through the
     /// closed-set walk).
     #[must_use]
@@ -1044,11 +1044,11 @@ impl Boundary {
     /// (`condition-kinds-first-distinct-<kind>`) reaches this ONE
     /// primitive without allocating.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs (the earliest-element projection composes the
     /// SAME closed-set walk on both this boundary surface and the
     /// slice-level substrate primitive under short-circuit semantics).
-    /// THEORY.md §VI.1 — generation over composition (a new
+    /// Generation over composition (a new
     /// [`ConditionKind`] variant added to `ALL` reaches this primitive
     /// mechanically through the closed-set walk).
     #[must_use]
@@ -1138,11 +1138,11 @@ impl Boundary {
     /// closed-loop kind" audit reaches this ONE substrate site rather
     /// than restating the negated closed-set walk at every consumer.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the complement-earliest-element projection
     /// composes the SAME closed-set walk on both this boundary surface
     /// and the slice-level substrate primitive under short-circuit
-    /// semantics with a negated predicate). THEORY.md §VI.1
+    /// semantics with a negated predicate).
     /// (generation over composition — a new [`ConditionKind`] variant
     /// added to `ALL` reaches this primitive mechanically through the
     /// closed-set walk).
@@ -1230,11 +1230,11 @@ impl Boundary {
     /// kind as a scalar (`condition-kinds-last-distinct-<kind>`) reaches
     /// this ONE primitive without allocating.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs (the latest-element projection composes the
     /// SAME reversed closed-set walk on both this boundary surface and
     /// the slice-level substrate primitive under short-circuit
-    /// semantics). THEORY.md §VI.1 — generation over composition (a
+    /// semantics). Generation over composition (a
     /// new [`ConditionKind`] variant added to `ALL` reaches this
     /// primitive mechanically through the reversed closed-set walk).
     #[must_use]
@@ -1324,12 +1324,12 @@ impl Boundary {
     /// substrate site rather than restating the negated reversed
     /// closed-set walk at every consumer.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the complement-latest-element projection
     /// composes the SAME reversed closed-set walk on both this
     /// boundary surface and the slice-level substrate primitive
     /// under short-circuit semantics with a negated predicate).
-    /// THEORY.md §VI.1 (generation over composition — a new
+    /// (generation over composition — a new
     /// [`ConditionKind`] variant added to `ALL` reaches this
     /// primitive mechanically through the reversed closed-set walk).
     #[must_use]
@@ -1409,11 +1409,11 @@ impl Boundary {
     /// primitive's tests rather than as silent drift at either
     /// struct-level saturation caller.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs (the saturation-endpoint projection composes
     /// the SAME closed-set walk on both this boundary surface and the
     /// slice-level substrate primitive under short-circuit semantics).
-    /// THEORY.md §VI.1 — generation over composition (a new
+    /// Generation over composition (a new
     /// [`ConditionKind`] variant added to `ALL` reaches this primitive
     /// mechanically through the `all` short-circuit).
     #[must_use]
@@ -1505,11 +1505,11 @@ impl Boundary {
     /// `!boundary.missing_condition_kinds().is_empty()` (which
     /// allocates the Vec before the negated emptiness check).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the at-least-one halfspace projection
     /// composes the SAME two-slice union negation on both this
     /// boundary surface and the slice-level substrate primitive under
-    /// definitional negation). THEORY.md §VI.1 (generation over
+    /// definitional negation). (generation over
     /// composition — a new [`ConditionKind`] variant reaches both
     /// surfaces' at-least-one halfspace triads mechanically through
     /// the delegated union primitive).
@@ -1602,11 +1602,11 @@ impl Boundary {
     /// `!boundary.distinct_condition_kinds().is_empty()` (which
     /// allocates the Vec before the negated emptiness check).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the at-least-one halfspace projection
     /// composes the SAME closed-set walk on both this boundary surface
     /// and the slice-level substrate primitive under short-circuit
-    /// semantics). THEORY.md §VI.1 (generation over composition — a
+    /// semantics). (generation over composition — a
     /// new [`ConditionKind`] variant reaches both surfaces' at-least-
     /// one halfspace triads mechanically through the delegated union
     /// primitive).
@@ -1704,11 +1704,11 @@ impl Boundary {
     /// [`Self::has_condition_kind`] (this primitive) vs
     /// `!has_condition_kind` (the missing peer).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality-mid-endpoint projection on
     /// the closed-set-inversion axis composes the SAME two-step
     /// short-circuit walk under a two-slice union on both this
-    /// boundary surface and the ephemeral surface). THEORY.md §VI.1
+    /// boundary surface and the ephemeral surface).
     /// (generation over composition — a new [`ConditionKind`]
     /// variant reaches both surfaces' cardinality-mid-endpoint triads
     /// mechanically through the delegated union primitive).
@@ -1806,11 +1806,11 @@ impl Boundary {
     /// over [`ConditionKind::ALL`] under [`Self::has_condition_kind`]
     /// (this primitive) vs `!has_condition_kind` (the missing peer).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the exactly-one-hit witnessing projection on
     /// the closed-set-inversion axis composes the SAME two-step short-
     /// circuit walk under a two-slice union on both this boundary
-    /// surface and the ephemeral surface). THEORY.md §VI.1 (generation
+    /// surface and the ephemeral surface). (generation
     /// over composition — a new [`ConditionKind`] variant reaches both
     /// surfaces' unique-distinct-kind triads mechanically through the
     /// delegated union primitive).
@@ -1924,11 +1924,11 @@ impl Boundary {
     /// substrate call — byte-for-byte peer of the tagged-union
     /// `has-multiple-populated-kinds` classifier one struct-layer up.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality-many-arm projection on the
     /// closed-set-inversion axis composes the SAME two-step short-
     /// circuit walk under a two-slice union on both this boundary
-    /// surface and the ephemeral surface). THEORY.md §VI.1
+    /// surface and the ephemeral surface).
     /// (generation over composition — a new [`ConditionKind`]
     /// variant reaches both surfaces' cardinality-many-arm triads
     /// mechanically through the delegated union primitive).
@@ -2053,11 +2053,11 @@ impl Boundary {
     /// sibling `has-multiple-distinct-condition-kind` under the
     /// Boolean negation axis.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality "≤ 1" projection on the
     /// distinct axis composes the SAME definitional negation of the
     /// many-arm two-step short-circuit walk on both this boundary
-    /// surface and the ephemeral surface). THEORY.md §VI.1 (generation
+    /// surface and the ephemeral surface). (generation
     /// over composition — a new [`ConditionKind`] variant reaches both
     /// surfaces' cardinality "≤ 1" triads mechanically through the
     /// delegated union primitive).
@@ -2180,11 +2180,11 @@ impl Boundary {
     /// `has-any-distinct-condition-kind` under the Boolean negation
     /// axis.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality zero-endpoint projection on
     /// the distinct axis composes the SAME definitional negation of
     /// the at-least-one halfspace short-circuit walk on both this
-    /// boundary surface and the ephemeral surface). THEORY.md §VI.1
+    /// boundary surface and the ephemeral surface).
     /// (generation over composition — a new [`ConditionKind`] variant
     /// reaches both surfaces' cardinality zero-endpoint triads
     /// mechanically through the delegated union primitive).
@@ -2283,10 +2283,10 @@ impl Boundary {
     /// tagged-union `is-partially-populated` classifier one struct-
     /// layer up under the SAME parent-state middle-arm shape.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the parent-state middle-arm projection
     /// composes the SAME paired-halfspace body on both this boundary
-    /// surface and the ephemeral surface). THEORY.md §VI.1 (generation
+    /// surface and the ephemeral surface). (generation
     /// over composition — a new [`ConditionKind`] variant reaches both
     /// surfaces' parent-state middle-arm triads mechanically through
     /// the delegated union primitive).
@@ -2379,11 +2379,11 @@ impl Boundary {
     /// substrate call — byte-for-byte peer of the tagged-union
     /// `has-unique-missing-kind` classifier one struct-layer up.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality-mid-endpoint projection on
     /// the missing axis composes the SAME two-step short-circuit walk
     /// under a two-slice union negation on both this boundary surface
-    /// and the ephemeral surface). THEORY.md §VI.1 (generation over
+    /// and the ephemeral surface). (generation over
     /// composition — a new [`ConditionKind`] variant reaches both
     /// surfaces' cardinality-mid-endpoint triads mechanically through
     /// the delegated union primitive).
@@ -2490,11 +2490,11 @@ impl Boundary {
     /// [`Self::first_missing_condition_kind`] at TWO independent walks
     /// whose agreement is a coincidence.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the complement-exactly-one-hit witnessing
     /// projection composes the SAME two-step short-circuit walk under
     /// a two-slice union negation on both this boundary surface and
-    /// the ephemeral surface). THEORY.md §VI.1 (generation over
+    /// the ephemeral surface). (generation over
     /// composition — a new [`ConditionKind`] variant reaches both
     /// surfaces' unique-missing-kind triads mechanically through the
     /// delegated union primitive).
@@ -2598,11 +2598,11 @@ impl Boundary {
     /// substrate call — byte-for-byte peer of the tagged-union
     /// `has-multiple-missing-kinds` classifier one struct-layer up.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality-many-arm projection on the
     /// missing axis composes the SAME two-step short-circuit walk
     /// under a two-slice union negation on both this boundary surface
-    /// and the ephemeral surface). THEORY.md §VI.1 (generation over
+    /// and the ephemeral surface). (generation over
     /// composition — a new [`ConditionKind`] variant reaches both
     /// surfaces' cardinality-many-arm triads mechanically through the
     /// delegated union primitive).
@@ -2715,11 +2715,11 @@ impl Boundary {
     /// alongside its sibling `has-multiple-missing-condition-kind`
     /// under the Boolean negation axis.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality "≤ 1" projection on the
     /// missing axis composes the SAME definitional negation of the
     /// many-arm two-step short-circuit walk on both this boundary
-    /// surface and the ephemeral surface). THEORY.md §VI.1 (generation
+    /// surface and the ephemeral surface). (generation
     /// over composition — a new [`ConditionKind`] variant reaches both
     /// surfaces' cardinality "≤ 1" triads mechanically through the
     /// delegated union primitive).
@@ -2809,11 +2809,11 @@ impl Boundary {
     /// or restating `boundary.missing_condition_kinds().contains(&k)`
     /// with its allocation.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the per-kind closed-set-complement
     /// projection composes the SAME two-slice union negation on both
     /// this boundary surface and the slice-level substrate primitive
-    /// under definitional negation). THEORY.md §VI.1 (generation over
+    /// under definitional negation). (generation over
     /// composition — a new [`ConditionKind`] variant reaches both
     /// surfaces' complement-triads mechanically through the delegated
     /// union primitive).
@@ -2912,11 +2912,11 @@ impl Boundary {
     /// layer alongside its sibling `has-<kind>` under the per-kind
     /// presence-probe axis.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the kind-scoped strict-refinement projection
     /// composes the SAME fused short-circuit closed-set walk under
     /// [`Self::has_condition_kind`] on both this boundary surface and
-    /// the ephemeral surface). THEORY.md §VI.1 (generation over
+    /// the ephemeral surface). (generation over
     /// composition — a new [`ConditionKind`] variant reaches both
     /// surfaces' kind-scoped strict-refinement triads mechanically
     /// through the delegated union primitive).
@@ -3029,11 +3029,11 @@ impl Boundary {
     /// grid on the Boundary struct layer alongside its populated-axis
     /// peer [`Self::has_only_condition_kind`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the kind-scoped strict-refinement projection
     /// on the missing axis composes the SAME fused short-circuit
     /// closed-set walk under [`Self::has_condition_kind`] on both this
-    /// boundary surface and the ephemeral surface). THEORY.md §VI.1
+    /// boundary surface and the ephemeral surface).
     /// (generation over composition — a new [`ConditionKind`] variant
     /// reaches both surfaces' kind-scoped strict-refinement-on-missing
     /// triads mechanically through the delegated union primitive).
@@ -3133,11 +3133,11 @@ impl Boundary {
     /// slot on both slices to count) or the pre + post OR-composition
     /// with hand-authored short-circuit at every classifier arm.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the per-kind cardinality-many-arm projection
     /// composes the SAME two-step short-circuit walk over the two-
     /// slice chain on both this boundary surface and the ephemeral
-    /// surface). THEORY.md §VI.1 (generation over composition —
+    /// surface). (generation over composition —
     /// a new [`ConditionKind`] variant reaches both surfaces'
     /// per-kind-many-arm triads mechanically through the delegated
     /// chained iterator).
@@ -3229,11 +3229,11 @@ impl Boundary {
     /// OR-composition with hand-authored short-circuit at every
     /// classifier arm.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the per-kind cardinality-mid-endpoint
     /// projection composes the SAME two-step short-circuit walk
     /// over the two-slice chain on both this boundary surface and
-    /// the ephemeral surface). THEORY.md §VI.1 (generation over
+    /// the ephemeral surface). (generation over
     /// composition — a new [`ConditionKind`] variant reaches both
     /// surfaces' per-kind-mid-endpoint triads mechanically through
     /// the delegated chained iterator).
@@ -3332,11 +3332,11 @@ impl Boundary {
     /// single reference (1 match) but rejects duplicates reads this
     /// primitive with a single call.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the per-kind cardinality-"≤ 1" projection
     /// composes the SAME definitional negation shape over the two-
     /// slice chain on both this boundary surface and the ephemeral
-    /// surface). THEORY.md §VI.1 (generation over composition — a
+    /// surface). (generation over composition — a
     /// new [`ConditionKind`] variant reaches both surfaces' per-
     /// kind-"≤ 1" triads mechanically through the delegated chained
     /// iterator).
@@ -3427,11 +3427,11 @@ impl Boundary {
     /// (which walks the chain twice) or the pre + post disjoint-arm
     /// composition at every classifier arm.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the per-kind `Option<&Condition>`
     /// witnessing refinement composes the SAME two-step short-
     /// circuit walk over the two-slice chain on both this boundary
-    /// surface and the ephemeral surface). THEORY.md §VI.1
+    /// surface and the ephemeral surface).
     /// (generation over composition — a new [`ConditionKind`]
     /// variant reaches both surfaces' per-kind-witness triads
     /// mechanically through the delegated chained iterator).
@@ -3535,11 +3535,11 @@ impl Boundary {
     /// endpoints through TWO substrate methods at symmetric shapes
     /// without allocating through `iter_condition_kind().collect()`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the per-kind latest-position witness
     /// composes the SAME `iter_kind(k).last()` shape over the two-
     /// slice chain on both this boundary surface and the ephemeral
-    /// surface). THEORY.md §VI.1 (generation over composition — a
+    /// surface). (generation over composition — a
     /// new [`ConditionKind`] variant reaches both surfaces' per-
     /// kind latest-witness triads mechanically through the delegated
     /// chained iterator).
@@ -3627,7 +3627,7 @@ impl Boundary {
     /// scalar) triad on the per-kind `&Condition`-witness axis at
     /// the boundary level.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the materialized `Vec<&Condition>` witness
     /// composes the SAME `iter_kind(k).collect()` shape over the
     /// two-slice chain on both this boundary surface and the
@@ -3808,11 +3808,11 @@ impl Boundary {
 /// regression that drifted one from the other becomes structurally
 /// impossible past the trait boundary.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// Anchor: invariant 5 — composition preserves
 /// proofs; the per-slice walk lives at ONE substrate site so the
 /// two-half union in [`Boundary`] and the one-half probe on
 /// [`crate::ephemeral::EphemeralSpec::postconditions`] compose
-/// through the SAME primitive. THEORY.md §VI.1 — generation over
+/// through the SAME primitive. Generation over
 /// composition; a future `Vec<Condition>` consumer reaches the
 /// primitive through `slice.has_kind(k)` with no per-caller
 /// restatement of the `.iter().any(|c| c.kind == K)` closure body.
@@ -4016,15 +4016,15 @@ pub trait ConditionSliceExt {
     /// answers its question and the others stay compositionally
     /// derived from the single-source-of-truth widened primitive.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The closed-set-inversion projection lives at ONE substrate
     ///   site as a typed projection of [`Self::has_kind`] over the
     ///   closed set [`ConditionKind::ALL`]. Every downstream aggregate
     ///   consumer binds through the SAME shape rather than restating
     ///   the ALL-filter closure body.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically (the closed-set walk picks up the new
     ///   entry) and every downstream consumer sees the wider set
@@ -4087,14 +4087,14 @@ pub trait ConditionSliceExt {
     ///   k.label())` and folds through `itertools::join` without the
     ///   allocation `Vec<ConditionKind> -> String` pays.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The load-bearing iterator projection lives at ONE substrate
     ///   site; every downstream aggregate consumer refines it through a
     ///   standard-library iterator fold rather than restating the
     ///   [`ConditionKind::ALL`]-walk closure body.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches the walk
     ///   mechanically (the closed-set filter picks up the new entry) and
     ///   every downstream fold sees the wider set without further
@@ -4157,9 +4157,9 @@ pub trait ConditionSliceExt {
     ///   kinds" reaches `slice.distinct_kind_count()` directly rather
     ///   than restating the `.iter().filter(...).count()` closure body.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The scalar cardinality lives at ONE substrate site as a typed
     ///   projection of [`Self::distinct_kinds`] onto its `.len()`, and
     ///   the default body composes against [`Self::has_kind`] over the
@@ -4168,7 +4168,7 @@ pub trait ConditionSliceExt {
     ///   downstream aggregate consumer binds through the SAME shape
     ///   rather than paying for the allocation to reach the
     ///   cardinality.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically (the closed-set walk picks up the new
     ///   entry) and every downstream consumer sees the wider
@@ -4248,15 +4248,15 @@ pub trait ConditionSliceExt {
     ///   [`Self::missing_kind_count`] (the scalar-cardinality peer of
     ///   this widened primitive) without allocating.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The closed-set complement lives at ONE substrate site as a
     ///   typed projection of [`Self::has_kind`] over the closed set
     ///   [`ConditionKind::ALL`] under negation. Every downstream gap-
     ///   analysis consumer binds through the SAME shape rather than
     ///   restating the negated ALL-filter closure body.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically (the closed-set walk picks up the new
     ///   entry on the missing side WITHOUT further per-caller edit —
@@ -4330,14 +4330,14 @@ pub trait ConditionSliceExt {
     ///   `itertools::join` without the allocation `Vec<ConditionKind> ->
     ///   String` pays.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The load-bearing iterator projection on the complement side
     ///   lives at ONE substrate site, byte-for-byte symmetrical with
     ///   [`Self::iter_distinct_kinds`] under a negated `has_kind`
     ///   predicate.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches the walk
     ///   mechanically (the closed-set filter picks up the new entry on
     ///   the missing side) and every downstream fold sees the wider
@@ -4416,9 +4416,9 @@ pub trait ConditionSliceExt {
     ///   `slice.missing_kind_count()` directly rather than restating the
     ///   negated `.iter().filter(...).count()` closure body.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The scalar cardinality lives at ONE substrate site as a typed
     ///   projection of [`Self::missing_kinds`] onto its `.len()`, and
     ///   the default body composes against [`Self::has_kind`] over the
@@ -4427,7 +4427,7 @@ pub trait ConditionSliceExt {
     ///   Every downstream aggregate consumer binds through the SAME
     ///   shape rather than paying for the allocation to reach the
     ///   cardinality.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this primitive
     ///   mechanically (the closed-set walk picks up the new entry on
     ///   the missing side WITHOUT further per-caller edit — any slice
@@ -4499,13 +4499,13 @@ pub trait ConditionSliceExt {
     ///   `!distinct_kinds().is_empty()` or paying for the full
     ///   `distinct_kind_count() > 0` walk.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+    /// - Invariant 5 — composition preserves proofs. The
     ///   earliest-element projection lives at ONE substrate site as a
     ///   typed projection of [`Self::has_kind`] over the closed set
     ///   [`ConditionKind::ALL`] under short-circuit walk semantics.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this primitive
     ///   mechanically (the closed-set walk picks up the new entry) —
     ///   every downstream consumer sees the wider earliest-hit projection
@@ -4585,14 +4585,14 @@ pub trait ConditionSliceExt {
     ///   `!missing_kinds().is_empty()` or paying for the full
     ///   `missing_kind_count() > 0` walk.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs. The
+    /// - Invariant 5 — composition preserves proofs. The
     ///   complement-earliest-element projection lives at ONE substrate
     ///   site as a typed projection of [`Self::has_kind`] over the
     ///   closed set [`ConditionKind::ALL`] under negation with short-
     ///   circuit walk semantics.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this primitive
     ///   mechanically (the closed-set walk picks up the new entry on the
     ///   missing side) — every downstream consumer sees the wider
@@ -4669,15 +4669,15 @@ pub trait ConditionSliceExt {
     ///   the two endpoints through TWO substrate primitives at
     ///   symmetric shapes without allocating.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The latest-element projection lives at ONE substrate site as
     ///   a typed projection of [`Self::has_kind`] over the closed set
     ///   [`ConditionKind::ALL`] under REVERSED short-circuit walk
     ///   semantics; byte-for-byte peer of the earliest-element
     ///   projection under FORWARD walk semantics.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically (the reversed closed-set walk picks
     ///   up the new entry at the appropriate position) — every
@@ -4759,16 +4759,16 @@ pub trait ConditionSliceExt {
     ///   endpoints through TWO substrate primitives at symmetric
     ///   shapes without allocating through `missing_kinds()`.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The complement-latest-element projection lives at ONE
     ///   substrate site as a typed projection of [`Self::has_kind`]
     ///   over the closed set [`ConditionKind::ALL`] under negation
     ///   with REVERSED short-circuit walk semantics; byte-for-byte
     ///   peer of the complement-earliest-element projection under
     ///   FORWARD walk semantics.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically (the reversed closed-set walk picks
     ///   up the new entry on the missing side at the appropriate
@@ -4844,15 +4844,15 @@ pub trait ConditionSliceExt {
     ///   `boundary.postconditions.missing_kinds().is_empty()` (which
     ///   allocates the Vec before the emptiness check).
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The saturation-endpoint projection lives at ONE substrate
     ///   site as a typed short-circuiting closed-set walk
     ///   `ConditionKind::ALL.iter().all(has_kind)`. Every downstream
     ///   consumer binds through the SAME shape rather than restating
     ///   the `== ConditionKind::ALL.len()` scalar composition body.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the `all` short-circuit — a
     ///   slice that was previously saturated is no longer saturated
@@ -4971,9 +4971,9 @@ pub trait ConditionSliceExt {
     ///   primitive per test rather than restating the emptiness body at
     ///   every callsite.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The zero-endpoint projection on the closed-set-inversion axis
     ///   lives at ONE substrate site as a short-circuiting closed-set
     ///   walk over the load-bearing distinct iterator. Every downstream
@@ -4982,7 +4982,7 @@ pub trait ConditionSliceExt {
     ///   primitive's Vec allocation, the scalar counter's full-slot
     ///   walk, or the negation-at-callsite of the at-least-one halfspace
     ///   primitive.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the load-bearing distinct iterator — an
     ///   empty slice (returning `true` here) that later picks up any
@@ -5100,9 +5100,9 @@ pub trait ConditionSliceExt {
     ///   symmetrical with the sibling `is-kind-empty` /
     ///   `is-kind-saturated` arms on the closed parent-state trichotomy.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The parent-state middle-arm projection on the closed-set
     ///   partition lives at ONE substrate site as a FUSED short-circuit
     ///   walk over `ConditionKind::ALL` under [`Self::has_kind`] with
@@ -5115,7 +5115,7 @@ pub trait ConditionSliceExt {
     ///   testkit's per-arm sweep — pinned across every production
     ///   slice at compile time via the trait's default body
     ///   composition, not per-slice.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this primitive
     ///   mechanically through the fused walk — the trichotomy holds
     ///   on the widened kind set without further per-caller edit
@@ -5230,9 +5230,9 @@ pub trait ConditionSliceExt {
     ///   `.iter().copied().any(|k| slice.has_kind(k))` body at every
     ///   callsite.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The at-least-one halfspace projection on the closed-set-
     ///   inversion axis lives at ONE substrate site as a typed short-
     ///   circuiting closed-set walk `ConditionKind::ALL.iter().any(
@@ -5240,7 +5240,7 @@ pub trait ConditionSliceExt {
     ///   is "at least one kind is present" reads through this
     ///   primitive rather than paying for the widened primitive's Vec
     ///   allocation.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the `any` short-circuit — an
     ///   empty slice (returning `false` here) that later picks up the
@@ -5323,9 +5323,9 @@ pub trait ConditionSliceExt {
     ///   [`Self::first_distinct_kind`] to name the SOLE distinct kind
     ///   without allocating [`Self::distinct_kinds`]'s `Vec`.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The cardinality-mid-endpoint projection on the closed-set-
     ///   inversion axis lives at ONE substrate site as a typed
     ///   two-step-short-circuit fold through the load-bearing
@@ -5333,7 +5333,7 @@ pub trait ConditionSliceExt {
     ///   of `distinct_kind_count()` composed against `== 1`, but with
     ///   a second-distinct-slot short-circuit that the scalar counter
     ///   primitive does not offer.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the short-circuit walk — a
     ///   slice previously at the singleton-coverage arm (returned
@@ -5408,16 +5408,16 @@ pub trait ConditionSliceExt {
     ///   covered" from "0 or ≥ 2 covered" reads
     ///   `slice.unique_distinct_kind().is_some()` at ONE call site.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The exactly-one-hit witnessing projection on the closed-set-
     ///   inversion axis lives at ONE substrate site as a typed two-
     ///   step-short-circuit fold through the load-bearing
     ///   [`Self::iter_distinct_kinds`] iterator — byte-for-byte peer of
     ///   the tagged-union [`crate::tagged_union::TaggedUnion::unique_populated_kind`]
     ///   under the SAME iterator shape.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the short-circuit walk — a
     ///   slice previously at the singleton-coverage arm (returned
@@ -5509,9 +5509,9 @@ pub trait ConditionSliceExt {
     ///   `has_multiple_distinct_kinds()` at ONE call site without
     ///   allocating [`Self::distinct_kinds`]'s `Vec`.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The cardinality-many-arm projection on the distinct axis
     ///   lives at ONE substrate site as a typed two-step-short-circuit
     ///   fold through the load-bearing [`Self::iter_distinct_kinds`]
@@ -5519,7 +5519,7 @@ pub trait ConditionSliceExt {
     ///   composed against `>= 2`, but with a second-distinct-slot
     ///   short-circuit that the scalar counter primitive does not
     ///   offer.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the short-circuit walk — a
     ///   slice previously at the singleton-coverage arm (returned
@@ -5640,9 +5640,9 @@ pub trait ConditionSliceExt {
     ///   `has_at_most_one_distinct_kind()` at ONE call site without
     ///   allocating [`Self::distinct_kinds`]'s `Vec`.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The cardinality "≤ 1" projection on the distinct axis lives
     ///   at ONE substrate site as the definitional Boolean negation
     ///   of [`Self::has_multiple_distinct_kinds`]; the three composition
@@ -5651,7 +5651,7 @@ pub trait ConditionSliceExt {
     ///   has_unique_distinct_kind()`) compose through the SAME two-
     ///   step-short-circuit walk shape one negation up, byte-for-byte
     ///   identical on every arm.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the delegated
     ///   [`Self::has_multiple_distinct_kinds`] — a slice previously at
@@ -5758,9 +5758,9 @@ pub trait ConditionSliceExt {
     ///   substrate primitive per test rather than restating the
     ///   negation body at every callsite.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The at-least-one halfspace projection lives at ONE substrate
     ///   site as a definitional negation of
     ///   [`Self::is_kind_saturated`]. Every downstream consumer whose
@@ -5768,7 +5768,7 @@ pub trait ConditionSliceExt {
     ///   through this primitive rather than negating `is_kind_saturated`
     ///   at every callsite or paying for the widened primitive's Vec
     ///   allocation.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the delegated
     ///   `is_kind_saturated` — a slice that was previously saturated
@@ -5857,9 +5857,9 @@ pub trait ConditionSliceExt {
     ///   [`Self::first_missing_kind`] to name the SOLE remaining hole
     ///   without allocating [`Self::missing_kinds`]'s `Vec`.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The cardinality-mid-endpoint projection on the missing axis
     ///   lives at ONE substrate site as a typed two-step-short-
     ///   circuit walk over [`ConditionKind::ALL`] under negated
@@ -5867,7 +5867,7 @@ pub trait ConditionSliceExt {
     ///   `missing_kind_count()` composed against `== 1`, but with a
     ///   second-missing-slot short-circuit that the scalar counter
     ///   primitive does not offer.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the short-circuit walk — a
     ///   slice previously at the near-saturation arm (returned `true`
@@ -5945,16 +5945,16 @@ pub trait ConditionSliceExt {
     ///   still missing" from "0 or ≥ 2 still missing" reads
     ///   `slice.unique_missing_kind().is_some()` at ONE call site.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The complement-exactly-one-hit witnessing projection lives at
     ///   ONE substrate site as a typed two-step-short-circuit fold
     ///   through the load-bearing [`Self::iter_missing_kinds`] iterator
     ///   — byte-for-byte peer of the tagged-union
     ///   [`crate::tagged_union::TaggedUnion::unique_missing_kind`]
     ///   under the SAME iterator shape.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically on the missing side.
     fn unique_missing_kind(&self) -> Option<ConditionKind> {
@@ -6045,9 +6045,9 @@ pub trait ConditionSliceExt {
     ///   `has_multiple_missing_kinds()` at ONE call site without
     ///   allocating [`Self::missing_kinds`]'s `Vec`.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The cardinality-many-arm projection on the missing axis
     ///   lives at ONE substrate site as a typed two-step-short-
     ///   circuit walk over [`ConditionKind::ALL`] under negated
@@ -6055,7 +6055,7 @@ pub trait ConditionSliceExt {
     ///   `missing_kind_count()` composed against `>= 2`, but with a
     ///   second-missing-slot short-circuit that the scalar counter
     ///   primitive does not offer.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the short-circuit walk — a
     ///   slice previously at the near-saturation arm (returned
@@ -6156,9 +6156,9 @@ pub trait ConditionSliceExt {
     ///   `has_at_most_one_missing_kind()` at ONE call site without
     ///   allocating [`Self::missing_kinds`]'s `Vec`.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The cardinality "≤ 1" projection on the missing axis lives
     ///   at ONE substrate site as the definitional Boolean negation
     ///   of [`Self::has_multiple_missing_kinds`]; the three composition
@@ -6166,7 +6166,7 @@ pub trait ConditionSliceExt {
     ///   and `is_kind_saturated() || has_unique_missing_kind()`)
     ///   compose through the SAME two-step-short-circuit walk shape
     ///   one negation up, byte-for-byte identical on every arm.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the delegated
     ///   [`Self::has_multiple_missing_kinds`] — a slice previously at
@@ -6262,16 +6262,16 @@ pub trait ConditionSliceExt {
     ///   `ConditionKind::ALL` fold at ONE substrate primitive per test
     ///   rather than restating the negation body at every callsite.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The per-kind closed-set-complement projection lives at ONE
     ///   substrate site as a definitional negation of [`Self::has_kind`].
     ///   Every downstream consumer whose semantic reading is "the
     ///   missing set contains THIS kind" reads through this primitive
     ///   rather than negating `has_kind` at every callsite or paying
     ///   for the closed-set-complement scan.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the delegated `has_kind` —
     ///   every downstream `lacks-<kind>` classifier arm sees the wider
@@ -6381,9 +6381,9 @@ pub trait ConditionSliceExt {
     ///   fused walk, no allocation, no `Option<ConditionKind>`
     ///   construction.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The kind-scoped strict-refinement projection lives at ONE
     ///   substrate site as a fused short-circuit walk over
     ///   [`ConditionKind::ALL`] under [`Self::has_kind`] with early
@@ -6391,7 +6391,7 @@ pub trait ConditionSliceExt {
     ///   byte-for-byte cheaper than the widened composition
     ///   `distinct_kinds() == vec![kind]`, semantically identical on
     ///   every arm.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the fused walk — every
     ///   downstream `has-only-<kind>` classifier arm sees the wider
@@ -6506,9 +6506,9 @@ pub trait ConditionSliceExt {
     ///   site — the strongest structural pin on the missing-side
     ///   well-formed diagonal.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The kind-scoped strict-refinement projection on the missing
     ///   axis lives at ONE substrate site as a fused short-circuit
     ///   walk over [`ConditionKind::ALL`] under [`Self::has_kind`]
@@ -6517,7 +6517,7 @@ pub trait ConditionSliceExt {
     ///   fused walk under complement, semantically identical to
     ///   `first_missing_kind() == Some(kind) && missing_kind_count() == 1`
     ///   on every arm.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the delegated `has_kind` walk
     ///   — every downstream `lacks-only-<kind>` classifier arm sees
@@ -6595,16 +6595,16 @@ pub trait ConditionSliceExt {
     ///   `ConditionKind::ALL.into_iter().filter(|k|
     ///   slice.has_multiple_of_kind(*k))` at ONE call site.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The per-kind cardinality-many-arm projection on the count
     ///   axis lives at ONE substrate site as a typed two-step-short-
     ///   circuit fold through the load-bearing [`Self::iter_kind`]
     ///   iterator — byte-for-byte peer of `count_kind(kind)` composed
     ///   against `>= 2`, but with a second-match short-circuit that
     ///   the scalar counter primitive does not offer.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the per-kind iterator — a
     ///   slice previously containing no conditions of the new kind
@@ -6698,16 +6698,16 @@ pub trait ConditionSliceExt {
     ///   `slice.lacks_kind(k)` or `slice.has_multiple_of_kind(k)`
     ///   without restating the walk.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The per-kind cardinality-mid-endpoint projection on the
     ///   count axis lives at ONE substrate site as a typed two-step-
     ///   short-circuit fold through the load-bearing [`Self::iter_kind`]
     ///   iterator — byte-for-byte peer of `count_kind(kind)` composed
     ///   against `== 1`, but with a second-match short-circuit that
     ///   the scalar counter primitive does not offer.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the per-kind iterator — a
     ///   slice previously containing no conditions of the new kind
@@ -6822,9 +6822,9 @@ pub trait ConditionSliceExt {
     ///   kind is duplicated" projection composes through the SAME
     ///   substrate primitive without restating the negation.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The per-kind cardinality "≤ 1" projection lives at ONE
     ///   substrate site as the definitional Boolean negation of
     ///   [`Self::has_multiple_of_kind`]; the three composition forms
@@ -6832,7 +6832,7 @@ pub trait ConditionSliceExt {
     ///   `lacks_kind(k) || has_unique_of_kind(k)`) compose through
     ///   the SAME two-step-short-circuit walk shape one negation up,
     ///   byte-for-byte identical on every arm.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant added to `ALL` reaches this
     ///   primitive mechanically through the delegated
     ///   [`Self::has_multiple_of_kind`] — a slice previously at the
@@ -6899,16 +6899,16 @@ pub trait ConditionSliceExt {
     /// the params directly — a two-pass phrase leaves the singleton
     /// invariant implicit; this peer carries it in the return type.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The `Option<&Condition>` witnessing refinement lives at ONE
     ///   substrate site as a two-step short-circuit walk over
     ///   [`Self::iter_kind`]; the composition law
     ///   `has_unique_of_kind(k) == unique_of_kind(k).is_some()` binds
     ///   the Boolean projection to the widened witness at the trait's
     ///   default body.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant reaches this primitive
     ///   mechanically through the delegated [`Self::iter_kind`] with
     ///   no per-caller edit.
@@ -6989,14 +6989,14 @@ pub trait ConditionSliceExt {
     /// earlier hit surfaces which slot was authored first, the later
     /// hit surfaces which slot the operator last touched.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The latest-position `Option<&Condition>` witness lives at
     ///   ONE substrate site as `iter_kind(k).last()`; the composition
     ///   laws bind the witness to its Boolean and first-match siblings
     ///   at the trait's default body.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant reaches this primitive mechanically
     ///   through the delegated [`Self::iter_kind`] — every downstream
     ///   `last-of-<kind>` witness callsite sees the wider closed set
@@ -7075,15 +7075,15 @@ pub trait ConditionSliceExt {
     /// [`Self::distinct_kinds`]) and the missing-kind axis
     /// ([`Self::iter_missing_kinds`] ↔ [`Self::missing_kinds`]).
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The materialized `Vec<&Condition>` witness lives at ONE
     ///   substrate site as `iter_kind(k).collect()`; the composition
     ///   laws bind the vec to its iterator, first-match, last-match,
     ///   cardinality, and Boolean siblings at the trait's default
     ///   body.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant reaches this primitive mechanically
     ///   through the delegated [`Self::iter_kind`] — every downstream
     ///   `all-of-<kind>` Vec-witness callsite sees the wider closed
@@ -7149,15 +7149,15 @@ pub trait ConditionSliceExt {
     /// per witness and every downstream caller picks it up
     /// mechanically.
     ///
-    /// # Theory grounding
+    /// # Grounding
     ///
-    /// - THEORY.md §II.1 invariant 5 — composition preserves proofs.
+    /// - Invariant 5 — composition preserves proofs.
     ///   The index witness lives at ONE substrate site as
     ///   `self.iter().position(|c| c.kind == kind)`; the composition
     ///   law `position_of_kind(k).map(|i| &slice[i]) == find_kind(k)`
     ///   binds it to the value-witness peer at the trait's default
     ///   body.
-    /// - THEORY.md §VI.1 — generation over composition. A new
+    /// - Generation over composition. A new
     ///   [`ConditionKind`] variant reaches this primitive mechanically
     ///   through the delegated `.iter().position` walk — every
     ///   downstream `first-position-of-<kind>` callsite sees the
@@ -7293,12 +7293,12 @@ impl ConditionSliceExt for [Condition] {
 /// addressed slice-level refinement, one per closed-set-addressed
 /// tagged-union parent-level refinement.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// Anchor: invariant 5 — composition preserves
 /// proofs. The four coarser refinements are typed projections of the
 /// widened primitive, and this substrate primitive turns each
 /// projection's composition law from doc-prose into a first-class
 /// typed theorem provable generically over any
-/// `S: ConditionSliceExt + ?Sized`. THEORY.md §VI.1 — generation over
+/// `S: ConditionSliceExt + ?Sized`. Generation over
 /// composition; a new [`ConditionKind`] variant added to `ALL` reaches
 /// every downstream composition-law consumer through the SAME
 /// closed-set sweep with no per-caller edit.
@@ -8613,15 +8613,15 @@ where
 /// `condition-<kind>` / `precondition-<kind>` / `postcondition-<kind>`
 /// require-tag classifier surfaces downstream.
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs. Each
+/// - Invariant 5 — composition preserves proofs. Each
 ///   union arm is a typed projection of its two half-slice peers via
 ///   a specific monoid operator, and this substrate macro turns each
 ///   projection's composition law from doc-prose into a first-class
 ///   typed theorem provable against any surface exposing the twelve
 ///   `_kind`-suffixed inherent methods.
-/// - THEORY.md §VI.1 — generation over composition. A new
+/// - Generation over composition. A new
 ///   [`ConditionKind`] variant added to `ALL` reaches every downstream
 ///   union-composition-law consumer through the SAME closed-set sweep
 ///   with no per-caller edit; a new surface (a typed wrapper carrying
@@ -9002,7 +9002,7 @@ impl ConditionKind {
     /// - `PromQL` / `Cel` / `NixEval` are stub evaluators
     ///   ([`Self::is_stub`]) — no cluster fetch at all.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the (ConditionKind → FluxResource)
     /// association lives at ONE typed algebra projection here, not
     /// at every reconciler dispatch arm).

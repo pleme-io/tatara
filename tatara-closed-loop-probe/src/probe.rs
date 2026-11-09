@@ -43,11 +43,11 @@ impl ServiceEndpoint {
     /// picks up the scheme upgrade mechanically without per-callsite
     /// hand-edit.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 4-slot HTTP-endpoint composition recurred at two hand-
     /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-    /// trigger and is lifted to ONE method here). THEORY.md §II.1
-    /// invariant 5 (composition preserves proofs — the pins below
+    /// trigger and is lifted to ONE method here).
+    /// Invariant 5 (composition preserves proofs — the pins below
     /// bind the primitive at fail-before-pass-after granularity, so a
     /// regression that dropped the port, drifted the scheme, or
     /// reshaped the concatenation surfaces at

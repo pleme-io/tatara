@@ -66,16 +66,16 @@ use std::hash::{Hash, Hasher};
 /// normally in that path (pinned by `assert_char_array_pairwise_
 /// distinct_panics_at_runtime_on_collision`).
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide distinctness
+/// Grounding:
+/// - Knowable platform; the family-wide distinctness
 ///   contract becomes a TYPE-LEVEL theorem the substrate carries per
 ///   array declaration rather than a runtime test the developer must
 ///   remember to write per array.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   sweep IS the generative shape. Every new closed-set char array
 ///   adds ONE `const _` line to get the distinctness theorem rather
 ///   than re-deriving a `HashSet::insert` loop test per array.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   distinctness proof at declaration site AND the outer-dispatch
 ///   match-arm exhaustiveness the consumer relies on regenerate
 ///   through the SAME `const _` witness.
@@ -189,24 +189,24 @@ const _: () = assert_char_array_pairwise_distinct(&Atom::ESCAPE_DECODED);
 /// ASCII sibling; the shared `"-NON-ASCII-"` infix lets callers grep
 /// any row's ASCII sibling by `"NON-ASCII"` alone.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide per-entry
+/// Grounding:
+/// - Knowable platform; the family-wide per-entry
 ///   ASCII-scalar-range contract on the substrate's reader-boundary
 ///   `char` vocabulary becomes a TYPE-LEVEL theorem the substrate
 ///   carries per array declaration rather than a runtime test the
 ///   developer must remember to write per scalar constant.
-/// - THEORY.md §II.1 invariant 1 — typed entry; a reader-boundary
+/// - Invariant 1 — typed entry; a reader-boundary
 ///   scalar's `char` projection IS the entry-point discriminator into
 ///   the tokenizer's outer dispatch, and a non-ASCII scalar in that
 ///   projection silently escapes the byte-level assumption every
 ///   downstream parser encodes into its own byte-position arithmetic.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) matrix now carries the ASCII per-entry corner on TWO rows
 ///   ({`char`, `&'static str`}) at ONE peer const-fn helper per row.
 ///   The (element-type ∈ {char, `&'static str`}) × (contract-shape ∈
 ///   {per-entry ASCII}) 2-corner row of the per-entry ASCII column is
 ///   now closed at TWO peer const-fn helpers.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   scalar-range sweep IS the generative shape. Every new closed-set
 ///   reader-boundary scalar array adds ONE `const _` line to get the
 ///   ASCII theorem rather than re-deriving a per-array runtime iterator
@@ -390,8 +390,8 @@ const _: () = assert_char_array_all_ascii(&Atom::ESCAPE_DECODED);
 /// sibling by `"VIOLATION"` alone or route to the specific element-
 /// type row by the disambiguator prefix.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide subset-
+/// Grounding:
+/// - Knowable platform; the family-wide subset-
 ///   embedding contract on the reader-boundary `char` vocabulary
 ///   becomes a TYPE-LEVEL theorem the substrate carries per (subset,
 ///   superset) array pair rather than a runtime test the developer
@@ -400,19 +400,19 @@ const _: () = assert_char_array_all_ascii(&Atom::ESCAPE_DECODED);
 ///   `QuoteForm::LEADS ⊆ NON_WHITESPACE_BARE_ATOM_TERMINATORS`,
 ///   `SELF_ESCAPE_TABLE ⊆ ESCAPE_SOURCES`) previously lived only as
 ///   prose in their parent arrays' composition-rule docstrings.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) matrix now carries the SUBSET-EMBEDDING corner at BOTH
 ///   the `u8` row and the `char` row, closing the element-type column
 ///   on the SUBSET-corner face at two peer const-fn helpers rather
 ///   than at one primitive with a runtime cast per element-type.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   set-membership sweep IS the generative shape. Every new closed-
 ///   set `char` sub-vocabulary array whose distinct-value set is an
 ///   intentional SUBSET of another substrate `char` array adds ONE
 ///   `const _` line to get the subset-embedding theorem rather than
 ///   re-deriving a per-embedding runtime iterator sweep at each call
 ///   site.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   SUBSET-embedding proof at declaration site AND the reader outer-
 ///   dispatch cascade's four-category exhaustiveness contract (which
 ///   assumes LIST_DELIMITERS + QuoteForm::LEADS + STR_DELIMITER +
@@ -628,27 +628,27 @@ const _: () = assert_char_array_within_char_finite_set::<2, 5>(
 /// by `"VIOLATION"` alone or route to the specific contract-shape by
 /// the axis stem (`"DISJOINTNESS"` vs `"SUBSET"`).
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide cross-array
+/// Grounding:
+/// - Knowable platform; the family-wide cross-array
 ///   disjointness contract on the reader-boundary `char` vocabulary
 ///   becomes a TYPE-LEVEL theorem the substrate carries per (a, b)
 ///   char-array pair rather than a runtime test the developer must
 ///   remember to write per pair.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) matrix now carries the DISJOINTNESS corner on the (char)
 ///   row at ONE peer const-fn helper rather than at a per-pair runtime
 ///   iterator sweep. The (subset, disjointness) 2-corner face on the
 ///   (char) row is now closed at TWO peer const-fn helpers —
 ///   [`assert_char_array_within_char_finite_set`] on the SUBSET corner
 ///   and this helper on the DISJOINTNESS corner.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   cross-array membership sweep IS the generative shape. Every new
 ///   closed-set `char` sub-vocabulary array whose distinct-values set
 ///   is an intentionally-disjoint peer of another substrate `char`
 ///   array adds ONE `const _` line to get the disjointness theorem
 ///   rather than re-deriving a per-pair runtime iterator sweep at
 ///   each call site.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   DISJOINTNESS proof at declaration site AND the reader outer-
 ///   dispatch cascade's arm-set partition contract regenerate through
 ///   the SAME `const _` witnesses at the ARRAY level.
@@ -871,19 +871,19 @@ const _: () =
 /// AND
 /// `assert_char_array_slice_equals_char_array_panic_message_names_the_helper_and_char_slice_equals_array_violation_axis`).
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide per-position
+/// Grounding:
+/// - Knowable platform; the family-wide per-position
 ///   ORDER contract on the `char`-typed vocabulary becomes a TYPE-
 ///   LEVEL theorem the substrate carries per array declaration
 ///   rather than a runtime iterator sweep the developer must
 ///   remember to write per array.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   positionwise sweep IS the generative shape. Every new closed-
 ///   set char array declared as a positionwise composition against
 ///   named-scalar constants adds ONE `const _` line to get the
 ///   per-slot ORDER theorem rather than re-deriving a runtime index-
 ///   by-index `assert_eq!` block per array.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+/// - Invariant 5 — composition preserves proofs;
 ///   the per-slot-ORDER proof at declaration site AND the per-role
 ///   `pub const` alias-chain composition every consumer relies on
 ///   regenerate through the SAME `const _` witness.
@@ -1239,17 +1239,17 @@ const _: () = assert_char_array_slice_equals_char_array::<7, 1, 6>(
 /// `assert_str_array_pairwise_distinct_panics_at_runtime_on_binary_
 /// collision`).
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide
+/// Grounding:
+/// - Knowable platform; the family-wide
 ///   distinctness contract on the `&'static str`-typed vocabulary
 ///   becomes a TYPE-LEVEL theorem the substrate carries per array
 ///   declaration rather than a runtime test the developer must
 ///   remember to write per array.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   sweep IS the generative shape. Every new closed-set string
 ///   array adds ONE `const _` line to get the distinctness theorem
 ///   rather than re-deriving a per-array runtime iterator sweep.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+/// - Invariant 5 — composition preserves proofs;
 ///   the distinctness proof at declaration site AND the same-index
 ///   alias-chain composition the consumer relies on regenerate
 ///   through the SAME `const _` witness.
@@ -1488,18 +1488,18 @@ const _: () = assert_str_array_slice_equals_str_array::<4, 4, 0>(
 /// on the within-finite-set sibling) so a diagnostic that names the
 /// failed axis routes UNAMBIGUOUSLY to THIS specific NONEMPTY helper.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide nonempty-
+/// Grounding:
+/// - Knowable platform; the family-wide nonempty-
 ///   cardinality-lower-bound contract on the `&'static str` label
 ///   vocabulary becomes a TYPE-LEVEL theorem the substrate carries per
 ///   array declaration rather than a runtime test the developer must
 ///   remember to write per label constant.
-/// - THEORY.md §II.1 invariant 1 — typed entry; a closed-set variant's
+/// - Invariant 1 — typed entry; a closed-set variant's
 ///   label projection is the entry-point discriminator into the typed
 ///   algebra, and a `""` entry would silently break the discriminator
 ///   at the boundary between untyped `&str` input and typed enum
 ///   variant.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   sweep IS the generative shape. Every new closed-set label array
 ///   adds ONE `const _` line to get the NONEMPTY theorem rather than
 ///   re-deriving a per-array runtime iterator sweep at each call site.
@@ -1616,18 +1616,18 @@ const _: () = assert_str_array_all_nonempty(&QuoteForm::LABELS);
 /// names the failed axis routes UNAMBIGUOUSLY to THIS specific ASCII
 /// helper.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide per-entry
+/// Grounding:
+/// - Knowable platform; the family-wide per-entry
 ///   ASCII-byte-range contract on the substrate's `&'static str`
 ///   label vocabulary becomes a TYPE-LEVEL theorem the substrate
 ///   carries per array declaration rather than a runtime test the
 ///   developer must remember to write per label constant.
-/// - THEORY.md §II.1 invariant 1 — typed entry; a closed-set variant's
+/// - Invariant 1 — typed entry; a closed-set variant's
 ///   label projection is the entry-point discriminator into the typed
 ///   algebra, and a non-ASCII byte in that projection silently
 ///   escapes the seven-bit-clean assumption every downstream wire
 ///   surface encodes into its own byte-level parser.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   byte-range sweep IS the generative shape. Every new closed-set
 ///   label array adds ONE `const _` line to get the ASCII theorem
 ///   rather than re-deriving a per-array runtime iterator sweep at
@@ -1800,27 +1800,27 @@ const _: () = assert_str_array_all_ascii(&QuoteForm::LABELS);
 /// toolchain stabilising `const fn str::eq` collapses BOTH callers at
 /// ONE edit rather than two.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide cross-array
+/// Grounding:
+/// - Knowable platform; the family-wide cross-array
 ///   disjointness contract on the substrate's `&'static str`
 ///   vocabulary becomes a TYPE-LEVEL theorem the substrate carries per
 ///   (a, b) str-array pair rather than a runtime test the developer
 ///   must remember to write per pair.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) matrix now carries the DISJOINTNESS corner on THREE rows
 ///   ({char, u8, `&'static str`}) at ONE peer const-fn helper per row.
 ///   The (element-type ∈ {char, u8, `&'static str`}) × (contract-shape
 ///   ∈ {pairwise-distinctness (INJECTIVITY), disjointness}) 3×2 =
 ///   6-corner face on the array-pair-contract prism is now closed at
 ///   SIX peer const-fn helpers.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   cross-array byte-membership sweep IS the generative shape. Every
 ///   new `[&'static str; N]` sub-vocabulary array whose distinct-
 ///   values set is an intentionally-disjoint peer of another substrate
 ///   `[&'static str; M]` array adds ONE `const _` line to get the
 ///   disjointness theorem rather than re-deriving a per-pair runtime
 ///   iterator sweep at each call site.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   DISJOINTNESS proof at declaration site AND the outer-algebra's
 ///   arm-set partition contract (`QuoteForm::PREFIXES` on the reader-
 ///   boundary token surface vs. `QuoteForm::LABELS` on the human-
@@ -2073,27 +2073,27 @@ const _: () = assert_str_arrays_disjoint::<6, 4>(&AtomKind::LABELS, &QuoteForm::
 /// suffix lets callers grep any row's SUBSET-embedding sibling by
 /// the shared `"SUBSET-VIOLATION"` suffix alone.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide cross-array
+/// Grounding:
+/// - Knowable platform; the family-wide cross-array
 ///   subset-embedding contract on `&'static str` sub-vocabularies
 ///   becomes a TYPE-LEVEL theorem the substrate carries per (arr,
 ///   set) str-array pair rather than a runtime test the developer
 ///   must remember to write per pair.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) matrix now carries the SUBSET-EMBEDDING corner on THREE
 ///   rows at ONE peer const-fn helper per row. The (subset,
 ///   disjointness) 2-corner face on the (`&'static str`) row is now
 ///   closed at TWO peer const-fn helpers —
 ///   [`assert_str_arrays_disjoint`] on the DISJOINTNESS corner and
 ///   this helper on the SUBSET corner.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   cross-array membership sweep IS the generative shape. Every new
 ///   closed-set `&'static str` sub-vocabulary array whose distinct-
 ///   values set is an intentionally-embedded proper subset of another
 ///   substrate `&'static str` array adds ONE `const _` line to get
 ///   the subset-embedding theorem rather than re-deriving a per-pair
 ///   runtime iterator sweep at each call site.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   SUBSET-EMBEDDING proof at declaration site AND the outer-
 ///   algebra's twelve-arm shape-label partition contract regenerate
 ///   through the SAME `const _` witnesses at the ARRAY level.
@@ -2297,13 +2297,13 @@ pub const fn assert_str_array_within_str_finite_set<const N: usize, const M: usi
 /// type infix — one substring search per element-type routes any
 /// row's SET-side COVERAGE-VIOLATION back to its element-type peer.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the DISJOINT-UNION theorem
+/// Grounding:
+/// - Knowable platform; the DISJOINT-UNION theorem
 ///   on `&'static str` sub-vocabulary partitions becomes a TYPE-LEVEL
 ///   theorem the substrate carries per (partition-triple, parent)
 ///   quadruple rather than a runtime test the developer must
 ///   remember to write per partition.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) matrix now carries the THREE-ARRAY-COVERAGE corner on
 ///   the (`&'static str`) row at ONE peer const-fn helper. Combined
 ///   with the pre-existing (str, pairwise-distinct), (str, subset-
@@ -2311,13 +2311,13 @@ pub const fn assert_str_array_within_str_finite_set<const N: usize, const M: usi
 ///   shape corners on the (`&'static str`) row jointly close the
 ///   full DISJOINT-UNION theorem on any n-way partition of a
 ///   `&'static str` vocabulary at compile time.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   coverage sweep IS the generative shape. Every new n-way `&'static
 ///   str` vocabulary partition adds ONE `const _` line (plus the
 ///   sibling SUBSET-EMBEDDING and pairwise-DISJOINTNESS witnesses per
 ///   sub-array pair) to get the DISJOINT-UNION theorem rather than
 ///   re-deriving a per-partition runtime iterator sweep at each site.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   COVERAGE proof at declaration site AND the outer-algebra's
 ///   twelve-arm shape-label partition regenerate through the SAME
 ///   `const _` witness at the ARRAY level.
@@ -2510,14 +2510,14 @@ pub const fn assert_str_finite_set_covered_by_three_str_arrays<
 /// `..._on_arity_slip`, and `..._panic_message_names_the_helper_and_
 /// block_constancy_violation_axis`.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the MANY-TO-ONE variant →
+/// Grounding:
+/// - Knowable platform; the MANY-TO-ONE variant →
 ///   canonical-projection block-constant contract on the `&'static
 ///   str` per-index projection axis becomes a TYPE-LEVEL theorem the
 ///   substrate carries per (arr, head, tail, K) quadruple rather than
 ///   a runtime iterator sweep the developer must remember to write
 ///   per quadruple.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) matrix now carries the MANY-TO-ONE-BLOCK-CONSTANCY corner
 ///   on the (`&'static str`) row at ONE peer const-fn helper. Combined
 ///   with the pre-existing (`_pairwise_distinct`) INJECTIVITY sibling
@@ -2525,12 +2525,12 @@ pub const fn assert_str_finite_set_covered_by_three_str_arrays<
 ///   CONSTANCY) 2-corner face on the (`&'static str`) row — every
 ///   family-wide `[&'static str; N]` per-index projection array picks
 ///   the corner that matches its per-index projection cardinality.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   block-constant sweep IS the generative shape. Every new MANY-TO-
 ///   ONE variant → canonical-projection substrate closed set adds ONE
 ///   `const _` line to get the block-constant theorem rather than
 ///   re-deriving a per-projection runtime multiplicity check.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   BLOCK-CONSTANCY proof at declaration site AND the compound-key
 ///   `"{operation}: {stage}"` surface's partition contract regenerate
 ///   through the SAME `const _` witness at the ARRAY level.
@@ -2774,19 +2774,19 @@ pub const fn assert_str_array_is_concatenation_of_two_scalar_replicas<
 /// AND
 /// `assert_str_array_slice_equals_str_array_panic_message_names_the_helper_and_str_slice_equals_array_violation_axis`).
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide per-position
+/// Grounding:
+/// - Knowable platform; the family-wide per-position
 ///   ORDER contract on the `&'static str`-typed vocabulary becomes a
 ///   TYPE-LEVEL theorem the substrate carries per array declaration
 ///   rather than a runtime iterator sweep the developer must remember
 ///   to write per array.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   positionwise sweep IS the generative shape. Every new closed-set
 ///   string array declared as a positionwise composition against
 ///   named-per-role `pub const` labels adds ONE `const _` line to get
 ///   the per-slot ORDER theorem rather than re-deriving a runtime
 ///   index-by-index `assert_eq!` block per array.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   per-slot-ORDER proof at declaration site AND the per-role
 ///   `pub const *_LABEL` alias-chain composition every consumer relies
 ///   on regenerate through the SAME `const _` witness.
@@ -2942,18 +2942,18 @@ pub const fn assert_str_array_slice_equals_str_array<
 /// `==` directly in const-fn context, collapsing the triangular
 /// pair sweep to a two-loop shape without an inner byte walk.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide
+/// Grounding:
+/// - Knowable platform; the family-wide
 ///   distinctness contract on the `u8` cache-key vocabulary becomes
 ///   a TYPE-LEVEL theorem the substrate carries per array
 ///   declaration rather than a runtime test the developer must
 ///   remember to write per array.
-/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+/// - Three-pillar attestation; the outer-`Sexp`
 ///   cache-key partition is the `intent_hash` composition axis —
 ///   binding the discriminator arrays on the typed algebra makes
 ///   attestation-key drift a compile error rather than a silent
 ///   BLAKE3 mis-hash on any consumer keyed on `Hash for Sexp`.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   sweep IS the generative shape. Every new closed-set
 ///   discriminator array adds ONE `const _` line to get the
 ///   distinctness theorem rather than re-deriving a per-array
@@ -3109,17 +3109,17 @@ pub const fn assert_u8_array_pairwise_distinct<const N: usize>(arr: &[u8; N]) {
 /// on a `[(char, char); N]` table names WHICH column collapsed,
 /// halving the search space for the operator debugging the drift.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide bijectivity
+/// Grounding:
+/// - Knowable platform; the family-wide bijectivity
 ///   contract on the `(char, char)` paired escape-table vocabulary
 ///   becomes a TYPE-LEVEL theorem the substrate carries per paired-
 ///   array declaration rather than a two-runtime-test pair the
 ///   developer must remember to write per array (one per column).
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   bijection proof at declaration site AND the outer-dispatch
 ///   match-arm exhaustiveness at [`Atom::decode_str_escape`]'s five
 ///   arms regenerate through the SAME `const _` witness.
-/// - THEORY.md §VI.1 — generation over composition; the two-column
+/// - Generation over composition; the two-column
 ///   const-eval sweep IS the generative shape. Every new closed-set
 ///   paired-array vocabulary adds ONE `const _` line to get the
 ///   bijection theorem rather than re-deriving TWO per-column
@@ -3300,21 +3300,21 @@ const _: () = assert_char_pair_array_bijective(&Atom::ESCAPE_TABLE);
 /// `assert_char_pair_array_within_char_pair_finite_set_panic_message_
 /// names_the_helper_and_char_pair_subset_violation_axis`.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide paired-array
+/// Grounding:
+/// - Knowable platform; the family-wide paired-array
 ///   SUBSET-embedding contract on `(char, char)` sub-vocabularies
 ///   becomes a TYPE-LEVEL theorem the substrate carries per (arr,
 ///   set) `[(char, char); N] × [(char, char); M]` pair rather than a
 ///   runtime test per pair.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) matrix's (SUBSET-EMBEDDING) column now carries the
 ///   PRODUCT-ELEMENT `(char, char)` row alongside the three scalar
 ///   rows at ONE peer const-fn helper per row.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   SUBSET-EMBEDDING proof at declaration site AND the outer-
 ///   algebra's paired-array partition contract regenerate through
 ///   the SAME `const _` witness at the ARRAY level.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   CONJOINED-pair membership sweep IS the generative shape — every
 ///   new `(char, char)` sub-vocabulary paired array whose distinct-
 ///   value set is an intentionally-closed subset of another substrate
@@ -3532,26 +3532,26 @@ const _: () = assert_char_pair_array_within_char_pair_finite_set::<3, 5>(
 /// row's DISJOINTNESS sibling by `"DISJOINTNESS-VIOLATION"` alone or
 /// route to the specific element-type by the axis prefix.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide paired-array
+/// Grounding:
+/// - Knowable platform; the family-wide paired-array
 ///   cross-array disjointness contract on `(char, char)` sub-
 ///   vocabularies becomes a TYPE-LEVEL theorem the substrate carries
 ///   per (a, b) paired-array pair rather than a runtime test the
 ///   developer must remember to write per pair.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) matrix's (DISJOINTNESS) column now carries the PRODUCT-
 ///   ELEMENT `(char, char)` row alongside the three SCALAR rows at ONE
 ///   peer const-fn helper per row. The (element-type ∈ {char, u8,
 ///   `&'static str`, `(char, char)`} × contract-shape ∈ {disjointness})
 ///   4-corner column of the paired-array-contract prism is now closed
 ///   at FOUR peer const-fn helpers.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   DISJOINTNESS proof at declaration site AND the outer-algebra's
 ///   two-sub-vocabulary partition contract on `Atom::ESCAPE_TABLE`
 ///   (pattern-DISTINCT-from-value NAMED rows disjoint from pattern-
 ///   EQUALS-value SELF rows) regenerate through the SAME `const _`
 ///   witness at the paired-ARRAY level.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   CONJOINED-pair membership sweep IS the generative shape. Every
 ///   new `(char, char)` sub-vocabulary paired array whose distinct-
 ///   value set is an intentionally-disjoint peer of another substrate
@@ -3749,18 +3749,18 @@ const _: () = assert_char_pair_arrays_disjoint::<3, 2>(
 /// tuples to be pairwise-distinct — reaches for THIS helper without
 /// composing through the strictly stronger bijective sibling.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide tuple-
+/// Grounding:
+/// - Knowable platform; the family-wide tuple-
 ///   level pairwise-distinctness contract on the `(char, char)`
 ///   paired substrate vocabulary becomes a TYPE-LEVEL theorem the
 ///   substrate carries per paired-array declaration rather than a
 ///   runtime test the developer must remember to write per array.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; a
+/// - Invariant 5 — composition preserves proofs; a
 ///   tuple-level distinctness proof at declaration site AND the
 ///   tuple-level match-arm exhaustiveness at every consumer that
 ///   enumerates the array's tuples as DISJOINT arms regenerate
 ///   through the SAME `const _` witness.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   tuple-CONJOINED sweep IS the generative shape. Every new
 ///   closed-set paired-array vocabulary whose distinct-value tuple-
 ///   set is intentionally pairwise-distinct-at-the-tuple-level adds
@@ -3957,17 +3957,17 @@ const _: () = assert_char_pair_array_pairwise_distinct(&Atom::ESCAPE_TABLE);
 /// TABLE, &Self::FOO_LEFT, &Self::FOO_RIGHT);` and the three-way
 /// column bond binds at compile time WITHOUT a runtime zip loop.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the three-way column bond
+/// Grounding:
+/// - Knowable platform; the three-way column bond
 ///   on the paired-array + peer-scalar-columns vocabulary becomes
 ///   a TYPE-LEVEL theorem the substrate carries per declaration
 ///   triple rather than a runtime zip loop the developer must
 ///   remember to write per triple.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+/// - Invariant 5 — composition preserves proofs;
 ///   the column-projection-equality proof at declaration site AND
 ///   the peer-array outer-dispatch consumers regenerate through
 ///   the SAME `const _` witness.
-/// - THEORY.md §VI.1 — generation over composition; the two-column
+/// - Generation over composition; the two-column
 ///   positionwise-equality sweep IS the generative shape. Every
 ///   new closed-set paired-array declared alongside peer scalar
 ///   columns adds ONE `const _` line to get the three-way bond
@@ -4173,19 +4173,19 @@ const _: () = assert_char_pair_array_columns_equal_char_arrays(
 /// disjointness contract binds at compile time WITHOUT a runtime
 /// LEFT.iter().any(RIGHT.contains) sweep.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the WITHIN-ARRAY CROSS-
+/// Grounding:
+/// - Knowable platform; the WITHIN-ARRAY CROSS-
 ///   COLUMN disjointness contract becomes a TYPE-LEVEL theorem the
 ///   substrate carries per pattern-DISTINCT-from-value paired-array
 ///   declaration rather than a runtime membership sweep the developer
 ///   must remember to write per array.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   cross-column disjointness proof at declaration site AND the
 ///   escape-table consumers that route SOURCE-column characters
 ///   THROUGH `decode_str_escape` to DECODED-column characters (and
 ///   rely on that route being one-way) regenerate through the SAME
 ///   `const _` witness.
-/// - THEORY.md §VI.1 — generation over composition; the doubly-nested
+/// - Generation over composition; the doubly-nested
 ///   `while` cross-column sweep IS the generative shape. Every new
 ///   pattern-DISTINCT-from-value closed-set paired-array adds ONE
 ///   `const _` line to get the cross-column disjointness theorem
@@ -4369,16 +4369,16 @@ const _: () = assert_char_pair_array_columns_cross_disjoint(&Atom::NAMED_ESCAPE_
 /// declaration and the compound identity binds at compile time
 /// WITHOUT a runtime concat-and-zip loop.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the SEGMENTED composite-
+/// Grounding:
+/// - Knowable platform; the SEGMENTED composite-
 ///   construction identity becomes a TYPE-LEVEL theorem carried per
 ///   declaration triple rather than a runtime concat-and-zip loop
 ///   the developer must remember to write per triple.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+/// - Invariant 5 — composition preserves proofs;
 ///   the (head-segment, diagonal-tail-segment) composition proof at
 ///   declaration site AND the peer-vocabulary consumers regenerate
 ///   through the SAME `const _` witness.
-/// - THEORY.md §VI.1 — generation over composition; the SEGMENTED
+/// - Generation over composition; the SEGMENTED
 ///   concat-and-diagonal-embed sweep IS the generative shape. Every
 ///   new paired-array declared as a segmented concat with a
 ///   diagonal-embedded scalar tail adds ONE `const _` line to get
@@ -4641,24 +4641,24 @@ const _: () =
 /// after the composite's declaration and the compound identity binds
 /// at compile time.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the SLICE-EQUALS-ARRAY
+/// Grounding:
+/// - Knowable platform; the SLICE-EQUALS-ARRAY
 ///   positionwise-composition contract on the `(char, char)` paired
 ///   vocabulary becomes a TYPE-LEVEL theorem the substrate carries
 ///   per (container, sub-carving) pair rather than a runtime iterator
 ///   sweep the developer must remember to write per pair.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) matrix now carries the (SUB-SLICE ARRAY-image) column
 ///   at ALL FOUR element-type rows — the (u8), (char), (str), and
 ///   `(char, char)` rows each ship a peer const-fn helper. The FOUR
 ///   helpers close the SUB-SLICE ARRAY-image column of the matrix.
-/// - THEORY.md §VI.1 — generation over composition; the paired
+/// - Generation over composition; the paired
 ///   positionwise sweep IS the generative shape. Every new paired
 ///   composite declared as a positionwise-composition against a peer
 ///   paired sub-vocabulary adds ONE `const _` line to get the
 ///   compound theorem rather than re-deriving a runtime
 ///   `full[START + i] == sub[i]` per-position sweep.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   SUB-SLICE positionwise-composition proof at declaration site AND
 ///   the peer-sub-vocabulary consumers that read the composite's sub-
 ///   slice regenerate through the SAME `const _` witness.
@@ -4992,25 +4992,25 @@ const _: () = assert_char_pair_array_slice_equals_char_pair_array::<5, 3, 0>(
 /// declaration and the compound identity binds at compile time
 /// WITHOUT a runtime concat-and-project loop.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the SEGMENTED composite-
+/// Grounding:
+/// - Knowable platform; the SEGMENTED composite-
 ///   construction identity on the CROSS-ROW (paired → scalar) column-
 ///   projection axis becomes a TYPE-LEVEL theorem carried per
 ///   declaration triple rather than a runtime concat-and-project loop
 ///   the developer must remember to write per triple.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) matrix now carries the CROSS-ROW (paired-column ⊕
 ///   scalar-tail → scalar-composite) segmented-concatenation corner
 ///   at ONE peer const-fn helper. Combined with the pre-existing
 ///   (char, char)-row diagonal-tail sibling, the two helpers close
 ///   the CROSS-ROW SEGMENTED-CONCATENATION face of the substrate's
 ///   Str-payload escape-table product-vocabulary.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   (paired-column-head-segment, scalar-tail-segment) composition
 ///   proof at declaration site AND the peer-vocabulary consumers
 ///   regenerate through the SAME `const _` witness at the (char)
 ///   scalar row.
-/// - THEORY.md §VI.1 — generation over composition; the paired-
+/// - Generation over composition; the paired-
 ///   column-project + scalar-verbatim-copy sweep IS the generative
 ///   shape. Every new scalar-composite declared as a segmented
 ///   concatenation-through-column-projection adds ONE `const _` line
@@ -5265,13 +5265,13 @@ const _: () = assert_char_array_is_concatenation_of_char_pair_array_column_and_c
 /// invariants (cardinality, min-bound, max-bound) are compile-time
 /// theorems on the SAME `const _` line.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide range-
+/// Grounding:
+/// - Knowable platform; the family-wide range-
 ///   coverage contract on the `u8` cache-key vocabulary becomes a
 ///   TYPE-LEVEL theorem the substrate carries per array declaration
 ///   rather than a runtime test the developer must remember to write
 ///   per array (one range-bound sweep + one full-coverage sweep).
-/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+/// - Three-pillar attestation; the outer-`Sexp`
 ///   cache-key partition is the `intent_hash` composition axis —
 ///   binding the range-coverage arrays on the typed algebra makes
 ///   attestation-key drift a compile error rather than a silent
@@ -5280,7 +5280,7 @@ const _: () = assert_char_array_is_concatenation_of_char_pair_array_column_and_c
 ///   an out-of-range byte) fails the build before it can silently
 ///   invalidate a cached expansion or a Sekiban audit-trail metric
 ///   keyed on the outer discriminator space.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   range-and-coverage sweep IS the generative shape. Every new
 ///   closed-set discriminator array whose distinct-value set is an
 ///   intentionally-closed inclusive range adds ONE `const _` line to
@@ -5529,27 +5529,27 @@ const _: () = assert_u8_array_covers_inclusive_range::<12, 0, 6>(
 /// specific contiguity corner by the `"RANGE-"` / bare-`"SUBSET-"`
 /// disambiguator prefix.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide range-
+/// Grounding:
+/// - Knowable platform; the family-wide range-
 ///   subset-embedding contract on the `u8` cache-key vocabulary
 ///   becomes a TYPE-LEVEL theorem the substrate carries per
 ///   (array, range) pair rather than a transitively-implied claim
 ///   the developer must trust to hold across sibling witnesses
 ///   drifting in lockstep.
-/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+/// - Three-pillar attestation; the outer-`Sexp`
 ///   cache-key `[0..=6]` partition is the `intent_hash` composition
 ///   axis — binding the range-subset embedding on the typed algebra
 ///   makes a coordinated drift outside the parent range a compile
 ///   error rather than a silent BLAKE3 mis-hash on any
 ///   `Expander::cache` consumer keyed on the sub-carving.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   range-membership-only sweep IS the generative shape. Every new
 ///   closed-set discriminator array whose distinct-value set is an
 ///   intentional SUBSET of a contiguous inclusive range on the
 ///   substrate adds ONE `const _` line to get the range-subset-
 ///   embedding theorem rather than re-deriving a per-embedding
 ///   runtime iterator sweep at each call site.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+/// - Invariant 5 — composition preserves proofs;
 ///   the RANGE-SUBSET embedding proof at declaration site AND the
 ///   parent [`assert_u8_array_covers_inclusive_range`] proof on the
 ///   parent-range-covering array regenerate through the SAME
@@ -5734,17 +5734,17 @@ const _: () = assert_u8_array_within_inclusive_range::<2, 0, 6>(
 /// `_panics_at_runtime_on_non_adjacent_collision`,
 /// `_panics_at_runtime_on_terminal_collision`).
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the caller-side target-set
+/// Grounding:
+/// - Knowable platform; the caller-side target-set
 ///   well-formedness contract becomes a TYPE-LEVEL theorem the
 ///   substrate carries per call site rather than a docstring-level
 ///   responsibility the developer must remember to keep in lockstep
 ///   with every downstream covers/permutes invocation.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   set-well-formedness proof at the CALLER's site AND the covers/
 ///   permutes helpers' downstream pigeonhole arguments regenerate
 ///   through the SAME `const _` witness at each call site.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   set-pairwise-distinct sweep IS the generative shape. Every
 ///   downstream call to `assert_u8_array_covers_finite_set` or
 ///   `assert_u8_array_permutes_finite_set` now composes the set-
@@ -5903,26 +5903,26 @@ pub const fn assert_u8_finite_set_pairwise_distinct<const M: usize>(set: &[u8; M
 /// names the failed axis routes UNAMBIGUOUSLY to THIS specific
 /// SUBSET-embedding helper.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide subset-
+/// Grounding:
+/// - Knowable platform; the family-wide subset-
 ///   embedding contract on the `u8` cache-key vocabulary becomes a
 ///   TYPE-LEVEL theorem the substrate carries per (subset, superset)
 ///   array pair rather than a runtime test the developer must
 ///   remember to write per embedding.
-/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+/// - Three-pillar attestation; the outer-`Sexp`
 ///   cache-key partition is the `intent_hash` composition axis —
 ///   binding the subset-embedding arrays on the typed algebra
 ///   makes a substitution-subset drift outside the parent superset
 ///   a compile error rather than a silent BLAKE3 mis-hash on any
 ///   `Expander::cache` consumer keyed on the subset carving.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   set-membership-only sweep IS the generative shape. Every new
 ///   closed-set discriminator array whose distinct-value set is an
 ///   intentional SUBSET of another substrate array adds ONE
 ///   `const _` line to get the subset-embedding theorem rather
 ///   than re-deriving a per-embedding runtime iterator sweep at
 ///   each call site.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+/// - Invariant 5 — composition preserves proofs;
 ///   the SUBSET-embedding proof at declaration site AND the per-
 ///   role scalar alias-chain composition through
 ///   `UnquoteForm::V_HASH_DISCRIMINATOR = QuoteForm::V_HASH_DISCRIMINATOR`
@@ -6211,34 +6211,34 @@ const _: () = assert_u8_array_slice_equals_u8_array::<4, 2, 2>(
 /// route to the specific contract-shape by the axis stem
 /// (`"DISJOINTNESS"` vs `"SUBSET"`).
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide cross-array
+/// Grounding:
+/// - Knowable platform; the family-wide cross-array
 ///   disjointness contract on the outer-`Sexp` cache-key `u8`
 ///   vocabulary becomes a TYPE-LEVEL theorem the substrate carries
 ///   per (a, b) u8-array pair rather than a runtime test the
 ///   developer must remember to write per pair.
-/// - THEORY.md §III — the typescape; the (element-type × contract-
+/// - The typescape; the (element-type × contract-
 ///   shape) 2×2 = 4-corner matrix is now closed at ONE peer const-fn
 ///   helper per corner — [`assert_char_array_within_char_finite_set`]
 ///   on the (char, subset) corner, [`assert_char_arrays_disjoint`] on
 ///   the (char, disjointness) corner,
 ///   [`assert_u8_array_within_u8_finite_set`] on the (u8, subset)
 ///   corner, and this helper on the (u8, disjointness) corner.
-/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+/// - Three-pillar attestation; the outer-`Sexp`
 ///   cache-key partition is the substrate's `intent_hash` composition
 ///   axis — binding the ARRAY-vs-ARRAY disjointness pairs at compile
 ///   time makes a joint-partition-overlap drift a compile error
 ///   rather than a silent BLAKE3 mis-hash on any `Expander::cache` or
 ///   `Sekiban` audit-trail metric keyed on the outer discriminator
 ///   space.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   cross-array membership sweep IS the generative shape. Every new
 ///   closed-set `u8` sub-vocabulary array whose distinct-values set is
 ///   an intentionally-disjoint peer of another substrate `u8` array
 ///   adds ONE `const _` line to get the disjointness theorem rather
 ///   than re-deriving a per-pair runtime iterator sweep at each call
 ///   site.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   DISJOINTNESS proof at declaration site AND the outer-`Sexp`
 ///   cache-key JOINT PARTITION contract regenerate through the SAME
 ///   `const _` witnesses at the ARRAY level.
@@ -6410,13 +6410,13 @@ const _: () = assert_u8_arrays_disjoint::<2, 2>(
 /// ("OUT-OF-RANGE" vs. "MISSING") so a diagnostic that names the
 /// failed axis routes UNAMBIGUOUSLY to the failed HELPER too.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide finite-set-
+/// Grounding:
+/// - Knowable platform; the family-wide finite-set-
 ///   coverage contract on the `u8` cache-key vocabulary becomes a
 ///   TYPE-LEVEL theorem the substrate carries per array declaration
 ///   rather than a runtime test the developer must remember to write
 ///   per non-contiguous partition.
-/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+/// - Three-pillar attestation; the outer-`Sexp`
 ///   cache-key partition is the `intent_hash` composition axis —
 ///   binding the finite-set-covering arrays on the typed algebra makes
 ///   attestation-key drift a compile error rather than a silent
@@ -6426,7 +6426,7 @@ const _: () = assert_u8_arrays_disjoint::<2, 2>(
 ///   fails the build before it can silently invalidate a cached
 ///   expansion or a Sekiban audit-trail metric keyed on the outer
 ///   discriminator space.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   set-membership + set-coverage sweep IS the generative shape.
 ///   Every new closed-set discriminator array whose distinct-value set
 ///   is an intentionally-closed finite (possibly non-contiguous)
@@ -6670,20 +6670,20 @@ pub const fn assert_u8_array_covers_finite_set<const N: usize, const M: usize>(
 /// range-membership or pairwise-distinctness arm surfaces with the
 /// respective sibling helper's message body.
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide permutation-
+/// Grounding:
+/// - Knowable platform; the family-wide permutation-
 ///   of-range contract on the `u8` cache-key vocabulary becomes a
 ///   TYPE-LEVEL theorem the substrate carries per array declaration
 ///   at ONE `const _` line rather than at TWO per-axis `const _` lines
 ///   the developer must remember to keep in lockstep across every
 ///   permutation-shaped HASH_DISCRIMINATORS array.
-/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+/// - Three-pillar attestation; the outer-`Sexp`
 ///   cache-key partition is the `intent_hash` composition axis —
 ///   binding the permutation-shaped sub-carvings' arrays on the typed
 ///   algebra makes cardinality drift a compile error rather than a
 ///   silent `Hash for Sexp` mis-hash on a caller keyed on a
 ///   permutation-shaped sub-carve.
-/// - THEORY.md §VI.1 — generation over composition; the compound
+/// - Generation over composition; the compound
 ///   arity-check + range-coverage + pairwise-distinctness sweep IS
 ///   the generative shape. Every new closed-set discriminator array
 ///   whose distinct-value set is an intentionally-closed contiguous
@@ -6692,7 +6692,7 @@ pub const fn assert_u8_array_covers_finite_set<const N: usize, const M: usize>(
 ///   than re-deriving TWO per-axis `const _` lines (one for
 ///   injectivity, one for surjectivity) that would silently drift out
 ///   of lockstep if one was updated without the other.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   compound permutation proof at declaration site AND the three
 ///   consumer sites (nested atomic-payload carve inside `Hash for
 ///   Atom`, quote-family arms of `Hash for Sexp`, substitution-subset
@@ -6932,20 +6932,20 @@ pub const fn assert_u8_array_permutes_inclusive_range<
 /// message body (`"duplicate"` on the INJECTIVITY axis; `"OUT-OF-SET"`
 /// / `"SET-BYTE-MISSING"` on the SURJECTIVITY axis).
 ///
-/// Theory grounding:
-/// - THEORY.md §V.1 — knowable platform; the family-wide permutation-
+/// Grounding:
+/// - Knowable platform; the family-wide permutation-
 ///   of-finite-set contract on the `u8` cache-key vocabulary becomes
 ///   a TYPE-LEVEL theorem the substrate carries per array declaration
 ///   at ONE `const _` line rather than at TWO per-axis `const _` lines
 ///   the developer must remember to keep in lockstep across every
 ///   permutation-of-finite-set-shaped HASH_DISCRIMINATORS array.
-/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+/// - Three-pillar attestation; the outer-`Sexp`
 ///   cache-key partition is the `intent_hash` composition axis —
 ///   binding the non-contiguous permutation-shaped sub-carvings'
 ///   arrays on the typed algebra makes cardinality drift a compile
 ///   error rather than a silent `Hash for Sexp` mis-hash on a caller
 ///   keyed on a non-contiguous permutation-shaped sub-carve.
-/// - THEORY.md §VI.1 — generation over composition; the compound
+/// - Generation over composition; the compound
 ///   arity-check + set-coverage + pairwise-distinctness sweep IS the
 ///   generative shape. Every new closed-set discriminator array whose
 ///   distinct-value set is an intentionally-closed non-contiguous
@@ -6954,7 +6954,7 @@ pub const fn assert_u8_array_permutes_inclusive_range<
 ///   than re-deriving TWO per-axis `const _` lines (one for
 ///   injectivity, one for surjectivity) that would silently drift out
 ///   of lockstep if one was updated without the other.
-/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// - Invariant 5 — composition preserves proofs; the
 ///   compound permutation-of-finite-set proof at declaration site AND
 ///   the consumer site (`StructuralKind` sub-carve inside
 ///   `Hash for Sexp` on `Sexp::Nil` / `Sexp::List(_)`) regenerate
@@ -7173,13 +7173,13 @@ const _: () = assert_u8_array_permutes_finite_set::<2, 2>(
 /// byte_and_quote_form_hash_discriminator_partition` runtime-test
 /// regression.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// Anchor: invariant 5 — composition preserves
 /// proofs; the joint carving's compound permutation contract composes
 /// through the three sub-algebras' `HASH_DISCRIMINATOR`s and the const-fn
 /// contract preserves the joint permutation-of-range proof across `rustc`
-/// invocations byte-for-byte. THEORY.md §III — the typescape; the joint-
+/// invocations byte-for-byte. The typescape; the joint-
 /// partition property becomes a TYPE-level theorem on the substrate rather
-/// than a per-carving test-time invariant. THEORY.md §V.3 — three-pillar
+/// than a per-carving test-time invariant. Three-pillar
 /// attestation; the outer-`Sexp` cache-key partition is the substrate's
 /// outer `Sexp` `intent_hash` composition axis — binding the joint
 /// permutation at rustc time makes attestation-key drift a compile error
@@ -7627,8 +7627,8 @@ const _: () = assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4, 0
 /// crosses helper boundaries stays unambiguous under `grep` on the
 /// failed axis.
 ///
-/// Theory grounding:
-/// - THEORY.md §III — the typescape; the SLICE-BLOCK-CONSTANCY corner
+/// Grounding:
+/// - The typescape; the SLICE-BLOCK-CONSTANCY corner
 ///   on the (`u8`) row of the (element-type × contract-shape) matrix
 ///   becomes a TYPE-LEVEL theorem the substrate carries per (arr,
 ///   scalar, START, END) quadruple rather than a runtime iterator
@@ -7637,19 +7637,19 @@ const _: () = assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4, 0
 ///   BLOCK-CONSTANCY column at BOTH the SUB-SLICE arity (this helper)
 ///   and the FULL-ARRAY-with-two-blocks arity (the sibling), on
 ///   COMPLEMENTARY element-type rows.
-/// - THEORY.md §V.1 — knowable platform; the sub-slice constant-
+/// - Knowable platform; the sub-slice constant-
 ///   block contract on the substrate's ONE MANY-TO-ONE-collapse
 ///   `[u8; N]` array binds at `cargo check` time via ONE `const _`
 ///   line, closing the drift-catch loop one invocation stage earlier
 ///   than the pre-lift sextet of per-alias assertions inside
 ///   `sexp_shape_hash_discriminators_pin_legacy_outer_cache_key_bytes`.
-/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+/// - Three-pillar attestation; the outer-`Sexp`
 ///   cache-key partition is the `intent_hash` composition axis —
 ///   binding the six-way atomic-shape collapse at the ARRAY level
 ///   makes attestation-key drift on the atomic-collapse slice a
 ///   compile error rather than a silent BLAKE3 mis-hash across the
 ///   six atomic outer shapes.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   slice sweep IS the generative shape — every future MANY-TO-ONE
 ///   variant → canonical-projection substrate SUB-SLICE-CONSTANT
 ///   segment (a hypothetical `Signal::CLASSES` array whose middle
@@ -7894,8 +7894,8 @@ const _: () = assert_u8_array_slice_is_scalar_replica::<12, 1, 7>(
 /// `(START, END)` const generics to `(START, M)` — the CARDINALITY
 /// carrier is the peer array's arity `M`, not an END index.
 ///
-/// Theory grounding:
-/// - THEORY.md §III — the typescape; the SLICE-EQUALS-ARRAY corner on
+/// Grounding:
+/// - The typescape; the SLICE-EQUALS-ARRAY corner on
 ///   the (`u8`) row of the (element-type × contract-shape) matrix
 ///   becomes a TYPE-LEVEL theorem the substrate carries per
 ///   `(full, sub, START)` triple rather than a runtime iterator sweep
@@ -7904,7 +7904,7 @@ const _: () = assert_u8_array_slice_is_scalar_replica::<12, 1, 7>(
 ///   the SAME row — the two together open the SUB-SLICE column at
 ///   BOTH the SINGLE-scalar-image arity (constant block) AND the
 ///   ARRAY-of-length-`M`-image arity (positionwise composition).
-/// - THEORY.md §V.1 — knowable platform; the positionwise
+/// - Knowable platform; the positionwise
 ///   composition contract binding
 ///   `SexpShape::HASH_DISCRIMINATORS[8..12] ==
 ///   QuoteForm::HASH_DISCRIMINATORS` at rustc-time closes the drift-
@@ -7915,13 +7915,13 @@ const _: () = assert_u8_array_slice_is_scalar_replica::<12, 1, 7>(
 ///   projection method chain (a distinct failure mode from a drift
 ///   in the constants themselves); together the two enforce the
 ///   theorem at BOTH stages of the toolchain.
-/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+/// - Three-pillar attestation; the outer-`Sexp`
 ///   cache-key partition is the `intent_hash` composition axis —
 ///   binding the quote-family tail-slice's per-position ORDER at the
 ///   ARRAY level makes attestation-key drift on the four-slot quote-
 ///   family sub-carving a compile error rather than a silent BLAKE3
 ///   mis-hash across the four quote-family outer shapes.
-/// - THEORY.md §VI.1 — generation over composition; the const-eval
+/// - Generation over composition; the const-eval
 ///   slice sweep IS the generative shape — every future substrate
 ///   POSITIONWISE-COMPOSITION between a container array's sub-slice
 ///   and a sub-carving's canonical `[u8; M]` listing (a hypothetical
@@ -8322,15 +8322,15 @@ impl Atom {
     /// axis where the [`QuoteForm::prefix`] projection sits at the
     /// homoiconic-wrapper axis.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Keyword payload, canonical `:` prefix) pairing now binds at
     /// ONE constant on the closed-set [`Atom`] algebra regardless of
     /// which of the four reader-entry / rendering surfaces reaches in.
-    /// THEORY.md §VI.1 — generation over composition; the four
+    /// Generation over composition; the four
     /// byte-identical `":"` / `":{s}"` inline literals collapse onto
     /// ONE named constant, matching the substrate's three-times rule
     /// (four occurrences, well past the ≥2 lift threshold).
-    /// THEORY.md §V.1 — knowable platform; the canonical
+    /// Knowable platform; the canonical
     /// keyword-marker byte becomes a TYPE-level constant on the
     /// substrate algebra rather than four inline bytes at four
     /// consumer surfaces.
@@ -8395,17 +8395,17 @@ impl Atom {
     /// [`Sexp::COMMENT_LEAD`], [`Sexp::COMMENT_TERM`]) — collapse onto
     /// ONE named byte on the substrate algebra.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Keyword-prefix lead byte, canonical `':'`) pairing binds at ONE
     /// constant on the closed-set outer [`Atom`] algebra regardless of
-    /// which reader-surface consumer reaches in. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the
+    /// which reader-surface consumer reaches in.
+    /// Invariant 5 — composition preserves proofs; the
     /// `Self::KEYWORD_MARKER.starts_with(Self::KEYWORD_MARKER_LEAD)`
     /// round-trip law is a coherence proof BETWEEN the paired projection
     /// ([`Self::KEYWORD_MARKER`]) AND its projected lead byte (this
     /// constant) on ONE algebra — a regression that drifts either side
     /// surfaces at the pin rather than as a silent Keyword-prefix reader
-    /// drift. THEORY.md §V.1 — knowable platform; the canonical
+    /// drift. Knowable platform; the canonical
     /// Keyword-prefix lead byte becomes a TYPE-level constant on the
     /// substrate algebra rather than an inline
     /// `.chars().next().expect(_)` extraction at every test surface AND
@@ -8489,23 +8489,23 @@ impl Atom {
     /// Both projections close a (marker, payload) pair on their owning
     /// closed-set algebra.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Keyword payload, canonical qualified rendering) pairing binds
     /// at ONE projection on the closed-set [`Atom`] algebra regardless
     /// of which of the three canonical-rendering surfaces reaches in.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// round-trip law
     /// `Self::from_lexeme(&Self::keyword_qualified(n)) ==
     /// Self::Keyword(n.into())` is a coherence proof BETWEEN the
     /// paired typed-EXIT rendering (this method) AND the typed-ENTRY
     /// classification ([`Self::from_lexeme`]) on ONE algebra — a
     /// regression that drifts either side surfaces at the pin rather
-    /// than as a silent Keyword-round-trip drift. THEORY.md §V.1 —
-    /// knowable platform; the (Keyword payload → canonical qualified
+    /// than as a silent Keyword-round-trip drift.
+    /// Knowable platform; the (Keyword payload → canonical qualified
     /// rendering) composition becomes a TYPE-level projection on the
     /// substrate algebra rather than an inline
     /// `format!("{}{s}", Self::KEYWORD_MARKER)` at every consumer
-    /// site. THEORY.md §VI.1 — generation over composition; three
+    /// site. Generation over composition; three
     /// byte-identical inline compositions collapse onto ONE named
     /// projection (two routed sites + one Display byte-identity pin),
     /// matching the substrate's three-times rule.
@@ -8576,14 +8576,14 @@ impl Atom {
     /// now carries a canonical-marker/spelling for BOTH prefix-marked
     /// (Keyword) and self-marked (Bool) variants.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Bool payload, canonical Scheme spelling) pairing now binds at
     /// ONE projection on the closed-set [`Atom`] algebra regardless of
     /// which of the two reader-entry / rendering surfaces reaches in.
-    /// THEORY.md §VI.1 — generation over composition; the four byte-
+    /// Generation over composition; the four byte-
     /// identical `"#t"` / `"#f"` inline literals collapse onto ONE
     /// named projection, matching the substrate's three-times rule.
-    /// THEORY.md §V.1 — knowable platform; the canonical Scheme-bool
+    /// Knowable platform; the canonical Scheme-bool
     /// spellings become a TYPE-level projection on the substrate
     /// algebra rather than four inline bytes at two consumer surfaces.
     #[must_use]
@@ -8632,14 +8632,14 @@ impl Atom {
     /// (`BOOL_LITERAL_LEAD`, `TRUE_LITERAL`) pairing on ONE typed
     /// algebra.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (`true`, canonical Scheme spelling) pairing binds at ONE
     /// `pub const` on the closed-set outer [`Atom`] algebra regardless
     /// of which of the reader/Display surface consumers reaches in.
-    /// THEORY.md §VI.1 — generation over composition; the multi-site
+    /// Generation over composition; the multi-site
     /// inline `"#t"` literal collapses onto ONE named `pub const`,
-    /// matching the substrate's three-times rule. THEORY.md §V.1 —
-    /// knowable platform; the canonical `true`-spelling becomes a
+    /// matching the substrate's three-times rule.
+    /// Knowable platform; the canonical `true`-spelling becomes a
     /// TYPE-level constant on the substrate algebra rather than an
     /// inline byte literal at every consumer surface.
     pub const TRUE_LITERAL: &'static str = "#t";
@@ -8759,17 +8759,17 @@ impl Atom {
     /// assertion since the lead byte is by construction the SAME
     /// across both spellings.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Bool-family lead byte, canonical `'#'`) pairing binds at ONE
     /// constant on the closed-set outer [`Atom`] algebra regardless of
-    /// which reader-surface consumer reaches in. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the
+    /// which reader-surface consumer reaches in.
+    /// Invariant 5 — composition preserves proofs; the
     /// [`Self::bool_literal(b).starts_with(Self::BOOL_LITERAL_LEAD)`]
     /// round-trip law is a coherence proof BETWEEN the paired
     /// projection ([`Self::bool_literal`]) AND the shared lead byte
     /// (this constant) on ONE algebra — a regression that drifts
     /// either side surfaces at the pin rather than as a silent
-    /// hash-prefix reader-family drift. THEORY.md §V.1 — knowable
+    /// hash-prefix reader-family drift. Knowable
     /// platform; the canonical Bool-family lead byte becomes a
     /// TYPE-level constant on the substrate algebra rather than an
     /// inline `.chars().next().unwrap()` extraction at every test
@@ -8853,15 +8853,15 @@ impl Atom {
     /// structurally disjoint through the reader's delimiter
     /// dispatch.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Str payload, canonical `"` delimiter) pairing now binds at
     /// ONE constant on the closed-set [`Atom`] algebra regardless of
     /// which of the four reader tokenizer sites reaches in.
-    /// THEORY.md §VI.1 — generation over composition; four byte-
+    /// Generation over composition; four byte-
     /// identical inline `'"'` char literals in `crate::reader::tokenize`
     /// collapse onto ONE named constant. Four occurrences, well past
     /// the ≥2 lift threshold — the substrate's three-times rule at
-    /// the Str-delimiter axis. THEORY.md §V.1 — knowable platform;
+    /// the Str-delimiter axis. Knowable platform;
     /// the canonical string-delimiter byte becomes a TYPE-level
     /// constant on the substrate algebra rather than four inline
     /// bytes at four consumer sites inside one reader file.
@@ -8939,15 +8939,15 @@ impl Atom {
     /// byte the reader binds to when discriminating the Str-payload
     /// accumulation loop's branch dispatch.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Str-payload escape lead, canonical `\` byte) pairing now binds
     /// at ONE constant on the closed-set [`Atom`] algebra regardless
     /// of which of the two reader tokenizer sites reaches in.
-    /// THEORY.md §VI.1 — generation over composition; two byte-
+    /// Generation over composition; two byte-
     /// identical inline `'\\'` char literals in `crate::reader::tokenize`
     /// collapse onto ONE named constant. Two occurrences at the ≥2
     /// lift threshold — the substrate's three-times rule at the
-    /// Str-escape-lead axis. THEORY.md §V.1 — knowable platform; the
+    /// Str-escape-lead axis. Knowable platform; the
     /// canonical string-escape-lead byte becomes a TYPE-level constant
     /// on the substrate algebra rather than two inline bytes at two
     /// consumer sites inside one reader file.
@@ -9034,13 +9034,13 @@ impl Atom {
     /// site each; both close the reader's per-char specialization
     /// point onto the algebra.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Str-escape source byte, decoded byte) pairing now binds at
     /// ONE typed projection on the closed-set [`Atom`] algebra
-    /// regardless of which consumer reaches in. THEORY.md §VI.1 —
-    /// generation over composition; the reader's five-arm inline
+    /// regardless of which consumer reaches in.
+    /// Generation over composition; the reader's five-arm inline
     /// table plus one passthrough arm at [`crate::reader::tokenize`]
-    /// collapses onto ONE named projection. THEORY.md §V.1 — knowable
+    /// collapses onto ONE named projection. Knowable
     /// platform; the canonical Str-escape decode table becomes a
     /// TYPE-level method on the substrate algebra rather than an
     /// inline block inside one reader file — a future decoder
@@ -9300,13 +9300,13 @@ impl Atom {
     ///   sequences — the source-byte pool IS `Self::ESCAPE_SOURCES`
     ///   rather than reassembled from the two peer arrays.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the FIVE non-
+    /// Anchor: the typescape; the FIVE non-
     /// passthrough source bytes now bind at ONE typed `[char; 5]` on
     /// the closed-set [`Atom`] algebra rather than at a runtime chain
     /// over the two peer sub-vocabulary arrays reassembled per
-    /// consumer. THEORY.md §V.1 — knowable platform; the non-
+    /// consumer. Knowable platform; the non-
     /// passthrough source-byte SPAN becomes load-bearing typed data at
-    /// the algebra level. THEORY.md §VI.1 — generation over
+    /// the algebra level. Generation over
     /// composition; the "FIVE non-passthrough arms" identity that
     /// lived as prose in the [`Self::SELF_ESCAPE_TABLE`] docstring AND
     /// as a runtime iterator chain at one test site regenerates
@@ -9430,13 +9430,13 @@ impl Atom {
     ///   pool IS `Self::ESCAPE_DECODED` rather than reassembled from
     ///   the two peer arrays.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the FIVE
+    /// Anchor: the typescape; the FIVE
     /// DECODED bytes of the non-passthrough arm-set now bind at ONE
     /// typed `[char; 5]` on the closed-set [`Atom`] algebra rather than
     /// at a runtime map through `decode_str_escape` from
-    /// `ESCAPE_SOURCES`. THEORY.md §V.1 — knowable platform; the
+    /// `ESCAPE_SOURCES`. Knowable platform; the
     /// non-passthrough DECODED-byte SPAN becomes load-bearing typed
-    /// data at the algebra level. THEORY.md §VI.1 — generation over
+    /// data at the algebra level. Generation over
     /// composition; the column-dual identity that lived only as a
     /// runtime `decode_str_escape` projection of the peer SOURCE-column
     /// SPAN regenerates identically through this ONE typed forced-arity
@@ -9575,17 +9575,17 @@ impl Atom {
     ///   non-passthrough arms at ONE closed-set enum on the algebra
     ///   (with `ESCAPE_TABLE` becoming its `.pair()` projection).
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the FIVE
+    /// Anchor: the typescape; the FIVE
     /// `(SOURCE, DECODED)` pairs of the non-passthrough arm-set now
     /// bind at ONE typed `[(char, char); 5]` on the closed-set
     /// [`Atom`] algebra rather than at a runtime zip of the two peer
-    /// column-dual arrays. THEORY.md §V.1 — knowable platform; the
+    /// column-dual arrays. Knowable platform; the
     /// non-passthrough paired-column SPAN becomes load-bearing typed
-    /// data at the algebra level. THEORY.md §VI.1 — generation over
+    /// data at the algebra level. Generation over
     /// composition; the paired-column identity that lived only as a
     /// runtime zip of the peer column-dual `[char; 5]` SPANs
     /// regenerates identically through this ONE typed forced-arity
-    /// pair-array. THEORY.md §II.1 invariant 5 — composition preserves
+    /// pair-array. Invariant 5 — composition preserves
     /// proofs; the pointwise composition law `ESCAPE_TABLE[i] ==
     /// (ESCAPE_SOURCES[i], ESCAPE_DECODED[i])` is a load-bearing
     /// structural invariant carrying the two-column composition
@@ -9651,13 +9651,13 @@ impl Atom {
     /// round-trips through the construct face: `Atom::symbol(_).kind()
     /// == AtomKind::Symbol`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle;
+    /// Anchor: invariant 2 — free middle;
     /// every consumer that constructs an [`Atom`] of a typed kind binds
     /// to ONE typed method on the algebra rather than to the bare
     /// tuple-variant constructor + per-site `.into()` coercion.
-    /// THEORY.md §V.1 — knowable platform; the `(AtomKind variant,
+    /// Knowable platform; the `(AtomKind variant,
     /// typed construct method)` pair becomes a TYPE projection on the
-    /// substrate's [`Atom`] algebra. THEORY.md §VI.1 — generation over
+    /// substrate's [`Atom`] algebra. Generation over
     /// composition; the `[Sexp; 6]` outer constructors at
     /// [`Sexp::symbol`]–[`Sexp::boolean`] regenerate identically
     /// through `Self::Atom(Atom::X(_))` composition rather than
@@ -9769,7 +9769,7 @@ impl Atom {
     /// algebra the substrate's diagnostic + cache-key surfaces both
     /// route through.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Atom variant, downstream-consumer-payload) pairing now binds at
     /// ONE typed projection site (this method composed with
     /// [`AtomKind`]'s arms) regardless of which consumer surface
@@ -9863,7 +9863,7 @@ impl Atom {
     /// [`Self::as_float`] / [`Self::as_bool`] + the composite
     /// [`Self::as_symbol_or_string`]).
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (Atom
+    /// Anchor: knowable platform; the (Atom
     /// variant, `&'static str` diagnostic label) pairing becomes a TYPE
     /// projection on the outer-[`Atom`] algebra rather than a per-
     /// callsite `.kind().label()` two-step OR a wrap-through-Sexp
@@ -9871,12 +9871,12 @@ impl Atom {
     /// A typo or swap at the outer-`Atom` label site is no longer a
     /// runtime label drift but a compile error against the typed
     /// composition — the [`Atom`] ↔ [`AtomKind`] ↔ label chain is
-    /// rustc-enforced end-to-end. THEORY.md §II.1 invariant 2 — free
+    /// rustc-enforced end-to-end. Invariant 2 — free
     /// middle; the outer-[`Atom`] diagnostic-label projection now binds
     /// at ONE site on the outer-`Atom` algebra, composing through the
     /// pre-existing marker-level label projection ([`AtomKind::label`])
-    /// rather than duplicating the six-arm match. THEORY.md §VI.1 —
-    /// generation over composition; the outer-`Atom` label projection is
+    /// rather than duplicating the six-arm match.
+    /// Generation over composition; the outer-`Atom` label projection is
     /// the missing algebra layer between the outer [`Atom`] value-carrier
     /// and the pre-existing [`AtomKind`] marker-level label projection —
     /// the three pre-existing typed layers ([`Atom`] → [`AtomKind`] →
@@ -9969,20 +9969,20 @@ impl Atom {
     /// composition-through-carving-marker posture the two methods
     /// share.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (outer
+    /// Anchor: knowable platform; the (outer
     /// `Atom` variant, `SexpShape` variant) pairing becomes a TYPE
     /// projection on the outermost atomic value-carrier algebra
     /// composed through the pre-existing marker-level projection,
     /// rather than at parallel inline match arms each future consumer
     /// of the outer-shape from an outer-`Atom` value has to re-derive.
-    /// THEORY.md §II.1 invariant 2 — free middle; the outer-`Atom`
+    /// Invariant 2 — free middle; the outer-`Atom`
     /// outer-shape algebra now closes over THREE typed layers (outer
     /// `Atom` → [`AtomKind`] → [`SexpShape`]) with rustc-enforced
     /// consistency across each — a regression that drifts ONE layer's
     /// shape mapping from the others cannot reach the substrate's
     /// runtime typed-witness surface, `LispError::TypeMismatch.got`
-    /// slot, or [`SexpWitness::shape`] projection. THEORY.md §VI.1 —
-    /// generation over composition; the outer-value projection is the
+    /// slot, or [`SexpWitness::shape`] projection.
+    /// Generation over composition; the outer-value projection is the
     /// missing algebra layer between the outer `Atom` and the
     /// pre-existing marker-level shape projection — the two
     /// pre-existing typed layers become a full THREE-layer typed
@@ -10054,17 +10054,17 @@ impl Atom {
     /// [`AtomKind::hash_discriminator`] one algebra layer down and
     /// [`crate::ast::Sexp::hash_discriminator`] one algebra layer up.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (outer
+    /// Anchor: knowable platform; the (outer
     /// `Atom` variant, cache-key byte) pairing becomes a TYPE projection
     /// on the outermost atomic value-carrier algebra composed through the
     /// pre-existing marker-level projection, rather than a two-hop
-    /// composition at the [`Hash for Atom`] callsite. THEORY.md §II.1
-    /// invariant 2 — free middle; the outer-`Atom` cache-key algebra now
+    /// composition at the [`Hash for Atom`] callsite.
+    /// Invariant 2 — free middle; the outer-`Atom` cache-key algebra now
     /// closes over THREE typed layers (outer `Atom` → [`AtomKind`] → byte)
     /// with rustc-enforced consistency across each — a regression that
     /// drifts the [`Hash for Atom`] callsite's byte routing from the
     /// canonical [`AtomKind::hash_discriminator`] site cannot reach the
-    /// substrate's expansion-cache runtime. THEORY.md §VI.1 — generation
+    /// substrate's expansion-cache runtime. Generation
     /// over composition; the outer-value byte projection is the missing
     /// algebra layer between the outer `Atom` and the pre-existing
     /// marker-level byte projection — the two pre-existing typed layers
@@ -10151,16 +10151,16 @@ impl Atom {
     ///     where one surface's per-variant body changes without the
     ///     other.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the (Atom variant, canonical JValue rendering) pair lived inline
     /// at the `sexp_to_json` site as six byte-identical arms. The lift
     /// retires the per-site fan-out onto ONE method on the `Atom`
-    /// algebra. THEORY.md §II.1 invariant 2 — free middle; the typed-
+    /// algebra. Invariant 2 — free middle; the typed-
     /// exit JSON projection, the Display-surface rendering, the
     /// diagnostic surface, and any future canonical-form surface
     /// (e.g. `Atom::to_iac_forge_sexpr`) all route through ONE
     /// per-variant projection family rather than per-callsite
-    /// re-derivation. THEORY.md §V.1 — knowable platform; a future
+    /// re-derivation. Knowable platform; a future
     /// seventh atomic kind (e.g. `Char` for `#\x` reader syntax) lands
     /// at one [`AtomKind::ALL`] entry plus one arm here plus one arm
     /// per sibling projection — exhaustively checked by the compiler,
@@ -10290,7 +10290,7 @@ impl Atom {
     /// surface on the closed-set algebra rather than at inline arms
     /// scattered across per-consumer sites.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// (JSON `Number` → typed [`Atom`] numeric variant) projection IS
     /// the typed-entry gate on the JSON numeric axis. Placing the
     /// paired forward (`Atom::to_json`'s [`Self::Int`] / [`Self::Float`]
@@ -10303,10 +10303,10 @@ impl Atom {
     /// extend the algebra ONCE at [`Self::to_json`]'s match AND ONCE at
     /// this method's cascade — both edits land on the SAME algebra
     /// rather than across the `Atom` module AND the `Sexp` module
-    /// boundary. THEORY.md §V.1 — knowable platform; the numeric
+    /// boundary. Knowable platform; the numeric
     /// inverse projection becomes a NAMED primitive on the substrate's
     /// [`Atom`] algebra rather than an inline three-arm cascade at the
-    /// `Sexp::from_json` consumer. THEORY.md §II.1 invariant 5 —
+    /// `Sexp::from_json` consumer. Invariant 5 —
     /// composition preserves proofs; the round-trip law
     /// `Atom::from_json_number(&Atom::Int(n).to_json_as_number()) ==
     /// Atom::Int(n)` (pinned at
@@ -10389,15 +10389,15 @@ impl Atom {
     /// pass. Pinned at
     /// `atom_classify_numeric_int_then_float_short_circuits_float_on_int_success`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; both
+    /// Anchor: invariant 2 — free middle; both
     /// numeric decoders (typed-entry from JSON `Number`, typed-entry
     /// from bare reader lexeme) now route through ONE typed algebra
     /// projection rather than through two byte-identical inline
-    /// cascades. THEORY.md §VI.1 — generation over composition; the
+    /// cascades. Generation over composition; the
     /// (try-int, try-float, else) three-arm cascade lived inline at
     /// TWO sites on the [`Atom`] algebra past the PRIME-DIRECTIVE
     /// ≥ 2 duplication trigger, and is lifted to ONE owner here.
-    /// THEORY.md §V.1 — knowable platform; a future third numeric
+    /// Knowable platform; a future third numeric
     /// decoder (e.g. a [`Self::from_yaml_scalar`] that decodes YAML
     /// tagged numeric scalars, a [`Self::from_toml_datetime`] that
     /// decodes TOML numeric fragments, a [`Self::from_cli_argv_slot`]
@@ -10489,18 +10489,18 @@ impl Atom {
     /// `#[cfg(feature = "iac-forge")]`-gated `From<&Sexp> for SExpr`
     /// impl.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the (Atom variant, canonical SExpr rendering) pair lived inline
     /// at the interop site as six byte-identical arms. The lift retires
     /// the per-site fan-out onto ONE method on the `Atom` algebra,
     /// completing the three-surface sweep ([`fmt::Display for Atom`],
     /// [`Self::to_json`], [`Self::to_iac_forge_sexpr`]) the prior runs
-    /// in this series named. THEORY.md §II.1 invariant 2 — free middle;
+    /// in this series named. Invariant 2 — free middle;
     /// the typed-exit Display rendering, the JSON projection, the
     /// canonical-attestation-form projection, the diagnostic surface,
     /// and the cache-key hash surface ALL route through ONE
     /// per-variant projection family rather than per-callsite
-    /// re-derivation. THEORY.md §V.1 — knowable platform; a future
+    /// re-derivation. Knowable platform; a future
     /// seventh atomic kind (e.g. `Char` for `#\x` reader syntax) lands
     /// at one [`AtomKind::ALL`] entry plus one arm per projection —
     /// exhaustively checked by the compiler across every consumer
@@ -10581,7 +10581,7 @@ impl Atom {
     ///     `reader_atom_token_arm_routes_through_atom_from_lexeme_for_
     ///     every_kind` in [`crate::reader::tests`]).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry;
+    /// Anchor: invariant 1 — typed entry;
     /// `atom_from_str` was the typed-entry gate as a free function in
     /// `reader.rs`, outside the typed `Atom` algebra. Naming it on the
     /// algebra brings the typed-entry side INTO the same closed-set
@@ -10589,12 +10589,12 @@ impl Atom {
     /// seventh atomic kind (e.g. `Char` for `#\x` reader syntax) lands
     /// at ONE [`AtomKind::ALL`] entry plus ONE arm here plus ONE arm
     /// per typed-exit projection — exhaustively checked by rustc
-    /// across all FOUR per-variant projection families. THEORY.md
-    /// §II.1 invariant 2 — free middle; FOUR consumers (typed-entry
+    /// across all FOUR per-variant projection families.
+    /// Invariant 2 — free middle; FOUR consumers (typed-entry
     /// classification, Display rendering, JSON projection, canonical-
     /// attestation-form projection) now route through ONE
     /// per-`Atom`-variant projection family on the closed-set algebra.
-    /// THEORY.md §VI.1 — generation over composition; this lift
+    /// Generation over composition; this lift
     /// completes the bidirectional sweep across the four production
     /// surfaces the prior runs in this series named.
     ///
@@ -10683,12 +10683,12 @@ impl Atom {
     /// surface now binds at ONE method on the closed-set algebra rather
     /// than at inline arms inside its consumer.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Atom variant, downstream-consumer-payload) pairing now binds at
     /// ONE typed projection per consumer surface (six canonical-form
     /// surfaces — `Display`, JSON, iac-forge, plus the soft-projection
     /// FAMILY this method opens), regardless of which consumer reaches
-    /// in. THEORY.md §VI.1 — generation over composition; the six inline
+    /// in. Generation over composition; the six inline
     /// `Self::Atom(Atom::X(s)) => Some(_)` arms at `Sexp::as_X` sites
     /// (well past the ≥2 PRIME-DIRECTIVE trigger once the structural
     /// shape is named) collapse onto the closed-set `Atom` algebra so a
@@ -10696,7 +10696,7 @@ impl Atom {
     /// `Bigint` for arbitrary-precision integers) extends `Atom::ALL` +
     /// the per-variant soft-projection method ONCE and rustc enforces
     /// matching across every consumer through the closed-set match.
-    /// THEORY.md §V.1 — knowable platform; the (Atom variant, payload)
+    /// Knowable platform; the (Atom variant, payload)
     /// pairing becomes a TYPE projection on the substrate algebra
     /// rather than six inline arms at the `Sexp` consumer. A typo or
     /// swap at the soft-projection site is no longer a runtime drift
@@ -10856,16 +10856,16 @@ impl Atom {
     /// projection the `Sexp` consumer routes through via the structural
     /// lift [`Sexp::as_atom`] (ONE `Sexp::as_atom` traversal post-lift).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Symbol ⊎ Str) union projection now binds at ONE method on the
     /// closed-set [`Atom`] algebra regardless of which consumer reaches
-    /// in. THEORY.md §VI.1 — generation over composition; the
+    /// in. Generation over composition; the
     /// disjunctive `as_symbol().or_else(|| as_string())` composition at
     /// [`Sexp::as_symbol_or_string`]'s body collapses onto a SINGLE
     /// structural lift through [`Sexp::as_atom`] + the algebra-level
     /// union projection, eliminating the double-traversal redundancy
-    /// the pre-lift consumer-layer composition carried. THEORY.md §V.1
-    /// — knowable platform; the (Symbol-or-Str) NAME-slot union becomes
+    /// the pre-lift consumer-layer composition carried.
+    /// Knowable platform; the (Symbol-or-Str) NAME-slot union becomes
     /// a TYPE projection on the substrate algebra rather than a
     /// disjunctive composition at every NAME-gate consumer.
     ///
@@ -10938,24 +10938,24 @@ impl Atom {
 /// / `SexpShape` literals that could drift independently across the
 /// substrate's three per-atom-kind consumer surfaces.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+/// Anchor: invariant 1 — typed entry; the
 /// atomic-payload discriminator at a typed-entry rejection IS part of
 /// the proof of WHAT the gate observed, and naming its closed-set
 /// identity lifts the discriminator from per-site literal-pair
 /// discipline (a byte at the Hash site, a SexpShape variant at the
 /// `sexp_shape` site, a `&'static str` at any future LSP completion
 /// site) to ONE typed enum the substrate's diagnostic + cache-key
-/// surfaces both bind against. THEORY.md §II.1 invariant 2 — free
+/// surfaces both bind against. Invariant 2 — free
 /// middle; THREE consumers ([`Hash for Atom`],
 /// [`crate::domain::sexp_shape`], and the future diagnostic /
 /// completion surface) route through ONE typed closed-set match
 /// family, so a regression that drifts ONE consumer's pairing from the
-/// others cannot reach the substrate's runtime. THEORY.md §V.1 —
-/// knowable platform; the closed set of atomic payload kinds becomes a
+/// others cannot reach the substrate's runtime.
+/// Knowable platform; the closed set of atomic payload kinds becomes a
 /// TYPE rather than six byte literals (Hash) + six SexpShape literals
 /// (`sexp_shape`) scattered across distinct files — a typo in any one
 /// site is no longer a runtime drift but a compile error against the
-/// typed projection. THEORY.md §VI.1 — generation over composition;
+/// typed projection. Generation over composition;
 /// the (Atom variant, label, discriminator-byte, SexpShape variant)
 /// quadruple appeared inline at THREE sites (`Hash for Atom`'s six
 /// byte arms, `domain::sexp_shape`'s six atom arms, plus implicit
@@ -11122,15 +11122,15 @@ impl AtomKind {
     /// lockstep — rustc's forced-arity check on the two `[_; N]` arrays
     /// fails compilation if EITHER ALL array grows without the other.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the six canonical
+    /// Anchor: the typescape; the six canonical
     /// atomic-payload marker bytes bind at ONE typed
     /// `[&'static str; 6]` array on the closed-set AtomKind algebra
     /// rather than at zero-primitive-on-this-subset-plus-six-inline-
-    /// lookups scattered across the substrate. THEORY.md §V.1 —
-    /// knowable platform; the family's cardinality becomes a TYPE-level
+    /// lookups scattered across the substrate.
+    /// Knowable platform; the family's cardinality becomes a TYPE-level
     /// constant on the substrate algebra rather than a per-consumer
-    /// runtime dispatch through the composition. THEORY.md §VI.1 —
-    /// generation over composition; the family-wide contract sweeps
+    /// runtime dispatch through the composition.
+    /// Generation over composition; the family-wide contract sweeps
     /// (alignment with `ALL`, pairwise disjointness, membership through
     /// [`Self::label`]) emerge from the composition of TWO substrate
     /// primitives (this `pub const` array + the six per-role
@@ -11169,12 +11169,12 @@ impl AtomKind {
     /// runs on the [`Atom`] type, not [`Sexp`]), `QuoteForm` at
     /// `{3..=6}` at the outer [`Sexp`] cache-key space itself.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the alias-chain composition law
     /// `AtomKind::HASH_DISCRIMINATORS[i] ==
     /// AtomKind::ALL[i].hash_discriminator()` binds the family-wide
     /// array to the projection method at rustc time, pinned by byte
-    /// equality. THEORY.md §III — the typescape; the six canonical
+    /// equality. The typescape; the six canonical
     /// cache-key bytes bind at ONE `pub(crate) const` per role on the
     /// typed algebra rather than as inline `u8` literals in the
     /// `hash_discriminator` match arms.
@@ -11266,19 +11266,19 @@ impl AtomKind {
     /// silently allowed a discriminator collision on `6u8` (the next
     /// free byte on the nested [`Atom`] cache-key space).
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the six
+    /// Anchor: the typescape; the six
     /// canonical cache-key bytes bind at ONE typed `[u8; 6]` array on
     /// the closed-set [`AtomKind`] algebra rather than at zero-
     /// primitive-plus-six-inline-`u8`-literals scattered across the
-    /// [`Self::hash_discriminator`] match arms. THEORY.md §V.1 —
-    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// [`Self::hash_discriminator`] match arms.
+    /// Knowable platform; the family's cardinality becomes a TYPE-
     /// level constant on the substrate algebra rather than a per-
-    /// consumer runtime dispatch through the match table. THEORY.md
-    /// §V.3 — three-pillar attestation; the cache-key partition is
+    /// consumer runtime dispatch through the match table.
+    /// Three-pillar attestation; the cache-key partition is
     /// the substrate's nested [`Atom`] `intent_hash` composition axis
     /// for every atomic arm — binding the six bytes on the typed
     /// algebra makes attestation-key drift a compile error rather
-    /// than a silent BLAKE3 mis-hash. THEORY.md §VI.1 — generation
+    /// than a silent BLAKE3 mis-hash. Generation
     /// over composition; the family-wide contract sweeps (alignment
     /// with `ALL`, pairwise disjointness, membership through
     /// [`Self::hash_discriminator`]) emerge from the composition of
@@ -11404,19 +11404,19 @@ impl AtomKind {
     /// hashes the outer-Sexp byte-set upfront) picks up the same
     /// canonical byte from ONE source of truth.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the (AtomKind ⊂ SexpShape carve, outer-Sexp
     /// cache-key byte) pairing binds at rustc time by byte equality
     /// against the shape-level projection's atomic collapse arm.
-    /// THEORY.md §III — the typescape; the outer-Atom cache-key byte
+    /// The typescape; the outer-Atom cache-key byte
     /// binds at ONE `pub(crate) const` on the typed algebra rather
     /// than as inline `1u8` literals at every joint-partition + shape-
-    /// level-collapse site. THEORY.md §V.1 — knowable platform; the
+    /// level-collapse site. Knowable platform; the
     /// outer-Sexp cache-key space's four-way partition (this scalar
     /// PLUS the three sibling carvings' arrays) becomes a TYPE-level
     /// constant on the substrate algebra rather than a per-callsite
-    /// hand-rolled `{0, 1, 2, 3, 4, 5, 6}` re-enumeration. THEORY.md
-    /// §V.3 — three-pillar attestation; the outer-Sexp cache-key
+    /// hand-rolled `{0, 1, 2, 3, 4, 5, 6}` re-enumeration.
+    /// Three-pillar attestation; the outer-Sexp cache-key
     /// partition is the substrate's outer [`Sexp`] `intent_hash`
     /// composition axis — binding the four-way partition's atomic-
     /// carve byte on the typed algebra makes attestation-key drift a
@@ -11494,14 +11494,14 @@ impl AtomKind {
     /// fails the routing pin loudly without needing a per-variant
     /// cross-axis literal sweep.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// AtomKind ⊂ SexpShape label-vocabulary containment becomes a
     /// TYPED CONSEQUENCE of the [`Self::sexp_shape`] + [`SexpShape::label`]
-    /// composition rather than literal discipline at two sites. THEORY.md
-    /// §VI.1 — generation over composition; the six atomic-arm labels
+    /// composition rather than literal discipline at two sites.
+    /// Generation over composition; the six atomic-arm labels
     /// live at ONE canonical site ([`SexpShape::label`]) and this method
     /// generates its identity through the typed-projection composition.
-    /// THEORY.md §II.1 invariant 2 — free middle; FOUR consumers of the
+    /// Invariant 2 — free middle; FOUR consumers of the
     /// [`AtomKind`] algebra ([`Hash for Atom`] via
     /// [`Self::hash_discriminator`], [`crate::domain::sexp_shape`] via
     /// [`Self::sexp_shape`], the diagnostic-rendering surface via this
@@ -11660,20 +11660,20 @@ impl AtomKind {
     /// the other, AND the peer [`SexpShape::as_atom_kind`] arm must
     /// grow in lockstep to preserve the round-trip identity.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the six
+    /// Anchor: the typescape; the six
     /// canonical [`SexpShape`] embed targets bind at ONE typed
     /// `[SexpShape; 6]` array on the closed-set AtomKind algebra
     /// rather than at zero-primitive-on-this-subset-plus-six-inline-
-    /// lookups scattered across the substrate. THEORY.md §V.1 —
-    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// lookups scattered across the substrate.
+    /// Knowable platform; the family's cardinality becomes a TYPE-
     /// level constant on the substrate algebra rather than a per-
-    /// consumer runtime dispatch through the composition. THEORY.md
-    /// §II.1 invariant 2 — free middle; the (embed, project) pair
+    /// consumer runtime dispatch through the composition.
+    /// Invariant 2 — free middle; the (embed, project) pair
     /// binds at THREE typed sites now — the projection method
     /// [`Self::sexp_shape`], this family-wide array, AND the peer
     /// inverse [`crate::error::SexpShape::as_atom_kind`] — with
-    /// rustc-enforced consistency across all three. THEORY.md §VI.1
-    /// — generation over composition; the family-wide contract
+    /// rustc-enforced consistency across all three.
+    /// Generation over composition; the family-wide contract
     /// sweeps (alignment with `ALL`, round-trip through
     /// `as_atom_kind`, membership through `sexp_shape`) emerge from
     /// the composition of TWO substrate primitives (this `pub const`
@@ -11748,12 +11748,12 @@ impl AtomKind {
     /// disjointness with the quote-family sibling
     /// `SexpShape::as_quote_form`.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (Atom
+    /// Anchor: knowable platform; the (Atom
     /// variant, SexpShape variant) pairing becomes a TYPE projection
     /// on the substrate algebra rather than six inline arms in
     /// [`crate::domain::sexp_shape`]. A typo or swap at the shape-
     /// projection site is no longer a runtime drift but a compile
-    /// error against the typed projection. THEORY.md §II.1 invariant
+    /// error against the typed projection. Invariant
     /// 2 — free middle; THREE consumers ([`Hash for Atom`] via
     /// [`Self::hash_discriminator`], [`crate::domain::sexp_shape`]
     /// via this method, and the future diagnostic / completion surface
@@ -11824,10 +11824,10 @@ impl AtomKind {
     /// paired-array can land at zero cost once a third test-sweep
     /// consumer materializes.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the two byte-identical sample mappings compose against ONE
     /// substrate primitive here rather than being restated per-site.
-    /// THEORY.md §III — the typescape; the (kind, canonical sample
+    /// The typescape; the (kind, canonical sample
     /// atom) pairing binds at ONE typed method on the closed-set
     /// algebra rather than at a zero-primitive-on-this-axis-plus-two-
     /// inline-copies scattering across the crate.
@@ -11914,14 +11914,14 @@ impl Sexp {
     /// `Token::LParen` outer-dispatch arm would ambiguously route
     /// through a sibling algebra's arm.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (`Self::List` outer structure, canonical `(` opener) pairing
     /// now binds at ONE constant on the closed-set outer [`Sexp`]
     /// algebra regardless of which of the four consumer surfaces
-    /// reaches in. THEORY.md §VI.1 — generation over composition;
+    /// reaches in. Generation over composition;
     /// four byte-identical inline `'('` char literals across two
     /// substrate files collapse onto ONE named constant, matching
-    /// the substrate's three-times rule. THEORY.md §V.1 — knowable
+    /// the substrate's three-times rule. Knowable
     /// platform; the canonical list-opener byte becomes a
     /// TYPE-level constant on the outer substrate algebra rather
     /// than four inline bytes at four consumer surfaces across two
@@ -12002,15 +12002,15 @@ impl Sexp {
     /// (`QuoteForm::lead_char`), and every Bool-literal spelling's
     /// first char.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the paired
+    /// Anchor: the typescape; the paired
     /// (opener, closer) list-delimiter sub-vocabulary becomes a typed
     /// forced-arity ALL array on the closed-set outer [`Sexp`]
     /// algebra rather than as two inline algebra-constant
     /// enumerations at every consumer that iterates the paired
-    /// delimiter axis. THEORY.md §V.1 — knowable platform; the
+    /// delimiter axis. Knowable platform; the
     /// paired-delimiter sub-vocabulary now binds as load-bearing
     /// typed data at the algebra level rather than as two per-site
-    /// disjuncts. THEORY.md §VI.1 — generation over composition; the
+    /// disjuncts. Generation over composition; the
     /// paired-delimiter (opener + closer) composition regenerates
     /// identically through this ONE typed forced-arity array rather
     /// than through two inline algebra-constant enumerations per
@@ -12069,14 +12069,14 @@ impl Sexp {
     /// lexeme would ambiguously route through the line-comment arm AND
     /// a sibling algebra's arm at the reader's outer dispatch.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (reader-discard role, canonical `;` byte) pairing binds at ONE
     /// constant on the closed-set outer [`Sexp`] algebra regardless of
-    /// which of the two consumer sites reaches in. THEORY.md §VI.1 —
-    /// generation over composition; two byte-identical inline `';'`
+    /// which of the two consumer sites reaches in.
+    /// Generation over composition; two byte-identical inline `';'`
     /// char literals across ONE substrate file collapse onto ONE named
     /// constant, matching the substrate's three-times rule
-    /// (`\geq 2` PRIME-DIRECTIVE trigger). THEORY.md §V.1 — knowable
+    /// (`\geq 2` PRIME-DIRECTIVE trigger). Knowable
     /// platform; the canonical comment-lead byte becomes a TYPE-level
     /// constant on the outer substrate algebra rather than two inline
     /// bytes at two consumer surfaces in `crate::reader`.
@@ -12145,18 +12145,18 @@ impl Sexp {
     /// the line-comment terminator at the reader's outer-dispatch
     /// discard loop.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (reader-discard terminator role, canonical `\n` byte) pairing
     /// binds at ONE constant on the closed-set outer [`Sexp`] algebra
-    /// regardless of which consumer reaches in. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the paired
+    /// regardless of which consumer reaches in.
+    /// Invariant 5 — composition preserves proofs; the paired
     /// (COMMENT_LEAD, COMMENT_TERM) shape now lives at the algebra
     /// alongside (LIST_OPEN, LIST_CLOSE), so the reader-discard axis
     /// carries the SAME opener/closer discipline as the outer-
-    /// structural axis. THEORY.md §VI.1 — generation over composition;
+    /// structural axis. Generation over composition;
     /// the reader's inline `'\n'` char literal at the line-comment
     /// discard loop's terminator check collapses onto ONE named
-    /// constant on the substrate algebra. THEORY.md §V.1 — knowable
+    /// constant on the substrate algebra. Knowable
     /// platform; the canonical line-comment terminator byte becomes
     /// a TYPE-level constant on the outer substrate algebra rather
     /// than an inline `'\n'` at one consumer surface in
@@ -12284,7 +12284,7 @@ impl Sexp {
     /// mechanically, extending the reader-discard axis by ONE peer
     /// array without touching this one's shape.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the paired
+    /// Anchor: the typescape; the paired
     /// (opener, terminator) reader-discard sub-vocabulary of the
     /// reader's outer-dispatch arm-set now binds at ONE typed `[char;
     /// 2]` array on the closed-set outer [`Sexp`] algebra rather than
@@ -12293,14 +12293,14 @@ impl Sexp {
     /// that wants the paired-role shape. The shared `[char; 2]` shape
     /// with [`Self::LIST_DELIMITERS`] encodes the paired-role identity
     /// relation across the two axes of the SAME closed-set algebra at
-    /// the type system level. THEORY.md §V.1 — knowable platform; the
+    /// the type system level. Knowable platform; the
     /// paired-discard-delimiter sub-vocabulary becomes load-bearing
-    /// typed data on the closed-set outer [`Sexp`] algebra. THEORY.md
-    /// §VI.1 — generation over composition; the paired-delimiter
+    /// typed data on the closed-set outer [`Sexp`] algebra.
+    /// Generation over composition; the paired-delimiter
     /// (opener + terminator) composition regenerates identically
     /// through this ONE typed forced-arity array rather than through
-    /// two independent algebra constants at every consumer. THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs; the two-axis
+    /// two independent algebra constants at every consumer.
+    /// Invariant 5 — composition preserves proofs; the two-axis
     /// (outer-structural, reader-discard) cross-product on the closed-
     /// set outer [`Sexp`] algebra now carries the SAME opener/closer
     /// discipline on BOTH axes through two forced-arity ALL arrays
@@ -12400,19 +12400,19 @@ impl Sexp {
     /// compilation if the algebra grows without the array (or the
     /// array without the algebra).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (reader-outer-dispatch category, canonical char) family-wide
     /// pairing binds at ONE typed `[char; 7]` array on the outer
     /// [`Sexp`] algebra regardless of which of the three sub-algebras
     /// the individual chars name their per-role `pub const` primitive
-    /// on. THEORY.md §III — the typescape; the seven canonical
+    /// on. The typescape; the seven canonical
     /// reader-outer-dispatch category-leading bytes bind at ONE typed
     /// `[char; 7]` array on the outer [`Sexp`] algebra rather than at
     /// three-part sub-expression composition inline at
-    /// [`Self::is_bare_atom_boundary`]. THEORY.md §V.1 — knowable
+    /// [`Self::is_bare_atom_boundary`]. Knowable
     /// platform; the family's cardinality becomes a TYPE-level constant
     /// on the substrate algebra rather than a per-consumer hand-rolled
-    /// enumeration of the seven chars. THEORY.md §VI.1 — generation over
+    /// enumeration of the seven chars. Generation over
     /// composition; the family-wide contract sweeps (routing through
     /// typed sub-algebra `pub const` primitives, pairwise distinctness,
     /// agreement with the pre-lift sub-expression disjunction) emerge
@@ -12494,15 +12494,15 @@ impl Sexp {
     /// `[Token::Atom(format!("foo{ch}"))]` (ONE token) when it is
     /// `false`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (reader-level boundary role, canonical char) pairing binds at
     /// ONE typed projection on the outer [`Sexp`] algebra regardless
     /// of which of the SIX outer-dispatch category-leading chars is
-    /// under test. THEORY.md §VI.1 — generation over composition; a
+    /// under test. Generation over composition; a
     /// SIX-clause inline boolean disjunction spanning THREE type
     /// namespaces collapses onto ONE named method — the substrate's
     /// three-times rule saturated at the outer-dispatch's disjunction.
-    /// THEORY.md §V.1 — knowable platform; the canonical reader-level
+    /// Knowable platform; the canonical reader-level
     /// boundary predicate becomes a TYPE-level method on the outer
     /// substrate algebra rather than an inline six-clause boolean
     /// chain at ONE consumer site inside `crate::reader::tokenize`.
@@ -12615,15 +12615,15 @@ impl Sexp {
     /// (the single site the allocation composition lives) and
     /// propagates through these four typed constructors byte-for-byte.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (QuoteForm variant, [`Sexp`] tuple-variant constructor) pairing
     /// binds at ONE typed-algebra method per marker on the outer
     /// [`Sexp`] algebra regardless of which consumer reaches in.
-    /// THEORY.md §VI.1 — generation over composition; the welded
+    /// Generation over composition; the welded
     /// `Self::X(Box::new(_))` triple at every quote-family construct
     /// site regenerates through `QuoteForm::X.wrap(_)` composition over
-    /// the typed algebra rather than per-site re-derivation. THEORY.md
-    /// §V.1 — knowable platform; the typed-construct family becomes a
+    /// the typed algebra rather than per-site re-derivation.
+    /// Knowable platform; the typed-construct family becomes a
     /// TYPE projection on the substrate's outer [`Sexp`] algebra sitting
     /// next to the typed-project family [`Self::as_quote_form`] rather
     /// than as bare tuple-variant constructor + per-site `Box::new`
@@ -12771,24 +12771,24 @@ impl Sexp {
     /// the single [`QuoteForm::wrap`] composition site and propagates
     /// through this constructor byte-for-byte.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// (typed [`QuoteForm`] marker, owned inner body, [`QuoteForm::wrap`]
     /// composition) triple binds at ONE typed-algebra method on the
     /// outer [`Sexp`] algebra, closing the marker-driven quote-family
     /// (construct, project) algebra dual pair with
-    /// [`Self::as_quote_form`] on the projection side. THEORY.md §II.1
-    /// invariant 2 — free middle; every consumer that has a runtime
+    /// [`Self::as_quote_form`] on the projection side.
+    /// Invariant 2 — free middle; every consumer that has a runtime
     /// [`QuoteForm`] marker + an owned inner body and wants to build a
     /// quote-family wrapper routes through the SAME typed method, so a
     /// regression that drifts one consumer's marker→wrapper mapping
-    /// cannot reach the substrate's runtime. THEORY.md §V.1 — knowable
+    /// cannot reach the substrate's runtime. Knowable
     /// platform; the marker-driven quote-family typed-construct becomes
     /// a TYPE projection on the substrate's outer [`Sexp`] algebra
     /// sitting next to the typed-project family
     /// [`Self::as_quote_form`] / [`Self::as_quote_form_marker`] rather
     /// than the closed-set [`QuoteForm::wrap`] method threaded as a
-    /// method call on a bound-marker value. THEORY.md §VI.1 —
-    /// generation over composition; the marker-driven quote-family
+    /// method call on a bound-marker value.
+    /// Generation over composition; the marker-driven quote-family
     /// pair emerges from ONE typed-algebra composition through
     /// [`QuoteForm::wrap`] rather than from per-consumer marker→wrapper
     /// dispatch literals; a future fifth homoiconic prefix syntax
@@ -12938,25 +12938,25 @@ impl Sexp {
     /// propagates through this constructor byte-for-byte (via the
     /// [`UnquoteForm::wrap`] composition).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// (typed [`UnquoteForm`] marker, owned inner body,
     /// [`UnquoteForm::wrap`] composition) triple binds at ONE typed-
     /// algebra method on the outer [`Sexp`] algebra, closing the marker-
     /// driven template-substitution (construct, project) algebra dual
-    /// pair with [`Self::as_unquote`] on the projection side. THEORY.md
-    /// §II.1 invariant 2 — free middle; every consumer that has a
+    /// pair with [`Self::as_unquote`] on the projection side.
+    /// Invariant 2 — free middle; every consumer that has a
     /// runtime [`UnquoteForm`] marker + an owned inner body and wants to
     /// build a template-substitution wrapper routes through the SAME
     /// typed method, so a regression that drifts one consumer's subset
     /// marker → wrapper mapping cannot reach the substrate's runtime.
-    /// THEORY.md §V.1 — knowable platform; the marker-driven template-
+    /// Knowable platform; the marker-driven template-
     /// substitution typed-construct becomes a TYPE projection on the
     /// substrate's outer [`Sexp`] algebra sitting next to the typed-
     /// project family [`Self::as_unquote`] / [`Self::as_unquote_form`]
     /// rather than the closed-set [`UnquoteForm::wrap`] method threaded
     /// as a method call on a bound-marker value or the two-step subset
-    /// → superset then [`Self::quote_form`] composition. THEORY.md
-    /// §VI.1 — generation over composition; the marker-driven template-
+    /// → superset then [`Self::quote_form`] composition.
+    /// Generation over composition; the marker-driven template-
     /// substitution pair emerges from ONE typed-algebra composition
     /// through [`UnquoteForm::wrap`] rather than from per-consumer
     /// subset-marker → wrapper dispatch literals; a future third
@@ -13068,22 +13068,22 @@ impl Sexp {
     /// edit at this method site and propagates through consumers
     /// byte-for-byte.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// (list-shaped inner sequence, [`Self::List`] tuple-variant
     /// constructor) pairing binds at ONE typed-algebra method on the
     /// outer [`Sexp`] algebra, closing the outer-algebra construct
     /// family across ALL THREE structural carvings of the [`SexpShape`]
-    /// closed set (atomic-payload + quote-family + residual). THEORY.md
-    /// §II.1 invariant 2 — free middle; every consumer that has an
+    /// closed set (atomic-payload + quote-family + residual).
+    /// Invariant 2 — free middle; every consumer that has an
     /// owned or iterable sequence of [`Sexp`] and wants to build a
     /// list-shaped wrapper routes through the SAME typed method, so a
     /// regression that drifts one consumer's construction from the
-    /// others cannot reach the substrate's runtime. THEORY.md §V.1 —
-    /// knowable platform; the typed-construct family becomes a TYPE
+    /// others cannot reach the substrate's runtime.
+    /// Knowable platform; the typed-construct family becomes a TYPE
     /// projection on the substrate's outer [`Sexp`] algebra sitting
     /// next to the typed-project family [`Self::as_list`] rather than
     /// bare tuple-variant constructor + per-site `Vec<Sexp>` discipline.
-    /// THEORY.md §VI.1 — generation over composition; the residual-
+    /// Generation over composition; the residual-
     /// arm outer-shape + carving-marker pairings emerge from ONE
     /// typed-algebra composition on the outer [`Sexp`] algebra rather
     /// than from per-consumer per-variant literals.
@@ -13161,18 +13161,18 @@ impl Sexp {
     /// projection — the operator answering "which residual arm?"
     /// rather than the bare "is this the List arm?" predicate.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// (Sexp variant, StructuralKind carving marker) pairing becomes a
     /// TYPE projection on the substrate `Sexp` algebra rather than a
     /// two-step composition through the shape-level projection. A typo
     /// or swap at the value-projection site is no longer a runtime
     /// drift but a compile error against the typed projection.
-    /// THEORY.md §VI.1 — generation over composition; the
+    /// Generation over composition; the
     /// residual-carving marker projection now lives on the typed
     /// `Sexp` algebra alongside [`Self::as_atom`], [`Self::as_list`],
     /// [`Self::as_quote_form`], [`Self::as_unquote`], completing the
     /// (Sexp value → closed-set carving marker) family at the residual
-    /// axis. THEORY.md §II.1 invariant 2 — free middle; every consumer
+    /// axis. Invariant 2 — free middle; every consumer
     /// that needs the residual-carving marker at the value level (a
     /// future `tatara-check` predicate keyed on the Nil/List cohort, a
     /// future LSP structural-navigation filter that keys on the
@@ -13237,21 +13237,21 @@ impl Sexp {
     /// through [`Self::to_json`]) or does not (projects as
     /// [`serde_json::Value::Array`]).
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// Anchor: generation over composition; the
     /// kwargs-shape predicate, previously a `pub(crate)` free function in
     /// `domain.rs` reached across the module boundary by [`Self::to_json`],
     /// is lifted ONE algebra level higher onto the inherent method on
     /// the [`Sexp`] algebra — completing the structural-predicate family
     /// alongside [`Self::is_list`] and the soft-projection family
     /// ([`Self::as_atom`], [`Self::as_list`], [`Self::as_quote_form`]).
-    /// THEORY.md §II.1 invariant 2 — free middle; every consumer that
+    /// Invariant 2 — free middle; every consumer that
     /// queries "would [`Self::to_json`] project this as `Object`?" (the
     /// `Self::to_json` arm itself, future authoring-tool diagnostics, a
     /// future LSP completion fallback, a future REPL pretty-printer that
     /// chooses between `(…)` and `{…}` rendering, a future `tatara-check`
     /// typed-pattern matcher) routes through ONE inherent algebra method
     /// rather than reaching into the `domain` module path for a free
-    /// function. THEORY.md §V.1 — knowable platform; the JSON-format
+    /// function. Knowable platform; the JSON-format
     /// witness becomes a TYPE projection on the substrate `Sexp` algebra
     /// next to its sibling `Sexp::is_list` / `Sexp::as_list` pair rather
     /// than living in a `domain.rs` `pub(crate)` helper consumers must
@@ -13310,15 +13310,15 @@ impl Sexp {
     /// distinction `Int(1)` vs `Float(1.0)` is preserved at the algebra
     /// layer (see [`Atom::as_int`]'s docstring for the discipline).
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the six inline `Self::Atom(Atom::X(s)) => Some(_)` arms across
-    /// the `Sexp::as_X` family is past the three-times rule. THEORY.md
-    /// §II.1 invariant 2 — free middle; SIX consumers (`as_symbol`,
+    /// the `Sexp::as_X` family is past the three-times rule.
+    /// Invariant 2 — free middle; SIX consumers (`as_symbol`,
     /// `as_keyword`, `as_string`, `as_int`, `as_float`, `as_bool`) now
     /// route through ONE typed structural lift (this method) AND ONE
     /// per-variant projection family on the closed-set `Atom` algebra
     /// rather than six byte-identical outer-arm matches each.
-    /// THEORY.md §V.1 — knowable platform; the (Sexp variant, inner
+    /// Knowable platform; the (Sexp variant, inner
     /// payload kind) pairing becomes a TYPE projection on the substrate
     /// algebra rather than six inline arms scattered across the six
     /// `Sexp::as_X` consumers.
@@ -13390,20 +13390,20 @@ impl Sexp {
     /// (residual axis); this projection is the payload-agnostic
     /// carving-marker cell.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (Sexp
+    /// Anchor: knowable platform; the (Sexp
     /// variant, AtomKind carving marker) pairing becomes a TYPE
     /// projection on the substrate `Sexp` algebra rather than a
     /// two-step composition through either the [`Atom`] algebra or the
     /// shape algebra. A typo or swap at the value-projection site is
     /// no longer a runtime drift but a compile error against the
-    /// typed projection. THEORY.md §VI.1 — generation over composition;
+    /// typed projection. Generation over composition;
     /// the atomic-carving marker projection now lives on the typed
     /// `Sexp` algebra alongside [`Self::as_atom`], [`Self::as_list`],
     /// [`Self::as_quote_form`], [`Self::as_unquote`],
     /// [`Self::as_structural_kind`], completing the (Sexp value →
     /// closed-set carving marker) family across ALL THREE axes
-    /// (atomic + quote-family + structural-residual). THEORY.md §II.1
-    /// invariant 2 — free middle; every consumer that needs the
+    /// (atomic + quote-family + structural-residual).
+    /// Invariant 2 — free middle; every consumer that needs the
     /// atomic-carving marker at the value level (a future
     /// `tatara-check` predicate keyed on the atomic cohort, a future
     /// LSP structural-navigation filter that keys on the atomic
@@ -13473,20 +13473,20 @@ impl Sexp {
     /// family axis) — every other arm (`Nil`, `List`) projects to its
     /// own [`SexpShape`] variant directly.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// (Sexp variant, SexpShape variant) pairing becomes an inherent
     /// algebra projection rather than a free function in `domain.rs`,
     /// so the projection sits next to the rest of the typed `Sexp`
     /// algebra ([`Self::as_atom`], [`Self::as_list`],
     /// [`Self::as_quote_form`], [`Self::head_symbol`],
-    /// [`Self::as_call`]) the substrate carries. THEORY.md §II.1
-    /// invariant 2 — free middle; every consumer that needs the
+    /// [`Self::as_call`]) the substrate carries.
+    /// Invariant 2 — free middle; every consumer that needs the
     /// outer shape (diagnostic builders at
     /// [`crate::domain::sexp_witness`] / [`crate::domain::missing_head_err`],
     /// [`crate::compile`]'s `TypeMismatch.got` projection, future LSP /
     /// REPL / `tatara-check` typed-pattern matchers) now reaches a
     /// method on the value rather than a free function imported from
-    /// `domain`. THEORY.md §VI.1 — generation over composition; the
+    /// `domain`. Generation over composition; the
     /// inline dispatch lifted to [`crate::domain::sexp_shape`] is now
     /// lifted ONE algebra level higher — from the free function to
     /// the inherent method — so a future `Sexp` variant lands at the
@@ -13572,14 +13572,14 @@ impl Sexp {
     /// boundary now reaches a method on the value rather than a
     /// free function imported from `domain`.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// (Sexp variant, SexpWitness identity) pairing becomes an
     /// inherent algebra projection rather than a free function in
     /// `domain.rs`, so the projection sits next to the rest of the
     /// typed `Sexp` algebra ([`Self::shape`], [`Self::as_atom`],
     /// [`Self::as_list`], [`Self::as_quote_form`],
     /// [`Self::head_symbol`], [`Self::as_call`]) the substrate
-    /// carries. THEORY.md §II.1 invariant 2 — free middle; every
+    /// carries. Invariant 2 — free middle; every
     /// consumer that needs the typed joint identity at a
     /// rejection-boundary slot (`NonSymbolUnquoteTarget.got`,
     /// `SpliceOutsideList.got`, `NonSymbolParam.got`,
@@ -13589,7 +13589,7 @@ impl Sexp {
     /// `RewriterNonList.got`, future LSP / REPL / `tatara-check`
     /// typed-pattern matchers) now reaches a method on the value
     /// rather than a free function imported from `domain`.
-    /// THEORY.md §VI.1 — generation over composition; the inline
+    /// Generation over composition; the inline
     /// dispatch lifted to [`crate::domain::sexp_witness`] is now
     /// lifted ONE algebra level higher — from the free function
     /// to the inherent method — completing the Sexp-projection
@@ -13648,7 +13648,7 @@ impl Sexp {
     /// the projection cheap to embed in any error variant without
     /// allocation.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// (Sexp variant, `&'static str` label) pairing becomes an
     /// inherent algebra projection rather than a free function in
     /// `domain.rs`, so the projection sits next to the rest of the
@@ -13656,13 +13656,13 @@ impl Sexp {
     /// [`Self::to_json`], [`Self::from_json`], [`Self::as_atom`],
     /// [`Self::as_list`], [`Self::as_quote_form`],
     /// [`Self::head_symbol`], [`Self::as_call`]) the substrate
-    /// carries. THEORY.md §II.1 invariant 2 — free middle; every
+    /// carries. Invariant 2 — free middle; every
     /// consumer that needs the outer-shape label
     /// (`LispError::TypeMismatch.got` projection in `compile.rs`,
     /// legacy substring-grep rejection-message tests, future LSP /
     /// REPL diagnostic surfaces) now reaches a method on the value
     /// rather than a free function imported from `domain`.
-    /// THEORY.md §VI.1 — generation over composition; the inline
+    /// Generation over composition; the inline
     /// `s.shape().label()` recipe lifted to
     /// [`crate::domain::sexp_type_name`] is now lifted ONE algebra
     /// level higher — from the free function to the inherent
@@ -13754,13 +13754,13 @@ impl Sexp {
     /// [`Atom`] projection family (`Atom::Display`, [`Atom::to_json`],
     /// `Atom::to_iac_forge_sexpr`).
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the inline dispatch the prior runs lifted onto
     /// [`crate::domain::sexp_to_json`] (the free function) is now
     /// lifted ONE algebra level higher — from the free function to
     /// the inherent method — completing the Sexp-projection family
-    /// alongside [`Self::shape`] and [`Self::witness`]. THEORY.md
-    /// §II.1 invariant 2 — free middle; the typed-exit JSON
+    /// alongside [`Self::shape`] and [`Self::witness`].
+    /// Invariant 2 — free middle; the typed-exit JSON
     /// projection (every consumer that round-trips a Sexp through
     /// `serde_json::from_value::<T>` for typed-domain
     /// deserialization, the typed-rewriter at
@@ -13768,7 +13768,7 @@ impl Sexp {
     /// `compile_from_args` fallthrough, and any future canonical-
     /// form surface) all route through ONE inherent algebra method
     /// rather than reach into the `domain` module path for a free
-    /// function. THEORY.md §V.1 — knowable platform; a future
+    /// function. Knowable platform; a future
     /// `Sexp` variant extension (e.g. `Sexp::Vector` for `#(...)`
     /// reader syntax, `Sexp::Map` for `{...}`) reaches this method
     /// through the already-lifted [`Self::as_quote_form`] +
@@ -13906,15 +13906,15 @@ impl Sexp {
     /// `Self::from_nix` — the naming pattern is now structurally
     /// established by this pair.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the inline `json_to_sexp` dispatcher in `domain.rs` is lifted
     /// ONE algebra level higher (from free function to inherent
     /// method), completing the Sexp ↔ JValue round-trip closure
-    /// alongside [`Self::to_json`]. THEORY.md §V.1 — knowable
+    /// alongside [`Self::to_json`]. Knowable
     /// platform; the inverse projection becomes a NAMED primitive on
     /// the substrate's `Sexp` algebra rather than a `domain`-module
     /// free function consumers reach across module boundaries to call.
-    /// THEORY.md §II.1 invariant 2 — free middle; every consumer that
+    /// Invariant 2 — free middle; every consumer that
     /// round-trips through JSON (the typed-rewriter at
     /// [`crate::domain::TypedRewriter`], the derive macro's
     /// `compile_from_args` JSON fallthrough, the test round-trip
@@ -14021,7 +14021,7 @@ impl Sexp {
     /// Composition law: `s.as_symbol_or_string() == s.as_atom().and_then(Atom::as_symbol_or_string)`
     /// for every [`Sexp`] `s`. See [`Atom::as_symbol_or_string`] for the
     /// algebra-level peer's docstring (per-variant family completion +
-    /// theory grounding).
+    /// grounding).
     pub fn as_symbol_or_string(&self) -> Option<&str> {
         self.as_atom().and_then(Atom::as_symbol_or_string)
     }
@@ -14176,26 +14176,26 @@ impl Sexp {
     /// `.map(...)` chains without a per-site `.collect::<Vec<Sexp>>()`
     /// coercion.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// (head string, args sequence, [`Self::List`] tuple-variant
     /// constructor) triple binds at ONE typed-algebra method on the
     /// outer [`Sexp`] algebra, closing the call-form (construct,
     /// project) algebra dual pair with [`Self::as_call`] /
-    /// [`Self::as_call_to`] / [`Self::head_symbol`]. THEORY.md §II.1
-    /// invariant 2 — free middle; every consumer that has a head
+    /// [`Self::as_call_to`] / [`Self::head_symbol`].
+    /// Invariant 2 — free middle; every consumer that has a head
     /// string + an owned or iterable sequence of args and wants to
     /// build a call-shaped [`Sexp`] routes through the SAME typed
     /// method, so a regression that drifts one consumer's construction
     /// from the others (e.g. a copy-edit that emits `Sexp::keyword(
     /// head)` for the head position, or that swaps in a `Sexp::string`
     /// head that [`Self::as_call`] then rejects at the projection
-    /// site) cannot reach the substrate's runtime. THEORY.md §V.1 —
-    /// knowable platform; the call-form typed-construct becomes a TYPE
+    /// site) cannot reach the substrate's runtime.
+    /// Knowable platform; the call-form typed-construct becomes a TYPE
     /// projection on the substrate's outer [`Sexp`] algebra sitting
     /// next to the typed-project family [`Self::as_call`] /
     /// [`Self::as_call_to`] rather than bare tuple-variant constructor
     /// paired with per-site `Sexp::List(vec![Sexp::symbol(...), ...])`
-    /// discipline. THEORY.md §VI.1 — generation over composition; the
+    /// discipline. Generation over composition; the
     /// call-form pair emerges from ONE typed-algebra composition
     /// through [`Self::list`] composed with [`Self::symbol`] rather
     /// than from per-consumer per-callsite literals; a future call-
@@ -14334,28 +14334,28 @@ impl Sexp {
     /// `name:id` reader-side rejection that fires BEFORE any
     /// downstream binding sees the drifted shape.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// (head string, NAME string, spec args sequence, [`Self::call`]
     /// call-form constructor) quadruple binds at ONE typed-algebra
     /// method on the outer [`Sexp`] algebra, closing the named-call-
     /// form (construct, project) algebra dual pair with
     /// [`Self::as_named_call_to`] / [`Self::as_named_call_to_any`] on
     /// the projection side and [`crate::compile::split_name_slot`] on
-    /// the gate side. THEORY.md §II.1 invariant 2 — free middle;
+    /// the gate side. Invariant 2 — free middle;
     /// every consumer that has a head + NAME + spec args and wants to
     /// build a named-call-shaped [`Sexp`] routes through the SAME
     /// typed method, so a regression that drifts one consumer's
     /// construction from the others (e.g. a copy-edit that emits
     /// `Sexp::keyword(name)` for the NAME position, which the
     /// named-form gate would reject with `NamedFormNonSymbolName`)
-    /// cannot reach the substrate's runtime. THEORY.md §V.1 —
-    /// knowable platform; the named-call-form typed-construct becomes
+    /// cannot reach the substrate's runtime.
+    /// Knowable platform; the named-call-form typed-construct becomes
     /// a TYPE projection on the substrate's outer [`Sexp`] algebra
     /// sitting next to the typed-project family [`Self::
     /// as_named_call_to`] / [`Self::as_named_call_to_any`] +
     /// [`crate::ast::iter_named_calls_to`] /
     /// [`crate::ast::iter_named_calls_to_any`] rather than a per-site
-    /// inline composition. THEORY.md §VI.1 — generation over
+    /// inline composition. Generation over
     /// composition; the named-call-form pair emerges from ONE typed-
     /// algebra composition through [`Self::call`] composed with
     /// [`Self::symbol`] rather than from per-consumer per-callsite
@@ -14633,15 +14633,15 @@ impl Sexp {
     /// shape (with `Result::collect` short-circuiting on the first
     /// malformed NAME) — every layer of the cube preserves both faces.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// Anchor: generation over composition; the
     /// per-form × classifier × named cell of the soft-dispatch cube is a
     /// CONSEQUENCE of [`Sexp::as_call_to_any`] + [`crate::compile::split_name_slot`],
     /// named on the substrate's `Sexp` algebra rather than re-derived
-    /// inline at every per-form named consumer site. THEORY.md §V.1 —
-    /// knowable platform; the per-form named-classifier projection
+    /// inline at every per-form named consumer site.
+    /// Knowable platform; the per-form named-classifier projection
     /// becomes a NAMED primitive on the `Sexp` algebra, discoverable by
     /// any future authoring tool (LSP, REPL, `tatara-check`) that holds
-    /// a single form in isolation. THEORY.md §II.1 invariant 2 — free
+    /// a single form in isolation. Invariant 2 — free
     /// middle; the slice-side sibling [`iter_named_calls_to_any`] now
     /// routes through this per-form primitive via the same
     /// `forms.iter().filter_map(_)` skeleton the bare-kwargs row uses
@@ -14712,7 +14712,7 @@ impl Sexp {
     ///   * `as_named_call_to(k).is_none() == as_call_to(k).is_none()`
     ///   * `iter_named_calls_to(forms, k) == forms.iter().filter_map(|f| f.as_named_call_to(k))`
     ///
-    /// Theory anchor: see [`Sexp::as_named_call_to_any`] — the constant-
+    /// Anchor: see [`Sexp::as_named_call_to_any`] — the constant-
     /// keyword sibling shares the same lift posture, threading the
     /// `&'static str` keyword constraint through the named-form gate's
     /// canonical-keyword slot rather than admitting an arbitrary runtime
@@ -14801,21 +14801,21 @@ impl Sexp {
     /// and project to `None`), eliminating the silent two-site
     /// extension-drift this lift was already designed to forbid.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// Anchor: generation over composition; the
     /// `(Sexp::Unquote, UnquoteForm::Unquote)` and
     /// `(Sexp::UnquoteSplice, UnquoteForm::Splice)` pairings appear ≥3
     /// times across `compile_node` (2 arms) + `substitute` (top-level +
     /// list-inner) — past the PRIME-DIRECTIVE trigger once the structural
-    /// shape is named. THEORY.md §V.1 — knowable platform; the
+    /// shape is named. Knowable platform; the
     /// unquote-family projection becomes a NAMED primitive on the
     /// substrate's `Sexp` algebra rather than per-site `Sexp::Unquote(_)
     /// | Sexp::UnquoteSplice(_)` inline matches paired with per-site
     /// `UnquoteForm::Unquote` / `UnquoteForm::Splice` literals.
-    /// THEORY.md §II.1 invariant 1 — typed entry; the macro-template
+    /// Invariant 1 — typed entry; the macro-template
     /// substitution surface's typed-marker projection IS the rust-level
     /// typed-entry gate's structural component, lifted from per-site
     /// duplication onto ONE rust method the substrate's diagnostic
-    /// promotions hang off of. THEORY.md §II.1 invariant 2 — free middle;
+    /// promotions hang off of. Invariant 2 — free middle;
     /// both expansion strategies (bytecode `compile_node` and substitute
     /// fallback `substitute`) route through the SAME projection, so a
     /// regression that drifts ONE strategy's (Sexp variant, UnquoteForm
@@ -14924,7 +14924,7 @@ impl Sexp {
     ///   * `as_unquote_form() == Some(UnquoteForm::Splice)`   iff `matches!(self, Sexp::UnquoteSplice(_))`
     ///   * `as_unquote_form() == None`                        iff `!matches!(self, Sexp::Unquote(_) | Sexp::UnquoteSplice(_))`
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the substitution-
+    /// Anchor: knowable platform; the substitution-
     /// subset carving marker at the value level becomes a NAMED
     /// primitive on the substrate's `Sexp` algebra rather than a per-
     /// site composition through either [`Self::as_unquote`] (discarding
@@ -14932,7 +14932,7 @@ impl Sexp {
     /// 12-variant `SexpShape` closed set to arrive at the 2-of-12
     /// carving marker) or the parent [`Self::as_quote_form`] combined
     /// with [`QuoteForm::as_unquote_form`] (the 2-of-4 subset gate).
-    /// THEORY.md §II.1 invariant 2 — free middle; every consumer that
+    /// Invariant 2 — free middle; every consumer that
     /// wants the substitution-subset carving identity without needing
     /// the wrapped inner (a future `tatara-check` predicate
     /// `(check-value-projects-to-unquote-subset …)` that filters
@@ -14944,7 +14944,7 @@ impl Sexp {
     /// inner payload identity; a future REPL pretty-printer that chooses
     /// rendering paths keyed on the value-level substitution carving
     /// marker without needing the inner payload) binds to ONE typed
-    /// method on the value algebra. THEORY.md §VI.1 — generation over
+    /// method on the value algebra. Generation over
     /// composition; the (Sexp variant, UnquoteForm variant) pairing
     /// binds at ONE inherent method on the algebra rather than at three
     /// parallel compositions (`as_unquote().map(…)`, `shape()
@@ -15042,15 +15042,15 @@ impl Sexp {
     /// clone, no allocation — same lifetime as `&self` and same posture
     /// as [`Sexp::as_unquote`]'s tail.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// Anchor: generation over composition; the
     /// quote-family (Sexp variant, prefix string, hash discriminator)
     /// triple appeared inline at three sites (`Hash for Sexp`,
     /// `Display for Sexp`, `as_unquote`) — well past the ≥2 PRIME-DIRECTIVE
-    /// trigger once the structural shape is named. THEORY.md §V.1 —
-    /// knowable platform; the quote-family typed-marker projection becomes
+    /// trigger once the structural shape is named.
+    /// Knowable platform; the quote-family typed-marker projection becomes
     /// a NAMED primitive on the substrate's `Sexp` algebra rather than
     /// per-site inline matches paired with per-site discriminator literals
-    /// and prefix literals. THEORY.md §II.1 invariant 1 — typed entry; the
+    /// and prefix literals. Invariant 1 — typed entry; the
     /// reader's prefix-to-variant dispatch ([`crate::reader::read_quoted`])
     /// AND the Display impl's variant-to-prefix dispatch are dual
     /// typed-entry / typed-exit gates over the same closed set; the
@@ -15058,7 +15058,7 @@ impl Sexp {
     /// regression that drifts one side's prefix from the other (e.g. the
     /// reader gains a fifth prefix but the Display impl doesn't) is no
     /// longer a silent two-site divergence — rustc binds both sides to
-    /// the same closed-set enum. THEORY.md §II.1 invariant 2 — free
+    /// the same closed-set enum. Invariant 2 — free
     /// middle; the three consumers (Hash, Display, `as_unquote`) route
     /// through the SAME projection, so a regression that drifts ONE
     /// consumer's (Sexp variant, marker) pairing from the others cannot
@@ -15151,14 +15151,14 @@ impl Sexp {
     ///   * `as_quote_form_marker() == Some(QuoteForm::UnquoteSplice)` iff `matches!(self, Sexp::UnquoteSplice(_))`
     ///   * `as_quote_form_marker() == None`                           iff `!matches!(self, Sexp::Quote(_) | Sexp::Quasiquote(_) | Sexp::Unquote(_) | Sexp::UnquoteSplice(_))`
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the quote-
+    /// Anchor: knowable platform; the quote-
     /// family carving marker at the value level becomes a NAMED
     /// primitive on the substrate's `Sexp` algebra rather than a per-
     /// site two-step composition through either [`Self::as_quote_form`]
     /// (discarding its `&Sexp` inner) or [`Self::shape`] (walking through
     /// the full 12-variant [`SexpShape`](crate::error::SexpShape) closed
-    /// set to arrive at the 4-of-12 carving marker). THEORY.md §II.1
-    /// invariant 2 — free middle; every consumer that wants the quote-
+    /// set to arrive at the 4-of-12 carving marker).
+    /// Invariant 2 — free middle; every consumer that wants the quote-
     /// family carving identity without needing the wrapped inner (a
     /// future `tatara-check` predicate `(check-value-projects-to-quote-
     /// family …)` that filters diagnostics keyed on the quote-family
@@ -15173,7 +15173,7 @@ impl Sexp {
     /// the two composition sites, and both compositions are pinned as
     /// agreement laws so a regression that drifts ONE composition's
     /// pairing from the other cannot reach the substrate's runtime.
-    /// THEORY.md §VI.1 — generation over composition; the (Sexp variant,
+    /// Generation over composition; the (Sexp variant,
     /// QuoteForm variant) pairing binds at ONE inherent method on the
     /// algebra rather than at two parallel compositions, so a future
     /// extension (e.g. a fifth `Sexp` quote-family wrapper) lands at
@@ -15240,10 +15240,10 @@ impl Sexp {
     /// site is the proof of the invariant; the panic is the static
     /// fall-through for a regression that drifts that proof.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// Anchor: generation over composition; the
     /// (4-arm wildcard pattern, expect re-projection) pair appeared bit-
     /// for-bit at five production sites — well past the ≥2 PRIME-DIRECTIVE
-    /// trigger. THEORY.md §V.1 — knowable platform; the panic message and
+    /// trigger. Knowable platform; the panic message and
     /// the projection-with-assertion are now ONE named primitive on the
     /// substrate's `Sexp` algebra, structurally binding the invariant
     /// across every consumer that asserts an outer narrowing.
@@ -15409,18 +15409,18 @@ impl Sexp {
     /// exhaustiveness binding the extension end-to-end at
     /// [`crate::error::SexpShape::as_quote_form`]'s closed match.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (outer
+    /// Anchor: knowable platform; the (outer
     /// `Sexp` variant, canonical iac-forge tag) pairing becomes a TYPE
     /// projection on the outermost value-carrier algebra rather than an
     /// inline `.shape().iac_forge_tag()` two-step at every consumer. A
     /// typo or swap at the projection site is no longer a runtime tag
     /// drift but a compile error against the typed composition — the
     /// `Sexp` ↔ `SexpShape` ↔ `QuoteForm` ↔ tag string chain is rustc-
-    /// enforced end-to-end. THEORY.md §II.1 invariant 2 — free middle;
+    /// enforced end-to-end. Invariant 2 — free middle;
     /// the (outer value, canonical iac-forge tag) pairing now binds at
     /// ONE site on the outer-`Sexp` algebra, composing through the pre-
     /// existing shape-level partial projection rather than duplicating
-    /// the four-arm match here. THEORY.md §VI.1 — generation over
+    /// the four-arm match here. Generation over
     /// composition; the outer-`Sexp` cross-crate canonical-form tag
     /// surface closes at FOUR typed layers (outer → shape → carving →
     /// sub-carving-tag), each keyed on the SAME canonical-form tag
@@ -15547,19 +15547,19 @@ impl Sexp {
     /// exhaustiveness binding the extension end-to-end at
     /// [`crate::error::SexpShape::as_quote_form`]'s closed match.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (outer
+    /// Anchor: knowable platform; the (outer
     /// `Sexp` variant, reader-punctuation prefix) pairing becomes a
     /// TYPE projection on the outermost value-carrier algebra rather
     /// than an inline `.shape().prefix()` two-step at every consumer.
     /// A typo or swap at the projection site is no longer a runtime
     /// prefix drift but a compile error against the typed composition
     /// — the `Sexp` ↔ `SexpShape` ↔ `QuoteForm` ↔ prefix character
-    /// chain is rustc-enforced end-to-end. THEORY.md §II.1 invariant 2
+    /// chain is rustc-enforced end-to-end. Invariant 2
     /// — free middle; the (outer value, reader-punctuation prefix)
     /// pairing now binds at ONE site on the outer-`Sexp` algebra,
     /// composing through the pre-existing shape-level partial
     /// projection rather than duplicating the four-arm match here.
-    /// THEORY.md §VI.1 — generation over composition; the outer-`Sexp`
+    /// Generation over composition; the outer-`Sexp`
     /// reader-punctuation surface closes at FOUR typed layers (outer
     /// → shape → carving → sub-carving-prefix), each keyed on the SAME
     /// reader-punctuation projection carried at the closed-set sub-
@@ -15628,10 +15628,10 @@ impl Sexp {
     /// ceiling consumes) — so all three ceilings compose against a
     /// single arithmetic type without cross-cast overhead.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// structural size of a value on the outer [`Sexp`] algebra
     /// becomes a first-class TYPED projection rather than a
-    /// per-consumer hand-rolled walker. THEORY.md §VI.1 — generation
+    /// per-consumer hand-rolled walker. Generation
     /// over composition; a future ceiling on a subtree count (e.g.
     /// "reject any expansion whose LIST arms exceed N") emerges
     /// naturally as a peer projection on the same closed-set
@@ -15699,17 +15699,17 @@ pub const QUOTE_FAMILY_PROJECTION_INVARIANT: &str =
 /// [`Self::as_unquote_form`]'s arm together, with rustc binding the
 /// extension through the projection's `Option` return type.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+/// Anchor: invariant 1 — typed entry; the
 /// homoiconic-prefix-wrapper dispatch (the reader's prefix-to-variant
 /// gate AND the Display impl's variant-to-prefix dual) IS the rust-level
 /// typed-entry / typed-exit gate, and naming its closed-set identity
 /// lifts the gate from per-site literal-pair discipline to ONE typed
 /// enum the substrate's diagnostic promotions hang off of.
-/// THEORY.md §V.1 — knowable platform; the closed set of homoiconic
+/// Knowable platform; the closed set of homoiconic
 /// prefix-wrappers becomes a TYPE rather than four `&'static str` / `u8`
 /// literals scattered across Hash / Display / interop / sexp_shape — a
 /// typo in any one site is no longer a runtime drift but a compile error
-/// against the typed projection. THEORY.md §VI.1 — generation over
+/// against the typed projection. Generation over
 /// composition; the typed enum lands the structural-completeness floor
 /// for the quote-family surface, parallel to how `UnquoteForm` lands it
 /// for the template-marker subset and `MacroDefHead` for the
@@ -16000,11 +16000,11 @@ impl QuoteForm {
     /// would silently break the reader's outer dispatch. Pinned by
     /// `quote_form_lead_constants_distinct_from_every_other_algebra_marker_char`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (Quote-family single-quote lead byte, canonical `'\''`) pairing
     /// binds at ONE constant on the closed-set [`QuoteForm`] algebra
-    /// regardless of which paired projection reaches in. THEORY.md §V.1
-    /// — knowable platform; the canonical Quote-family lead byte becomes
+    /// regardless of which paired projection reaches in.
+    /// Knowable platform; the canonical Quote-family lead byte becomes
     /// a TYPE-level constant on the substrate algebra rather than an
     /// inline `'\''` char literal at [`Self::lead_char`]'s [`Self::Quote`]
     /// arm AND at [`Self::from_lead_char`]'s decode arm.
@@ -16119,15 +16119,15 @@ impl QuoteForm {
     ///   editor's per-char classifier binds through [`Self::LEADS`]
     ///   rather than three parallel `char`-literal patterns.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the three
+    /// Anchor: the typescape; the three
     /// distinct quote-family reader-lead bytes now bind at ONE typed
     /// `[char; 3]` array on the closed-set [`QuoteForm`] algebra
     /// rather than as three inline algebra-constant enumerations at
     /// every consumer that iterates the distinct-lead-byte sub-
-    /// vocabulary. THEORY.md §V.1 — knowable platform; the distinct-
+    /// vocabulary. Knowable platform; the distinct-
     /// lead-byte sub-vocabulary becomes load-bearing typed data on
-    /// the closed-set outer [`QuoteForm`] algebra. THEORY.md §VI.1 —
-    /// generation over composition; the shared-lead-byte collapse
+    /// the closed-set outer [`QuoteForm`] algebra.
+    /// Generation over composition; the shared-lead-byte collapse
     /// identity (four variants → three distinct lead bytes)
     /// composes at ONE typed ALL array whose shape-asymmetric
     /// cardinality (3 vs [`Self::PREFIXES`]'s 4) IS the collapse
@@ -16172,7 +16172,7 @@ impl QuoteForm {
     /// the same bare-atom-terminator disjunct pair with across FOUR
     /// per-variant lead chars.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// reader's per-char quote-family dispatch IS the typed-entry gate,
     /// and lifting its (char, `QuoteForm`) pairing to ONE projection
     /// method plus one inverse (see [`Self::from_lead_char`]) closes
@@ -16180,12 +16180,12 @@ impl QuoteForm {
     /// algebra rather than four inline `char` literals scattered across
     /// three tokenizer arms (`'\''` / `` '`' `` / `','` outer-match arms)
     /// AND three bare-atom-terminator disjuncts (`ch == '\''` / `ch ==
-    /// '`'` / `ch == ','`). THEORY.md §V.1 — knowable platform; the
+    /// '`'` / `ch == ','`). Knowable platform; the
     /// closed set of quote-family lead chars becomes a TYPE (the
     /// enum's arms projected through this method) rather than four
     /// literal `char` values scattered across the reader's outer
-    /// dispatch AND its bare-atom terminator. THEORY.md §VI.1 —
-    /// generation over composition; a fifth homoiconic prefix
+    /// dispatch AND its bare-atom terminator.
+    /// Generation over composition; a fifth homoiconic prefix
     /// (hypothetical `,~` reverse-unquote, `#'` function-quote,
     /// `#[…]` vector-quote) extends [`Self`] AND this method AND
     /// [`Self::from_lead_char`] AND the tokenizer's pre-match check
@@ -16258,9 +16258,9 @@ impl QuoteForm {
     /// dispatch binds through ONE typed decode rather than through
     /// scattered per-arm `char` / `&str` literal patterns.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// reader's per-char quote-family classification IS the typed-entry
-    /// gate. THEORY.md §V.1 — knowable platform; the reader's outer
+    /// gate. Knowable platform; the reader's outer
     /// dispatch AND the bare-atom terminator each route through ONE
     /// typed decode against the closed-set algebra rather than through
     /// three (or four) parallel `char`-literal patterns that could
@@ -16314,13 +16314,13 @@ impl QuoteForm {
     /// every canonical reader-punctuation constant on the substrate is a
     /// `pub const` on its owning closed-set algebra.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// reader's two-char splice-promotion gate IS the typed-entry gate
     /// on the `,@` boundary, and lifting the `@` discriminator to ONE
     /// canonical byte on the closed-set algebra closes the gate's
     /// entry-char identity onto the algebra rather than at an inline
-    /// `char` literal at the reader's peek arm. THEORY.md §V.1 —
-    /// knowable platform; the splice-promotion discriminator becomes a
+    /// `char` literal at the reader's peek arm.
+    /// Knowable platform; the splice-promotion discriminator becomes a
     /// TYPED byte on the substrate algebra rather than an inline `'@'`
     /// scattered across the reader — a regression that renames the byte
     /// without updating the sibling promotion peer fails at rustc /
@@ -16454,21 +16454,21 @@ impl QuoteForm {
     /// [`crate::error::StructuralKind::HASH_DISCRIMINATORS`] lifts
     /// carried before their downstream consumers materialized.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// reader's two-char quote-family classification IS the typed-
     /// entry gate on the `,@` boundary, and lifting the promotion
     /// algebra's canonical triples to ONE typed `[(Self, char, Self);
     /// N]` primitive on the closed-set algebra closes the gate's
     /// two-char entry surface onto the algebra rather than at inline
     /// arm literals scattered across the const-fn match body.
-    /// THEORY.md §III — the typescape; the singleton promotion triple
+    /// The typescape; the singleton promotion triple
     /// binds at ONE typed `pub const` on the closed-set [`QuoteForm`]
     /// algebra rather than at zero-primitive-plus-inline-arm-literals
-    /// at [`Self::promote_via_next_char`]'s match arm. THEORY.md §V.1
-    /// — knowable platform; the family's cardinality becomes a
+    /// at [`Self::promote_via_next_char`]'s match arm.
+    /// Knowable platform; the family's cardinality becomes a
     /// TYPE-level constant on the substrate algebra rather than a
     /// per-consumer runtime dispatch through the match table.
-    /// THEORY.md §VI.1 — generation over composition; the family-wide
+    /// Generation over composition; the family-wide
     /// contract sweeps (alignment with
     /// [`Self::promote_via_next_char`], pairwise disjointness across
     /// the head-discriminator product, rendered-prefix composition
@@ -16568,14 +16568,14 @@ impl QuoteForm {
     /// arm rerouted through the wrong variant, or a prefix renamed
     /// without updating the promotion table) surfaces immediately.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// reader's two-char quote-family classification IS the typed-
-    /// entry gate on the `,@` boundary. THEORY.md §V.1 — knowable
+    /// entry gate on the `,@` boundary. Knowable
     /// platform; the (variant, next char) → promoted variant table
     /// becomes a TYPE projection on the substrate algebra rather than
     /// at an inline `matches!(qf, Unquote) && c == '@'` pattern
-    /// scattered at the reader's peek arm. THEORY.md §VI.1 —
-    /// generation over composition; a fifth homoiconic prefix with its
+    /// scattered at the reader's peek arm.
+    /// Generation over composition; a fifth homoiconic prefix with its
     /// own two-char extension extends [`Self`] AND this method's match
     /// arm in lockstep — rustc binds the extension through
     /// exhaustiveness over the closed enum, and the `Option<Self>`
@@ -16676,12 +16676,12 @@ impl QuoteForm {
     /// serve — same visibility rationale as [`Self::hash_discriminator`]
     /// itself.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the alias-chain composition law
     /// `QuoteForm::HASH_DISCRIMINATORS[i] ==
     /// QuoteForm::ALL[i].hash_discriminator()` binds the family-wide
     /// array to the projection method at rustc time, pinned by byte
-    /// equality. THEORY.md §III — the typescape; the four canonical
+    /// equality. The typescape; the four canonical
     /// cache-key bytes bind at ONE `pub(crate) const` per role on the
     /// typed algebra rather than as inline `u8` literals in the
     /// `hash_discriminator` match arms.
@@ -16767,19 +16767,19 @@ impl QuoteForm {
     /// silently allowed a discriminator collision on `7u8` (the next
     /// free byte).
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the four
+    /// Anchor: the typescape; the four
     /// canonical cache-key bytes bind at ONE typed `[u8; 4]` array on
     /// the closed-set [`QuoteForm`] algebra rather than at zero-
     /// primitive-plus-four-inline-`u8`-literals scattered across the
-    /// [`Self::hash_discriminator`] match arms. THEORY.md §V.1 —
-    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// [`Self::hash_discriminator`] match arms.
+    /// Knowable platform; the family's cardinality becomes a TYPE-
     /// level constant on the substrate algebra rather than a per-
-    /// consumer runtime dispatch through the match table. THEORY.md
-    /// §V.3 — three-pillar attestation; the cache-key partition is
+    /// consumer runtime dispatch through the match table.
+    /// Three-pillar attestation; the cache-key partition is
     /// the substrate's outer-Sexp `intent_hash` composition axis for
     /// every quote-family arm — binding the four bytes on the typed
     /// algebra makes attestation-key drift a compile error rather
-    /// than a silent BLAKE3 mis-hash. THEORY.md §VI.1 — generation
+    /// than a silent BLAKE3 mis-hash. Generation
     /// over composition; the family-wide contract sweeps (alignment
     /// with `ALL`, pairwise disjointness, membership through
     /// [`Self::hash_discriminator`]) emerge from the composition of
@@ -17076,16 +17076,16 @@ impl QuoteForm {
     /// method's match arm together — rustc binds the iac-forge
     /// canonical-form surface to the algebra through exhaustiveness.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// quote-family canonical-form tag set becomes a TYPE projection
     /// on the substrate algebra rather than four `&'static str`
     /// literals scattered across the `interop` arms (parallel to how
     /// `Self::prefix` lifts the Display↔reader prefix and
     /// `Self::hash_discriminator` lifts the cache-key bytes).
-    /// THEORY.md §VI.1 — generation over composition; the (Sexp
+    /// Generation over composition; the (Sexp
     /// variant, iac-forge tag) pairing appeared at the four
     /// `interop.rs` arms — past the ≥2 PRIME-DIRECTIVE trigger once
-    /// the structural shape is named. THEORY.md §II.1 invariant 1 —
+    /// the structural shape is named. Invariant 1 —
     /// typed entry; the cross-crate canonical-form projection IS the
     /// typed-exit gate at the iac-forge boundary, and naming its
     /// closed-set tag identity lifts the gate from per-site literal
@@ -17186,15 +17186,15 @@ impl QuoteForm {
     /// ([`Self::lead_char`] / [`Self::prefix`] / [`Self::sexp_shape`]
     /// / [`Self::as_unquote_form`] on the forward side).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// inbound iac-forge canonical-form decode surface becomes a
     /// TYPE projection on the closed-set [`QuoteForm`] algebra
     /// rather than an inline match at every downstream consumer.
-    /// THEORY.md §V.1 — knowable platform; the closed set of
+    /// Knowable platform; the closed set of
     /// canonical CL tags becomes a decoder codomain rather than
     /// four inline `&'static str` literals scattered across future
-    /// consumers that could drift independently. THEORY.md §VI.1 —
-    /// generation over composition; the (tag, typed variant)
+    /// consumers that could drift independently.
+    /// Generation over composition; the (tag, typed variant)
     /// pairing decodes at ONE typed method on the algebra composed
     /// from the pre-existing [`Self::ALL`] typed set and the
     /// [`Self::iac_forge_tag`] outbound projection — no new
@@ -17375,22 +17375,22 @@ impl QuoteForm {
     /// other, AND the peer [`SexpShape::as_quote_form`] arm must grow
     /// in lockstep to preserve the round-trip identity.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the four
+    /// Anchor: the typescape; the four
     /// canonical [`SexpShape`] embed targets bind at ONE typed
     /// `[SexpShape; 4]` array on the closed-set QuoteForm algebra
     /// rather than at zero-primitive-on-this-subset-plus-four-inline-
     /// lookups scattered across the substrate. Closes the FOURTH
     /// per-role `pub const` axis on the QuoteForm carving alongside
     /// the pre-existing LABELS + PREFIXES + IAC_FORGE_TAGS +
-    /// HASH_DISCRIMINATORS axes. THEORY.md §V.1 — knowable platform;
+    /// HASH_DISCRIMINATORS axes. Knowable platform;
     /// the family's cardinality becomes a TYPE-level constant on the
     /// substrate algebra rather than a per-consumer runtime dispatch
-    /// through the composition. THEORY.md §II.1 invariant 2 — free
+    /// through the composition. Invariant 2 — free
     /// middle; the (embed, project) pair binds at THREE typed sites
     /// now — the projection method [`Self::sexp_shape`], this family-
     /// wide array, AND the peer inverse
     /// [`crate::error::SexpShape::as_quote_form`] — with rustc-enforced
-    /// consistency across all three. THEORY.md §VI.1 — generation
+    /// consistency across all three. Generation
     /// over composition; the family-wide contract sweeps (alignment
     /// with `ALL`, round-trip through `as_quote_form`, membership
     /// through `sexp_shape`, pairwise injectivity across the four
@@ -17463,16 +17463,16 @@ impl QuoteForm {
     /// composition law's other direction + disjointness with the
     /// atomic-payload sibling `SexpShape::as_atom_kind`.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (QuoteForm
+    /// Anchor: knowable platform; the (QuoteForm
     /// variant, SexpShape variant) pairing becomes a TYPE projection on
     /// the substrate algebra rather than four inline arms in
     /// [`crate::domain::sexp_shape`]. A typo or swap at the shape-projection
     /// site is no longer a runtime drift but a compile error against the
-    /// typed projection. THEORY.md §II.1 invariant 2 — free middle; SIX
+    /// typed projection. Invariant 2 — free middle; SIX
     /// consumers of the [`QuoteForm`] algebra now route through ONE typed
     /// closed-set match family, so a regression that drifts ONE consumer's
     /// pairing from the others cannot reach the substrate's runtime.
-    /// THEORY.md §VI.1 — generation over composition; the (Sexp variant,
+    /// Generation over composition; the (Sexp variant,
     /// SexpShape variant) pairing appeared at four arms in `sexp_shape` —
     /// past the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
     /// named.
@@ -17566,19 +17566,19 @@ impl QuoteForm {
     /// together — rustc binds the diagnostic surface to the algebra
     /// through the closed-set composition without touching this method.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (QuoteForm
+    /// Anchor: knowable platform; the (QuoteForm
     /// variant, canonical short label) pairing becomes a TYPE projection
     /// on the substrate algebra composed through the pre-existing outer-
     /// shape projection, rather than at a per-callsite
     /// `.sexp_shape().label()` two-hop the load-bearing pin already
-    /// carries as a composition-law contract. THEORY.md §II.1 invariant 2
+    /// carries as a composition-law contract. Invariant 2
     /// — free middle; the outer-`QuoteForm` diagnostic-label algebra now
     /// closes over THREE typed layers (`QuoteForm` → [`SexpShape`] →
     /// `&'static str`) with rustc-enforced consistency across each — a
     /// regression that drifts ONE layer's mapping from the others cannot
     /// reach the substrate's runtime typed-witness surface,
     /// `LispError::TypeMismatch.got` slot, or [`crate::error::SexpWitness::shape`]
-    /// projection. THEORY.md §VI.1 — generation over composition; the
+    /// projection. Generation over composition; the
     /// outer-value diagnostic-label projection is the missing algebra
     /// layer between the outer `QuoteForm` and the pre-existing marker-
     /// level label projection — the two pre-existing typed layers become
@@ -17730,26 +17730,26 @@ impl QuoteForm {
     /// the two `[_; N]` arrays fails compilation if EITHER ALL array
     /// grows without the other.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the four
+    /// Anchor: the typescape; the four
     /// canonical quote-family marker labels bind at ONE typed
     /// `[&'static str; 4]` array on the closed-set [`QuoteForm`]
     /// algebra rather than at zero-primitive-on-this-subset-plus-four-
     /// inline-lookups scattered across the substrate. Closes the
     /// fourth SexpShape sub-carving's per-role LABEL parity with
-    /// [`AtomKind`] and [`crate::error::StructuralKind`]. THEORY.md
-    /// §V.1 — knowable platform; the family's cardinality becomes a
+    /// [`AtomKind`] and [`crate::error::StructuralKind`].
+    /// Knowable platform; the family's cardinality becomes a
     /// TYPE-level constant on the substrate algebra rather than a per-
     /// consumer runtime dispatch through the composition. The alias-
     /// chain shape is load-bearing: a [`SexpShape`]-side rename
     /// propagates through the const-eval alias chain byte-for-byte
-    /// without silent drift. THEORY.md §VI.1 — generation over
+    /// without silent drift. Generation over
     /// composition; the family-wide contract sweeps (alignment with
     /// [`Self::ALL`], pairwise disjointness, membership through
     /// [`Self::label`]) emerge from the composition of TWO substrate
     /// primitives (this `pub const` array + the four per-role
     /// `pub const *_LABEL` aliases) rather than as per-variant inline
-    /// assertions duplicated at each call site. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the alias-chain
+    /// assertions duplicated at each call site.
+    /// Invariant 5 — composition preserves proofs; the alias-chain
     /// composition law `QuoteForm::LABELS[i] ==
     /// QuoteForm::ALL[i].sexp_shape().label()` binds the family-wide
     /// array to the composition through [`Self::sexp_shape`] +
@@ -17816,23 +17816,23 @@ impl QuoteForm {
     /// so a future allocation-policy change (e.g. arena-allocated wrappers
     /// for span-aware Sexp) lands as ONE edit.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// reader's prefix-token → Sexp-wrapper gate IS the rust-level
     /// typed-entry gate at the source-text boundary, and naming the
     /// typed projection from [`QuoteForm`] back to the `Sexp::*` wrapper
     /// lifts the gate from per-arm constructor literals to ONE method
     /// the closed-set algebra owns — parallel to how [`Self::prefix`]
-    /// lifts the Display↔reader prefix-string surface. THEORY.md §II.1
-    /// invariant 2 — free middle; ALL FIVE consumers (Hash, Display,
+    /// lifts the Display↔reader prefix-string surface.
+    /// Invariant 2 — free middle; ALL FIVE consumers (Hash, Display,
     /// as_unquote, iac-forge interop, reader's parse) now route through
     /// the SAME closed-set algebra so a regression that drifts ONE
     /// consumer's pairing from the others cannot reach the substrate's
-    /// runtime. THEORY.md §V.1 — knowable platform; the (QuoteForm
+    /// runtime. Knowable platform; the (QuoteForm
     /// variant, Sexp::* constructor) pairing becomes a TYPE projection on
     /// the substrate algebra rather than four `fn(Box<Sexp>) -> Sexp`
     /// function pointers threaded as call arguments. A typo or
     /// swap is no longer a runtime drift but a compile error against the
-    /// typed projection. THEORY.md §VI.1 — generation over composition;
+    /// typed projection. Generation over composition;
     /// the (QuoteForm variant, Sexp::* constructor) pairing appeared at
     /// the four reader arms — past the ≥2 PRIME-DIRECTIVE trigger once
     /// the structural shape is named. The typed projection lands the
@@ -17953,19 +17953,19 @@ impl QuoteForm {
 /// re-derives the head comparison via [`Sexp::as_call_to`]'s `head ==
 /// keyword` check at every form — no shared-state, fully Iterator-fused.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// two-site `for + as_call_to` inline walk is past the ≥2 PRIME-DIRECTIVE
-/// trigger once the per-form sibling has a name. THEORY.md §V.1 —
-/// knowable platform / "make invalid states unrepresentable"; the
+/// trigger once the per-form sibling has a name.
+/// Knowable platform / "make invalid states unrepresentable"; the
 /// slice-side projection becomes a NAMED primitive on the substrate's
 /// `&[Sexp]` algebra rather than a re-derived for-loop at every consumer
 /// site, so authoring tools (REPL, LSP, `tatara-check`) bind to ONE
-/// function instead of re-implementing the walk. THEORY.md §II.1
-/// invariant 1 — typed entry; the typed-keyword filter on a slice IS the
+/// function instead of re-implementing the walk.
+/// Invariant 1 — typed entry; the typed-keyword filter on a slice IS the
 /// rust-level typed-entry-batch gate (the batch sibling of `as_call_to`'s
 /// per-form gate), and naming its single shape lifts the gate from
 /// two-site duplication to one rust function the substrate's diagnostic
-/// promotions hang off of. THEORY.md §II.1 invariant 2 — free middle;
+/// promotions hang off of. Invariant 2 — free middle;
 /// both dispatchers route through the SAME projection, so a regression
 /// that drifts one consumer's walk from the other cannot reach the
 /// substrate's runtime: the type system binds every consumer to the
@@ -18083,7 +18083,7 @@ pub fn iter_calls_to<'a>(
 /// `FnOnce`-coerced borrow — no shared-state hazard, fully
 /// Iterator-fused.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// per-form classifier sibling [`Sexp::as_call_to_any`] has two
 /// production consumers (`macro_def_from` via closed-set classifier
 /// `MacroDefHead::from_keyword`, `Expander::expand` via live-registry
@@ -18092,11 +18092,11 @@ pub fn iter_calls_to<'a>(
 /// authoring-tool surfaces (LSP buffer walks, `tatara-check` batch
 /// dispatchers, REPL exhaustive listers) join the family without
 /// re-deriving the `filter_map(|f| f.as_call_to_any(_))` triple per
-/// consumer. THEORY.md §V.1 — knowable platform; the slice-side
+/// consumer. Knowable platform; the slice-side
 /// typed-decoded projection becomes a NAMED primitive on the
 /// substrate's `&[Sexp]` algebra, closing the 2×2 of soft-dispatch
-/// primitives the per-form algebra already establishes. THEORY.md
-/// §II.1 invariant 2 — free middle; the slice-side keyword filter
+/// primitives the per-form algebra already establishes.
+/// Invariant 2 — free middle; the slice-side keyword filter
 /// ([`iter_calls_to`]) now routes through the slice-side classifier
 /// filter (THIS function) via the constant-classifier composition, so
 /// a regression that drifts the keyword filter's instrumentation
@@ -18249,18 +18249,18 @@ where
 /// JSON-serialized payloads) `.to_string()` themselves — pushing the
 /// clone to the consumer boundary keeps the primitive allocation-free.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// named-form gate composition lived at the Expander level pre-lift
 /// (inside `expand_and_collect_named_calls_to_any`'s projection
 /// closure); the slice algebra had no named sibling to the bare
 /// [`iter_calls_to_any`]. Post-lift the slice algebra closes at the
 /// named corner, and the Expander surface routes through it via the
 /// SAME `expand_program + iter + map + collect` pipeline the bare
-/// expander surface uses. THEORY.md §V.1 — knowable platform; the
+/// expander surface uses. Knowable platform; the
 /// slice-side named-classifier walk becomes a NAMED primitive on the
 /// substrate's `&[Sexp]` algebra, discoverable by any future authoring
 /// tool (LSP, REPL, `tatara-check`) that already holds expanded forms.
-/// THEORY.md §II.1 invariant 2 — free middle; the bare and named slice
+/// Invariant 2 — free middle; the bare and named slice
 /// projections share the same `forms.iter().filter_map(_)` skeleton, so
 /// a regression that drifts ONE row's instrumentation from the other
 /// becomes structurally impossible.
@@ -18340,12 +18340,12 @@ where
 ///         .map(|maybe_triple| maybe_triple.map(|(_, name, args)| (name, args)))
 /// ```
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// constant-keyword named slice projection is a CONSEQUENCE of the
 /// typed-decoded named slice projection + a constant-classifier
 /// decoder, parallel to how [`iter_calls_to`] is a consequence of
-/// [`iter_calls_to_any`] on the bare-kwargs axis. THEORY.md §II.1
-/// invariant 2 — free middle; both rows of the slice algebra
+/// [`iter_calls_to_any`] on the bare-kwargs axis.
+/// Invariant 2 — free middle; both rows of the slice algebra
 /// (bare-kwargs, named) route through their classifier sibling via
 /// constant-classifier composition, so a regression that drifts ONE
 /// row's pipeline from the other becomes structurally impossible.
@@ -18381,13 +18381,13 @@ pub fn iter_named_calls_to<'a>(
 /// already warns about NaN's PartialEq irregularity at the cache-key
 /// boundary), so the helper does not paper over that prior limitation.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+/// Anchor: invariant 1 — typed entry; the
 /// substrate's typed-entry gate distinguishes `Atom::Int` from
 /// `Atom::Float`, and the Display→read round-trip is the typed-exit-side
 /// mirror that must preserve the distinction. Pre-lift the
 /// `Float(integral) → Int(integral)` collapse silently violated the
 /// invariant at the round-trip boundary; post-lift the typed identity is
-/// preserved. THEORY.md §V.1 — knowable platform; diagnostics that
+/// preserved. Knowable platform; diagnostics that
 /// project a `Float(1.0)` slot through `SexpWitness::display` (sourced
 /// from `Sexp::to_string()`) used to surface as `got 1` — confusingly
 /// identical to the typed `Int(1)` projection. Post-lift the diagnostic
@@ -18489,7 +18489,7 @@ fn fmt_float(n: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 ///     [`fmt_float`]'s `.0` suffix preserves for the float-vs-int
 ///     distinction at the Sexp layer.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// (Atom variant, canonical rendering) pair appeared inline at THREE
 /// production sites (`Display for Sexp`'s 7-sub-arm atom arm,
 /// `sexp_to_json`'s 6 atom arms, `From<&Sexp> for SExpr`'s 6 atom arms)
@@ -18498,7 +18498,7 @@ fn fmt_float(n: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// naming the typed primitive on the `Atom` algebra; future runs route
 /// the JSON and iac-forge sites through parallel sibling projections
 /// (`Atom::to_json`, `Atom::to_iac_forge_sexpr`) the same pattern
-/// names. THEORY.md §II.1 invariant 1 — typed entry; the substrate's
+/// names. Invariant 1 — typed entry; the substrate's
 /// [`Atom::from_lexeme`] is the typed-entry gate at the atomic-payload
 /// boundary (lifted onto the typed [`Atom`] algebra from the reader's
 /// pre-lift free function), and this impl is the typed-exit-side
@@ -18507,7 +18507,7 @@ fn fmt_float(n: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// per-variant rendering from the other (e.g. extends `Atom` with a
 /// `Char` variant the reader accepts but the writer can't emit) is no
 /// longer a silent two-site divergence — rustc binds both sides to
-/// the same closed-set enum. THEORY.md §II.1 invariant 2 — free middle;
+/// the same closed-set enum. Invariant 2 — free middle;
 /// the typed-exit rendering, the reader, the diagnostic surface
 /// (`LispError::TypeMismatch.got` slot rendering an atomic witness),
 /// and any future authoring tool (LSP / REPL pretty-printer) all
@@ -24593,12 +24593,12 @@ mod tests {
         // `AtomKind::label`'s structural routing through the
         // `Self::sexp_shape() ∘ SexpShape::label` composition.
         //
-        // Theory anchor: THEORY.md §V.1 — knowable platform; the
+        // Anchor: knowable platform; the
         // label-projection routing is a NAMED structural contract
         // pinned alongside the per-arm vocabulary contract, so
         // operators reading the test surface see BOTH the load-bearing
-        // identity AND the load-bearing composition. THEORY.md §VI.1
-        // — generation over composition; the label projection emerges
+        // identity AND the load-bearing composition.
+        // Generation over composition; the label projection emerges
         // from the typed pairing rather than per-arm literal discipline,
         // and the routing pin enforces the lift stays in effect.
         for kind in AtomKind::ALL {

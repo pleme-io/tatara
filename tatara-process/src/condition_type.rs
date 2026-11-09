@@ -114,15 +114,15 @@
 //! observable reason — the attribute surfaces that as a warning at
 //! every consumer site.
 //!
-//! Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+//! Anchor: invariant 5 (composition preserves
 //! proofs — the wire-form literal at ONE substrate owner means the
 //! writer + reader sides of the K8s `status.conditions[].type` wire
 //! agree bytewise by construction; a drift at either end becomes
 //! unrepresentable at the closed-set level, not "detected at
-//! runtime by a mismatched observer log line"). THEORY.md §III
+//! runtime by a mismatched observer log line").
 //! (typescape — the ProcessCondition `type` slot's closed set is a
 //! first-class Rust enum, not a stringly-typed wire-form).
-//! THEORY.md §VI.1 (generation over composition — the two-literal
+//! (generation over composition — the two-literal
 //! closed set recurred at FOUR hand-authored sites past the ★★
 //! PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
 //! substrate owner here on the K8s-Condition `type` wire-form axis).

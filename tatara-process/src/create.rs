@@ -91,11 +91,11 @@ use std::fmt::Debug;
 /// against the exact `resourceVersion` the create returned) doesn't
 /// have to re-fetch.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 2-link `api.create(&PostParams::default(), &obj)` chain recurred at
 /// 5 hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// trigger and is lifted onto the ONE workspace-wide substrate owner
-/// here). THEORY.md §II.1 invariant 5 (composition preserves proofs —
+/// here). Invariant 5 (composition preserves proofs —
 /// the pin block below binds the primitive at fail-before-pass-after
 /// granularity, so a regression that drifts `PostParams::default()` to
 /// a non-default posture — a stray `dry_run`, an accidental

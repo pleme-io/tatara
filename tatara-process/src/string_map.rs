@@ -64,11 +64,11 @@
 //! slots project the caller's borrowed handle into an owned `String`
 //! at the substrate, not at every callsite.
 //!
-//! Theory anchor: THEORY.md §VI.1 (generation over composition — the
+//! Anchor: (generation over composition — the
 //! `<map>.insert(<k>.to_string(), <v>.to_string())` shape recurred at
 //! three hand-authored production sites across two workspace crates
 //! past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted
-//! to ONE substrate owner here). THEORY.md §II.1 invariant 5
+//! to ONE substrate owner here). Invariant 5
 //! (composition preserves proofs — a regression that drifts the write
 //! shape at ONE consumer surfaces at the substrate pin rather than as
 //! silent per-emit skew across every K8s-carrier annotations / labels

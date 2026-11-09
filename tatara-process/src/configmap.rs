@@ -117,11 +117,11 @@ use std::collections::BTreeMap;
 /// `crate::patch::apply_patch_params`, or `.patch(...)` at their own
 /// call-sites, so no wire-side posture is baked in at the primitive.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 1-link `Api::namespaced::<ConfigMap>(<client>, <ns>)` chain
 /// recurred at 4 hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication trigger and is lifted onto the ONE workspace-wide
-/// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+/// substrate owner here). Invariant 5 (composition
 /// preserves proofs — the pin block below binds the primitive at
 /// fail-before-pass-after granularity, so a regression that swapped
 /// the fixed `K = ConfigMap` type parameter for a different built-in
@@ -207,11 +207,11 @@ pub fn namespaced(client: Client, ns: &str) -> Api<ConfigMap> {
 /// this one — the string-payload posture (`data: Some(<map>)`) is
 /// the invariant this composer names.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 5-link struct-literal chain recurred at 2 hand-authored sites past
 /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is lifted onto
-/// the ONE workspace-wide substrate owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — the pin block below
+/// the ONE workspace-wide substrate owner here).
+/// Invariant 5 (composition preserves proofs — the pin block below
 /// binds the composer at fail-before-pass-after granularity, so a
 /// regression that swapped a slot's default (`data: None` when a
 /// consumer expected `Some(<data>)`, `metadata.name: None` when the
@@ -285,11 +285,11 @@ pub fn with_data(
 /// payloads, a `not_found_ctx` peer for GET-verb 404 diagnostic bodies)
 /// lands next to the existing composers.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 3-slot `format!(...)` chain recurred at 2 hand-authored sites past
 /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is lifted onto
-/// the ONE workspace-wide substrate owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — the pin block below
+/// the ONE workspace-wide substrate owner here).
+/// Invariant 5 (composition preserves proofs — the pin block below
 /// binds the composer at fail-before-pass-after granularity, so a
 /// regression that reordered the head slots, drifted the fixed
 /// `"ConfigMap"` resource-kind literal (bypassing the routing pin at

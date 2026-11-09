@@ -278,7 +278,7 @@ pub const DEFAULT_MAX_MACRO_ARITY: usize = 128;
 /// the shipped posture in one value does not re-derive the six
 /// individual constants at its call site.
 ///
-/// Theory grounding: THEORY.md §II.1 — typed entry / typed exit for
+/// Grounding: typed entry / typed exit for
 /// the resource-limit configuration surface. The pre-lift six
 /// independent knobs were a set of typed scalars but their
 /// composition into an "Expander resource posture" was untyped —
@@ -460,10 +460,10 @@ pub const UNBOUNDED_RESOURCE_LIMITS: ResourceLimits = ResourceLimits {
 /// field's value at compile time via the const-fn peer of the
 /// existing lattice-law const-fn pins.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// Anchor: invariant 5 — composition preserves
 /// proofs; the identity element of a lattice operation is itself a
 /// typed named entry whose composition with any other element is the
-/// element (join) or the identity (meet). THEORY.md §V.1 — knowable
+/// element (join) or the identity (meet). Knowable
 /// platform; the bounded-lattice bottom binds at ONE typed constant
 /// rather than a six-primitive inline literal every consumer that
 /// needs the fold identity carries at its call site. Frontier
@@ -528,10 +528,10 @@ impl ResourceLimits {
     /// array over the six axes threads through this constant rather
     /// than a `6` literal.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// family arity of the ceiling closed-set is itself a typed named
-    /// exit rather than a magic-number literal. THEORY.md §V.1 —
-    /// knowable platform; the arity becomes a TYPE-level constant on
+    /// exit rather than a magic-number literal.
+    /// Knowable platform; the arity becomes a TYPE-level constant on
     /// the substrate algebra rather than a per-consumer magic-number.
     ///
     /// Frontier inspiration: Racket's `struct-info` / Common Lisp's
@@ -610,12 +610,12 @@ impl ResourceLimits {
     /// struct declaration at compile time via the paired
     /// [`Self::field_values`] positional-alignment pin.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// closed-set of ceiling field-name string projections binds at
     /// ONE `pub const` on the typed [`ResourceLimits`] algebra
     /// regardless of which consumer (observability serializer,
     /// per-axis error formatter, authoring / rendering surface) reaches
-    /// in. THEORY.md §V.1 — knowable platform; the family closure
+    /// in. Knowable platform; the family closure
     /// becomes a TYPE-level constant on the substrate algebra rather
     /// than per-consumer hand-rolled enumeration of the six names.
     ///
@@ -716,10 +716,10 @@ impl ResourceLimits {
     /// method's output likewise bind to this projection rather than
     /// re-deriving the six-field cascade.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture projection into the six-tuple of ceiling values is
     /// itself a typed named exit rather than a per-consumer inline
-    /// array literal. THEORY.md §V.1 — knowable platform; the
+    /// array literal. Knowable platform; the
     /// projection becomes a TYPE-level operation on the substrate
     /// algebra rather than a per-consumer field-access cascade.
     ///
@@ -861,10 +861,10 @@ impl ResourceLimits {
     /// (projection, injection) pair rather than re-deriving the
     /// six-field cascade.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-array injection into a posture is itself a typed named exit
-    /// rather than a per-consumer inline struct literal. THEORY.md §V.1
-    /// — knowable platform; the injection becomes a TYPE-level
+    /// rather than a per-consumer inline struct literal.
+    /// Knowable platform; the injection becomes a TYPE-level
     /// operation on the substrate algebra rather than a per-consumer
     /// hand-rolled six-field struct literal, and together with
     /// [`Self::field_values`] the pair pins the [`ResourceLimits`] /
@@ -997,10 +997,10 @@ impl ResourceLimits {
     /// family extension, no per-axis cascade to keep name and value in
     /// lockstep.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture fusion into the six-tuple of `(name, value)` pairs
     /// is itself a typed named exit rather than a per-consumer inline
-    /// `.iter().zip(...)` scaffold. THEORY.md §V.1 — knowable platform;
+    /// `.iter().zip(...)` scaffold. Knowable platform;
     /// the fusion becomes a TYPE-level operation on the substrate
     /// algebra rather than a per-consumer two-primitive composition,
     /// and together with [`Self::FIELD_NAMES`] and [`Self::field_values`]
@@ -1090,12 +1090,12 @@ impl ResourceLimits {
     /// field-exhaustiveness at the const's construction guarantees
     /// every ceiling is threaded through the `min` primitive.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the tightest posture of two preset-carried
     /// resource proofs is itself a `ResourceLimits` whose proof
     /// content is the intersection of the two, and this method is
-    /// the typed named entry composing them. THEORY.md §V.1 —
-    /// knowable platform; the pointwise-`min` combinator becomes a
+    /// the typed named entry composing them.
+    /// Knowable platform; the pointwise-`min` combinator becomes a
     /// TYPE-level operation on the posture algebra rather than an
     /// inline six-primitive cascade at every consumer that composes
     /// two presets. `tatara-lattice`'s `meet` / `join` operators on
@@ -1168,11 +1168,11 @@ impl ResourceLimits {
     /// third at compile time rather than deferring the composition
     /// to a runtime `Default::default()` chain.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the most-permissive posture of two preset-
     /// carried resource proofs is itself a `ResourceLimits` whose
     /// proof content is the union of the two, and this method is the
-    /// typed named entry composing them. THEORY.md §V.1 — knowable
+    /// typed named entry composing them. Knowable
     /// platform; the pointwise-`max` combinator becomes a TYPE-level
     /// operation on the posture algebra rather than an inline
     /// six-primitive cascade at every consumer that composes two
@@ -1305,12 +1305,12 @@ impl ResourceLimits {
     /// fix-up, matching [`Self::geq`]'s `other.leq(self)` argument-flip
     /// delegation one DIRECTION axis over.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the partial-order relation on two preset-
     /// carried resource proofs is itself a typed named entry composing
     /// their tightness ordering, and the two-primitive delegation
     /// composes both `axes_leq`'s per-axis proof and `all_mask_bits_set`'s
-    /// ALL-fold proof mechanically. THEORY.md §V.1 — knowable platform;
+    /// ALL-fold proof mechanically. Knowable platform;
     /// the pointwise `<=` combinator becomes a TYPE-level operation on
     /// the posture algebra threaded through ONE substrate ALL-fold
     /// primitive at the whole-posture-verdict callsite rather than a
@@ -1444,16 +1444,16 @@ impl ResourceLimits {
     /// axis i" — recovering the "which axes disagree" diagnostic at
     /// ONE composition of the two masks.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture-pair projection into the six-bool relation vector
     /// is itself a typed named exit rather than a per-consumer inline
-    /// six-primitive cascade. THEORY.md §II.1 invariant 5 —
+    /// six-primitive cascade. Invariant 5 —
     /// composition preserves proofs; the pairwise partial-order
     /// relation on two preset-carried resource proofs is itself
     /// decomposed into its six per-axis witnesses at TYPE level, so
     /// consumers reasoning about WHICH axes carry the relation bind
     /// through ONE typed primitive rather than re-running `<=` on
-    /// each. THEORY.md §V.1 — knowable platform; the per-axis
+    /// each. Knowable platform; the per-axis
     /// pointwise `<=` mask becomes a TYPE-level operation on the
     /// posture algebra rather than a per-consumer field-access
     /// cascade — with the per-axis granularity baked in so the
@@ -1567,17 +1567,17 @@ impl ResourceLimits {
     /// explicit `.clone()` (which const-fn would not permit anyway),
     /// and `bool` is trivially `Copy` in the array element position.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture-pair projection into the six-bool relation vector
     /// is itself a typed named exit rather than a per-consumer inline
-    /// six-primitive cascade. THEORY.md §II.1 invariant 5 —
+    /// six-primitive cascade. Invariant 5 —
     /// composition preserves proofs; the pairwise partial-order
     /// relation on two preset-carried resource proofs is decomposed
     /// into its six per-axis witnesses at TYPE level in both directions
     /// (below and above), so consumers reasoning about WHICH axes carry
     /// the relation bind through ONE typed primitive per direction
-    /// rather than re-running the comparison on each. THEORY.md §V.1 —
-    /// knowable platform; the per-axis pointwise `>=` mask becomes a
+    /// rather than re-running the comparison on each.
+    /// Knowable platform; the per-axis pointwise `>=` mask becomes a
     /// TYPE-level operation on the posture algebra rather than a per-
     /// consumer field-access cascade — with the per-axis granularity
     /// baked in so the consumer cannot silently drop an axis from the
@@ -1729,19 +1729,19 @@ impl ResourceLimits {
     /// return literal below guarantees every axis is threaded through
     /// the `&&` intersection in canonical order.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture-pair projection into the six-bool equality vector is
     /// itself a typed named exit rather than a per-consumer inline
     /// six-primitive cascade OR a single-bit `PartialEq::eq` verdict
-    /// that discards the per-axis witness. THEORY.md §II.1 invariant 5
+    /// that discards the per-axis witness. Invariant 5
     /// — composition preserves proofs; the pairwise equality relation
     /// on two preset-carried resource proofs is itself decomposed into
     /// its six per-axis witnesses at TYPE level as the STRUCTURAL
     /// INTERSECTION of the two direction-signed per-axis masks, so
     /// consumers reasoning about WHICH axes carry the equality bind
     /// through ONE typed primitive rather than re-running `==` on each
-    /// or dropping to a coarse single-bit answer. THEORY.md §V.1 —
-    /// knowable platform; the per-axis pointwise `==` mask becomes a
+    /// or dropping to a coarse single-bit answer.
+    /// Knowable platform; the per-axis pointwise `==` mask becomes a
     /// TYPE-level operation on the posture algebra rather than a
     /// per-consumer field-access cascade — with the per-axis
     /// granularity baked in so the consumer cannot silently drop an
@@ -1908,18 +1908,18 @@ impl ResourceLimits {
     /// binds at ONE typed `const fn` on the algebra, encoded as the De
     /// Morgan complement of the shipped equality mask.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture-pair projection into the six-bool difference vector
     /// is itself a typed named exit rather than a per-consumer inline
     /// six-primitive cascade OR a single-bit `PartialEq::ne` verdict
-    /// that discards the per-axis witness. THEORY.md §II.1 invariant 5
+    /// that discards the per-axis witness. Invariant 5
     /// — composition preserves proofs; the pairwise inequality relation
     /// on two preset-carried resource proofs is itself decomposed into
     /// its six per-axis witnesses at TYPE level as the STRUCTURAL
     /// COMPLEMENT of the equality mask, so consumers reasoning about
     /// WHICH axes carry the difference bind through ONE typed primitive
     /// rather than re-running `!=` on each or dropping to a coarse
-    /// single-bit answer. THEORY.md §V.1 — knowable platform; the
+    /// single-bit answer. Knowable platform; the
     /// per-axis pointwise `!=` mask becomes a TYPE-level operation on
     /// the posture algebra rather than a per-consumer field-access
     /// cascade — with the per-axis granularity baked in so the
@@ -2027,11 +2027,11 @@ impl ResourceLimits {
     /// losing the build-break property. Post-lift the equality
     /// verdict binds at ONE typed `const fn` on the algebra.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// pair-level whole-posture equality verdict is itself a typed
     /// named exit rather than a per-consumer inline six-primitive
     /// conjunction or a non-`const` `PartialEq::eq` fallback.
-    /// THEORY.md §V.1 — knowable platform; the pointwise `==`
+    /// Knowable platform; the pointwise `==`
     /// combinator becomes a `const`-evaluable TYPE-level operation on
     /// the posture algebra.
     ///
@@ -2131,11 +2131,11 @@ impl ResourceLimits {
     /// peer of the `const fn` evaluability every per-axis-mask
     /// primitive on the algebra carries.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
+    /// Anchor: invariant 3 — typed exit;
     /// the pair-level whole-posture difference verdict is itself
     /// a typed named exit rather than a per-consumer inline
     /// six-primitive disjunction or a non-`const` `PartialEq::ne`
-    /// fallback. THEORY.md §V.1 — knowable platform; the pointwise
+    /// fallback. Knowable platform; the pointwise
     /// `!=` combinator becomes a `const`-evaluable TYPE-level
     /// operation on the posture algebra.
     ///
@@ -2208,10 +2208,10 @@ impl ResourceLimits {
     /// EMPTY_RESOURCE_LIMITS.axes_lt(UNBOUNDED_RESOURCE_LIMITS);`),
     /// matching every peer method's const-fn evaluability.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture-pair projection into the six-bool strict-relation
     /// vector is itself a typed named exit rather than a per-consumer
-    /// inline six-primitive cascade. THEORY.md §II.1 invariant 5 —
+    /// inline six-primitive cascade. Invariant 5 —
     /// composition preserves proofs; the strict pairwise partial-order
     /// relation is decomposed into its six per-axis witnesses at TYPE
     /// level so a diagnostic consumer asking "which axes drive
@@ -2277,7 +2277,7 @@ impl ResourceLimits {
     ///
     /// `const fn` for the same compile-time-pin reasons as
     /// [`Self::axes_lt`]. See [`Self::axes_lt`] for the full docstring,
-    /// the theory anchor (THEORY.md §II.1 invariant 3 / 5, §V.1), and
+    /// the anchor (invariant 3 / 5, §V.1), and
     /// the Idris/APL frontier inspiration.
     #[must_use]
     pub const fn axes_gt(self, other: Self) -> [bool; Self::FIELD_COUNT] {
@@ -2362,11 +2362,11 @@ impl ResourceLimits {
     /// (rather than the consumer having to remember which seed pairs
     /// with which combinator at each call site).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the N-ary aggregation of N preset-carried
     /// resource proofs is itself a `ResourceLimits` whose proof content
     /// is the intersection of every operand's, and this method is the
-    /// typed named entry composing them. THEORY.md §V.1 — knowable
+    /// typed named entry composing them. Knowable
     /// platform; the N-ary meet becomes a TYPE-level operation on the
     /// posture algebra rather than an inline fold cascade at every
     /// consumer that aggregates a slice of presets — with the
@@ -2445,9 +2445,9 @@ impl ResourceLimits {
     /// meet-identity (`UNBOUNDED`) with the join combinator (a silent
     /// distortion that would inflate every axis to [`usize::MAX`]).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the N-ary join of N preset-carried resource
-    /// proofs is itself a `ResourceLimits`. THEORY.md §V.1 — knowable
+    /// proofs is itself a `ResourceLimits`. Knowable
     /// platform; the N-ary join becomes a TYPE-level operation on the
     /// posture algebra rather than an inline fold cascade at every
     /// consumer that aggregates a slice of presets.
@@ -2576,12 +2576,12 @@ impl ResourceLimits {
     /// `lower.leq(upper)` invariant at their bounds' construction site,
     /// not at every clamp call site.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the bracket projection of a preset-carried resource proof
     /// against two bound preset-carried resource proofs is itself a
     /// `ResourceLimits` whose proof content is the input's proof intersected
     /// with the ceiling's and unioned with the floor's, and this method is
-    /// the typed named entry composing them. THEORY.md §V.1 — knowable
+    /// the typed named entry composing them. Knowable
     /// platform; the bracket combinator becomes a TYPE-level operation on
     /// the posture algebra rather than an inline two-step composition at
     /// every consumer that enforces a policy range — with the (lower,
@@ -2690,10 +2690,10 @@ impl ResourceLimits {
     /// `lower.leq(upper)`), a silent distortion the type system did not gate
     /// pre-lift and now does through the method's parameter order.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the bracket-membership predicate on three preset-carried
     /// resource proofs is itself a typed named entry composing the input's
-    /// containment ordering. THEORY.md §V.1 — knowable platform; the
+    /// containment ordering. Knowable platform; the
     /// pointwise `≤`-conjunction combinator becomes a TYPE-level operation
     /// on the posture algebra rather than an inline two-primitive
     /// conjunction at every consumer that decides bracket membership — with
@@ -2841,16 +2841,16 @@ impl ResourceLimits {
     /// self ≤ upper`) into the type system rather than the consumer
     /// composing the per-position conjunction at every call site.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture-triple projection into the six-bool bracket-membership
     /// vector is itself a typed named exit rather than a per-consumer
-    /// inline six-primitive cascade. THEORY.md §II.1 invariant 5 —
+    /// inline six-primitive cascade. Invariant 5 —
     /// composition preserves proofs; the bracket-membership predicate on
     /// three preset-carried resource proofs is decomposed into its six
     /// per-axis witnesses at TYPE level, so consumers reasoning about
     /// WHICH axes carry the bracket-membership verdict bind through ONE
     /// typed primitive rather than re-running the two-primitive
-    /// conjunction on each axis. THEORY.md §V.1 — knowable platform; the
+    /// conjunction on each axis. Knowable platform; the
     /// per-axis pointwise bracket-membership mask becomes a TYPE-level
     /// operation on the posture algebra rather than a per-consumer field-
     /// access cascade — with the per-axis granularity baked in so the
@@ -3026,19 +3026,19 @@ impl ResourceLimits {
     /// algebra, encoded as the trichotomy dispatch on the two shipped
     /// direction-signed masks.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture-pair projection into the six-[`Ordering`] verdict
     /// vector is itself a typed named exit rather than a per-consumer
     /// inline six-primitive [`Ord::cmp`] cascade OR a coarser binary-
-    /// mask composition that discards the trichotomy structure. THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs; the joint
+    /// mask composition that discards the trichotomy structure.
+    /// Invariant 5 — composition preserves proofs; the joint
     /// direction-signed pairwise relation on two preset-carried resource
     /// proofs is decomposed into its six per-axis FULL-VERDICT witnesses
     /// at TYPE level, so consumers reasoning about WHICH axes carry the
     /// difference AND in what direction bind through ONE typed primitive
     /// rather than composing two per-axis-mask projections per axis or
-    /// re-running [`Ord::cmp`] on each field-accessor cascade. THEORY.md
-    /// §V.1 — knowable platform; the per-axis FULL-VERDICT projection
+    /// re-running [`Ord::cmp`] on each field-accessor cascade.
+    /// Knowable platform; the per-axis FULL-VERDICT projection
     /// becomes a TYPE-level operation on the posture algebra rather than
     /// a per-consumer field-access cascade — with the per-axis
     /// granularity baked in so the consumer cannot silently drop an axis
@@ -3172,11 +3172,11 @@ impl ResourceLimits {
     /// `self` DOMINATES rather than UNDERLIES the slice), a silent
     /// distortion the method's parameter direction now gates.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the N-ary containment-from-below predicate on
     /// (1 + N) preset-carried resource proofs is itself a typed named
-    /// entry composing the pairwise partial-order relation. THEORY.md
-    /// §V.1 — knowable platform; the N-ary `leq`-conjunction becomes a
+    /// entry composing the pairwise partial-order relation.
+    /// Knowable platform; the N-ary `leq`-conjunction becomes a
     /// TYPE-level operation on the posture algebra rather than an inline
     /// two-primitive conjunction at every consumer that decides
     /// N-ary-bound membership. Frontier inspiration: the algebraic-
@@ -3255,7 +3255,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin an N-ary-bound-membership identity
     /// at compile time. See [`Self::is_lower_bound_of`] for the shared
     /// pre-lift ≥2 pattern (`postures.iter().all(|p| p.leq(*self))`), the
-    /// theory anchor (THEORY.md §II.1 invariant 5, §V.1), and the
+    /// anchor (invariant 5, §V.1), and the
     /// `Foldable::all` frontier inspiration — this method carries the
     /// dual `postures[i].leq(self)` direction rather than
     /// `self.leq(postures[i])`. Encoded as the one-composition delegation
@@ -3405,17 +3405,17 @@ impl ResourceLimits {
     /// consumer composing the per-axis N-ary conjunction at every call
     /// site.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture-N-ary projection into the six-bool lower-bound
     /// vector is itself a typed named exit rather than a per-consumer
-    /// inline six-primitive N-ary conjunction cascade. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the N-ary lower-
+    /// inline six-primitive N-ary conjunction cascade.
+    /// Invariant 5 — composition preserves proofs; the N-ary lower-
     /// bound predicate on (1 + N) preset-carried resource proofs is
     /// decomposed into its six per-axis witnesses at TYPE level, so
     /// consumers reasoning about WHICH axes carry the lower-bound
     /// membership bind through ONE typed primitive rather than
-    /// re-running N-ary conjunctions on each axis. THEORY.md §V.1 —
-    /// knowable platform; the per-axis N-ary lower-bound mask becomes a
+    /// re-running N-ary conjunctions on each axis.
+    /// Knowable platform; the per-axis N-ary lower-bound mask becomes a
     /// TYPE-level operation on the posture algebra rather than a per-
     /// consumer field-access cascade — with the per-axis granularity
     /// baked in so the consumer cannot silently drop an axis from the
@@ -3596,17 +3596,17 @@ impl ResourceLimits {
     /// consumer composing the per-axis N-ary conjunction at every call
     /// site.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture-N-ary projection into the six-bool upper-bound
     /// vector is itself a typed named exit rather than a per-consumer
-    /// inline six-primitive N-ary conjunction cascade. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the N-ary upper-
+    /// inline six-primitive N-ary conjunction cascade.
+    /// Invariant 5 — composition preserves proofs; the N-ary upper-
     /// bound predicate on (1 + N) preset-carried resource proofs is
     /// decomposed into its six per-axis witnesses at TYPE level, so
     /// consumers reasoning about WHICH axes carry the upper-bound
     /// membership bind through ONE typed primitive rather than
-    /// re-running N-ary conjunctions on each axis. THEORY.md §V.1 —
-    /// knowable platform; the per-axis N-ary upper-bound mask becomes
+    /// re-running N-ary conjunctions on each axis.
+    /// Knowable platform; the per-axis N-ary upper-bound mask becomes
     /// a TYPE-level operation on the posture algebra rather than a
     /// per-consumer field-access cascade — with the per-axis
     /// granularity baked in so the consumer cannot silently drop an
@@ -3783,14 +3783,14 @@ impl ResourceLimits {
     /// the type system rather than the consumer composing the per-axis
     /// N-ary strict conjunction at every call site.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture-N-ary strict projection into the six-bool per-axis-
     /// strict-lower-bound vector is itself a typed named exit rather
     /// than a per-consumer inline six-primitive N-ary strict-conjunction
-    /// cascade. THEORY.md §II.1 invariant 5 — composition preserves
+    /// cascade. Invariant 5 — composition preserves
     /// proofs; the N-ary per-axis-strict lower-bound predicate on (1 +
     /// N) preset-carried resource proofs is decomposed into its six per-
-    /// axis witnesses at TYPE level. THEORY.md §V.1 — knowable platform;
+    /// axis witnesses at TYPE level. Knowable platform;
     /// the per-axis N-ary strict lower-bound mask becomes a TYPE-level
     /// operation on the posture algebra with the per-axis granularity
     /// baked in via the fixed-arity `[bool; FIELD_COUNT]` return so a
@@ -3889,7 +3889,7 @@ impl ResourceLimits {
     /// compositions into this method without a per-method fix-up.
     ///
     /// `const fn` — see [`Self::axes_is_strict_lower_bound_of`] for the
-    /// full theory anchor (THEORY.md §II.1 invariant 3, invariant 5,
+    /// full anchor (invariant 3, invariant 5,
     /// §V.1) and frontier inspiration; this method carries the dual
     /// `postures[i].axes_lt(self)` direction rather than
     /// `self.axes_lt(postures[i])`.
@@ -3964,11 +3964,11 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin a strict-N-ary-bound-membership
     /// identity at compile time as a build-break.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the N-ary strict-lower-bound predicate on (1 + N) preset-
     /// carried resource proofs is itself a typed named `bool` predicate
     /// composing them via the underlying pair-level [`Self::lt`]
-    /// projection. THEORY.md §V.1 — knowable platform; the N-ary
+    /// projection. Knowable platform; the N-ary
     /// `lt`-conjunction becomes a TYPE-level operation on the posture
     /// algebra rather than an inline `postures.iter().all(|p|
     /// self.lt(*p))` two-primitive scaffolding at every consumer that
@@ -4037,7 +4037,7 @@ impl ResourceLimits {
     ///
     /// `const fn` so a caller can pin a strict-N-ary-bound-membership
     /// identity at compile time. See [`Self::is_strict_lower_bound_of`]
-    /// for the theory anchor (THEORY.md §II.1 invariant 5, §V.1), and
+    /// for the anchor (invariant 5, §V.1), and
     /// the frontier `iter().all(|p| p < self)` inspiration — this method
     /// carries the dual `postures[i].lt(self)` direction rather than
     /// `self.lt(postures[i])`.
@@ -4169,14 +4169,14 @@ impl ResourceLimits {
     /// into the type system, and the encoding is a private implementation
     /// detail no caller can drift from.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// joint-bracket N-ary projection into a single-bit verdict is
     /// itself a typed named exit rather than a per-consumer inline
-    /// two-primitive scaffold. THEORY.md §II.1 invariant 5 —
+    /// two-primitive scaffold. Invariant 5 —
     /// composition preserves proofs; the joint-bracket N-ary predicate
     /// on `(1 + N + M)` preset-carried resource proofs is decomposed
     /// into its TWO already-lifted N-ary directional witnesses at TYPE
-    /// level. THEORY.md §V.1 — knowable platform; the joint-bracket
+    /// level. Knowable platform; the joint-bracket
     /// N-ary predicate becomes a TYPE-level operation on the posture
     /// algebra with the two-direction closure baked in so a consumer
     /// cannot silently drop a directional half from the check.
@@ -4310,7 +4310,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin a per-axis joint-bracket-membership
     /// N-ary verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariants 3 + 5 and §V.1 — same
+    /// Anchor: invariants 3 + 5 and §V.1 — same
     /// three anchors as [`Self::is_within_of`] one PROJECTION-KIND axis
     /// over, with the per-axis granularity baked in via the fixed-arity
     /// `[bool; FIELD_COUNT]` return so a consumer cannot silently drop
@@ -4503,14 +4503,14 @@ impl ResourceLimits {
     /// system, and the encoding is a private implementation detail no
     /// caller can drift from.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// strict joint-bracket N-ary projection into a single-bit verdict
     /// is itself a typed named exit rather than a per-consumer inline
-    /// two-primitive scaffold. THEORY.md §II.1 invariant 5 —
+    /// two-primitive scaffold. Invariant 5 —
     /// composition preserves proofs; the strict joint-bracket N-ary
     /// predicate on `(1 + N + M)` preset-carried resource proofs is
     /// decomposed into its TWO already-lifted N-ary directional strict
-    /// witnesses at TYPE level. THEORY.md §V.1 — knowable platform;
+    /// witnesses at TYPE level. Knowable platform;
     /// the strict-joint-bracket N-ary predicate becomes a TYPE-level
     /// operation on the posture algebra with the strict two-direction
     /// closure baked in so a consumer cannot silently drop a
@@ -4661,7 +4661,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin a per-axis strict-joint-bracket-
     /// membership N-ary verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariants 3 + 5 and §V.1 — same
+    /// Anchor: invariants 3 + 5 and §V.1 — same
     /// three anchors as [`Self::is_strictly_within_of`] one PROJECTION-
     /// KIND axis over, with the per-axis granularity baked in via the
     /// fixed-arity `[bool; FIELD_COUNT]` return so a consumer cannot
@@ -4799,11 +4799,11 @@ impl ResourceLimits {
     /// method the algebra exposes, and the encoding is a private
     /// implementation detail no caller can drift from.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the strict-tightening relation between two
     /// preset-carried resource proofs is itself a typed named `bool`
-    /// predicate composing them via the underlying `leq`. THEORY.md
-    /// §V.1 — knowable platform; the strict `<` relation becomes a
+    /// predicate composing them via the underlying `leq`.
+    /// Knowable platform; the strict `<` relation becomes a
     /// TYPE-level primitive on the posture algebra rather than an
     /// inline two-primitive conjunction at every consumer that
     /// decides "did we strictly tighten?" `tatara-lattice`'s partial
@@ -4858,7 +4858,7 @@ impl ResourceLimits {
     /// `const fn` for the same compile-time-pin reasons as
     /// [`Self::lt`]. See [`Self::lt`] for the full docstring, the
     /// pre-lift `a.leq(b) && !b.leq(a)` two-primitive PRIME DIRECTIVE
-    /// ≥2 pattern, the theory anchor (THEORY.md §II.1 invariant 5,
+    /// ≥2 pattern, the anchor (invariant 5,
     /// §V.1), and the [`Ord::gt`] frontier inspiration.
     #[must_use]
     pub const fn gt(self, other: Self) -> bool {
@@ -4925,7 +4925,7 @@ impl ResourceLimits {
     /// .geq(DEFAULT_RESOURCE_LIMITS));`). See [`Self::leq`] for the
     /// full docstring, the pre-lift six-inline-`>=`-conjunction pattern
     /// callers wrote before the pairwise relation was named, the
-    /// theory anchor (THEORY.md §II.1 invariant 5, §V.1), and the
+    /// anchor (invariant 5, §V.1), and the
     /// [`PartialOrd::ge`] frontier inspiration.
     #[must_use]
     pub const fn geq(self, other: Self) -> bool {
@@ -5052,14 +5052,14 @@ impl ResourceLimits {
     /// primitive `!leq && !geq` composition lives at ONE
     /// implementation site.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the antichain characterization is the
     /// SET-COMPLEMENT of the union of the two comparable-direction
     /// predicates, and pinning the projection at ONE typed primitive
     /// makes the (comparable, incomparable) two-cell partition of the
     /// ordered-pair × verdict surface a substrate-level THEOREM
     /// rather than a per-consumer inline `!leq && !geq` sanity check.
-    /// THEORY.md §V.1 — knowable platform; the antichain-detection
+    /// Knowable platform; the antichain-detection
     /// corner was an unnamed two-primitive composition recurring at
     /// every prospective "these two postures sit on distinct
     /// branches?" callsite pre-lift.
@@ -5221,14 +5221,14 @@ impl ResourceLimits {
     /// a compile-time bound, and the two-primitive `leq || geq`
     /// composition lives at ONE implementation site.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the comparability characterization is the
     /// SET-UNION of the two pointwise-domination directions, and
     /// pinning the projection at ONE typed primitive makes the
     /// (comparable, incomparable) two-cell partition of the ordered-
     /// pair × verdict surface a substrate-level THEOREM proved on
     /// BOTH SIDES rather than one side asserted and the other
-    /// inferred at consumer sites. THEORY.md §V.1 — knowable
+    /// inferred at consumer sites. Knowable
     /// platform; the comparability-detection corner was an unnamed
     /// two-primitive composition recurring at every prospective
     /// "these two postures sit on the same branch?" callsite pre-
@@ -5405,7 +5405,7 @@ impl ResourceLimits {
     /// DIRECTIVE trigger, since the four-way ordering dispatch appeared
     /// inline at every prospective full-verdict callsite pre-lift.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the FULL pointwise partial-order verdict on
     /// two preset-carried resource proofs is itself a typed
     /// `Option<Ordering>` value whose four arms each carry a distinct
@@ -5416,7 +5416,7 @@ impl ResourceLimits {
     /// primitive makes the (Less, Equal, Greater, None) 4-tile
     /// partition of the ordered pair × verdict surface a substrate-
     /// level THEOREM rather than a per-consumer inline four-way
-    /// dispatch. THEORY.md §V.1 — knowable platform; the full-verdict
+    /// dispatch. Knowable platform; the full-verdict
     /// projection was an unnamed four-primitive composition recurring
     /// at every prospective "how do these two postures relate?"
     /// callsite pre-lift.
@@ -5578,11 +5578,11 @@ impl ResourceLimits {
     /// method the algebra exposes, and the doubly-indexed all-pairs
     /// scaffolding lives at ONE implementation site.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the set-level chain verdict on N preset-carried resource
     /// proofs is itself a typed named `bool` predicate composing them via
     /// the underlying pair-level [`Self::is_comparable`] projection.
-    /// THEORY.md §V.1 — knowable platform; the doubly-indexed all-pairs
+    /// Knowable platform; the doubly-indexed all-pairs
     /// comparability conjunction becomes a TYPE-level operation on the
     /// posture algebra rather than an inline two-primitive scaffolding at
     /// every consumer that decides "is this slice a totally-ordered
@@ -5759,11 +5759,11 @@ impl ResourceLimits {
     /// to, factored down to a per-projection choice of pair-level
     /// primitive.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the set-level antichain verdict on N preset-carried
     /// resource proofs is itself a typed named `bool` predicate composing
     /// them via the underlying pair-level [`Self::is_incomparable`]
-    /// projection. THEORY.md §V.1 — knowable platform; the doubly-indexed
+    /// projection. Knowable platform; the doubly-indexed
     /// all-pairs incomparability conjunction becomes a TYPE-level
     /// operation on the posture algebra rather than an inline two-
     /// primitive scaffolding at every consumer that decides "is this
@@ -5901,11 +5901,11 @@ impl ResourceLimits {
     /// projections' pre-lift shapes carried, doubled. Post-lift the
     /// mixed-set verdict binds at ONE typed method the algebra exposes.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the set-level mixed-set verdict on N preset-
     /// carried resource proofs is itself a typed named `bool` predicate
     /// composing them via the underlying set-level [`Self::is_chain`] +
-    /// [`Self::is_antichain`] projections. THEORY.md §V.1 — knowable
+    /// [`Self::is_antichain`] projections. Knowable
     /// platform; the doubly-negated set-level conjunction becomes a
     /// TYPE-level operation on the posture algebra rather than an inline
     /// negation-composition at every consumer that decides "is this
@@ -6060,11 +6060,11 @@ impl ResourceLimits {
     /// only on the pair-level primitive it delegates to (`geq` in place of
     /// `leq`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the sequence-level ascending verdict on N preset-carried
     /// resource proofs is itself a typed named `bool` predicate composing
     /// them via the underlying pair-level [`Self::leq`] projection.
-    /// THEORY.md §V.1 — knowable platform; the consecutive-pair leq
+    /// Knowable platform; the consecutive-pair leq
     /// conjunction becomes a TYPE-level operation on the posture algebra
     /// rather than an inline windowed scaffolding at every consumer that
     /// decides "is this slice a leq-monotone ascending sequence?"
@@ -6200,8 +6200,8 @@ impl ResourceLimits {
     /// scaffolding at every prospective callsite. Post-lift the
     /// descending verdict binds at ONE typed method the algebra exposes.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
-    /// proofs. THEORY.md §V.1 — knowable platform.
+    /// Anchor: invariant 5 — composition preserves
+    /// proofs. Knowable platform.
     ///
     /// Frontier inspiration: `Iterator::is_sorted_by` with a reversed
     /// comparator on a totally-ordered carrier; Coq's `StronglySorted`
@@ -6356,14 +6356,14 @@ impl ResourceLimits {
     /// ascending diagnostic binds at ONE typed `const fn` returning
     /// `[bool; FIELD_COUNT]`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis-mask sequence-level ascending projection into a
     /// `[bool; FIELD_COUNT]` verdict is a typed named exit rather than
     /// a per-consumer inline six-primitive per-axis windowed cascade.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// Invariant 5 — composition preserves proofs;
     /// the sequence-level ascending verdict on N preset-carried
     /// resource proofs is decomposed into its six per-axis witnesses
-    /// at TYPE level. THEORY.md §V.1 — knowable platform; the per-axis
+    /// at TYPE level. Knowable platform; the per-axis
     /// consecutive-pair leq conjunction becomes a TYPE-level operation
     /// on the posture algebra with the per-axis granularity baked in
     /// so a consumer cannot silently drop an axis from the sequence-
@@ -6481,8 +6481,8 @@ impl ResourceLimits {
     ///
     /// `const fn` for the same compile-time-pin reasons as
     /// [`Self::axes_is_ascending`]. See [`Self::axes_is_ascending`]
-    /// for the full docstring, the theory anchor (THEORY.md §II.1
-    /// invariant 3 / 5, §V.1), and the APL/Idris/Haskell frontier
+    /// for the full docstring, the anchor
+    /// (invariant 3 / 5, §V.1), and the APL/Idris/Haskell frontier
     /// inspiration one PAIR-LEVEL-PRIMITIVE axis over.
     #[must_use]
     pub const fn axes_is_descending(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
@@ -6641,11 +6641,11 @@ impl ResourceLimits {
     /// structure and diverges only on the pair-level primitive it
     /// delegates to (`gt` in place of `lt`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the sequence-level strictly-ascending verdict on N preset-
     /// carried resource proofs is itself a typed named `bool` predicate
     /// composing them via the underlying pair-level [`Self::lt`]
-    /// projection. THEORY.md §V.1 — knowable platform; the consecutive-
+    /// projection. Knowable platform; the consecutive-
     /// pair lt conjunction becomes a TYPE-level operation on the posture
     /// algebra rather than an inline windowed scaffolding at every
     /// consumer that decides "is this slice an lt-monotone strictly-
@@ -6773,8 +6773,8 @@ impl ResourceLimits {
     /// scaffolding at every prospective callsite. Post-lift the strictly-
     /// descending verdict binds at ONE typed method the algebra exposes.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
-    /// proofs. THEORY.md §V.1 — knowable platform.
+    /// Anchor: invariant 5 — composition preserves
+    /// proofs. Knowable platform.
     ///
     /// Frontier inspiration: `<[T]>::is_sorted_by` with a reversed strict
     /// comparator on a totally-ordered carrier; Coq's `StronglySorted` on
@@ -6921,10 +6921,10 @@ impl ResourceLimits {
     /// whole-posture verdict collapses. Post-lift the strict per-axis-mask
     /// verdict binds at ONE typed method the algebra exposes.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis strict-ascending verdict is itself a typed named `[bool; N]`
-    /// exit rather than an inline windowed conjunction. THEORY.md §V.1 —
-    /// knowable platform; the per-axis strict-ascending mask becomes a
+    /// exit rather than an inline windowed conjunction.
+    /// Knowable platform; the per-axis strict-ascending mask becomes a
     /// TYPE-level operation on the posture algebra.
     ///
     /// Frontier inspiration: the order-theoretic notion of AXIS-WISE STRICT
@@ -7018,7 +7018,7 @@ impl ResourceLimits {
     /// `const fn` for the same compile-time-pin reasons as
     /// [`Self::axes_is_strictly_ascending`]. See
     /// [`Self::axes_is_strictly_ascending`] for the full docstring, the
-    /// theory anchor (THEORY.md §II.1 invariant 3 / 5, §V.1), and the
+    /// anchor (invariant 3 / 5, §V.1), and the
     /// APL / Haskell / Idris frontier inspiration one DIRECTION axis over.
     #[must_use]
     pub const fn axes_is_strictly_descending(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
@@ -7242,12 +7242,12 @@ impl ResourceLimits {
     /// descending) 2×2 face was the last unnamed corner on the
     /// sequence-level pairwise-relation surface.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the sequence-level constant-value verdict on N preset-
     /// carried resource proofs is itself a typed named `bool` predicate
     /// composing them via the underlying sequence-level
     /// [`Self::is_ascending`] + [`Self::is_descending`] projections.
-    /// THEORY.md §V.1 — knowable platform; the doubly-conjoined
+    /// Knowable platform; the doubly-conjoined
     /// sequence-level projection becomes a TYPE-level operation on the
     /// posture algebra rather than an inline windowed
     /// `all(|w| w[0] == w[1])` scaffolding at every consumer that
@@ -7445,12 +7445,12 @@ impl ResourceLimits {
     /// non-monotone) three-cell face was the last unnamed corner on the
     /// sequence-level pairwise-relation surface.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the sequence-level non-monotone verdict on N preset-
     /// carried resource proofs is itself a typed named `bool` predicate
     /// composing them via the underlying sequence-level
     /// [`Self::is_ascending`] + [`Self::is_descending`] projections.
-    /// THEORY.md §V.1 — knowable platform; the doubly-conjoined negation-
+    /// Knowable platform; the doubly-conjoined negation-
     /// conjunction becomes a TYPE-level operation on the posture algebra
     /// rather than an inline `!is_ascending && !is_descending`
     /// scaffolding at every consumer that decides "is this slice
@@ -7591,12 +7591,12 @@ impl ResourceLimits {
     /// surface, closing what the just-lifted [`Self::is_non_monotone`]
     /// opened one COMBINATOR-DUAL axis over.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the sequence-level monotone verdict on N
     /// preset-carried resource proofs is itself a typed named `bool`
     /// predicate composing them via the underlying sequence-level
     /// [`Self::is_ascending`] + [`Self::is_descending`] projections.
-    /// THEORY.md §V.1 — knowable platform; the doubly-disjoined
+    /// Knowable platform; the doubly-disjoined
     /// projection becomes a TYPE-level operation on the posture
     /// algebra rather than an inline `is_ascending || is_descending`
     /// scaffolding at every consumer that decides "is this slice
@@ -7747,12 +7747,12 @@ impl ResourceLimits {
     /// dual 2-cell face at [`Self::is_monotone`] one STRICTNESS axis
     /// over.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the sequence-level strict-monotone verdict on
     /// N preset-carried resource proofs is itself a typed named `bool`
     /// predicate composing them via the underlying sequence-level
     /// [`Self::is_strictly_ascending`] + [`Self::is_strictly_descending`]
-    /// projections. THEORY.md §V.1 — knowable platform; the doubly-
+    /// projections. Knowable platform; the doubly-
     /// disjoined strict projection becomes a TYPE-level operation on
     /// the posture algebra rather than an inline `is_strictly_ascending
     /// || is_strictly_descending` scaffolding at every consumer that
@@ -7912,12 +7912,12 @@ impl ResourceLimits {
     /// disjunction corner closed at [`Self::is_strictly_monotone`] one
     /// COMBINATOR axis over.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the sequence-level strict-non-monotone verdict on N
     /// preset-carried resource proofs is itself a typed named `bool`
     /// predicate composing them via the underlying sequence-level
     /// [`Self::is_strictly_ascending`] + [`Self::is_strictly_descending`]
-    /// projections. THEORY.md §V.1 — knowable platform; the doubly-
+    /// projections. Knowable platform; the doubly-
     /// conjoined-with-negation strict projection becomes a TYPE-level
     /// operation on the posture algebra rather than an inline
     /// `!is_strictly_ascending && !is_strictly_descending` scaffolding at
@@ -8063,15 +8063,15 @@ impl ResourceLimits {
     /// De Morgan 2-cell partition at [`Self::is_strictly_monotone`] and
     /// [`Self::is_strictly_non_monotone`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// scalar strict-constant verdict is a typed named `bool` exit rather
-    /// than an inline doubly-composed conjunction. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the projection
+    /// than an inline doubly-composed conjunction.
+    /// Invariant 5 — composition preserves proofs; the projection
     /// composes from the shipped strict direction pair via a pure
     /// conjunction, and the strict-refines-non-strict + refines-into-
     /// strict-monotone contracts compose through boolean-lattice
-    /// implication across the two strict projections. THEORY.md §V.1 —
-    /// knowable platform; the strict-constant verdict becomes a
+    /// implication across the two strict projections.
+    /// Knowable platform; the strict-constant verdict becomes a
     /// TYPE-level operation on the posture algebra rather than an inline
     /// two-primitive scaffolding at every consumer.
     ///
@@ -8302,13 +8302,13 @@ impl ResourceLimits {
     /// kind × strictness) 2×2×2 face was the next natural corner to open
     /// on the sequence-level surface.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the per-
+    /// Anchor: invariant 3 — typed exit; the per-
     /// axis monotone verdict is a typed named `[bool; N]` exit rather
-    /// than an inline doubly-composed disjunction. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the per-axis-mask
+    /// than an inline doubly-composed disjunction.
+    /// Invariant 5 — composition preserves proofs; the per-axis-mask
     /// monotone projection composes from the shipped per-axis-mask
-    /// direction pair via a pure per-axis `||`-fold. THEORY.md §V.1 —
-    /// knowable platform; the per-axis-mask monotone verdict becomes a
+    /// direction pair via a pure per-axis `||`-fold.
+    /// Knowable platform; the per-axis-mask monotone verdict becomes a
     /// TYPE-level operation on the posture algebra rather than an inline
     /// two-primitive scaffolding at every consumer that decides "which
     /// axes are monotone as usize sequences?"
@@ -8527,13 +8527,13 @@ impl ResourceLimits {
     /// combinator column at [`Self::axes_is_monotone`] one STRICTNESS
     /// axis under.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the per-
+    /// Anchor: invariant 3 — typed exit; the per-
     /// axis strict-monotone verdict is a typed named `[bool; N]` exit
-    /// rather than an inline doubly-composed disjunction. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the per-axis-mask
+    /// rather than an inline doubly-composed disjunction.
+    /// Invariant 5 — composition preserves proofs; the per-axis-mask
     /// strict-monotone projection composes from the shipped per-axis-
     /// mask strict-direction pair via a pure per-axis `||`-fold.
-    /// THEORY.md §V.1 — knowable platform; the per-axis-mask strict-
+    /// Knowable platform; the per-axis-mask strict-
     /// monotone verdict becomes a TYPE-level operation on the posture
     /// algebra rather than an inline two-primitive scaffolding at every
     /// consumer that decides "which axes are strictly monotone as usize
@@ -8754,13 +8754,13 @@ impl ResourceLimits {
     /// AND [`Self::axes_is_strictly_monotone`] was the next natural corner
     /// to open on the sequence-level surface.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the per-
+    /// Anchor: invariant 3 — typed exit; the per-
     /// axis constant verdict is a typed named `[bool; N]` exit rather
-    /// than an inline doubly-composed conjunction. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the per-axis-mask
+    /// than an inline doubly-composed conjunction.
+    /// Invariant 5 — composition preserves proofs; the per-axis-mask
     /// constant projection composes from the shipped per-axis-mask
-    /// direction pair via a pure per-axis `&&`-fold. THEORY.md §V.1 —
-    /// knowable platform; the per-axis-mask constant verdict becomes a
+    /// direction pair via a pure per-axis `&&`-fold.
+    /// Knowable platform; the per-axis-mask constant verdict becomes a
     /// TYPE-level operation on the posture algebra rather than an inline
     /// two-primitive scaffolding at every consumer that decides "which
     /// axes are pointwise-equal across this slice?"
@@ -9017,14 +9017,14 @@ impl ResourceLimits {
     /// the (constant, monotone, non-monotone) three-cell face on the
     /// per-axis-mask combinator column into a complete per-axis partition.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the per-
+    /// Anchor: invariant 3 — typed exit; the per-
     /// axis non-monotone verdict is a typed named `[bool; N]` exit rather
-    /// than an inline doubly-composed negation-conjunction. THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs; the per-axis-
+    /// than an inline doubly-composed negation-conjunction.
+    /// Invariant 5 — composition preserves proofs; the per-axis-
     /// mask non-monotone projection composes from the shipped per-axis-
     /// mask direction pair via a pure per-axis `!x && !y`-fold, and the
     /// De Morgan complement contract composes through boolean-lattice
-    /// duality across the two projections. THEORY.md §V.1 — knowable
+    /// duality across the two projections. Knowable
     /// platform; the per-axis-mask non-monotone verdict becomes a TYPE-
     /// level operation on the posture algebra rather than an inline two-
     /// primitive scaffolding at every consumer that decides "which axes
@@ -9317,15 +9317,15 @@ impl ResourceLimits {
     /// at [`Self::axes_is_non_monotone`] was the next natural row to
     /// open on the sequence-level surface.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the per-
+    /// Anchor: invariant 3 — typed exit; the per-
     /// axis strict-non-monotone verdict is a typed named `[bool; N]`
     /// exit rather than an inline doubly-composed strict-negation-
-    /// conjunction. THEORY.md §II.1 invariant 5 — composition preserves
+    /// conjunction. Invariant 5 — composition preserves
     /// proofs; the per-axis-mask strict-non-monotone projection composes
     /// from the shipped per-axis-mask strict direction pair via a pure
     /// per-axis `!x && !y`-fold, and the De Morgan complement contract
     /// composes through boolean-lattice duality across the two strict
-    /// projections. THEORY.md §V.1 — knowable platform; the per-axis-
+    /// projections. Knowable platform; the per-axis-
     /// mask strict-non-monotone verdict becomes a TYPE-level operation
     /// on the posture algebra rather than an inline two-primitive
     /// scaffolding at every consumer that decides "which axes are
@@ -9525,16 +9525,16 @@ impl ResourceLimits {
     /// mask combinator column past the just-closed (strict-monotone,
     /// strict-non-monotone) De Morgan 2-cell partition.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the per-
+    /// Anchor: invariant 3 — typed exit; the per-
     /// axis strict-constant verdict is a typed named `[bool; N]` exit
     /// rather than an inline doubly-composed per-axis conjunction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// per-axis-mask strict-constant projection composes from the
     /// shipped per-axis-mask strict direction pair via a pure per-axis
     /// `&&`-fold, and the strict-refines-non-strict + refines-into-
     /// strict-monotone contracts compose through boolean-lattice
-    /// implication across the two strict projections. THEORY.md §V.1 —
-    /// knowable platform; the per-axis-mask strict-constant verdict
+    /// implication across the two strict projections.
+    /// Knowable platform; the per-axis-mask strict-constant verdict
     /// becomes a TYPE-level operation on the posture algebra rather than
     /// an inline two-primitive scaffolding.
     ///
@@ -9650,10 +9650,10 @@ impl ResourceLimits {
     /// free literals, and the const-fn evaluability carries the pole-
     /// identity into any const context.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the bottom-pole identity of a preset-carried resource
     /// proof is itself a typed named `bool` predicate composing it via
-    /// the underlying `leq`. THEORY.md §V.1 — knowable platform; the
+    /// the underlying `leq`. Knowable platform; the
     /// pole-identity binds at ONE typed method rather than an inline
     /// six-primitive field-conjunction (or non-`const fn` `PartialEq`
     /// call) at every consumer that decides pole membership. Frontier
@@ -9732,10 +9732,10 @@ impl ResourceLimits {
     /// sibling of the const-fn evaluability pins on [`Self::leq`] one
     /// PREDICATE-KIND axis over.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the top-pole identity of a preset-carried resource proof
     /// is itself a typed named `bool` predicate composing it via the
-    /// underlying `leq`. THEORY.md §V.1 — knowable platform; the pole-
+    /// underlying `leq`. Knowable platform; the pole-
     /// identity binds at ONE typed method rather than an inline six-
     /// primitive field-conjunction. Frontier inspiration: Haskell's
     /// `Bounded` typeclass exposing `maxBound` as a named entry
@@ -9849,11 +9849,11 @@ impl ResourceLimits {
     /// Post-lift the pole-membership verdict binds at ONE typed method
     /// the algebra exposes.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the pole-membership verdict on a preset-
     /// carried resource proof is itself a typed named `bool` predicate
     /// composing the two pole-identity primitives via the underlying
-    /// disjunction. THEORY.md §V.1 — knowable platform; the pole-
+    /// disjunction. Knowable platform; the pole-
     /// membership disjunction was an unnamed two-primitive composition
     /// recurring at every prospective "is this posture distinguished?"
     /// callsite pre-lift; naming it makes the (pole, interior) 2-cell
@@ -9966,12 +9966,12 @@ impl ResourceLimits {
     /// interior membership at compile time — a build-break rather than
     /// a runtime `assert!` on the first execution.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the interior-membership verdict is the De
     /// Morgan complement of the pole disjunction, and pinning the
     /// projection at ONE typed primitive makes the (pole, interior)
     /// 2-cell partition of the pole-identity surface a substrate-level
-    /// EXCLUSIVITY THEOREM. THEORY.md §V.1 — knowable platform; the
+    /// EXCLUSIVITY THEOREM. Knowable platform; the
     /// interior-membership complement was an unnamed two-primitive
     /// negated-conjunction pre-lift recurring at every prospective
     /// "is this posture a shippable non-pole?" callsite.
@@ -10107,16 +10107,16 @@ impl ResourceLimits {
     /// previously composable only as a per-consumer inline field
     /// cascade.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture projection into the six-bool pole-mask is itself a
     /// typed named exit rather than a per-consumer inline
-    /// six-primitive cascade. THEORY.md §II.1 invariant 5 —
+    /// six-primitive cascade. Invariant 5 —
     /// composition preserves proofs; the pole-identity on a
     /// preset-carried resource proof is decomposed into its six
     /// per-axis witnesses at TYPE level, so consumers reasoning about
     /// WHICH axes carry the pole identity bind through ONE typed
     /// primitive rather than re-running the comparison on each.
-    /// THEORY.md §V.1 — knowable platform; the per-axis pole mask
+    /// Knowable platform; the per-axis pole mask
     /// becomes a TYPE-level operation on the posture algebra rather
     /// than a per-consumer field-access cascade — with the per-axis
     /// granularity baked in so the consumer cannot silently drop an
@@ -10244,8 +10244,8 @@ impl ResourceLimits {
     /// [`Self::axes_is_bottom`] — a ≥2 PRIME DIRECTIVE trigger
     /// following the axes_is_bottom lift.
     ///
-    /// Theory anchor: same as [`Self::axes_is_bottom`] — THEORY.md
-    /// §II.1 invariants 3 + 5, THEORY.md §V.1.
+    /// Anchor: same as [`Self::axes_is_bottom`] —
+    /// invariants 3 + 5.
     ///
     /// Frontier inspiration: Idris's `zipWith (== maxBound)` over a
     /// `Vec n Nat` producing a `Vec n Bool`; APL's `⍵≥⌈/⍵` per-
@@ -10347,15 +10347,15 @@ impl ResourceLimits {
     /// [`ResourceLimits`] lets the const-fn body call the two
     /// delegated per-axis-mask primitives by-value.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture projection into the six-bool pole-membership vector
     /// is itself a typed named exit rather than a per-consumer inline
-    /// six-primitive per-axis disjunction. THEORY.md §II.1 invariant 5
+    /// six-primitive per-axis disjunction. Invariant 5
     /// — composition preserves proofs; the per-axis pole-membership
     /// verdict decomposes cleanly through the DE MORGAN dual to
     /// [`Self::axes_is_interior`], and the two projections together
     /// close the per-axis-mask (pole, interior) 2-cell partition as a
-    /// SUBSTRATE-LEVEL EXCLUSIVITY THEOREM. THEORY.md §V.1 — knowable
+    /// SUBSTRATE-LEVEL EXCLUSIVITY THEOREM. Knowable
     /// platform; the per-axis pole-mask becomes a TYPE-level operation
     /// on the posture algebra with per-axis granularity structurally
     /// forced by the array's fixed arity.
@@ -10458,12 +10458,12 @@ impl ResourceLimits {
     /// compile time (`const _: [bool; ResourceLimits::FIELD_COUNT] =
     /// DEFAULT_RESOURCE_LIMITS.axes_is_interior();`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs (the
     /// per-axis interior-membership verdict is the DE MORGAN COMPLEMENT
     /// of `axes_is_pole`, and the two projections together close the
     /// per-axis-mask (pole, interior) 2-cell partition as a substrate-
-    /// level EXCLUSIVITY THEOREM); THEORY.md §V.1 — knowable platform.
+    /// level EXCLUSIVITY THEOREM); knowable platform.
     ///
     /// Frontier inspiration: order theory's canonical "interior of a
     /// bounded lattice" concept lifted to a per-position vector via
@@ -10577,15 +10577,15 @@ impl ResourceLimits {
     /// sibling of the const-fn evaluability pins on
     /// [`Self::axes_is_pole`] one PROJECTION-KIND axis over.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture axial-polarity verdict is a named typed exit rather
     /// than an inline `axes_is_pole().iter().all(...)` per-consumer fold.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// axial-polarity predicate is the ALL-fold of the shipped per-axis
     /// pole-mask, and the (`is_pole`, `is_axially_polar`) pair
     /// crystallizes the WEAKER-vs-STRONGER pole semantics as TWO named
     /// typed predicates on the algebra rather than one predicate with
-    /// two silently-competing readings. THEORY.md §V.1 — knowable
+    /// two silently-competing readings. Knowable
     /// platform; the axial polarity binds at ONE typed method
     /// structurally forced by the array's fixed arity.
     ///
@@ -10702,17 +10702,17 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin axial interiority at compile time
     /// (`const _: bool = DEFAULT_RESOURCE_LIMITS.is_axially_interior();`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture axial-interior verdict is a named typed exit rather
     /// than an inline `axes_is_interior().iter().all(...)` per-consumer
-    /// fold. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// fold. Invariant 5 — composition preserves proofs;
     /// the (`is_axially_polar`, `is_axially_interior`) pair closes the
     /// axial-quantifier partition as a substrate-level EXCLUSIVITY
     /// THEOREM proved on BOTH sides at TYPE level via the De Morgan
     /// dual, and the (`is_interior`, `is_axially_interior`) pair
     /// crystallizes the WEAKER-vs-STRONGER interior semantics as TWO
     /// named typed predicates on the algebra rather than one predicate
-    /// with two silently-competing readings. THEORY.md §V.1 — knowable
+    /// with two silently-competing readings. Knowable
     /// platform.
     ///
     /// Frontier inspiration: order theory's canonical "strict interior
@@ -10852,17 +10852,17 @@ impl ResourceLimits {
     /// sibling of the const-fn evaluability pins on
     /// [`Self::is_axially_polar`] one QUANTIFIER axis over.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture existential-polar verdict is a named typed exit rather
     /// than an inline `axes_is_pole().iter().any(...)` per-consumer fold
-    /// at each call site. THEORY.md §II.1 invariant 5 — composition
+    /// at each call site. Invariant 5 — composition
     /// preserves proofs; the (has_polar_axis, has_interior_axis) pair
     /// opens the AXIAL-QUANTIFIER surface's EXISTENTIAL-QUANTIFIER row
     /// past the just-closed UNIVERSAL-QUANTIFIER row, and the
     /// (has_polar_axis, is_axially_interior) + (has_interior_axis,
     /// is_axially_polar) diagonal De Morgan pairs crystallize the
     /// cross-quantifier duality as TWO named typed theorems across the
-    /// (quantifier × cell) 2×2 face. THEORY.md §V.1 — knowable
+    /// (quantifier × cell) 2×2 face. Knowable
     /// platform; the existential-polar verdict binds at ONE typed method
     /// structurally forced by the ANY-fold over the fixed-arity
     /// `axes_is_pole` mask.
@@ -10987,12 +10987,12 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin existential interiority at compile
     /// time (`const _: bool = DEFAULT_RESOURCE_LIMITS.has_interior_axis();`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs (the
     /// existential-interior verdict is the ANY-fold of the shipped
     /// per-axis interior-mask, and the (has_polar_axis, has_interior_axis)
     /// pair opens the AXIAL-QUANTIFIER surface's EXISTENTIAL row past
-    /// the just-closed UNIVERSAL row); THEORY.md §V.1 — knowable
+    /// the just-closed UNIVERSAL row); knowable
     /// platform.
     ///
     /// Frontier inspiration: order theory's canonical "strict interior
@@ -11090,10 +11090,10 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin whole-posture strict-mixedness at
     /// compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// truly-mixed corner verdict is a named typed exit rather than an
     /// inline `has_polar_axis() && has_interior_axis()` per-consumer
-    /// conjunction. THEORY.md §II.1 invariant 5 — composition preserves
+    /// conjunction. Invariant 5 — composition preserves
     /// proofs; the (is_strictly_mixed, is_axially_uniform) pair opens
     /// the MIXITY column at the whole-posture single-bit verdict surface
     /// as the direct COMBINATOR-KIND peer of the (has_polar_axis,
@@ -11184,7 +11184,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin whole-posture axial uniformity at
     /// compile time.
     ///
-    /// Theory anchor: same as [`Self::is_strictly_mixed`], on the
+    /// Anchor: same as [`Self::is_strictly_mixed`], on the
     /// COMPLEMENT half of the MIXITY partition.
     ///
     /// Frontier inspiration: same as [`Self::is_strictly_mixed`], through
@@ -11296,10 +11296,10 @@ impl ResourceLimits {
     /// pins on [`Self::is_bottom`] one QUANTIFIER-KIND axis over and
     /// [`Self::has_polar_axis`] one CELL-KIND axis over.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-posture existential-bottom verdict is a named typed exit
     /// rather than an inline `axes_is_bottom().iter().any(...)` per-
-    /// consumer fold at each call site. THEORY.md §II.1 invariant 5 —
+    /// consumer fold at each call site. Invariant 5 —
     /// composition preserves proofs; the (has_bottom_axis, has_top_axis)
     /// pair SPLITS [`Self::has_polar_axis`]'s compound pole verdict into
     /// its two atomic sub-verdicts, so a consumer that needs to
@@ -11310,7 +11310,7 @@ impl ResourceLimits {
     /// `axes_is_bottom().iter().any(...)` inline at each site. The
     /// paired decomposition theorem `has_polar_axis == has_bottom_axis
     /// || has_top_axis` closes the atomic-cell split as a substrate-
-    /// level identity. THEORY.md §V.1 — knowable platform; the
+    /// level identity. Knowable platform; the
     /// existential-bottom verdict binds at ONE typed method structurally
     /// forced by the ANY-fold over the fixed-arity `axes_is_bottom` mask.
     ///
@@ -11394,10 +11394,10 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
     /// .has_top_axis());`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs (the
     /// (has_bottom_axis, has_top_axis) atomic-cell split decomposes the
-    /// compound `has_polar_axis` pole verdict); THEORY.md §V.1 —
+    /// compound `has_polar_axis` pole verdict);
     /// knowable platform.
     ///
     /// Frontier inspiration: APL's `∨/(⍵=⌈/⍵)` per-position top-equality
@@ -11486,10 +11486,10 @@ impl ResourceLimits {
     /// of the const-fn evaluability pins on [`Self::is_bottom`] and
     /// [`Self::has_bottom_axis`] one QUANTIFIER-KIND axis over each.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// arithmetic bottom-axis tally is a named typed exit rather than an
     /// inline `axes_is_bottom().iter().filter(...).count()` per-consumer
-    /// fold. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// fold. Invariant 5 — composition preserves proofs;
     /// the (count_bottom_axes, count_top_axes) arithmetic pair strictly
     /// REFINES the (has_bottom_axis, has_top_axis) boolean pair —
     /// carrying the (ALL, ANY, COUNT) three-level quantifier ladder as
@@ -11585,13 +11585,13 @@ impl ResourceLimits {
     /// higher-order axial partitions, cross-posture disagreement
     /// counts) composes through this same primitive.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis popcount dispatch shape at every `count_X_axes` body
     /// binds at ONE typed named `const fn` on the algebra rather than
-    /// a per-tally six-line open-coded `while` loop. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper composes
+    /// a per-tally six-line open-coded `while` loop.
+    /// Invariant 5 — composition preserves proofs; the helper composes
     /// mechanically under the fold-agreement identity above with no
-    /// re-derivation at the caller. THEORY.md §V.1 — knowable
+    /// re-derivation at the caller. Knowable
     /// platform.
     ///
     /// Frontier inspiration: APL's `+/` folded over a boolean vector;
@@ -11705,14 +11705,14 @@ impl ResourceLimits {
     /// checks, cross-posture disagreement existence checks) composes
     /// through this same primitive.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis ANY-fold dispatch shape at every `has_X_axis` body
     /// binds at ONE typed named `const fn` on the algebra rather than a
-    /// per-predicate seven-line open-coded `while` loop. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper composes
+    /// per-predicate seven-line open-coded `while` loop.
+    /// Invariant 5 — composition preserves proofs; the helper composes
     /// mechanically under the iterator-agreement and popcount-agreement
-    /// identities above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform.
+    /// identities above with no re-derivation at the caller.
+    /// Knowable platform.
     ///
     /// Frontier inspiration: APL's `∨/` folded over a boolean vector;
     /// Haskell's `any id` on a `[Bool]`; Idris's `any id` under a total
@@ -11851,16 +11851,16 @@ impl ResourceLimits {
     /// partition universal checks, cross-posture agreement universal
     /// checks) composes through this same primitive.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis ALL-fold dispatch shape at every `is_axially_X` body
     /// binds at ONE typed named `const fn` on the algebra rather than a
     /// per-predicate seven-line open-coded `while` loop or a FIELD_COUNT-
-    /// coupled hardcoded conjunction chain. THEORY.md §II.1 invariant 5
+    /// coupled hardcoded conjunction chain. Invariant 5
     /// — composition preserves proofs; the helper composes mechanically
     /// under the iterator-agreement, De Morgan, and popcount-saturation
     /// identities above with no re-derivation at the caller, closing the
-    /// (∃, ∀) quantifier pair on the per-axis mask substrate. THEORY.md
-    /// §V.1 — knowable platform; the ALL-fold becomes a substrate-level
+    /// (∃, ∀) quantifier pair on the per-axis mask substrate.
+    /// Knowable platform; the ALL-fold becomes a substrate-level
     /// theorem the type system carries for the per-axis
     /// `[bool; FIELD_COUNT]` mask input, and the FIELD_COUNT coupling
     /// the hardcoded `mask[0] && ... && mask[5]` chain carried is
@@ -12003,14 +12003,14 @@ impl ResourceLimits {
     /// higher-order axial partition first-hits, cross-posture
     /// disagreement first-hits) composes through this same primitive.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis first-hit dispatch shape at every `first_X_axis_index`
     /// body binds at ONE typed named `const fn` on the algebra rather
     /// than a per-projection nine-line open-coded `while` loop.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// helper composes mechanically under the iterator-agreement,
     /// any-fold-bridge, and count-bridge identities above with no
-    /// re-derivation at the caller. THEORY.md §V.1 — knowable platform.
+    /// re-derivation at the caller. Knowable platform.
     ///
     /// Frontier inspiration: APL's `⍸/⍨` first-hit index on a boolean
     /// vector; Haskell's `Data.List.findIndex id` on a `[Bool]`;
@@ -12163,15 +12163,15 @@ impl ResourceLimits {
     /// higher-order axial partition last-hits, cross-posture
     /// disagreement last-hits) composes through this same primitive.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis last-hit dispatch shape at every `last_X_axis_index`
     /// body binds at ONE typed named `const fn` on the algebra rather
-    /// than a per-projection ten-line open-coded `while` loop. THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs; the helper
+    /// than a per-projection ten-line open-coded `while` loop.
+    /// Invariant 5 — composition preserves proofs; the helper
     /// composes mechanically under the iterator-rposition-agreement,
     /// any-fold-bridge, count-bridge, and first-le-last sandwich
-    /// identities above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform.
+    /// identities above with no re-derivation at the caller.
+    /// Knowable platform.
     ///
     /// Frontier inspiration: APL's `⌈/⍸⍨` last-hit index on a boolean
     /// vector; Haskell's `Data.List.findIndex id . reverse` with the
@@ -12336,17 +12336,17 @@ impl ResourceLimits {
     /// this helper's forward `[a[i] && b[i]; N]` fixed-size array
     /// construction has already proven safe.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis pointwise-AND mask combinator at every MASK→MASK
     /// INTERSECTION exit now binds at ONE typed named `const fn` on the
     /// algebra rather than a per-consumer six-primitive hardcoded array
     /// literal whose FIELD_COUNT=6-coupling silently rots on a future
-    /// arity bump. THEORY.md §II.1 invariant 5 — composition preserves
+    /// arity bump. Invariant 5 — composition preserves
     /// proofs; the helper composes mechanically under the iterator-zip-
     /// and-agreement, AND-monoid identity/annihilator, commutativity,
     /// idempotence, POPCOUNT upper bound, and ANY/ALL-fold bridge
-    /// identities above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the per-axis pointwise `&&` combinator
+    /// identities above with no re-derivation at the caller.
+    /// Knowable platform; the per-axis pointwise `&&` combinator
     /// becomes a TYPE-level operation on the per-axis mask algebra rather
     /// than a per-consumer inline six-primitive cascade, with the per-
     /// axis granularity baked in so the consumer cannot silently drop an
@@ -12537,17 +12537,17 @@ impl ResourceLimits {
     /// difference) primitives at shapes this helper's forward `[a[i] ||
     /// b[i]; N]` fixed-size array construction has already proven safe.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis pointwise-OR mask combinator at every MASK→MASK UNION
     /// exit now binds at ONE typed named `const fn` on the algebra
     /// rather than a per-consumer six-primitive hardcoded array literal
     /// whose FIELD_COUNT=6-coupling silently rots on a future arity
-    /// bump. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// bump. Invariant 5 — composition preserves proofs;
     /// the helper composes mechanically under the iterator-zip-or
     /// agreement, OR-monoid identity/annihilator, commutativity,
     /// idempotence, POPCOUNT lower bound, and ANY/ALL-fold bridge
-    /// identities above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the per-axis pointwise `||` combinator
+    /// identities above with no re-derivation at the caller.
+    /// Knowable platform; the per-axis pointwise `||` combinator
     /// becomes a TYPE-level operation on the per-axis mask algebra
     /// rather than a per-consumer inline six-primitive cascade, with the
     /// per-axis granularity baked in so the consumer cannot silently
@@ -12730,18 +12730,18 @@ impl ResourceLimits {
     /// the (AND, OR, NOT) Boolean-completeness triad on the per-axis mask
     /// substrate.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis pointwise-NOT mask combinator at every MASK→MASK
     /// COMPLEMENT exit now binds at ONE typed named `const fn` on the
     /// algebra rather than a per-consumer six-primitive hardcoded array
     /// literal (or De Morgan-expanded per-axis fill) whose FIELD_COUNT=6-
-    /// coupling silently rots on a future arity bump. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper composes
+    /// coupling silently rots on a future arity bump.
+    /// Invariant 5 — composition preserves proofs; the helper composes
     /// mechanically under the iterator-map-not agreement, involutivity,
     /// endpoint-swap, POPCOUNT complement, De Morgan over intersect / De
     /// Morgan over union, and paired ANY/ALL-fold De Morgan bridge
-    /// identities above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the per-axis pointwise `!` combinator
+    /// identities above with no re-derivation at the caller.
+    /// Knowable platform; the per-axis pointwise `!` combinator
     /// becomes a TYPE-level operation on the per-axis mask algebra rather
     /// than a per-consumer inline six-primitive cascade, with the per-
     /// axis granularity baked in so the consumer cannot silently drop an
@@ -12958,17 +12958,17 @@ impl ResourceLimits {
     /// combinators and the five paired MASK→SCALAR collapse helpers
     /// already carry at their own exits.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis pointwise-XOR mask combinator at every future
     /// MASK→MASK DIFFERENCE exit binds at ONE typed named `const fn`
     /// on the algebra rather than a per-consumer three-primitive
     /// nested composition through the shipped (AND, OR, NOT) triple.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// Invariant 5 — composition preserves proofs;
     /// the helper composes mechanically under the iterator-zip-xor
     /// agreement, XOR-group identity/self-annihilation/commutativity/
     /// associativity, POPCOUNT inclusion-exclusion, both De Morgan
     /// synthesis bridges, and the `axes_ne` algebraic bridge with no
-    /// re-derivation at the caller. THEORY.md §V.1 — knowable
+    /// re-derivation at the caller. Knowable
     /// platform; the per-axis pointwise `^` combinator becomes a
     /// TYPE-level operation on the per-axis mask algebra rather than
     /// a per-consumer nested composition, with the per-axis
@@ -13211,19 +13211,19 @@ impl ResourceLimits {
     /// substrate's SET-ALGEBRA closure at the classical
     /// (AND, OR, NOT, XOR, ANDNOT) primitive-connective roster.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// per-axis pointwise SET-DIFFERENCE mask combinator at every
     /// MASK+MASK→MASK ASYMMETRIC-SUBTRACTION exit now binds at ONE
     /// typed named `const fn` on the algebra rather than a per-consumer
     /// six-primitive hardcoded array literal whose FIELD_COUNT=6-coupling
-    /// silently rots on a future arity bump. THEORY.md §II.1 invariant
+    /// silently rots on a future arity bump. Invariant
     /// 5 — composition preserves proofs; the helper composes
     /// mechanically under the iterator-zip-and-not agreement, right-
     /// identity, left-zero, right-annihilator, self-annihilation, EXACT
     /// POPCOUNT identity, AND-composition synthesis, XOR-decomposition
     /// synthesis, and ANY-fold-of-direction-signed-masks bridge
-    /// identities above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the per-axis pointwise `a && !b`
+    /// identities above with no re-derivation at the caller.
+    /// Knowable platform; the per-axis pointwise `a && !b`
     /// combinator becomes a TYPE-level operation on the per-axis mask
     /// algebra rather than a per-consumer inline six-primitive cascade,
     /// with the per-axis granularity baked in so the consumer cannot
@@ -13318,11 +13318,11 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact top-axis tally at
     /// compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs (the arithmetic
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs (the arithmetic
     /// pair strictly REFINES the boolean ANY-fold pair with a
-    /// discriminator the boolean surface cannot access); THEORY.md §V.1
-    /// — knowable platform.
+    /// discriminator the boolean surface cannot access);
+    /// knowable platform.
     ///
     /// Frontier inspiration: APL's `+/(⍵=⌈/⍵)` per-position top-equality
     /// summation folded through `+/`. Idris's `count (== maxBound) v`
@@ -13430,17 +13430,17 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
     /// .count_polar_axes() == ResourceLimits::FIELD_COUNT);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// arithmetic polar-axis tally is a named typed exit rather than an
     /// inline `axes_is_pole().iter().filter(...).count()` per-consumer
-    /// fold. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// fold. Invariant 5 — composition preserves proofs;
     /// the (count_polar_axes, count_interior_axes) arithmetic pair closes
     /// the ARITHMETIC-QUANTIFIER row on the COMPOUND (polar, interior)
     /// 2-cell partition with the LOAD-BEARING EXHAUSTIVE-PARTITION
     /// identity `count_polar + count_interior == FIELD_COUNT` on every
     /// posture — the ARITHMETIC form of the boolean cover-exhaustiveness
     /// theorem lifted through disjoint-mask sum-of-cardinalities.
-    /// THEORY.md §V.1 — knowable platform.
+    /// Knowable platform.
     ///
     /// Frontier inspiration: APL's `+/((0=⍵)∨(⍵=⌈/⍵))` per-position
     /// pole-membership summation folded through `+/` — the arithmetic
@@ -13525,14 +13525,14 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact interior-axis tally at
     /// compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs (the
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs (the
     /// (count_polar_axes, count_interior_axes) pair closes the ARITHMETIC-
     /// QUANTIFIER row on the COMPOUND (polar, interior) 2-cell partition
     /// with the LOAD-BEARING EXHAUSTIVE-PARTITION identity
     /// `count_polar_axes + count_interior_axes == FIELD_COUNT` — the
     /// ARITHMETIC form of the boolean cover-exhaustiveness lifted through
-    /// disjoint-mask sum-of-cardinalities); THEORY.md §V.1 — knowable
+    /// disjoint-mask sum-of-cardinalities); knowable
     /// platform.
     ///
     /// Frontier inspiration: APL's `+/(∼(0=⍵)∧∼(⍵=⌈/⍵))` per-position
@@ -13620,13 +13620,13 @@ impl ResourceLimits {
     /// predicate bodies through the helper becomes a substrate-level
     /// refactor rather than a per-method rewrite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// present-vs-empty dispatch shape at every AXIS-CELL predicate exit
     /// binds at ONE typed named `const fn` on the algebra rather than a
-    /// per-consumer four-line open-coded conditional. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper composes
+    /// per-consumer four-line open-coded conditional.
+    /// Invariant 5 — composition preserves proofs; the helper composes
     /// mechanically under the two-arm identity above with no re-derivation
-    /// at the caller. THEORY.md §V.1 — knowable platform; the empty-arm
+    /// at the caller. Knowable platform; the empty-arm
     /// convention becomes a substrate-level theorem rather than a per-
     /// predicate convention.
     ///
@@ -13742,15 +13742,15 @@ impl ResourceLimits {
     /// silently re-classifying every downstream `_axis_is_singleton`
     /// reading.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SINGLETON-KIND count witness at every `_axis_is_singleton` body
     /// binds at ONE typed named `const fn` on the algebra rather than a
     /// per-consumer two-line `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1 invariant
+    /// [`Self::witness_axis_presence`] helper. Invariant
     /// 5 — composition preserves proofs; the helper composes structurally
     /// through the shipped [`Self::witness_axis_presence`] under the
     /// two-arm dispatch identity above with no re-derivation at the
-    /// caller. THEORY.md §V.1 — knowable platform; the LOWER-ENDPOINT
+    /// caller. Knowable platform; the LOWER-ENDPOINT
     /// cardinality dispatch becomes a substrate-level theorem rather
     /// than a per-predicate convention.
     ///
@@ -13870,15 +13870,15 @@ impl ResourceLimits {
     /// fire immediately at the helper's own pins rather than silently
     /// re-classifying every downstream `_axis_is_multi` reading.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// MULTI-KIND count witness at every `_axis_is_multi` body binds at ONE
     /// typed named `const fn` on the algebra rather than a per-consumer
     /// two-line `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1 invariant 5
+    /// [`Self::witness_axis_presence`] helper. Invariant 5
     /// — composition preserves proofs; the helper composes structurally
     /// through the shipped [`Self::witness_axis_presence`] under the
     /// two-arm dispatch identity above with no re-derivation at the caller.
-    /// THEORY.md §V.1 — knowable platform; the STRICT-ABOVE-LOWER-ENDPOINT
+    /// Knowable platform; the STRICT-ABOVE-LOWER-ENDPOINT
     /// cardinality dispatch becomes a substrate-level theorem rather than a
     /// per-predicate convention.
     ///
@@ -14014,15 +14014,15 @@ impl ResourceLimits {
     /// factored predicate combinator ([`Self::witness_axis_presence`]) rather
     /// than three parallel two-arm matches at every callsite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SATURATED-KIND count witness at every `_axis_is_saturated` body binds
     /// at ONE typed named `const fn` on the algebra rather than a per-consumer
     /// two-line `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1 invariant 5 —
+    /// [`Self::witness_axis_presence`] helper. Invariant 5 —
     /// composition preserves proofs; the helper composes structurally through
     /// the shipped [`Self::witness_axis_presence`] under the two-arm dispatch
-    /// identity above with no re-derivation at the caller. THEORY.md §V.1 —
-    /// knowable platform; the UPPER-ENDPOINT cardinality dispatch becomes a
+    /// identity above with no re-derivation at the caller.
+    /// Knowable platform; the UPPER-ENDPOINT cardinality dispatch becomes a
     /// substrate-level theorem rather than a per-predicate convention, and the
     /// arity constant [`Self::FIELD_COUNT`] is threaded through ONE point on
     /// the algebra rather than four.
@@ -14197,16 +14197,16 @@ impl ResourceLimits {
     /// constant [`Self::FIELD_COUNT`] threads through ONE point on the
     /// algebra rather than four.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// STRICTLY-MULTI-KIND count witness at every
     /// `_axis_is_strictly_multi` body binds at ONE typed named `const fn`
     /// on the algebra rather than a per-consumer two-line `let`-bound
     /// composition through the paired [`Self::witness_axis_presence`]
-    /// helper. THEORY.md §II.1 invariant 5 — composition preserves
+    /// helper. Invariant 5 — composition preserves
     /// proofs; the helper composes structurally through the shipped
     /// [`Self::witness_axis_presence`] under the two-arm dispatch
-    /// identity above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the STRICT-OPEN-INTERIOR cardinality
+    /// identity above with no re-derivation at the caller.
+    /// Knowable platform; the STRICT-OPEN-INTERIOR cardinality
     /// dispatch becomes a substrate-level theorem rather than a
     /// per-predicate convention.
     ///
@@ -14391,16 +14391,16 @@ impl ResourceLimits {
     /// arity constant [`Self::FIELD_COUNT`] threads through ONE point
     /// on the algebra rather than four.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// AT-MOST-HALF-SATURATED-KIND count witness at every
     /// `_axis_is_at_most_half_saturated` body binds at ONE typed named
     /// `const fn` on the algebra rather than a per-consumer two-line
     /// `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1 invariant
+    /// [`Self::witness_axis_presence`] helper. Invariant
     /// 5 — composition preserves proofs; the helper composes structurally
     /// through the shipped [`Self::witness_axis_presence`] under the
     /// two-arm dispatch identity above with no re-derivation at the
-    /// caller. THEORY.md §V.1 — knowable platform; the CLOSED-LOWER-HALF
+    /// caller. Knowable platform; the CLOSED-LOWER-HALF
     /// cardinality dispatch becomes a substrate-level theorem rather
     /// than a per-predicate convention.
     ///
@@ -14603,16 +14603,16 @@ impl ResourceLimits {
     /// constant [`Self::FIELD_COUNT`] threads through ONE point on the
     /// algebra rather than four.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// AT-LEAST-HALF-SATURATED-KIND count witness at every
     /// `_axis_is_at_least_half_saturated` body binds at ONE typed named
     /// `const fn` on the algebra rather than a per-consumer two-line
     /// `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1 invariant
+    /// [`Self::witness_axis_presence`] helper. Invariant
     /// 5 — composition preserves proofs; the helper composes structurally
     /// through the shipped [`Self::witness_axis_presence`] under the
     /// two-arm dispatch identity above with no re-derivation at the
-    /// caller. THEORY.md §V.1 — knowable platform; the CLOSED-UPPER-HALF
+    /// caller. Knowable platform; the CLOSED-UPPER-HALF
     /// cardinality dispatch becomes a substrate-level theorem rather
     /// than a per-predicate convention, closing the (AT-MOST, AT-LEAST)
     /// balance-point half-line partition at the substrate.
@@ -14819,16 +14819,16 @@ impl ResourceLimits {
     /// [`Self::FIELD_COUNT`] threads through ONE point on the algebra
     /// rather than four.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SUB-HALF-SATURATED-KIND count witness at every
     /// `_axis_is_sub_half_saturated` body binds at ONE typed named
     /// `const fn` on the algebra rather than a per-consumer two-line
     /// `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1 invariant
+    /// [`Self::witness_axis_presence`] helper. Invariant
     /// 5 — composition preserves proofs; the helper composes structurally
     /// through the shipped [`Self::witness_axis_presence`] under the
     /// two-arm dispatch identity above with no re-derivation at the
-    /// caller. THEORY.md §V.1 — knowable platform; the STRICT-LOWER-HALF
+    /// caller. Knowable platform; the STRICT-LOWER-HALF
     /// cardinality dispatch becomes a substrate-level theorem rather
     /// than a per-predicate convention, and the STRICT-COMPLEMENT of the
     /// shipped AT-LEAST-HALF combinator is a substrate-level theorem
@@ -15058,16 +15058,16 @@ impl ResourceLimits {
     /// substrate as a first-class TRICHOTOMY-CLOSURE theorem rather than
     /// a per-consumer observation on each of the four axis cells.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SUPER-HALF-SATURATED-KIND count witness at every
     /// `_axis_is_super_half_saturated` body binds at ONE typed named
     /// `const fn` on the algebra rather than a per-consumer two-line
     /// `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1 invariant
+    /// [`Self::witness_axis_presence`] helper. Invariant
     /// 5 — composition preserves proofs; the helper composes structurally
     /// through the shipped [`Self::witness_axis_presence`] under the
     /// two-arm dispatch identity above with no re-derivation at the
-    /// caller. THEORY.md §V.1 — knowable platform; the STRICT-UPPER-HALF
+    /// caller. Knowable platform; the STRICT-UPPER-HALF
     /// cardinality dispatch becomes a substrate-level theorem rather
     /// than a per-predicate convention, and the STRICT-COMPLEMENT of the
     /// shipped AT-MOST-HALF combinator (as well as the DUAL of the
@@ -15237,15 +15237,15 @@ impl ResourceLimits {
     /// the CARDINALITY-EQUALS-TWO literal threads through ONE point on
     /// the algebra rather than four.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// BARELY-MULTI-KIND count witness at every `_axis_is_barely_multi`
     /// body binds at ONE typed named `const fn` on the algebra rather
     /// than a per-consumer two-line `let`-bound composition through the
-    /// paired [`Self::witness_axis_presence`] helper. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper composes
+    /// paired [`Self::witness_axis_presence`] helper.
+    /// Invariant 5 — composition preserves proofs; the helper composes
     /// structurally through the shipped [`Self::witness_axis_presence`]
     /// under the two-arm dispatch identity above with no re-derivation
-    /// at the caller. THEORY.md §V.1 — knowable platform; the
+    /// at the caller. Knowable platform; the
     /// CARDINALITY-EQUALS-TWO cell dispatch becomes a substrate-level
     /// theorem rather than a per-predicate convention, and OPENS the
     /// COUNT-EQUALS-K cell partition (as the LOWER-END peer of the
@@ -15447,16 +15447,16 @@ impl ResourceLimits {
     /// CARDINALITY-EQUALS-FIELD_COUNT-MINUS-ONE literal threads through
     /// ONE point on the algebra rather than four.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// NEARLY-SATURATED-KIND count witness at every
     /// `_axis_is_nearly_saturated` body binds at ONE typed named
     /// `const fn` on the algebra rather than a per-consumer two-line
     /// `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper composes
+    /// [`Self::witness_axis_presence`] helper.
+    /// Invariant 5 — composition preserves proofs; the helper composes
     /// structurally through the shipped [`Self::witness_axis_presence`]
     /// under the two-arm dispatch identity above with no re-derivation
-    /// at the caller. THEORY.md §V.1 — knowable platform; the
+    /// at the caller. Knowable platform; the
     /// CARDINALITY-EQUALS-FIELD_COUNT-MINUS-ONE cell dispatch becomes
     /// a substrate-level theorem rather than a per-predicate
     /// convention, and CLOSES the (SINGLETON, BARELY-MULTI, NEARLY-
@@ -15651,16 +15651,16 @@ impl ResourceLimits {
     /// the CARDINALITY-EQUALS-FIELD_COUNT-DIV-TWO literal threads
     /// through ONE point on the algebra rather than four.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// HALF-SATURATED-KIND count witness at every
     /// `_axis_is_half_saturated` body binds at ONE typed named `const
     /// fn` on the algebra rather than a per-consumer two-line
     /// `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper composes
+    /// [`Self::witness_axis_presence`] helper.
+    /// Invariant 5 — composition preserves proofs; the helper composes
     /// structurally through the shipped [`Self::witness_axis_presence`]
     /// under the two-arm dispatch identity above with no re-derivation
-    /// at the caller. THEORY.md §V.1 — knowable platform; the
+    /// at the caller. Knowable platform; the
     /// CARDINALITY-EQUALS-FIELD_COUNT-DIV-TWO cell dispatch becomes a
     /// substrate-level theorem, EXTENDING the (SINGLETON, BARELY-MULTI,
     /// NEARLY-SATURATED, SATURATED) four-corner atomic cell family with
@@ -15868,17 +15868,17 @@ impl ResourceLimits {
     /// FIELD_COUNT-MINUS-ONE literal threads through ONE point on
     /// the algebra rather than four.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// AT-LEAST-NEARLY-SATURATED-KIND count witness at every
     /// `_axis_is_at_least_nearly_saturated` body binds at ONE typed
     /// named `const fn` on the algebra rather than a per-consumer
     /// two-line `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper
+    /// [`Self::witness_axis_presence`] helper.
+    /// Invariant 5 — composition preserves proofs; the helper
     /// composes structurally through the shipped
     /// [`Self::witness_axis_presence`] under the two-arm dispatch
     /// identity above with no re-derivation at the caller.
-    /// THEORY.md §V.1 — knowable platform; the CARDINALITY-GEQ-
+    /// Knowable platform; the CARDINALITY-GEQ-
     /// FIELD_COUNT-MINUS-ONE cell dispatch becomes a substrate-level
     /// theorem, EXTENDING the AT-LEAST-K count-halfline cohort with
     /// the CLOSED-RIGHT-ENDPOINT bracket around SATURATED at the
@@ -16084,17 +16084,17 @@ impl ResourceLimits {
     /// substrate can point to WITHOUT re-deriving from the STRICT
     /// UPPER half endpoint at every callsite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// BARELY-SUPER-HALF-SATURATED-KIND count witness at every
     /// `_axis_is_barely_super_half_saturated` body binds at ONE typed
     /// named `const fn` on the algebra rather than a per-consumer
     /// two-line `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper
+    /// [`Self::witness_axis_presence`] helper.
+    /// Invariant 5 — composition preserves proofs; the helper
     /// composes structurally through the shipped
     /// [`Self::witness_axis_presence`] under the two-arm dispatch
-    /// identity above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the CARDINALITY-EQUALS-FIELD_COUNT-
+    /// identity above with no re-derivation at the caller.
+    /// Knowable platform; the CARDINALITY-EQUALS-FIELD_COUNT-
     /// DIV-TWO-PLUS-ONE cell dispatch becomes a substrate-level
     /// theorem, EXTENDING the COUNT-EQUALS-K atomic cell family with
     /// the ONE-ABOVE-BALANCE-POINT slot as the SUPER-HALF-side twin
@@ -16305,17 +16305,17 @@ impl ResourceLimits {
     /// (BARELY-SUB-HALF-SATURATED, BARELY-SUPER-HALF-SATURATED)
     /// STRAIGHTLY-STRADDLING-BALANCE-POINT pair at the substrate.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// BARELY-SUB-HALF-SATURATED-KIND count witness at every
     /// `_axis_is_barely_sub_half_saturated` body binds at ONE typed
     /// named `const fn` on the algebra rather than a per-consumer
     /// two-line `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper
+    /// [`Self::witness_axis_presence`] helper.
+    /// Invariant 5 — composition preserves proofs; the helper
     /// composes structurally through the shipped
     /// [`Self::witness_axis_presence`] under the two-arm dispatch
-    /// identity above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the CARDINALITY-EQUALS-FIELD_COUNT-
+    /// identity above with no re-derivation at the caller.
+    /// Knowable platform; the CARDINALITY-EQUALS-FIELD_COUNT-
     /// MINUS-ONE-DIV-TWO cell dispatch becomes a substrate-level
     /// theorem, EXTENDING the COUNT-EQUALS-K atomic cell family with
     /// the HIGHEST-SUB-HALF slot as the SUB-HALF-side twin of the
@@ -16537,17 +16537,17 @@ impl ResourceLimits {
     /// (AT-MOST-BARELY-MULTI, AT-LEAST-NEARLY-SATURATED) CLOSED
     /// TWO-CELL ENDPOINT-BRACKET pair at the substrate.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// AT-MOST-BARELY-MULTI-KIND count witness at every
     /// `_axis_is_at_most_barely_multi` body binds at ONE typed named
     /// `const fn` on the algebra rather than a per-consumer two-line
     /// `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper
+    /// [`Self::witness_axis_presence`] helper.
+    /// Invariant 5 — composition preserves proofs; the helper
     /// composes structurally through the shipped
     /// [`Self::witness_axis_presence`] under the two-arm dispatch
-    /// identity above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the CLOSED-LEFT-ENDPOINT-BRACKET-
+    /// identity above with no re-derivation at the caller.
+    /// Knowable platform; the CLOSED-LEFT-ENDPOINT-BRACKET-
     /// AROUND-BARELY-MULTI cardinality dispatch becomes a substrate-
     /// level theorem, EXTENDING the CLOSED-BRACKET half-line family
     /// with the LEFT-ENDPOINT slot as the LEFT-endpoint DUAL of the
@@ -16784,17 +16784,17 @@ impl ResourceLimits {
     /// endpoint bracket, extending the BRACKET-CLOSURE half-line
     /// family with the STRICT-UPPER slot.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// PARTIALLY-SATURATED-KIND count witness at every
     /// `_axis_is_partially_saturated` body binds at ONE typed named
     /// `const fn` on the algebra rather than a per-consumer two-line
     /// `let`-bound composition through the paired
-    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper
+    /// [`Self::witness_axis_presence`] helper.
+    /// Invariant 5 — composition preserves proofs; the helper
     /// composes structurally through the shipped
     /// [`Self::witness_axis_presence`] under the two-arm dispatch
-    /// identity above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the STRICT-UPPER-BRACKET-AROUND-
+    /// identity above with no re-derivation at the caller.
+    /// Knowable platform; the STRICT-UPPER-BRACKET-AROUND-
     /// SATURATED cardinality dispatch becomes a substrate-level
     /// theorem, extending the BRACKET-CLOSURE half-line family with
     /// the STRICT-UPPER slot as the STRICT-BRACKET DUAL of
@@ -16983,15 +16983,15 @@ impl ResourceLimits {
     /// axis over, EXTENDING the substrate's cell family with the
     /// TWO-ATOMIC-ENDPOINT-UNION slot.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SATURATED-OR-SINGLETON-KIND count witness binds at ONE typed
     /// named `const fn` on the algebra rather than a per-consumer
     /// two-operand `||` composition of the paired atomic-endpoint
-    /// witnesses. THEORY.md §II.1 invariant 5 — composition preserves
+    /// witnesses. Invariant 5 — composition preserves
     /// proofs; the helper composes structurally through the shipped
     /// [`Self::witness_axis_presence`] under the two-arm dispatch
     /// identity above with no re-derivation at the caller.
-    /// THEORY.md §V.1 — knowable platform; the DISJOINT-UNION of the
+    /// Knowable platform; the DISJOINT-UNION of the
     /// two atomic ENDPOINT cells becomes a substrate-level theorem,
     /// EXTENDING the algebra with the SINGLE-FIRE-POLES slot as the
     /// POINTWISE COMPLEMENT of [`Self::witness_count_strictly_multi`]
@@ -17173,15 +17173,15 @@ impl ResourceLimits {
     /// substrate's cell family with the TWO-ATOMIC-ADJACENT-ENDPOINT-
     /// UNION slot.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// BMNS-KIND count witness binds at ONE typed named `const fn` on
     /// the algebra rather than a per-consumer two-operand `||`
     /// composition of the paired atomic-adjacent-endpoint witnesses.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// helper composes structurally through the shipped
     /// [`Self::witness_axis_presence`] under the two-arm dispatch
-    /// identity above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the DISJOINT-UNION of the two atomic
+    /// identity above with no re-derivation at the caller.
+    /// Knowable platform; the DISJOINT-UNION of the two atomic
     /// ADJACENT-TO-ENDPOINT cells becomes a substrate-level theorem,
     /// EXTENDING the algebra with the SINGLE-FIRE-ADJACENT-POLES slot
     /// as the ADJACENT-ENDPOINT peer of
@@ -17400,15 +17400,15 @@ impl ResourceLimits {
     /// EXTENDING the substrate's cell family with the FOUR-ATOMIC-CELL-
     /// UNION slot.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// AT-MOST-BMNS-KIND count witness binds at ONE typed named `const
     /// fn` on the algebra rather than a per-consumer two-operand `||`
     /// composition of the paired closed-bracket witnesses or a four-
-    /// operand disjunction two atomic atoms deep. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper composes
+    /// operand disjunction two atomic atoms deep.
+    /// Invariant 5 — composition preserves proofs; the helper composes
     /// structurally through the shipped [`Self::witness_axis_presence`]
     /// under the two-arm dispatch identity above with no re-derivation at
-    /// the caller. THEORY.md §V.1 — knowable platform; the LATTICE JOIN
+    /// the caller. Knowable platform; the LATTICE JOIN
     /// of the two shipped closed brackets becomes a substrate-level
     /// theorem, EXTENDING the algebra with the FOUR-CELL BOUNDARY-ZONE
     /// slot as the LATTICE JOIN of [`Self::witness_count_at_most_barely_multi`]
@@ -17551,17 +17551,17 @@ impl ResourceLimits {
     /// fire immediately at the helper's own pins rather than silently
     /// re-classifying every downstream axial reader.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// STRICT-INTERIOR-MIDDLE-KIND count witness at every axial predicate
     /// body binds at ONE typed named `const fn` on the algebra rather
     /// than a per-consumer DE MORGAN composition through the paired
     /// [`Self::negate_axis_witness`] and
     /// [`Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated`]
-    /// helpers. THEORY.md §II.1 invariant 5 — composition preserves
+    /// helpers. Invariant 5 — composition preserves
     /// proofs; the helper composes structurally through the shipped
     /// [`Self::witness_axis_presence`] under the two-arm dispatch
-    /// identity above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the STRICT-INTERIOR-MIDDLE-KIND
+    /// identity above with no re-derivation at the caller.
+    /// Knowable platform; the STRICT-INTERIOR-MIDDLE-KIND
     /// cardinality dispatch becomes a substrate-level theorem rather
     /// than a per-predicate convention.
     ///
@@ -17652,13 +17652,13 @@ impl ResourceLimits {
     /// through the helper becomes a substrate-level refactor rather than a
     /// per-method rewrite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// presence-preserving negation shape at every AXIS-CELL DE MORGAN
     /// complement predicate exit binds at ONE typed named `const fn` on the
     /// algebra rather than a per-consumer four-line open-coded match.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// helper composes mechanically under the two-arm identity above with no
-    /// re-derivation at the caller. THEORY.md §V.1 — knowable platform; the
+    /// re-derivation at the caller. Knowable platform; the
     /// empty-arm preservation becomes a substrate-level theorem rather than
     /// a per-predicate convention.
     ///
@@ -17816,17 +17816,17 @@ impl ResourceLimits {
     /// witness composes through this same primitive with its paired
     /// atomic count-witness constituents.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// presence-conjunctive JOIN shape at every COMPOUND-OR count
     /// witness body binds at ONE typed named `const fn` on the algebra
     /// rather than a per-witness one-line inline `||` composition
-    /// buried inside a `witness_axis_presence` call. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper composes
+    /// buried inside a `witness_axis_presence` call.
+    /// Invariant 5 — composition preserves proofs; the helper composes
     /// mechanically under the two-arm identity above with no re-
     /// derivation at the caller, and every compound witness that adopts
     /// it inherits the commutativity, associativity, idempotence, and
-    /// `Some(true)`-absorption theorems for free. THEORY.md §V.1 —
-    /// knowable platform; the compound-witness-is-LATTICE-JOIN-of-
+    /// `Some(true)`-absorption theorems for free.
+    /// Knowable platform; the compound-witness-is-LATTICE-JOIN-of-
     /// atomic-witnesses fact becomes a substrate-level theorem rather
     /// than a per-witness convention.
     ///
@@ -17929,13 +17929,13 @@ impl ResourceLimits {
     /// bodies through the helper becomes a substrate-level refactor rather
     /// than a per-method rewrite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// presence-preserving zero-projection shape at every AXIS-CELL
     /// CONTIGUITY predicate exit binds at ONE typed named `const fn` on
     /// the algebra rather than a per-consumer four-line open-coded match.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// helper composes mechanically under the two-arm identity above with
-    /// no re-derivation at the caller. THEORY.md §V.1 — knowable platform;
+    /// no re-derivation at the caller. Knowable platform;
     /// the empty-arm preservation becomes a substrate-level theorem rather
     /// than a per-predicate convention.
     ///
@@ -18039,13 +18039,13 @@ impl ResourceLimits {
     /// semantic change; any future ARM-AGNOSTIC LEAD projection over a
     /// `usize` distance tally composes through this same primitive.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// zero-signalling dispatch shape at every ARM-AGNOSTIC LEAD projection
     /// body binds at ONE typed named `const fn` on the algebra rather than
-    /// a per-projection four-line open-coded conditional. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper composes
+    /// a per-projection four-line open-coded conditional.
+    /// Invariant 5 — composition preserves proofs; the helper composes
     /// mechanically under the two-arm identity above with no re-derivation
-    /// at the caller. THEORY.md §V.1 — knowable platform; the zero-arm
+    /// at the caller. Knowable platform; the zero-arm
     /// preservation becomes a substrate-level theorem rather than a
     /// per-projection convention.
     ///
@@ -18198,15 +18198,15 @@ impl ResourceLimits {
     /// projection body, whose behavior on such input is undefined by
     /// the same convention.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// sign-split absolute-difference shape at every WHOLE-POSTURE
     /// SIGNED-KIND DIRECTED-CARDINAL projection exit binds at ONE typed
     /// named `const fn` on the algebra rather than a per-consumer four-
-    /// line open-coded body. THEORY.md §II.1 invariant 5 — composition
+    /// line open-coded body. Invariant 5 — composition
     /// preserves proofs; the helper composes mechanically under the two-
     /// arm sign-dispatch identity above with no re-derivation at the
     /// caller, and both swept callsites preserve their const-fn
-    /// evaluability pins verbatim. THEORY.md §V.1 — knowable platform;
+    /// evaluability pins verbatim. Knowable platform;
     /// the sign-split absolute-difference dispatch becomes a substrate-
     /// level theorem rather than a per-projection convention.
     ///
@@ -18326,15 +18326,15 @@ impl ResourceLimits {
     /// the helper becomes a substrate-level refactor rather than a
     /// per-method rewrite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// absolute-difference reduction at every WHOLE-POSTURE UNDIRECTED-
     /// KIND ARM-AGNOSTIC CARDINAL projection body binds at ONE typed
     /// named `const fn` on the algebra rather than a per-projection
-    /// open-coded `.abs_diff(...)` chain. THEORY.md §II.1 invariant 5 —
+    /// open-coded `.abs_diff(...)` chain. Invariant 5 —
     /// composition preserves proofs; the helper composes mechanically
     /// under the bare-body identity above with no re-derivation at the
     /// caller, and both swept callsites preserve their const-fn
-    /// evaluability pins verbatim. THEORY.md §V.1 — knowable platform;
+    /// evaluability pins verbatim. Knowable platform;
     /// the commutative absolute-difference dispatch becomes a substrate-
     /// level theorem rather than a per-projection convention.
     ///
@@ -18482,16 +18482,16 @@ impl ResourceLimits {
     /// the helper becomes a substrate-level refactor rather than a
     /// per-method rewrite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// guarded strict-dominance subtraction shape at every WHOLE-
     /// POSTURE ARM-SELECTING DIRECTED-LEAD projection body binds at
     /// ONE typed named `const fn` on the algebra rather than a per-
-    /// projection four-line open-coded conditional. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the helper composes
+    /// projection four-line open-coded conditional.
+    /// Invariant 5 — composition preserves proofs; the helper composes
     /// mechanically under the bare-body identity above with no re-
     /// derivation at the caller, and all four swept callsites preserve
-    /// their const-fn evaluability pins verbatim. THEORY.md §V.1 —
-    /// knowable platform; the strict-dominance directed-lead dispatch
+    /// their const-fn evaluability pins verbatim.
+    /// Knowable platform; the strict-dominance directed-lead dispatch
     /// becomes a substrate-level theorem rather than a per-projection
     /// convention.
     ///
@@ -18652,15 +18652,15 @@ impl ResourceLimits {
     /// becomes a substrate-level refactor rather than a per-method
     /// rewrite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// strict-dominance-verdict shape at every WHOLE-POSTURE ARM-
     /// SELECTING STRICT-MAJORITY predicate body binds at ONE typed
     /// named `const fn` on the algebra rather than a per-predicate
-    /// one-line open-coded `>` comparison. THEORY.md §II.1 invariant 5
+    /// one-line open-coded `>` comparison. Invariant 5
     /// — composition preserves proofs; the helper composes mechanically
     /// under the bare-body identity above with no re-derivation at the
     /// caller, and all four swept callsites preserve their const-fn
-    /// evaluability pins verbatim. THEORY.md §V.1 — knowable platform;
+    /// evaluability pins verbatim. Knowable platform;
     /// the strict-dominance-verdict dispatch becomes a substrate-level
     /// theorem rather than a per-predicate convention.
     ///
@@ -18816,15 +18816,15 @@ impl ResourceLimits {
     /// becomes a substrate-level refactor rather than a per-method
     /// rewrite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// equal-arity verdict shape at every WHOLE-POSTURE BALANCE
     /// predicate body binds at ONE typed named `const fn` on the algebra
     /// rather than a per-predicate one-line open-coded `==` comparison.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// helper composes mechanically under the bare-body identity above
     /// with no re-derivation at the caller, and both swept callsites
-    /// preserve their const-fn evaluability pins verbatim. THEORY.md
-    /// §V.1 — knowable platform; the equal-arity-verdict dispatch
+    /// preserve their const-fn evaluability pins verbatim.
+    /// Knowable platform; the equal-arity-verdict dispatch
     /// becomes a substrate-level theorem rather than a per-predicate
     /// convention.
     ///
@@ -19001,15 +19001,15 @@ impl ResourceLimits {
     /// becomes a substrate-level refactor rather than a per-method
     /// rewrite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// unequal-arity verdict shape at every WHOLE-POSTURE MAJORITY-
     /// EXISTENCE predicate body binds at ONE typed named `const fn` on
     /// the algebra rather than a per-predicate one-line open-coded
-    /// `!=` comparison. THEORY.md §II.1 invariant 5 — composition
+    /// `!=` comparison. Invariant 5 — composition
     /// preserves proofs; the helper composes mechanically under the
     /// bare-body identity above with no re-derivation at the caller,
     /// and both swept callsites preserve their const-fn evaluability
-    /// pins verbatim. THEORY.md §V.1 — knowable platform; the
+    /// pins verbatim. Knowable platform; the
     /// unequal-arity-verdict dispatch becomes a substrate-level theorem
     /// rather than a per-predicate convention.
     ///
@@ -19194,15 +19194,15 @@ impl ResourceLimits {
     /// single lifted `Ordering` — a body regression that dropped the
     /// balance leg cannot compile at any consumer.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// TRICHOTOMY-SIGNUM shape at every WHOLE-POSTURE `Ordering`-KIND
     /// projection body binds at ONE typed named `const fn` on the
     /// algebra rather than a per-projection open-coded three-leg
-    /// cascade. THEORY.md §II.1 invariant 5 — composition preserves
+    /// cascade. Invariant 5 — composition preserves
     /// proofs; the helper composes mechanically under the bare-body
     /// identity above with no re-derivation at the caller, and both
     /// swept callsites preserve their const-fn evaluability pins
-    /// verbatim. THEORY.md §V.1 — knowable platform; the TRICHOTOMY-
+    /// verbatim. Knowable platform; the TRICHOTOMY-
     /// SIGNUM dispatch becomes a substrate-level theorem rather than
     /// a per-projection convention.
     ///
@@ -19394,15 +19394,15 @@ impl ResourceLimits {
     /// against the single lifted `Ordering` — a body regression that
     /// dropped the `Greater` arm cannot compile at the helper.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// LEXICOGRAPHIC-COMPOSITION shape at every WHOLE-POSTURE
     /// composed-verdict projection body binds at ONE typed named
     /// `const fn` on the algebra rather than a per-projection open-
-    /// coded three-arm match. THEORY.md §II.1 invariant 5 —
+    /// coded three-arm match. Invariant 5 —
     /// composition preserves proofs; the helper composes mechanically
     /// under the bare-body identity above with no re-derivation at
     /// the caller, and both swept callsites preserve their const-fn
-    /// evaluability pins verbatim. THEORY.md §V.1 — knowable
+    /// evaluability pins verbatim. Knowable
     /// platform; the SHORT-CIRCUIT-ON-FIRST-NON-EQUAL dispatch
     /// becomes a substrate-level theorem rather than a per-projection
     /// convention.
@@ -19588,15 +19588,15 @@ impl ResourceLimits {
     /// RESOURCE-LATTICE `most_permissive` lattice-law pins. Pinned via
     /// `resource_limits_max_of_count_pair_agrees_with_resource_lattice_join_field_folds`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// ARM-AGNOSTIC MAX-fold shape at every WHOLE-POSTURE MAX-fold
     /// projection body binds at ONE typed named `const fn` on the
     /// algebra rather than a per-projection open-coded four-line split.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// helper composes mechanically under the bare-body identity above
     /// with no re-derivation at the caller, and both swept callsites
-    /// preserve their const-fn evaluability pins verbatim. THEORY.md
-    /// §V.1 — knowable platform; the MAX-OF-TWO-ARMS fold becomes a
+    /// preserve their const-fn evaluability pins verbatim.
+    /// Knowable platform; the MAX-OF-TWO-ARMS fold becomes a
     /// substrate-level theorem rather than a per-projection convention.
     ///
     /// Frontier inspiration: Haskell's `max` on `Ord a => a -> a -> a`
@@ -19799,15 +19799,15 @@ impl ResourceLimits {
     /// RESOURCE-LATTICE `strictest` lattice-law pins. Pinned via
     /// `resource_limits_min_of_count_pair_agrees_with_resource_lattice_meet_field_folds`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// ARM-AGNOSTIC MIN-fold shape at every WHOLE-POSTURE MIN-fold
     /// projection body binds at ONE typed named `const fn` on the
     /// algebra rather than a per-projection open-coded four-line split.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// helper composes mechanically under the bare-body identity above
     /// with no re-derivation at the caller, and both swept callsites
-    /// preserve their const-fn evaluability pins verbatim. THEORY.md
-    /// §V.1 — knowable platform; the MIN-OF-TWO-ARMS fold becomes a
+    /// preserve their const-fn evaluability pins verbatim.
+    /// Knowable platform; the MIN-OF-TWO-ARMS fold becomes a
     /// substrate-level theorem rather than a per-projection convention.
     ///
     /// Frontier inspiration: Haskell's `min` on `Ord a => a -> a -> a`
@@ -20001,18 +20001,18 @@ impl ResourceLimits {
     /// through ONE typed named `const fn` rather than a per-consumer
     /// sign-split.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SIGNED-KIND MAX-fold shape at every WHOLE-POSTURE SIGNED-MAX
     /// projection body binds at ONE typed named `const fn` on the
     /// algebra rather than a per-projection open-coded five-line sign-
-    /// split. THEORY.md §II.1 invariant 5 — composition preserves
+    /// split. Invariant 5 — composition preserves
     /// proofs; the helper composes mechanically under the bare-body
     /// identity above with no re-derivation at the caller, and both
     /// swept callsites preserve their const-fn evaluability pins
     /// verbatim. The (signed_max, signed_diff) SIGNED-KIND pair mirrors
     /// the (max, abs-diff) ARM-AGNOSTIC pair one SIGNEDNESS axis over,
     /// closing the (CENTRAL-TENDENCY, DISPERSION) column on BOTH
-    /// SIGNEDNESS legs. THEORY.md §V.1 — knowable platform; the
+    /// SIGNEDNESS legs. Knowable platform; the
     /// SIGNED-MAX-OF-TWO-ARMS fold becomes a substrate-level theorem
     /// rather than a per-projection convention.
     ///
@@ -20194,17 +20194,17 @@ impl ResourceLimits {
     /// through ONE typed named `const fn` rather than a per-consumer
     /// sign-split.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SIGNED-KIND MIN-fold shape at every WHOLE-POSTURE SIGNED-MIN
     /// projection body binds at ONE typed named `const fn` on the
     /// algebra rather than a per-projection open-coded five-line sign-
-    /// split. THEORY.md §II.1 invariant 5 — composition preserves
+    /// split. Invariant 5 — composition preserves
     /// proofs; the helper composes mechanically under the bare-body
     /// identity above with no re-derivation at the caller. The
     /// (signed_max, signed_min) SIGNED-KIND CENTRAL-TENDENCY pair
     /// mirrors the (max, min) ARM-AGNOSTIC pair one SIGNEDNESS axis
     /// over, closing the CENTRAL-TENDENCY column on BOTH SIGNEDNESS
-    /// legs. THEORY.md §V.1 — knowable platform; the SIGNED-MIN-OF-
+    /// legs. Knowable platform; the SIGNED-MIN-OF-
     /// TWO-ARMS fold becomes a substrate-level theorem rather than a
     /// per-projection convention.
     ///
@@ -20336,14 +20336,14 @@ impl ResourceLimits {
     /// projection body, whose behavior on such input is undefined by the
     /// same convention.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// joint-presence bracket-width shape at every AXIS-CELL `Option<usize>`-
     /// ENDPOINT-DERIVED projection exit binds at ONE typed named `const
     /// fn` on the algebra rather than a per-consumer four-line open-coded
-    /// match. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// match. Invariant 5 — composition preserves proofs;
     /// the helper composes mechanically under the two-arm joint-dispatch
-    /// identity above with no re-derivation at the caller. THEORY.md
-    /// §V.1 — knowable platform; the joint-Some AND empty-arm dispatch
+    /// identity above with no re-derivation at the caller.
+    /// Knowable platform; the joint-Some AND empty-arm dispatch
     /// becomes a substrate-level theorem rather than a per-projection
     /// convention.
     ///
@@ -20500,17 +20500,17 @@ impl ResourceLimits {
     /// partition bracket-widths, cross-posture disagreement bracket-
     /// widths) composes through this same primitive.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the mask-
+    /// Anchor: invariant 3 — typed exit; the mask-
     /// input BRACKET-WIDTH shape at every AXIS-CELL projection body
     /// binds at ONE typed named `const fn` on the algebra rather than a
     /// per-projection three-primitive re-composition of the paired
     /// POSITIONAL endpoints through
-    /// [`Self::derive_axis_endpoint_span`]. THEORY.md §II.1 invariant 5
+    /// [`Self::derive_axis_endpoint_span`]. Invariant 5
     /// — composition preserves proofs; the helper composes mechanically
     /// under the composition identity above with no re-derivation at the
     /// caller, and the mask-level POPCOUNT lower-bound inherits to every
-    /// AXIS-CELL projection through its adoption. THEORY.md §V.1 —
-    /// knowable platform; the mask-endpoint-span reduction becomes a
+    /// AXIS-CELL projection through its adoption.
+    /// Knowable platform; the mask-endpoint-span reduction becomes a
     /// substrate-level theorem rather than a per-projection convention.
     ///
     /// Frontier inspiration: APL's `1 + (⌈/⍸⍵) - (⌊/⍸⍵)` — the closed-
@@ -20643,14 +20643,14 @@ impl ResourceLimits {
     /// posture as every shipped BRACKET-GAP projection body, whose behavior
     /// on such input is undefined by the same convention.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// presence-preserving subtract-constant shape at every AXIS-CELL
     /// `(Option<usize>-SPAN, usize-COUNT)`-DERIVED bracket-gap projection
     /// exit binds at ONE typed named `const fn` on the algebra rather than a
-    /// per-consumer four-line open-coded match. THEORY.md §II.1 invariant 5
+    /// per-consumer four-line open-coded match. Invariant 5
     /// — composition preserves proofs; the helper composes mechanically
     /// under the two-arm dispatch identity above with no re-derivation at
-    /// the caller. THEORY.md §V.1 — knowable platform; the mixed-input
+    /// the caller. Knowable platform; the mixed-input
     /// (Option-carrier, plain-tally) presence-preserving subtract-constant
     /// becomes a substrate-level theorem rather than a per-projection
     /// convention.
@@ -20759,15 +20759,15 @@ impl ResourceLimits {
     /// time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
     /// .count_mixity_axes() == 0);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// MIXITY-depth tally is a named typed exit rather than an inline
     /// `min(a.count_polar_axes(), a.count_interior_axes())` per-consumer
-    /// composition. THEORY.md §II.1 invariant 5 — composition preserves
+    /// composition. Invariant 5 — composition preserves
     /// proofs; the (count_mixity_axes, count_uniformity_axes) arithmetic
     /// pair refines the just-shipped (is_strictly_mixed, is_axially_uniform)
     /// boolean pair one QUANTIFIER-KIND axis over with the LOAD-BEARING
     /// MIXITY-DEPTH-SUM identity `count_mixity + count_uniformity ==
-    /// FIELD_COUNT` on every posture. THEORY.md §V.1 — knowable platform.
+    /// FIELD_COUNT` on every posture. Knowable platform.
     ///
     /// Frontier inspiration: classical order theory's canonical "distance
     /// to a uniform lattice endomorphism" lifted to whole-posture
@@ -20869,7 +20869,7 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
     /// .count_uniformity_axes() == ResourceLimits::FIELD_COUNT);`).
     ///
-    /// Theory anchor: same as [`Self::count_mixity_axes`], on the DUAL
+    /// Anchor: same as [`Self::count_mixity_axes`], on the DUAL
     /// arm-selection combinator. The (count_mixity_axes,
     /// count_uniformity_axes) pair jointly ARITHMETIZES the (mixity,
     /// uniformity) axial partition of the whole-posture universe with the
@@ -21010,17 +21010,17 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
     /// .polar_is_majority());`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// polar-strict-majority verdict is a named typed exit rather than
     /// an inline `self.count_polar_axes() > self.count_interior_axes()`
-    /// per-consumer comparison. THEORY.md §II.1 invariant 5 —
+    /// per-consumer comparison. Invariant 5 —
     /// composition preserves proofs; the (polar_is_majority,
     /// interior_is_majority) pair opens the MAJORITY-KIND column past
     /// the just-closed (count_mixity_axes, count_uniformity_axes) MIN-
     /// MAX arithmetic-depth column on the SAME two-arm tally pair with
     /// the LOAD-BEARING STRICT-TOTAL-ORDER trichotomy that partitions
     /// every posture into (polar-majority, interior-majority, tie).
-    /// THEORY.md §V.1 — knowable platform; the MAJORITY-KIND verdict
+    /// Knowable platform; the MAJORITY-KIND verdict
     /// is a TYPE-level operation on the posture algebra returning a
     /// `const`-evaluable `bool`.
     ///
@@ -21128,7 +21128,7 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(DEFAULT_RESOURCE_LIMITS
     /// .interior_is_majority());`).
     ///
-    /// Theory anchor: same as [`Self::polar_is_majority`], on the DUAL
+    /// Anchor: same as [`Self::polar_is_majority`], on the DUAL
     /// arm-selection combinator. The (polar_is_majority,
     /// interior_is_majority) pair jointly carries the STRICT-TOTAL-ORDER
     /// trichotomy on the two-arm tally pair — LOAD-BEARING because the
@@ -21257,16 +21257,16 @@ impl ResourceLimits {
     /// time (`const _: () = assert!(!EMPTY_RESOURCE_LIMITS
     /// .is_axially_balanced());`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// balance verdict is a named typed `bool` exit rather than an
     /// inline `self.count_polar_axes() == self.count_interior_axes()`
-    /// per-consumer comparison. THEORY.md §II.1 invariant 5 —
+    /// per-consumer comparison. Invariant 5 —
     /// composition preserves proofs; the (is_axially_balanced,
     /// has_majority_axis) pair CLOSES the MAJORITY-KIND column past the
     /// just-shipped (polar_is_majority, interior_is_majority) STRICT-
     /// INEQUALITY pair on the SAME two-arm tally pair with the LOAD-
-    /// BEARING EQUALITY leg the pair jointly rejects. THEORY.md §V.1 —
-    /// knowable platform; the MAJORITY-KIND verdict is a TYPE-level
+    /// BEARING EQUALITY leg the pair jointly rejects.
+    /// Knowable platform; the MAJORITY-KIND verdict is a TYPE-level
     /// operation on the posture algebra returning a `const`-evaluable
     /// `bool`.
     ///
@@ -21402,7 +21402,7 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
     /// .has_majority_axis());`).
     ///
-    /// Theory anchor: same as [`Self::is_axially_balanced`], on the
+    /// Anchor: same as [`Self::is_axially_balanced`], on the
     /// COMPLEMENT half of the MAJORITY-EXISTENCE partition. The
     /// (is_axially_balanced, has_majority_axis) pair jointly closes the
     /// MAJORITY-KIND column past the just-shipped (polar_is_majority,
@@ -21552,19 +21552,19 @@ impl ResourceLimits {
     /// time (`const _: () = assert!(matches!(EMPTY_RESOURCE_LIMITS
     /// .polar_lead(), Some(6)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// polar-directed-lead projection is a named typed `Option<usize>`
     /// exit rather than an inline `if self.count_polar_axes() > self
     /// .count_interior_axes() { Some(self.count_polar_axes() - self
     /// .count_interior_axes()) } else { None }` per-consumer guarded
-    /// subtraction. THEORY.md §II.1 invariant 5 — composition
+    /// subtraction. Invariant 5 — composition
     /// preserves proofs; the (polar_lead, interior_lead) pair opens
     /// the CARDINAL-DISTANCE column past the just-closed BOOLEAN
     /// COMPARISON columns (STRICT-INEQUALITY MAJORITY,
     /// EQUALITY-KIND BALANCED, De Morgan MAJORITY-EXISTENCE) on the
     /// SAME two-arm tally pair with the LOAD-BEARING CARDINAL
     /// magnitude the boolean STRICT-INEQUALITY verdict structurally
-    /// cannot access. THEORY.md §V.1 — knowable platform; the
+    /// cannot access. Knowable platform; the
     /// CARDINAL-DISTANCE verdict is a TYPE-level operation on the
     /// posture algebra returning a `const`-evaluable `Option<usize>`.
     ///
@@ -21720,7 +21720,7 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(matches!(
     /// DEFAULT_RESOURCE_LIMITS.interior_lead(), Some(6)));`).
     ///
-    /// Theory anchor: same as [`Self::polar_lead`], on the DUAL
+    /// Anchor: same as [`Self::polar_lead`], on the DUAL
     /// arm-selection combinator. The (polar_lead, interior_lead) pair
     /// jointly opens the CARDINAL-DISTANCE column past the just-closed
     /// BOOLEAN COMPARISON columns on the SAME two-arm tally pair —
@@ -21844,19 +21844,19 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact skew at compile time
     /// (`const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_skew() == 6);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// UNDIRECTED CARDINAL projection is a named typed `usize` exit
     /// through the substrate primitive [`Self::absolute_count_difference`]
     /// rather than an inline `self.count_polar_axes()
     /// .abs_diff(self.count_interior_axes())` per-consumer combinator.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// (axial_skew, majority_lead) pair CLOSES the CARDINAL-DISTANCE
     /// column past the just-opened (polar_lead, interior_lead) DIRECTED-
     /// LEAD pair on the SAME two-arm tally with the LOAD-BEARING ARM-
     /// AGNOSTIC magnitude — the CARDINAL projection reading the SIGNED
     /// integer difference through its ABSOLUTE-VALUE fold that the
     /// DIRECTED pair expresses only through two `Option<usize>` exits.
-    /// THEORY.md §V.1 — knowable platform; the UNDIRECTED CARDINAL
+    /// Knowable platform; the UNDIRECTED CARDINAL
     /// verdict is a TYPE-level operation on the posture algebra
     /// returning a `const`-evaluable `usize`.
     ///
@@ -21992,7 +21992,7 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.majority_lead(), Some(6)));`).
     ///
-    /// Theory anchor: same as [`Self::axial_skew`], on the DUAL
+    /// Anchor: same as [`Self::axial_skew`], on the DUAL
     /// `Option<usize>` shape. The (axial_skew, majority_lead) pair
     /// jointly CLOSES the CARDINAL-DISTANCE column past the just-opened
     /// (polar_lead, interior_lead) DIRECTED-LEAD pair — LOAD-BEARING
@@ -22153,16 +22153,16 @@ impl ResourceLimits {
     /// at compile time (`const _: () = assert!(
     /// EMPTY_RESOURCE_LIMITS.axial_signed_skew() == 6);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SIGNED CARDINAL projection is a named typed `isize` exit
     /// rather than an inline sign-split subtraction per consumer.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// Invariant 5 — composition preserves proofs;
     /// the SIGNED-KIND peer CLOSES the SIGNEDNESS axis on the
     /// CARDINAL-DISTANCE column with the LOAD-BEARING ABSOLUTE-VALUE
     /// fold agreeing with [`Self::axial_skew`] and the SIGN
     /// discriminating the polar-majority / interior-majority arms
     /// the UNDIRECTED reading structurally cannot access.
-    /// THEORY.md §V.1 — knowable platform; the SIGNED CARDINAL
+    /// Knowable platform; the SIGNED CARDINAL
     /// verdict is a TYPE-level operation on the posture algebra
     /// returning a `const`-evaluable `isize`.
     ///
@@ -22262,16 +22262,16 @@ impl ResourceLimits {
     /// time as a build-break (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.axial_ordering(), Ordering::Greater));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SIGNUM-TRICHOTOMY reading is a named typed exit rather than an
     /// inline three-way if-else per consumer, and the exit type is the
     /// std-canonical [`Ordering`] sum whose match-exhaustiveness rustc
-    /// verifies at every downstream dispatch site. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the SIGNUM projection
+    /// verifies at every downstream dispatch site.
+    /// Invariant 5 — composition preserves proofs; the SIGNUM projection
     /// opens the SIGNUM-TRICHOTOMY-KIND (`Ordering`) column on the
     /// COMPOUND (polar, interior) tally pair peer to the already-shipped
     /// (STRICT-INEQUALITY-BOOLEAN, EQUALITY-BOOLEAN, SIGNED-CARDINAL,
-    /// UNSIGNED-CARDINAL) projections. THEORY.md §V.1 — knowable
+    /// UNSIGNED-CARDINAL) projections. Knowable
     /// platform; the SIGNUM verdict is a TYPE-level operation on the
     /// posture algebra returning a `const`-evaluable [`Ordering`].
     ///
@@ -22423,11 +22423,11 @@ impl ResourceLimits {
     /// verdict at compile time (`const _: () = assert!(
     /// EMPTY_RESOURCE_LIMITS.bottom_is_majority());`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic-bottom-strict-majority verdict is a named typed exit
     /// rather than an inline `self.count_bottom_axes() >
-    /// self.count_top_axes()` per-consumer comparison. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the
+    /// self.count_top_axes()` per-consumer comparison.
+    /// Invariant 5 — composition preserves proofs; the
     /// (bottom_is_majority, top_is_majority) pair opens the
     /// MAJORITY-KIND column on the ATOMIC (bottom, top) tally pair one
     /// CELL-KIND axis over from the just-shipped
@@ -22435,7 +22435,7 @@ impl ResourceLimits {
     /// LOAD-BEARING BROADER TIE LEG partitioning every interior-uniform
     /// posture — and every truly-mixed atomic-tied posture — into the
     /// equality leg the polar-interior pair narrows to only-truly-
-    /// mixed corners. THEORY.md §V.1 — knowable platform; the
+    /// mixed corners. Knowable platform; the
     /// atomic-MAJORITY-KIND verdict is a TYPE-level operation on the
     /// posture algebra returning a `const`-evaluable `bool`.
     ///
@@ -22540,7 +22540,7 @@ impl ResourceLimits {
     /// at compile time (`const _: () = assert!(
     /// UNBOUNDED_RESOURCE_LIMITS.top_is_majority());`).
     ///
-    /// Theory anchor: same as [`Self::bottom_is_majority`], on the
+    /// Anchor: same as [`Self::bottom_is_majority`], on the
     /// DUAL atomic-arm-selection combinator. The (bottom_is_majority,
     /// top_is_majority) pair jointly carries the STRICT-TOTAL-ORDER
     /// trichotomy on the atomic tally pair — LOAD-BEARING because the
@@ -22677,18 +22677,18 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(DEFAULT_RESOURCE_LIMITS
     /// .is_atomically_balanced());`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic-balance verdict is a named typed `bool` exit rather
     /// than an inline `self.count_bottom_axes() == self
-    /// .count_top_axes()` per-consumer comparison. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the
+    /// .count_top_axes()` per-consumer comparison.
+    /// Invariant 5 — composition preserves proofs; the
     /// (is_atomically_balanced, has_atomic_majority) pair CLOSES the
     /// MAJORITY-KIND column on the ATOMIC (bottom, top) tally pair
     /// one CELL-KIND axis over from the COMPOUND (is_axially_balanced,
     /// has_majority_axis) pair with the LOAD-BEARING BROADER TIE
     /// LEG — every interior-uniform posture inhabits the atomic
     /// balance corner the compound balance corner structurally
-    /// cannot reach. THEORY.md §V.1 — knowable platform; the
+    /// cannot reach. Knowable platform; the
     /// MAJORITY-KIND verdict on the atomic partition is a TYPE-level
     /// operation on the posture algebra returning a `const`-evaluable
     /// `bool`.
@@ -22830,7 +22830,7 @@ impl ResourceLimits {
     /// verdict at compile time (`const _: () = assert!(
     /// EMPTY_RESOURCE_LIMITS.has_atomic_majority());`).
     ///
-    /// Theory anchor: same as [`Self::is_atomically_balanced`], on
+    /// Anchor: same as [`Self::is_atomically_balanced`], on
     /// the COMPLEMENT half of the ATOMIC-MAJORITY-EXISTENCE
     /// partition. The (is_atomically_balanced, has_atomic_majority)
     /// pair jointly closes the MAJORITY-KIND column past the just-
@@ -22986,11 +22986,11 @@ impl ResourceLimits {
     /// time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.bottom_lead(), Some(6)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic BOTTOM-directed lead is a named typed `Option<usize>` exit
     /// rather than an inline `if self.count_bottom_axes() > self
     /// .count_top_axes() { Some(...) } else { None }` per-consumer
-    /// guarded subtraction. THEORY.md §II.1 invariant 5 — composition
+    /// guarded subtraction. Invariant 5 — composition
     /// preserves proofs; the (bottom_lead, top_lead) pair opens the
     /// CARDINAL-DISTANCE column on the ATOMIC (bottom, top) tally pair
     /// past the just-closed (bottom_is_majority, top_is_majority,
@@ -22998,7 +22998,7 @@ impl ResourceLimits {
     /// closure with the LOAD-BEARING CARDINAL magnitude the boolean
     /// STRICT-INEQUALITY verdict structurally cannot access, and one
     /// CELL-KIND axis over from the COMPOUND (polar_lead, interior_lead)
-    /// DIRECTED-LEAD pair. THEORY.md §V.1 — knowable platform; the
+    /// DIRECTED-LEAD pair. Knowable platform; the
     /// atomic DIRECTED-LEAD verdict is a TYPE-level operation on the
     /// posture algebra returning a `const`-evaluable `Option<usize>`.
     ///
@@ -23118,7 +23118,7 @@ impl ResourceLimits {
     /// time (`const _: () = assert!(matches!(
     /// UNBOUNDED_RESOURCE_LIMITS.top_lead(), Some(6)));`).
     ///
-    /// Theory anchor: same as [`Self::bottom_lead`], on the DUAL
+    /// Anchor: same as [`Self::bottom_lead`], on the DUAL
     /// arm-selection combinator. The (bottom_lead, top_lead) atomic
     /// pair jointly opens the CARDINAL-DISTANCE column past the just-
     /// closed atomic MAJORITY-KIND column on the SAME two-arm atomic
@@ -23257,17 +23257,17 @@ impl ResourceLimits {
     /// CARDINAL skew at compile time (`const _: () = assert!(
     /// EMPTY_RESOURCE_LIMITS.atomic_skew() == 6);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic UNDIRECTED CARDINAL projection is a named typed `usize`
     /// exit through the substrate primitive [`Self::absolute_count_difference`]
     /// rather than an inline `count_bottom_axes().abs_diff(
-    /// count_top_axes())` per-consumer subtraction. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the (axial_skew,
+    /// count_top_axes())` per-consumer subtraction.
+    /// Invariant 5 — composition preserves proofs; the (axial_skew,
     /// atomic_skew) pair jointly carries the UNDIRECTED CARDINAL
     /// magnitude reading on BOTH levels of the (COMPOUND → ATOMIC)
     /// refinement chain the (polar_is_majority, bottom_is_majority)
     /// MAJORITY-KIND pair carries one QUANTIFIER-STRENGTH axis over.
-    /// THEORY.md §V.1 — knowable platform; the atomic UNDIRECTED
+    /// Knowable platform; the atomic UNDIRECTED
     /// CARDINAL verdict is a TYPE-level operation on the posture
     /// algebra returning a `const`-evaluable `usize`.
     ///
@@ -23424,7 +23424,7 @@ impl ResourceLimits {
     /// lead at compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.atomic_majority_lead(), Some(6)));`).
     ///
-    /// Theory anchor: same as [`Self::atomic_skew`], on the DUAL
+    /// Anchor: same as [`Self::atomic_skew`], on the DUAL
     /// `Option<usize>` shape. The (atomic_skew, atomic_majority_lead)
     /// pair jointly CLOSES the CARDINAL-DISTANCE column on the ATOMIC
     /// (bottom, top) tally pair past the just-opened (bottom_lead,
@@ -23640,16 +23640,16 @@ impl ResourceLimits {
     /// SATURATED corner at compile time (`const _: () = assert!(
     /// EMPTY_RESOURCE_LIMITS.atomic_signed_skew() == 6);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic SIGNED CARDINAL projection is a named typed `isize`
     /// exit rather than an inline sign-split subtraction per consumer
-    /// on the atomic pair. THEORY.md §II.1 invariant 5 — composition
+    /// on the atomic pair. Invariant 5 — composition
     /// preserves proofs; the SIGNED-KIND peer CLOSES the SIGNEDNESS
     /// axis on the atomic CARDINAL-DISTANCE column with the LOAD-
     /// BEARING ABSOLUTE-VALUE fold agreeing with [`Self::atomic_skew`]
     /// and the SIGN discriminating the bottom-majority / top-majority
     /// arms the UNDIRECTED atomic reading structurally cannot access.
-    /// THEORY.md §V.1 — knowable platform; the atomic SIGNED CARDINAL
+    /// Knowable platform; the atomic SIGNED CARDINAL
     /// verdict is a TYPE-level operation on the posture algebra
     /// returning a `const`-evaluable `isize`.
     ///
@@ -23801,18 +23801,18 @@ impl ResourceLimits {
     /// compile time as a build-break (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.atomic_ordering(), Ordering::Greater));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic SIGNUM-TRICHOTOMY reading is a named typed exit rather
     /// than an inline three-way if-else per consumer on the atomic
     /// pair, and the exit type is the std-canonical [`Ordering`] sum
     /// whose match-exhaustiveness rustc verifies at every downstream
-    /// dispatch site. THEORY.md §II.1 invariant 5 — composition
+    /// dispatch site. Invariant 5 — composition
     /// preserves proofs; the SIGNUM-KIND `Ordering` projection CLOSES
     /// the CELL-KIND axis on the SIGNUM-TRICHOTOMY column with the
     /// LOAD-BEARING BROADER atomic-tie corner absorbing every
     /// interior-uniform posture the compound [`Self::axial_ordering`]
-    /// partitions into its interior-majority arm. THEORY.md §V.1 —
-    /// knowable platform; the atomic SIGNUM verdict is a TYPE-level
+    /// partitions into its interior-majority arm.
+    /// Knowable platform; the atomic SIGNUM verdict is a TYPE-level
     /// operation on the posture algebra returning a
     /// `const`-evaluable [`Ordering`].
     ///
@@ -23955,13 +23955,13 @@ impl ResourceLimits {
     /// Ordering::Greater));`) — the LOAD-BEARING atomic-tiebreaker
     /// promotion pinnable in a `matches!` guard at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// lexicographic-composition reading is a named typed [`Ordering`]
     /// exit rather than an inline `self.axial_ordering().then(
     /// self.atomic_ordering())` per-consumer combinator, and the exit
     /// type is the std-canonical [`Ordering`] sum whose match-
     /// exhaustiveness rustc verifies at every downstream dispatch
-    /// site. THEORY.md §II.1 invariant 5 — composition preserves
+    /// site. Invariant 5 — composition preserves
     /// proofs; the (axial_ordering, atomic_ordering) SIGNUM pair
     /// composed through the std-canonical [`Ordering::then`]
     /// lexicographic combinator opens the OPERATOR-KIND column past
@@ -23969,8 +23969,8 @@ impl ResourceLimits {
     /// projection promoting the atomic verdict on axially-balanced
     /// fixtures — a first-class typed exit for the AXIAL-primary,
     /// ATOMIC-tiebreaker whole-posture reading neither cell's SIGNUM
-    /// alone can carry through ONE `Ordering`. THEORY.md §V.1 —
-    /// knowable platform; the composed SIGNUM verdict is a TYPE-
+    /// alone can carry through ONE `Ordering`.
+    /// Knowable platform; the composed SIGNUM verdict is a TYPE-
     /// level operation on the posture algebra returning a
     /// `const`-evaluable [`Ordering`].
     ///
@@ -24139,13 +24139,13 @@ impl ResourceLimits {
     /// BEARING PRIMARY-KEY split pinnable in a `matches!` guard at
     /// compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic-primary lexicographic composition is a named typed
     /// [`Ordering`] exit rather than an inline
     /// `self.atomic_ordering().then(self.axial_ordering())`
     /// per-consumer combinator, and the exit type is the std-canonical
     /// [`Ordering`] sum whose match-exhaustiveness rustc verifies at
-    /// every downstream dispatch site. THEORY.md §II.1 invariant 5 —
+    /// every downstream dispatch site. Invariant 5 —
     /// composition preserves proofs; the (atomic_ordering,
     /// axial_ordering) SIGNUM pair composed through the std-canonical
     /// [`Ordering::then`] combinator with atomic as the primary key
@@ -24154,7 +24154,7 @@ impl ResourceLimits {
     /// lexicographic-compositions of the pair as a first-class typed
     /// exit for the ATOMIC-primary, AXIAL-tiebreaker whole-posture
     /// reading neither cell's SIGNUM alone can carry through ONE
-    /// `Ordering`. THEORY.md §V.1 — knowable platform; the composed
+    /// `Ordering`. Knowable platform; the composed
     /// SIGNUM verdict is a TYPE-level operation on the posture algebra
     /// returning a `const`-evaluable [`Ordering`].
     ///
@@ -24320,11 +24320,11 @@ impl ResourceLimits {
     /// tally at compile time as a build-break (`const _: () =
     /// assert!(EMPTY_RESOURCE_LIMITS.axial_majority_count() == 6);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// ARM-AGNOSTIC MAX-fold projection is a named typed `usize`
     /// exit rather than an inline `count_polar_axes().max(
-    /// count_interior_axes())` per-consumer combinator. THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs; the
+    /// count_interior_axes())` per-consumer combinator.
+    /// Invariant 5 — composition preserves proofs; the
     /// ARM-AGNOSTIC MAX-fold opens the CENTRAL-TENDENCY column past
     /// the just-closed SIGNUM-KIND (`Ordering`) column on the SAME
     /// COMPOUND (polar, interior) tally pair with the LOAD-BEARING
@@ -24332,7 +24332,7 @@ impl ResourceLimits {
     /// into ONE bidirectional statistic-derivation theorem —
     /// `axial_majority_count` and `axial_skew` compute each other
     /// through `FIELD_COUNT` via the paired arithmetic identity.
-    /// THEORY.md §V.1 — knowable platform; the MAX-fold verdict is
+    /// Knowable platform; the MAX-fold verdict is
     /// a TYPE-level operation on the posture algebra returning a
     /// `const`-evaluable `usize`.
     ///
@@ -24487,16 +24487,16 @@ impl ResourceLimits {
     /// tally at compile time as a build-break (`const _: () =
     /// assert!(EMPTY_RESOURCE_LIMITS.axial_minority_count() == 0);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// ARM-AGNOSTIC MIN-fold projection is a named typed `usize`
     /// exit rather than an inline `count_polar_axes().min(
-    /// count_interior_axes())` per-consumer combinator. THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs; the (max,
+    /// count_interior_axes())` per-consumer combinator.
+    /// Invariant 5 — composition preserves proofs; the (max,
     /// min) pair closes the ARM-AGNOSTIC CENTRAL-TENDENCY column
     /// with the LOAD-BEARING EXHAUSTIVE-PARTITION SUM identity
     /// `majority_count + minority_count == FIELD_COUNT` binding
     /// them into ONE arithmetic-partition of the field-count.
-    /// THEORY.md §V.1 — knowable platform; the MIN-fold verdict is
+    /// Knowable platform; the MIN-fold verdict is
     /// a TYPE-level operation on the posture algebra returning a
     /// `const`-evaluable `usize`.
     ///
@@ -24680,18 +24680,18 @@ impl ResourceLimits {
     /// MAX tally at compile time as a build-break (`const _: () =
     /// assert!(EMPTY_RESOURCE_LIMITS.atomic_majority_count() == 6);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// ARM-AGNOSTIC atomic MAX-fold projection is a named typed
     /// `usize` exit rather than an inline `count_bottom_axes().max(
-    /// count_top_axes())` per-consumer combinator. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the (atomic_max,
+    /// count_top_axes())` per-consumer combinator.
+    /// Invariant 5 — composition preserves proofs; the (atomic_max,
     /// atomic_skew) pair on the SAME ATOMIC (bottom, top) tally
     /// pair with the LOAD-BEARING SUM+DIFF halving bijection tying
     /// the (atomic MAX, atomic ABS-DIFF) pair into ONE bidirectional
     /// statistic-derivation theorem — `atomic_majority_count` and
     /// `atomic_skew` compute each other through `count_polar_axes`
-    /// via the paired arithmetic identity. THEORY.md §V.1 —
-    /// knowable platform; the atomic MAX-fold verdict is a TYPE-
+    /// via the paired arithmetic identity.
+    /// Knowable platform; the atomic MAX-fold verdict is a TYPE-
     /// level operation on the posture algebra returning a
     /// `const`-evaluable `usize`.
     ///
@@ -24854,17 +24854,17 @@ impl ResourceLimits {
     /// MIN tally at compile time as a build-break (`const _: () =
     /// assert!(EMPTY_RESOURCE_LIMITS.atomic_minority_count() == 0);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// ARM-AGNOSTIC atomic MIN-fold projection is a named typed
     /// `usize` exit rather than an inline `count_bottom_axes().min(
-    /// count_top_axes())` per-consumer combinator. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the (max, min)
+    /// count_top_axes())` per-consumer combinator.
+    /// Invariant 5 — composition preserves proofs; the (max, min)
     /// atomic pair closes the ARM-AGNOSTIC CENTRAL-TENDENCY column
     /// on the ATOMIC (bottom, top) tally pair with the LOAD-BEARING
     /// EXHAUSTIVE-ATOMIC-PARTITION SUM identity `majority_count +
     /// minority_count == count_polar_axes` binding them into ONE
-    /// arithmetic-partition of `count_polar_axes`. THEORY.md §V.1
-    /// — knowable platform; the atomic MIN-fold verdict is a TYPE-
+    /// arithmetic-partition of `count_polar_axes`.
+    /// Knowable platform; the atomic MIN-fold verdict is a TYPE-
     /// level operation on the posture algebra returning a
     /// `const`-evaluable `usize`.
     ///
@@ -25020,16 +25020,16 @@ impl ResourceLimits {
     /// () = assert!(EMPTY_RESOURCE_LIMITS
     /// .axial_signed_majority_count() == 6);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SIGNED CENTRAL-TENDENCY projection is a named typed `isize`
     /// exit rather than an inline sign-split MAX-fold per consumer.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// Invariant 5 — composition preserves proofs;
     /// the SIGNED-KIND peer OPENS the SIGNEDNESS axis on the ARM-
     /// AGNOSTIC CENTRAL-TENDENCY MAX column with the LOAD-BEARING
     /// ABSOLUTE-VALUE fold agreeing with [`Self::axial_majority_count`]
     /// and the SIGN discriminating the polar-majority-or-balance /
     /// interior-strict-majority arms the UNSIGNED reading structurally
-    /// cannot access. THEORY.md §V.1 — knowable platform; the SIGNED
+    /// cannot access. Knowable platform; the SIGNED
     /// CENTRAL-TENDENCY verdict is a TYPE-level operation on the
     /// posture algebra returning a `const`-evaluable `isize`.
     ///
@@ -25180,15 +25180,15 @@ impl ResourceLimits {
     /// () = assert!(EMPTY_RESOURCE_LIMITS
     /// .axial_signed_minority_count() == 0);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SIGNED axial CENTRAL-TENDENCY MIN projection is a named typed
     /// `isize` exit rather than an inline sign-split MIN-fold on the
-    /// paired axial tallies per consumer. THEORY.md §II.1 invariant 5
+    /// paired axial tallies per consumer. Invariant 5
     /// — composition preserves proofs; the CELL-KIND peer CLOSES the
     /// SIGNEDNESS axis on the COMPOUND (polar, interior) CENTRAL-
     /// TENDENCY MIN column with the LOAD-BEARING ABSOLUTE-VALUE fold
-    /// agreeing with [`Self::axial_minority_count`]. THEORY.md §V.1 —
-    /// knowable platform; the SIGNED axial CENTRAL-TENDENCY MIN
+    /// agreeing with [`Self::axial_minority_count`].
+    /// Knowable platform; the SIGNED axial CENTRAL-TENDENCY MIN
     /// verdict is a TYPE-level operation on the posture algebra
     /// returning a `const`-evaluable `isize`.
     ///
@@ -25362,16 +25362,16 @@ impl ResourceLimits {
     /// assert!(EMPTY_RESOURCE_LIMITS.atomic_signed_majority_count() ==
     /// 6);`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SIGNED ATOMIC CENTRAL-TENDENCY projection is a named typed
     /// `isize` exit rather than an inline sign-split MAX-fold on the
-    /// paired atomic tallies per consumer. THEORY.md §II.1 invariant
+    /// paired atomic tallies per consumer. Invariant
     /// 5 — composition preserves proofs; the CELL-KIND peer OPENS the
     /// SIGNEDNESS axis on the ATOMIC (bottom, top) CENTRAL-TENDENCY
     /// MAX column with the LOAD-BEARING ABSOLUTE-VALUE fold agreeing
     /// with [`Self::atomic_majority_count`] and the ZERO-KEY bridge
     /// discriminating the axially-interior corner the axial peer's
-    /// NEVER-ZERO structure cannot reach. THEORY.md §V.1 — knowable
+    /// NEVER-ZERO structure cannot reach. Knowable
     /// platform; the SIGNED ATOMIC CENTRAL-TENDENCY verdict is a
     /// TYPE-level operation on the posture algebra returning a
     /// `const`-evaluable `isize`.
@@ -25513,10 +25513,10 @@ impl ResourceLimits {
     /// () = assert!(EMPTY_RESOURCE_LIMITS
     /// .atomic_signed_minority_count() == 0);`).
     ///
-    /// Theory anchor: same as [`Self::axial_signed_minority_count`],
-    /// on the DUAL CELL-KIND cell. THEORY.md §II.1 invariant 3 —
-    /// typed exit; THEORY.md §II.1 invariant 5 — composition preserves
-    /// proofs; THEORY.md §V.1 — knowable platform.
+    /// Anchor: same as [`Self::axial_signed_minority_count`],
+    /// on the DUAL CELL-KIND cell. Invariant 3 —
+    /// typed exit; invariant 5 — composition preserves
+    /// proofs; knowable platform.
     ///
     /// Frontier inspiration: same as [`Self::axial_signed_minority_count`],
     /// through the DUAL (ATOMIC vs COMPOUND) arm-selection combinator
@@ -25588,14 +25588,14 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.first_bottom_axis_index(), Some(0)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// index-of-first-bottom projection is a named typed exit
     /// `Option<usize>` rather than an inline `axes_is_bottom().iter().
-    /// position(...)` per-consumer fold. THEORY.md §II.1 invariant 5 —
+    /// position(...)` per-consumer fold. Invariant 5 —
     /// composition preserves proofs; the (has, count, first) INDEX
     /// projection strictly REFINES both the boolean ANY-fold and the
     /// arithmetic COUNT-fold with positional discriminators neither can
-    /// access on the atomic BOTTOM cell. THEORY.md §V.1 — knowable
+    /// access on the atomic BOTTOM cell. Knowable
     /// platform; the INDEX projection is a TYPE-level operation on the
     /// posture algebra returning a `const`-evaluable `Option<usize>`.
     ///
@@ -25675,10 +25675,10 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact first-top index at
     /// compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs (the INDEX
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs (the INDEX
     /// projection strictly REFINES both ANY and COUNT with positional
-    /// discriminators neither can access); THEORY.md §V.1 — knowable
+    /// discriminators neither can access); knowable
     /// platform.
     ///
     /// Frontier inspiration: APL's `⍸(⍵=⌈/⍵)` per-position top-index
@@ -25771,10 +25771,10 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.first_polar_axis_index(), Some(0)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// index-of-first-polar projection is a named typed exit
     /// `Option<usize>` rather than an inline `axes_is_pole().iter().
-    /// position(...)` per-consumer fold. THEORY.md §II.1 invariant 5 —
+    /// position(...)` per-consumer fold. Invariant 5 —
     /// composition preserves proofs; the (has, count, first) INDEX
     /// projection strictly REFINES both the boolean ANY-fold and the
     /// arithmetic COUNT-fold with positional discriminators neither
@@ -25783,7 +25783,7 @@ impl ResourceLimits {
     /// mask into the atomic (bottom, top) cells at the INDEX surface
     /// as MIN-of-Option, exactly the way the boolean ANY-fold column
     /// carries it as OR and the arithmetic COUNT column carries it as
-    /// SUM. THEORY.md §V.1 — knowable platform.
+    /// SUM. Knowable platform.
     ///
     /// Frontier inspiration: APL's `⍸((0=⍵)∨(⍵=⌈/⍵))` per-position
     /// polar-index projection returning the sequence of indices of
@@ -25896,13 +25896,13 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact first-interior index
     /// at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs
     /// (the (first_polar, first_interior) INDEX pair strictly REFINES
     /// both the boolean (has_polar, has_interior) De Morgan pair and
     /// the arithmetic (count_polar, count_interior) partition-sum
     /// pair with positional discriminators neither can access);
-    /// THEORY.md §V.1 — knowable platform.
+    /// knowable platform.
     ///
     /// Frontier inspiration: APL's `⍸((⍵≠0)∧(⍵≠⌈/⍵))` per-position
     /// strict-interior-index projection; Haskell's
@@ -25988,17 +25988,17 @@ impl ResourceLimits {
     /// EMPTY_RESOURCE_LIMITS.last_bottom_axis_index(),
     /// Some(i) if i + 1 == ResourceLimits::FIELD_COUNT));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// index-of-last-bottom projection is a named typed exit
     /// `Option<usize>` rather than an inline `axes_is_bottom().iter().
-    /// rposition(...)` per-consumer fold. THEORY.md §II.1 invariant 5
+    /// rposition(...)` per-consumer fold. Invariant 5
     /// — composition preserves proofs; the (INDEX-OF-FIRST,
     /// INDEX-OF-LAST) DIRECTION-pair strictly REFINES both the boolean
     /// ANY-fold and the arithmetic COUNT-fold with the LEFT/RIGHT
     /// bracket endpoints on the atomic BOTTOM cell — POSITIONAL
     /// discriminators the ANY-fold cannot access at all and the
-    /// COUNT-fold can only access as cardinality. THEORY.md §V.1 —
-    /// knowable platform; the INDEX-OF-LAST projection is a TYPE-level
+    /// COUNT-fold can only access as cardinality.
+    /// Knowable platform; the INDEX-OF-LAST projection is a TYPE-level
     /// operation on the posture algebra returning a `const`-evaluable
     /// `Option<usize>`.
     ///
@@ -26097,14 +26097,14 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact last-top index at
     /// compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs (the
     /// (INDEX-OF-FIRST, INDEX-OF-LAST) DIRECTION-pair strictly REFINES
     /// both ANY and COUNT with LEFT/RIGHT bracket endpoints neither
     /// can access, and the atomic-cell (last_bottom, last_top) pair
     /// carries the INDEX-OF-LAST form of the atomic-cell (first_bottom,
     /// first_top) cross-cell exclusivity on the DUAL scan direction);
-    /// THEORY.md §V.1 — knowable platform.
+    /// knowable platform.
     ///
     /// Frontier inspiration: APL's `⌈/⍸(⍵=⌈/⍵)` reduce-max-over-
     /// indices projection returning the greatest position at which the
@@ -26214,10 +26214,10 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact last-polar index at
     /// compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// index-of-last-polar projection is a named typed exit
     /// `Option<usize>` rather than an inline `axes_is_pole().iter().
-    /// rposition(...)` per-consumer fold. THEORY.md §II.1 invariant 5 —
+    /// rposition(...)` per-consumer fold. Invariant 5 —
     /// composition preserves proofs; the (INDEX-OF-FIRST, INDEX-OF-LAST)
     /// DIRECTION-pair strictly REFINES both the boolean ANY-fold and
     /// the arithmetic COUNT-fold on the COMPOUND polar cell with
@@ -26228,8 +26228,8 @@ impl ResourceLimits {
     /// FIRST scan carries it as MIN-of-Option one SCAN-DIRECTION axis
     /// over, the boolean ANY-fold column carries it as OR one
     /// PROJECTION-KIND axis over, and the arithmetic COUNT column
-    /// carries it as SUM one PROJECTION-KIND axis further. THEORY.md
-    /// §V.1 — knowable platform.
+    /// carries it as SUM one PROJECTION-KIND axis further.
+    /// Knowable platform.
     ///
     /// Frontier inspiration: APL's `⌈/⍸((0=⍵)∨(⍵=⌈/⍵))` reduce-max-
     /// over-indices projection returning the greatest position at which
@@ -26361,14 +26361,14 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact last-interior index at
     /// compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs (the
     /// (last_polar, last_interior) INDEX-OF-LAST pair strictly REFINES
     /// both the boolean (has_polar, has_interior) De Morgan pair and
     /// the arithmetic (count_polar, count_interior) partition-sum pair
     /// with RIGHT-endpoint positional discriminators neither can
     /// access, on the DUAL scan direction from the (first_polar,
-    /// first_interior) INDEX-OF-FIRST pair); THEORY.md §V.1 — knowable
+    /// first_interior) INDEX-OF-FIRST pair); knowable
     /// platform.
     ///
     /// Frontier inspiration: APL's `⌈/⍸((⍵≠0)∧(⍵≠⌈/⍵))` reduce-max-
@@ -26487,16 +26487,16 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact bottom-axis index span
     /// at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// index-span-of-bottom projection is a named typed exit
     /// `Option<usize>` rather than an inline
     /// `first.zip(last).map(|(f, l)| l - f + 1)` per-consumer bracket-
-    /// width fold. THEORY.md §II.1 invariant 5 — composition preserves
+    /// width fold. Invariant 5 — composition preserves
     /// proofs; the (COUNT, SPAN) pair on the same atomic cell adds a
     /// DENSITY-SENSITIVE discriminator neither COUNT alone nor
     /// (FIRST, LAST) alone can supply, closing the CONTIGUOUS-vs-
-    /// SPARSE decision at the compile-time surface. THEORY.md §V.1 —
-    /// knowable platform; the SPAN projection is a `const fn`
+    /// SPARSE decision at the compile-time surface.
+    /// Knowable platform; the SPAN projection is a `const fn`
     /// operation on the posture algebra returning a const-evaluable
     /// `Option<usize>`.
     ///
@@ -26597,11 +26597,11 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact top-axis index span at
     /// compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs (the
     /// SPAN adds a DENSITY-sensitive discriminator neither COUNT nor
     /// the (FIRST, LAST) endpoint pair can supply on their own);
-    /// THEORY.md §V.1 — knowable platform.
+    /// knowable platform.
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_index_span`],
     /// on the DUAL atomic mask.
@@ -26729,17 +26729,17 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact polar-axis index span
     /// at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// index-span-of-polar projection is a named typed exit
     /// `Option<usize>` rather than an inline
     /// `first.zip(last).map(|(f, l)| l - f + 1)` per-consumer bracket-
-    /// width fold on the COMPOUND cell. THEORY.md §II.1 invariant 5 —
+    /// width fold on the COMPOUND cell. Invariant 5 —
     /// composition preserves proofs; the (COUNT, SPAN) pair on the
     /// COMPOUND cell adds a DENSITY-SENSITIVE discriminator neither the
     /// COUNT alone nor the (FIRST, LAST) endpoint pair can supply on
     /// their own, closing the CONTIGUOUS-vs-SPARSE decision at the
     /// compile-time surface for the COMPOUND (polar, interior)
-    /// partition. THEORY.md §V.1 — knowable platform; the SPAN
+    /// partition. Knowable platform; the SPAN
     /// projection is a `const fn` operation on the posture algebra
     /// returning a const-evaluable `Option<usize>`.
     ///
@@ -26833,9 +26833,9 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact interior-axis index
     /// span at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
-    /// THEORY.md §V.1 — knowable platform.
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs;
+    /// knowable platform.
     ///
     /// Frontier inspiration: same as [`Self::polar_axis_index_span`],
     /// on the De Morgan dual COMPOUND cell.
@@ -26947,11 +26947,11 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.bottom_axis_gap_count(), Some(0)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs (the GAP adds a
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs (the GAP adds a
     /// CONTIGUITY-sensitive discriminator that upgrades the SPAN ≥ COUNT
     /// INEQUALITY into an EQUATION `gap == span - count`, expressible as
-    /// a first-class `Option<usize>` typed exit); THEORY.md §V.1 —
+    /// a first-class `Option<usize>` typed exit);
     /// knowable platform.
     ///
     /// Frontier inspiration: APL's `(⌈/⍸P) - (⌊/⍸P) + 1 - +/P` bracket-
@@ -27033,7 +27033,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact top-axis gap at compile
     /// time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_gap_count`].
+    /// Anchor: same as [`Self::bottom_axis_gap_count`].
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_gap_count`], on
     /// the DUAL atomic mask.
@@ -27148,11 +27148,11 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.polar_axis_gap_count(), Some(0)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Anchor: invariant 3 — typed exit;
+    /// invariant 5 — composition preserves proofs (the
     /// COMPOUND GAP is a structural derivation from the (COMPOUND SPAN,
     /// COMPOUND COUNT) pair via one `Option::map` subtraction under the
-    /// Some arm); THEORY.md §V.1 — knowable platform.
+    /// Some arm); knowable platform.
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_gap_count`], on
     /// the COMPOUND POLAR mask formed via De Morgan disjunction of the
@@ -27247,7 +27247,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the exact interior-axis gap at
     /// compile time.
     ///
-    /// Theory anchor: same as [`Self::polar_axis_gap_count`], on the De
+    /// Anchor: same as [`Self::polar_axis_gap_count`], on the De
     /// Morgan dual COMPOUND cell.
     ///
     /// Frontier inspiration: same as [`Self::polar_axis_gap_count`], on
@@ -27310,13 +27310,13 @@ impl ResourceLimits {
     /// at compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_contiguous(), Some(true)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// CONTIGUITY predicate is a named typed exit `Option<bool>` rather
     /// than an inline `self.bottom_axis_gap_count().map(|k| k == 0)`
-    /// per-consumer predicate. THEORY.md §II.1 invariant 5 — composition
+    /// per-consumer predicate. Invariant 5 — composition
     /// preserves proofs (the CONTIGUITY is a structural derivation from
     /// the GAP projection via `Option::map` under one equality
-    /// comparison). THEORY.md §V.1 — knowable platform.
+    /// comparison). Knowable platform.
     ///
     /// Frontier inspiration: APL's `∧/(⌊/⍸P + ⍳(⌈/⍸P - ⌊/⍸P + 1)) ∈ ⍸P`
     /// bracket-fully-populated predicate; Racket contract `(->
@@ -27373,7 +27373,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis CONTIGUITY verdict at
     /// compile time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_is_contiguous`].
+    /// Anchor: same as [`Self::bottom_axis_is_contiguous`].
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_is_contiguous`],
     /// on the DUAL atomic mask.
@@ -27460,13 +27460,13 @@ impl ResourceLimits {
     /// at compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.polar_axis_is_contiguous(), Some(true)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// compound CONTIGUITY predicate is a named typed exit `Option<bool>`
     /// rather than an inline `self.polar_axis_gap_count().map(|k| k == 0)`
-    /// per-consumer predicate. THEORY.md §II.1 invariant 5 —
+    /// per-consumer predicate. Invariant 5 —
     /// composition preserves proofs (the CONTIGUITY is a structural
     /// derivation from the compound GAP projection via `Option::map`
-    /// under one equality comparison). THEORY.md §V.1 — knowable
+    /// under one equality comparison). Knowable
     /// platform.
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_is_contiguous`],
@@ -27527,7 +27527,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis CONTIGUITY
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::polar_axis_is_contiguous`], on the
+    /// Anchor: same as [`Self::polar_axis_is_contiguous`], on the
     /// De Morgan dual COMPOUND cell.
     ///
     /// Frontier inspiration: same as [`Self::polar_axis_is_contiguous`],
@@ -27601,13 +27601,13 @@ impl ResourceLimits {
     /// at compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_sparse(), Some(false)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SPARSE predicate is a named typed exit `Option<bool>` rather
     /// than an inline `self.bottom_axis_is_contiguous().map(|b| !b)`
-    /// per-consumer negation. THEORY.md §II.1 invariant 5 —
+    /// per-consumer negation. Invariant 5 —
     /// composition preserves proofs (the SPARSE cell is a structural
     /// derivation from the CONTIGUITY projection via `Option::map`
-    /// under one boolean negation). THEORY.md §V.1 — knowable
+    /// under one boolean negation). Knowable
     /// platform.
     ///
     /// Frontier inspiration: APL's `∨/(⌊/⍸P + ⍳(⌈/⍸P - ⌊/⍸P + 1)) ∉ ⍸P`
@@ -27672,7 +27672,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis SPARSITY verdict at
     /// compile time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_is_sparse`].
+    /// Anchor: same as [`Self::bottom_axis_is_sparse`].
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_is_sparse`],
     /// on the DUAL atomic mask.
@@ -27773,14 +27773,14 @@ impl ResourceLimits {
     /// at compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.polar_axis_is_sparse(), Some(false)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND SPARSE predicate is a named typed exit `Option<bool>`
     /// rather than an inline `self.polar_axis_is_contiguous().map(|b|
-    /// !b)` per-consumer negation. THEORY.md §II.1 invariant 5 —
+    /// !b)` per-consumer negation. Invariant 5 —
     /// composition preserves proofs (the COMPOUND SPARSE cell is a
     /// structural derivation from the COMPOUND CONTIGUITY projection
-    /// via `Option::map` under one boolean negation). THEORY.md §V.1 —
-    /// knowable platform.
+    /// via `Option::map` under one boolean negation).
+    /// Knowable platform.
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_is_sparse`],
     /// on the COMPOUND POLAR mask formed via De Morgan disjunction of
@@ -27847,7 +27847,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis SPARSITY
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::polar_axis_is_sparse`], on the De
+    /// Anchor: same as [`Self::polar_axis_is_sparse`], on the De
     /// Morgan dual COMPOUND cell.
     ///
     /// Frontier inspiration: same as [`Self::polar_axis_is_sparse`], on
@@ -27914,14 +27914,14 @@ impl ResourceLimits {
     /// at compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_singleton(), Some(false)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SINGLETON predicate is a named typed exit `Option<bool>` rather
     /// than a per-consumer `self.count_bottom_axes() == 1` inline
     /// equality test that discards the has-axis-at-all distinction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Invariant 5 — composition preserves proofs (the
     /// SINGLETON cell is a structural derivation from the COUNT
     /// projection via one usize equality and one is-zero split, no new
-    /// per-axis scan, no allocation). THEORY.md §V.1 — knowable platform.
+    /// per-axis scan, no allocation). Knowable platform.
     ///
     /// Frontier inspiration: Idris's `Vect 1 a` (a typed exit for
     /// singleton vectors distinct from `Vect 0 a` and `Vect (S k) a`);
@@ -27981,7 +27981,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis SINGLETON verdict at
     /// compile time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_is_singleton`].
+    /// Anchor: same as [`Self::bottom_axis_is_singleton`].
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_is_singleton`],
     /// on the DUAL atomic mask.
@@ -28067,15 +28067,15 @@ impl ResourceLimits {
     /// at compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.polar_axis_is_singleton(), Some(false)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar SINGLETON predicate is a named typed exit
     /// `Option<bool>` rather than a per-consumer
     /// `self.count_polar_axes() == 1` inline equality test that discards
-    /// the has-axis-at-all distinction. THEORY.md §II.1 invariant 5 —
+    /// the has-axis-at-all distinction. Invariant 5 —
     /// composition preserves proofs (the SINGLETON cell is a structural
     /// derivation from the COMPOUND COUNT projection via one usize
     /// equality and one is-zero split, no new per-axis scan, no
-    /// allocation). THEORY.md §V.1 — knowable platform.
+    /// allocation). Knowable platform.
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_is_singleton`]
     /// on the DUAL COMPOUND mask.
@@ -28128,7 +28128,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis SINGLETON
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::polar_axis_is_singleton`], on the
+    /// Anchor: same as [`Self::polar_axis_is_singleton`], on the
     /// DUAL COMPOUND cell.
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_is_singleton`]
@@ -28204,14 +28204,14 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_multi(), Some(true)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// MULTI predicate is a named typed exit `Option<bool>` rather than
     /// a per-consumer `self.count_bottom_axes() > 1` inline strict
     /// inequality test that discards the has-axis-at-all distinction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Invariant 5 — composition preserves proofs (the
     /// MULTI cell is a structural derivation from the COUNT projection
     /// via one usize strict-inequality and one is-zero split, no new
-    /// per-axis scan, no allocation). THEORY.md §V.1 — knowable
+    /// per-axis scan, no allocation). Knowable
     /// platform.
     ///
     /// Frontier inspiration: Racket's `(pair? lst)` (multi-element
@@ -28277,7 +28277,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis MULTI verdict at
     /// compile time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_is_multi`].
+    /// Anchor: same as [`Self::bottom_axis_is_multi`].
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_is_multi`], on
     /// the DUAL atomic mask.
@@ -28380,15 +28380,15 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.polar_axis_is_multi(), Some(true)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar MULTI predicate is a named typed exit
     /// `Option<bool>` rather than a per-consumer
     /// `self.count_polar_axes() > 1` inline strict inequality test that
-    /// discards the has-axis-at-all distinction. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs (the COMPOUND MULTI
+    /// discards the has-axis-at-all distinction.
+    /// Invariant 5 — composition preserves proofs (the COMPOUND MULTI
     /// cell is a structural derivation from the COMPOUND polar COUNT
     /// projection via one usize strict-inequality and one is-zero split,
-    /// no new per-axis scan, no allocation). THEORY.md §V.1 — knowable
+    /// no new per-axis scan, no allocation). Knowable
     /// platform: every axis-family cell on the MULTI column is either a
     /// first-class typed exit or a De Morgan reflection of one.
     ///
@@ -28452,7 +28452,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis MULTI verdict
     /// at compile time.
     ///
-    /// Theory anchor: same as [`Self::polar_axis_is_multi`], on the
+    /// Anchor: same as [`Self::polar_axis_is_multi`], on the
     /// DUAL COMPOUND cell.
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_is_multi`] on
@@ -28546,16 +28546,16 @@ impl ResourceLimits {
     /// at compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_saturated(), Some(true)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SATURATED predicate is a named typed exit `Option<bool>` rather
     /// than a per-consumer `self.count_bottom_axes() == Self::FIELD_COUNT`
     /// inline equality test that discards the has-axis-at-all distinction
     /// AND a `self.is_bottom()` inline preset-equality test that discards
-    /// the count-based derivation. THEORY.md §II.1 invariant 5 —
+    /// the count-based derivation. Invariant 5 —
     /// composition preserves proofs (the SATURATED cell is a structural
     /// derivation from the COUNT projection via one usize equality against
     /// `Self::FIELD_COUNT` and one is-zero split, no new per-axis scan,
-    /// no allocation). THEORY.md §V.1 — knowable platform.
+    /// no allocation). Knowable platform.
     ///
     /// Frontier inspiration: APL's `∧/⍵=0` per-vector all-zero test lifted
     /// to a tri-state `Option<bool>` at the has-cell distinction; Idris's
@@ -28627,7 +28627,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis SATURATED verdict at
     /// compile time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_is_saturated`].
+    /// Anchor: same as [`Self::bottom_axis_is_saturated`].
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_is_saturated`],
     /// on the DUAL atomic mask.
@@ -28731,17 +28731,17 @@ impl ResourceLimits {
     /// compile time (`const _: () = assert!(matches!(
     /// EMPTY_RESOURCE_LIMITS.polar_axis_is_saturated(), Some(true)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar SATURATED predicate is a named typed exit
     /// `Option<bool>` rather than a per-consumer
     /// `self.count_polar_axes() == Self::FIELD_COUNT` inline equality test
     /// that discards the has-axis-at-all distinction AND an
     /// `self.is_axially_polar()` inline ALL-fold call that discards the
-    /// count-based derivation. THEORY.md §II.1 invariant 5 — composition
+    /// count-based derivation. Invariant 5 — composition
     /// preserves proofs (the COMPOUND SATURATED cell is a structural
     /// derivation from the COMPOUND polar COUNT projection via one usize
     /// equality against `Self::FIELD_COUNT` and one is-zero split, no new
-    /// per-axis scan, no allocation). THEORY.md §V.1 — knowable platform.
+    /// per-axis scan, no allocation). Knowable platform.
     ///
     /// Frontier inspiration: same as [`Self::bottom_axis_is_saturated`], on
     /// the DUAL COMPOUND polar mask. Boolean-algebra complementation lifted
@@ -28815,7 +28815,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis SATURATED verdict
     /// at compile time.
     ///
-    /// Theory anchor: same as [`Self::polar_axis_is_saturated`], on the
+    /// Anchor: same as [`Self::polar_axis_is_saturated`], on the
     /// DUAL COMPOUND cell.
     ///
     /// Frontier inspiration: same as [`Self::polar_axis_is_saturated`], on
@@ -28939,18 +28939,18 @@ impl ResourceLimits {
     /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_strictly_multi(),
     /// Some(false)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// STRICTLY-MULTI predicate is a named typed exit `Option<bool>`
     /// rather than a per-consumer `self.count_bottom_axes() > 1 &&
     /// self.count_bottom_axes() < Self::FIELD_COUNT` inline
     /// range-inequality that discards the has-axis-at-all distinction
     /// AND a paired `self.bottom_axis_is_multi() == Some(true) &&
     /// self.bottom_axis_is_saturated() == Some(false)` two-projection
-    /// chain that carries the set-difference at the call site. THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs (the
+    /// chain that carries the set-difference at the call site.
+    /// Invariant 5 — composition preserves proofs (the
     /// STRICTLY-MULTI cell is a structural derivation from the COUNT
     /// projection via one usize range check and one is-zero split, no
-    /// new per-axis scan, no allocation). THEORY.md §V.1 — knowable
+    /// new per-axis scan, no allocation). Knowable
     /// platform.
     ///
     /// Frontier inspiration: Racket's `(and (list? l) (not (single? l))
@@ -29048,7 +29048,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis STRICTLY-MULTI
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_is_strictly_multi`].
+    /// Anchor: same as [`Self::bottom_axis_is_strictly_multi`].
     ///
     /// Frontier inspiration: same as
     /// [`Self::bottom_axis_is_strictly_multi`], on the DUAL atomic mask.
@@ -29178,19 +29178,19 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis STRICTLY-MULTI
     /// verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar STRICTLY-MULTI predicate is a named typed exit
     /// `Option<bool>` rather than a per-consumer `{ let c =
     /// self.count_polar_axes(); c > 1 && c < Self::FIELD_COUNT }` inline
     /// range-inequality that discards the has-axis-at-all distinction
     /// AND a paired `polar_axis_is_multi() == Some(true) &&
     /// polar_axis_is_saturated() == Some(false)` two-projection chain
-    /// that carries the set-difference at the call site. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs (the COMPOUND
+    /// that carries the set-difference at the call site.
+    /// Invariant 5 — composition preserves proofs (the COMPOUND
     /// STRICTLY-MULTI cell is a structural derivation from the COMPOUND
     /// polar COUNT projection via one usize range check and one is-zero
-    /// split, no new per-axis scan, no allocation). THEORY.md §V.1 —
-    /// knowable platform: every axis-family cell on the STRICTLY-MULTI
+    /// split, no new per-axis scan, no allocation).
+    /// Knowable platform: every axis-family cell on the STRICTLY-MULTI
     /// column is a first-class typed exit rather than a two-projection
     /// chain the consumer authors to distinguish the SATURATED endpoint
     /// from the strictly-between-endpoints regime.
@@ -29287,7 +29287,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis STRICTLY-MULTI
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::polar_axis_is_strictly_multi`], on
+    /// Anchor: same as [`Self::polar_axis_is_strictly_multi`], on
     /// the DUAL COMPOUND interior cell.
     ///
     /// Frontier inspiration: same as
@@ -29395,18 +29395,18 @@ impl ResourceLimits {
     /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_nearly_saturated(),
     /// Some(false)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// NEARLY-SATURATED predicate is a named typed exit `Option<bool>`
     /// rather than a per-consumer `self.count_bottom_axes() ==
     /// Self::FIELD_COUNT - 1` inline equality test that discards the
     /// has-axis-at-all distinction AND treats the neighbour-below-
     /// SATURATED cell as an ad-hoc arithmetic derivation on the field
-    /// count rather than a named substrate theorem. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs (the NEARLY-SATURATED
+    /// count rather than a named substrate theorem.
+    /// Invariant 5 — composition preserves proofs (the NEARLY-SATURATED
     /// cell is a structural derivation from the COUNT projection via
     /// one usize equality against `Self::FIELD_COUNT - 1` and one
-    /// is-zero split, no new per-axis scan, no allocation). THEORY.md
-    /// §V.1 — knowable platform.
+    /// is-zero split, no new per-axis scan, no allocation).
+    /// Knowable platform.
     ///
     /// Frontier inspiration: Racket's `(= (length l) (sub1 N))` typed
     /// exit for the one-shy-of-full length regime distinct from `(=
@@ -29488,7 +29488,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis NEARLY-SATURATED
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_is_nearly_saturated`].
+    /// Anchor: same as [`Self::bottom_axis_is_nearly_saturated`].
     ///
     /// Frontier inspiration: same as
     /// [`Self::bottom_axis_is_nearly_saturated`], on the DUAL atomic
@@ -29617,18 +29617,18 @@ impl ResourceLimits {
     /// EMPTY_RESOURCE_LIMITS.polar_axis_is_nearly_saturated(),
     /// Some(false)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar NEARLY-SATURATED predicate is a named typed exit
     /// `Option<bool>` rather than a per-consumer `self.count_polar_axes()
     /// == Self::FIELD_COUNT - 1` inline equality test that discards the
     /// has-axis-at-all distinction AND a paired `self.count_polar_axes()
     /// == Self::FIELD_COUNT` inline test that carries the endpoint
-    /// exclusion at the call site. THEORY.md §II.1 invariant 5 —
+    /// exclusion at the call site. Invariant 5 —
     /// composition preserves proofs (the COMPOUND NEARLY-SATURATED cell
     /// is a structural derivation from the COMPOUND polar COUNT
     /// projection via one usize equality against `Self::FIELD_COUNT - 1`
     /// and one is-zero split, no new per-axis scan, no allocation).
-    /// THEORY.md §V.1 — knowable platform.
+    /// Knowable platform.
     ///
     /// Frontier inspiration: same as
     /// [`Self::bottom_axis_is_nearly_saturated`], on the DUAL COMPOUND
@@ -29716,7 +29716,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis NEARLY-SATURATED
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::polar_axis_is_nearly_saturated`],
+    /// Anchor: same as [`Self::polar_axis_is_nearly_saturated`],
     /// on the DUAL COMPOUND interior cell.
     ///
     /// Frontier inspiration: same as
@@ -29847,16 +29847,16 @@ impl ResourceLimits {
     /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_half_saturated(),
     /// Some(false)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic bottom HALF-SATURATED predicate is a named typed exit
     /// `Option<bool>` rather than a per-consumer
     /// `self.count_bottom_axes() == Self::FIELD_COUNT / 2` inline
     /// equality test that discards the has-axis-at-all distinction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Invariant 5 — composition preserves proofs (the
     /// HALF-SATURATED cell is a structural derivation from the atomic
     /// bottom COUNT projection via one usize equality against
     /// `Self::FIELD_COUNT / 2` under a two-arm match on the zero split,
-    /// no new per-axis scan, no allocation). THEORY.md §V.1 — knowable
+    /// no new per-axis scan, no allocation). Knowable
     /// platform.
     ///
     /// Frontier inspiration: Racket's `(= (length l) (quotient N 2))`
@@ -29935,7 +29935,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis HALF-SATURATED
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_is_half_saturated`].
+    /// Anchor: same as [`Self::bottom_axis_is_half_saturated`].
     ///
     /// Frontier inspiration: same as
     /// [`Self::bottom_axis_is_half_saturated`], on the DUAL atomic
@@ -30095,17 +30095,17 @@ impl ResourceLimits {
     /// EMPTY_RESOURCE_LIMITS.polar_axis_is_half_saturated(),
     /// Some(false)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar HALF-SATURATED predicate is a named typed exit
     /// `Option<bool>` rather than a per-consumer
     /// `self.count_polar_axes() == Self::FIELD_COUNT / 2` inline
     /// equality test that discards the has-axis-at-all distinction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs
+    /// Invariant 5 — composition preserves proofs
     /// (the COMPOUND HALF-SATURATED cell is a structural derivation
     /// from the COMPOUND polar COUNT projection via one usize
     /// equality against `Self::FIELD_COUNT / 2` under a two-arm match
     /// on the zero split, no new per-axis scan, no allocation).
-    /// THEORY.md §V.1 — knowable platform.
+    /// Knowable platform.
     ///
     /// Frontier inspiration: same as
     /// [`Self::bottom_axis_is_half_saturated`], on the DUAL COMPOUND
@@ -30205,7 +30205,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::polar_axis_is_half_saturated`],
+    /// Anchor: same as [`Self::polar_axis_is_half_saturated`],
     /// on the DUAL COMPOUND interior cell.
     ///
     /// Frontier inspiration: same as
@@ -30327,15 +30327,15 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis SUB-HALF-SATURATED
     /// verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// SUB-HALF-SATURATED predicate is a named typed exit `Option<bool>`
     /// rather than a per-consumer `self.count_bottom_axes() * 2 <
     /// Self::FIELD_COUNT` inline strict-inequality test that discards the
-    /// has-axis-at-all distinction. THEORY.md §II.1 invariant 5 —
+    /// has-axis-at-all distinction. Invariant 5 —
     /// composition preserves proofs; the SUB-HALF-SATURATED cell is a
     /// structural derivation from the COUNT projection via one usize
     /// doubling and one strict-inequality comparison, no new per-axis
-    /// scan, no allocation. THEORY.md §V.1 — knowable platform: the count
+    /// scan, no allocation. Knowable platform: the count
     /// half-line's three cells around the balance-point cardinality now
     /// live at named typed methods with pinned mutual-exclusion bridges
     /// to every neighbouring count-cell predicate.
@@ -30432,7 +30432,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis SUB-HALF-SATURATED
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_is_sub_half_saturated`].
+    /// Anchor: same as [`Self::bottom_axis_is_sub_half_saturated`].
     ///
     /// Frontier inspiration: same as
     /// [`Self::bottom_axis_is_sub_half_saturated`], on the DUAL atomic
@@ -30535,17 +30535,17 @@ impl ResourceLimits {
     /// EMPTY_RESOURCE_LIMITS.polar_axis_is_sub_half_saturated(),
     /// Some(false)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar SUB-HALF-SATURATED predicate is a named typed
     /// exit `Option<bool>` rather than a per-consumer
     /// `self.count_polar_axes() * 2 < Self::FIELD_COUNT` inline strict-
     /// inequality that discards the has-axis-at-all distinction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Invariant 5 — composition preserves proofs (the
     /// COMPOUND SUB-HALF cell is a structural derivation from the
     /// COMPOUND polar COUNT projection via one usize doubling and one
     /// strict-inequality against `Self::FIELD_COUNT` under a two-arm
     /// match on the zero split, no new per-axis scan, no allocation).
-    /// THEORY.md §V.1 — knowable platform: the polar count half-line's
+    /// Knowable platform: the polar count half-line's
     /// (SUB-HALF, HALF, SUPER-HALF) three cells now live at named typed
     /// methods on the COMPOUND row, with the CROSS-CELL mutual-exclusion
     /// bridge naming the compound-partition invariant that the atomic
@@ -30634,7 +30634,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis SUB-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::polar_axis_is_sub_half_saturated`],
+    /// Anchor: same as [`Self::polar_axis_is_sub_half_saturated`],
     /// on the DUAL COMPOUND interior cell.
     ///
     /// Frontier inspiration: same as
@@ -30759,15 +30759,15 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis SUPER-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
+    /// Anchor: invariant 3 — typed exit;
     /// SUPER-HALF-SATURATED is a named typed exit `Option<bool>` rather
     /// than a per-consumer `self.count_bottom_axes() * 2 >
     /// Self::FIELD_COUNT` inline strict-inequality test that discards
-    /// the has-axis-at-all distinction. THEORY.md §II.1 invariant 5 —
+    /// the has-axis-at-all distinction. Invariant 5 —
     /// composition preserves proofs; the SUPER-HALF cell is a
     /// structural derivation from the already-lifted COUNT projection
     /// via one usize doubling and one strict-inequality comparison,
-    /// no new per-axis scan, no allocation. THEORY.md §V.1 — knowable
+    /// no new per-axis scan, no allocation. Knowable
     /// platform; the count half-line's (SUB-HALF, HALF, SUPER-HALF)
     /// three cells now TOTALLY PARTITION the has-axis regime at named
     /// typed methods with the CLOSURE invariant pinned as a first-class
@@ -30856,7 +30856,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis SUPER-HALF-SATURATED
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_is_super_half_saturated`].
+    /// Anchor: same as [`Self::bottom_axis_is_super_half_saturated`].
     ///
     /// Frontier inspiration: same as
     /// [`Self::bottom_axis_is_super_half_saturated`], on the DUAL
@@ -30991,17 +30991,17 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis SUPER-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar SUPER-HALF-SATURATED predicate is a named typed
     /// exit `Option<bool>` rather than a per-consumer
     /// `self.count_polar_axes() * 2 > Self::FIELD_COUNT` inline strict-
     /// inequality that discards the has-axis-at-all distinction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// Invariant 5 — composition preserves proofs (the
     /// COMPOUND SUPER-HALF cell is a structural derivation from the
     /// COMPOUND polar COUNT projection via one usize doubling and one
     /// strict-inequality against `Self::FIELD_COUNT` under a two-arm
     /// match on the zero split, no new per-axis scan, no allocation).
-    /// THEORY.md §V.1 — knowable platform: the polar count half-line's
+    /// Knowable platform: the polar count half-line's
     /// (SUB-HALF, HALF, SUPER-HALF) three cells now TOTALLY PARTITION
     /// the has-axis regime at named typed methods on the COMPOUND row
     /// with the CLOSURE invariant pinned as a first-class structural
@@ -31102,7 +31102,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis SUPER-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_super_half_saturated`], on the DUAL
     /// COMPOUND interior cell.
     ///
@@ -31198,16 +31198,16 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis BARELY-MULTI
     /// verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic bottom BARELY-MULTI predicate is a named typed exit
     /// `Option<bool>` rather than a per-consumer
     /// `self.count_bottom_axes() == 2` inline count-equality that
-    /// discards the has-axis-at-all distinction. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the BARELY-MULTI
+    /// discards the has-axis-at-all distinction.
+    /// Invariant 5 — composition preserves proofs; the BARELY-MULTI
     /// cell is a structural derivation from the already-lifted COUNT
     /// projection via one usize equality against `2` under a two-arm
     /// match on the zero split, no new per-axis scan, no allocation.
-    /// THEORY.md §V.1 — knowable platform; the (SINGLETON, BARELY-MULTI,
+    /// Knowable platform; the (SINGLETON, BARELY-MULTI,
     /// …, NEARLY-SATURATED, SATURATED) count-equality cells now name
     /// both endpoints of the multi-axis regime as typed methods with
     /// their bridges into the (STRICTLY-MULTI, SUB-HALF, MULTI)
@@ -31289,7 +31289,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis BARELY-MULTI
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::bottom_axis_is_barely_multi`], on
+    /// Anchor: same as [`Self::bottom_axis_is_barely_multi`], on
     /// the DUAL atomic top cell.
     ///
     /// Frontier inspiration: same as
@@ -31395,16 +31395,16 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis BARELY-MULTI
     /// verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar BARELY-MULTI predicate is a named typed exit
     /// `Option<bool>` rather than a per-consumer
     /// `self.count_polar_axes() == 2` inline count-equality that
-    /// discards the has-axis-at-all distinction. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the BARELY-MULTI
+    /// discards the has-axis-at-all distinction.
+    /// Invariant 5 — composition preserves proofs; the BARELY-MULTI
     /// cell is a structural derivation from the already-lifted
     /// COMPOUND COUNT projection via one usize equality against `2`
     /// under a two-arm match on the zero split, no new per-axis scan,
-    /// no allocation. THEORY.md §V.1 — knowable platform; the
+    /// no allocation. Knowable platform; the
     /// (SINGLETON, BARELY-MULTI, …, NEARLY-SATURATED, SATURATED)
     /// count-equality cells now name both endpoints of the multi-axis
     /// regime as typed methods on the COMPOUND row with the CROSS-
@@ -31497,7 +31497,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis BARELY-MULTI
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as [`Self::polar_axis_is_barely_multi`],
+    /// Anchor: same as [`Self::polar_axis_is_barely_multi`],
     /// on the DUAL COMPOUND interior cell.
     ///
     /// Frontier inspiration: same as
@@ -31611,17 +31611,17 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis BARELY-SUPER-
     /// HALF-SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic bottom BARELY-SUPER-HALF-SATURATED predicate is a named
     /// typed exit `Option<bool>` rather than a per-consumer
     /// `self.count_bottom_axes() == Self::FIELD_COUNT / 2 + 1` inline
     /// count-equality that discards the has-axis-at-all distinction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// BARELY-SUPER-HALF cell is a structural derivation from the
     /// already-lifted atomic bottom COUNT projection via one usize
     /// equality against `Self::FIELD_COUNT / 2 + 1` under a two-arm
     /// match on the zero split, no new per-axis scan, no allocation.
-    /// THEORY.md §V.1 — knowable platform; the (SINGLETON, BARELY-
+    /// Knowable platform; the (SINGLETON, BARELY-
     /// MULTI, HALF, BARELY-SUPER-HALF, NEARLY-SATURATED, SATURATED)
     /// count-equality cells now name BOTH endpoints of the multi-axis
     /// regime AND the FIRST cell strictly above the balance-point as
@@ -31716,7 +31716,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis BARELY-SUPER-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_barely_super_half_saturated`], on the
     /// DUAL atomic top cell.
     ///
@@ -31851,17 +31851,17 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis BARELY-SUPER-
     /// HALF-SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar BARELY-SUPER-HALF-SATURATED predicate is a named
     /// typed exit `Option<bool>` rather than a per-consumer
     /// `self.count_polar_axes() == Self::FIELD_COUNT / 2 + 1` inline
     /// count-equality that discards the has-axis-at-all distinction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// BARELY-SUPER-HALF cell is a structural derivation from the
     /// already-lifted COMPOUND polar COUNT projection via one usize
     /// equality against `Self::FIELD_COUNT / 2 + 1` under a two-arm
     /// match on the zero split, no new per-axis scan, no allocation.
-    /// THEORY.md §V.1 — knowable platform; the (SINGLETON, BARELY-
+    /// Knowable platform; the (SINGLETON, BARELY-
     /// MULTI, HALF, BARELY-SUPER-HALF, NEARLY-SATURATED, SATURATED)
     /// count-equality cells now name BOTH endpoints of the multi-axis
     /// regime AND the first cell strictly above the balance-point as
@@ -31970,7 +31970,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis BARELY-SUPER-
     /// HALF-SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_barely_super_half_saturated`], on the
     /// DUAL COMPOUND interior cell.
     ///
@@ -32103,16 +32103,16 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis AT-MOST-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic bottom AT-MOST-HALF-SATURATED predicate is a named typed
     /// exit `Option<bool>` rather than a per-consumer `self
     /// .count_bottom_axes() * 2 <= Self::FIELD_COUNT` inline
     /// comparison that discards the has-axis-at-all distinction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// AT-MOST-HALF cell is a structural derivation from the already-
     /// lifted COUNT projection via one usize comparison against
     /// `Self::FIELD_COUNT` under a two-arm match on the zero split, no
-    /// new per-axis scan, no allocation. THEORY.md §V.1 — knowable
+    /// new per-axis scan, no allocation. Knowable
     /// platform; naming the CLOSED-LOWER-HALF cell alongside its
     /// OPEN-LOWER-HALF sibling (SUB-HALF) removes the ambiguity in
     /// "≤ half" that the OPEN cell forces every consumer to inline:
@@ -32221,7 +32221,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis AT-MOST-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_at_most_half_saturated`], on the DUAL
     /// atomic top cell.
     ///
@@ -32353,19 +32353,19 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis AT-MOST-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar AT-MOST-HALF-SATURATED predicate is a named typed
     /// exit `Option<bool>` rather than a per-consumer `self
     /// .count_polar_axes() * 2 <= Self::FIELD_COUNT` inline comparison
-    /// that discards the has-axis-at-all distinction. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the AT-MOST-HALF cell
+    /// that discards the has-axis-at-all distinction.
+    /// Invariant 5 — composition preserves proofs; the AT-MOST-HALF cell
     /// is a structural derivation from the already-lifted COUNT
     /// projection via one usize comparison against `Self::FIELD_COUNT`
     /// under a two-arm match on the zero split, no new per-axis scan, no
     /// allocation. The CROSS-CELL DUAL-BALANCE-POINT CO-FIRE pin
     /// composes structurally through the already-lifted COMPOUND
     /// EXHAUSTIVE-PARTITION identity `count_polar + count_interior ==
-    /// FIELD_COUNT`, no re-derivation. THEORY.md §V.1 — knowable
+    /// FIELD_COUNT`, no re-derivation. Knowable
     /// platform; naming the CLOSED-LOWER-HALF cell on the compound row
     /// alongside its OPEN-LOWER-HALF sibling (SUB-HALF) removes the
     /// ambiguity in "≤ half" that the OPEN cell forces every consumer
@@ -32479,7 +32479,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis AT-MOST-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_at_most_half_saturated`], on the DUAL
     /// COMPOUND interior cell.
     ///
@@ -32616,16 +32616,16 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis AT-LEAST-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic bottom AT-LEAST-HALF-SATURATED predicate is a named typed
     /// exit `Option<bool>` rather than a per-consumer `self
     /// .count_bottom_axes() * 2 >= Self::FIELD_COUNT` inline comparison
-    /// that discards the has-axis-at-all distinction. THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the AT-LEAST-HALF
+    /// that discards the has-axis-at-all distinction.
+    /// Invariant 5 — composition preserves proofs; the AT-LEAST-HALF
     /// cell is a structural derivation from the already-lifted COUNT
     /// projection via one usize comparison against `Self::FIELD_COUNT`
     /// under a two-arm match on the zero split, no new per-axis scan,
-    /// no allocation. THEORY.md §V.1 — knowable platform; naming the
+    /// no allocation. Knowable platform; naming the
     /// CLOSED-UPPER-HALF cell alongside its OPEN-UPPER-HALF sibling
     /// (SUPER-HALF) removes the ambiguity in "≥ half" that the OPEN
     /// cell forces every consumer to inline: SUPER-HALF alone gives
@@ -32736,7 +32736,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis AT-LEAST-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_at_least_half_saturated`], on the DUAL
     /// atomic top cell.
     ///
@@ -32851,20 +32851,20 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis AT-LEAST-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// compound polar AT-LEAST-HALF-SATURATED predicate is a named typed
     /// exit `Option<bool>` rather than a per-consumer `self
     /// .count_polar_axes() * 2 >= Self::FIELD_COUNT` inline comparison
-    /// that discards the has-polar-axis-at-all distinction. THEORY.md
-    /// §II.1 invariant 5 — composition preserves proofs; the compound
+    /// that discards the has-polar-axis-at-all distinction.
+    /// Invariant 5 — composition preserves proofs; the compound
     /// AT-LEAST-HALF cell is a structural derivation from the already-
     /// lifted COUNT projection via one usize comparison against
     /// `Self::FIELD_COUNT` under a two-arm match on the zero split, no
     /// new per-axis scan, no allocation. The CROSS-CELL DUAL-BALANCE-
     /// POINT CO-FIRE pin composes structurally through the already-
     /// lifted COMPOUND EXHAUSTIVE-PARTITION identity `count_polar +
-    /// count_interior == FIELD_COUNT`, no re-derivation. THEORY.md
-    /// §V.1 — knowable platform; naming the CLOSED-UPPER-HALF cell on
+    /// count_interior == FIELD_COUNT`, no re-derivation.
+    /// Knowable platform; naming the CLOSED-UPPER-HALF cell on
     /// the compound row alongside its OPEN sibling SUPER-HALF-SATURATED
     /// and its LEFT endpoint HALF-SATURATED removes the ambiguity in
     /// "≥ half" that SUPER-HALF alone forces every compound-row
@@ -32974,7 +32974,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis AT-LEAST-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_at_least_half_saturated`], on the DUAL
     /// COMPOUND interior cell.
     ///
@@ -33082,23 +33082,23 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis
     /// PARTIALLY-SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic bottom PARTIALLY-SATURATED predicate is a named typed
     /// exit `Option<bool>` rather than a per-consumer `self
     /// .count_bottom_axes() < Self::FIELD_COUNT` inline comparison
     /// that discards the has-bottom-axis-at-all distinction and
     /// silently classifies EMPTY-bottom postures as
     /// "partially-saturated" (the classic zero-elides-as-false bug
-    /// the None-on-zero gate structurally forbids). THEORY.md §II.1
-    /// invariant 5 — composition preserves proofs; the
+    /// the None-on-zero gate structurally forbids).
+    /// Invariant 5 — composition preserves proofs; the
     /// PARTIALLY-SATURATED cell is a structural derivation from the
     /// already-lifted COUNT projection via one usize comparison
     /// against `Self::FIELD_COUNT` under a two-arm match on the zero
     /// split, no new per-axis scan, no allocation. The COMPLEMENTARITY
     /// pin with `is_saturated` composes structurally: both cells
     /// share the same count derivation, and their disagreement is a
-    /// single-bit binary partition of the has-axis regime. THEORY.md
-    /// §V.1 — knowable platform; naming the OPEN complement of
+    /// single-bit binary partition of the has-axis regime.
+    /// Knowable platform; naming the OPEN complement of
     /// SATURATED as a typed exit removes the ambiguity in "has
     /// bottom axis but not all saturated" that
     /// `has_bottom_axis() && !bottom_axis_is_saturated().unwrap_or(false)`
@@ -33201,7 +33201,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis
     /// PARTIALLY-SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_partially_saturated`], on the DUAL
     /// atomic top cell.
     ///
@@ -33348,7 +33348,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis
     /// PARTIALLY-SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_partially_saturated`], on the DUAL
     /// COMPOUND polar cell. Boolean-algebra complementation lifted
     /// to `Option<bool>` composed structurally through the already-
@@ -33457,7 +33457,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis PARTIALLY-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_partially_saturated`], on the DUAL
     /// COMPOUND interior cell.
     ///
@@ -33578,17 +33578,17 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis BARELY-SUB-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic bottom BARELY-SUB-HALF-SATURATED predicate is a named
     /// typed exit `Option<bool>` rather than a per-consumer
     /// `self.count_bottom_axes() == (Self::FIELD_COUNT - 1) / 2` inline
     /// count-equality that discards the has-axis-at-all distinction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// BARELY-SUB-HALF cell is a structural derivation from the
     /// already-lifted atomic bottom COUNT projection via one usize
     /// equality against `(Self::FIELD_COUNT - 1) / 2` under a two-arm
     /// match on the zero split, no new per-axis scan, no allocation.
-    /// THEORY.md §V.1 — knowable platform; the (SINGLETON, BARELY-
+    /// Knowable platform; the (SINGLETON, BARELY-
     /// MULTI, BARELY-SUB-HALF, HALF, BARELY-SUPER-HALF, NEARLY-
     /// SATURATED, SATURATED) count-equality cells now name BOTH
     /// balance-point-adjacent cardinalities as typed methods on the
@@ -33683,7 +33683,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis BARELY-SUB-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_barely_sub_half_saturated`], on the DUAL
     /// atomic top cell.
     ///
@@ -33821,17 +33821,17 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis BARELY-SUB-HALF-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// COMPOUND polar BARELY-SUB-HALF-SATURATED predicate is a named
     /// typed exit `Option<bool>` rather than a per-consumer
     /// `self.count_polar_axes() == (Self::FIELD_COUNT - 1) / 2` inline
     /// count-equality that discards the has-axis-at-all distinction.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// Invariant 5 — composition preserves proofs; the
     /// BARELY-SUB-HALF cell is a structural derivation from the
     /// already-lifted COMPOUND polar COUNT projection via one usize
     /// equality against `(Self::FIELD_COUNT - 1) / 2` under a two-arm
     /// match on the zero split, no new per-axis scan, no allocation.
-    /// THEORY.md §V.1 — knowable platform; the (SINGLETON, BARELY-
+    /// Knowable platform; the (SINGLETON, BARELY-
     /// MULTI, BARELY-SUB-HALF, HALF, BARELY-SUPER-HALF, NEARLY-
     /// SATURATED, SATURATED) count-equality cells now name BOTH
     /// balance-point-adjacent cardinalities as typed methods on the
@@ -33930,7 +33930,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis BARELY-SUB-
     /// HALF-SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_barely_sub_half_saturated`], on the DUAL
     /// COMPOUND interior cell.
     ///
@@ -34051,7 +34051,7 @@ impl ResourceLimits {
     /// assert!(matches!(EMPTY_RESOURCE_LIMITS
     /// .bottom_axis_is_at_least_nearly_saturated(), Some(true)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic bottom AT-LEAST-NEARLY-SATURATED predicate is a named
     /// typed exit `Option<bool>` rather than a per-consumer
     /// `self.count_bottom_axes() >= Self::FIELD_COUNT - 1` inline
@@ -34059,12 +34059,12 @@ impl ResourceLimits {
     /// distinction and silently classifies the empty-bottom posture
     /// as SATURATION-ADJACENT (the classic zero-elides-as-close-to-
     /// saturated bug the None-on-zero gate structurally forbids).
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// Invariant 5 — composition preserves proofs;
     /// the AT-LEAST-NEARLY cell is a structural derivation from the
     /// already-lifted atomic bottom COUNT projection via one usize
     /// comparison against `Self::FIELD_COUNT - 1` under a two-arm
     /// match on the zero split, no new per-axis scan, no allocation.
-    /// THEORY.md §V.1 — knowable platform; naming the CLOSED right-
+    /// Knowable platform; naming the CLOSED right-
     /// endpoint bracket on the atomic bottom row alongside its OPEN
     /// sibling NEARLY-SATURATED and its RIGHT endpoint SATURATED
     /// removes the ambiguity in "at or one shy of saturation" that
@@ -34171,7 +34171,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis AT-LEAST-NEARLY-
     /// SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_at_least_nearly_saturated`], on the
     /// DUAL atomic top cell.
     ///
@@ -34278,7 +34278,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis
     /// AT-LEAST-NEARLY-SATURATED verdict at compile time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// compound polar AT-LEAST-NEARLY-SATURATED predicate is a named
     /// typed exit `Option<bool>` rather than a per-consumer
     /// `polar_axis_is_nearly_saturated() == Some(true) ||
@@ -34287,7 +34287,7 @@ impl ResourceLimits {
     /// silently classify the EMPTY-polar posture as NOT
     /// SATURATION-ADJACENT rather than UNDEFINED (the classic
     /// zero-elides-as-far-from-saturation bug the None-on-zero gate
-    /// structurally forbids). THEORY.md §II.1 invariant 5 —
+    /// structurally forbids). Invariant 5 —
     /// composition preserves proofs; the compound AT-LEAST-NEARLY
     /// cell is a structural derivation from the already-lifted
     /// [`Self::count_polar_axes`] via one usize comparison against
@@ -34296,7 +34296,7 @@ impl ResourceLimits {
     /// CO-FIRE-UNSATISFIABLE pin composes structurally through the
     /// already-lifted COMPOUND EXHAUSTIVE-PARTITION identity
     /// `count_polar + count_interior == FIELD_COUNT`, no
-    /// re-derivation. THEORY.md §V.1 — knowable platform; naming the
+    /// re-derivation. Knowable platform; naming the
     /// CLOSED right-endpoint bracket on the compound polar row
     /// alongside its OPEN sibling NEARLY-SATURATED and its RIGHT
     /// endpoint SATURATED removes the ambiguity in "at or one shy of
@@ -34408,7 +34408,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis
     /// AT-LEAST-NEARLY-SATURATED verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_at_least_nearly_saturated`], on the
     /// DUAL COMPOUND interior cell.
     ///
@@ -34522,19 +34522,19 @@ impl ResourceLimits {
     /// assert!(matches!(ENDPOINTS_ONLY_BOTTOM_POSTURE
     /// .bottom_axis_is_at_most_barely_multi(), Some(true)));`).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// Anchor: invariant 3 — typed exit; the
     /// atomic bottom AT-MOST-BARELY-MULTI predicate is a named typed
     /// exit `Option<bool>` rather than a per-consumer
     /// `self.count_bottom_axes() <= 2` inline comparison that
     /// discards the has-bottom-axis-at-all distinction and silently
     /// classifies the empty-bottom posture as SPARSITY-ADJACENT (the
     /// classic zero-elides-as-close-to-singleton bug the None-on-zero
-    /// gate structurally forbids). THEORY.md §II.1 invariant 5 —
+    /// gate structurally forbids). Invariant 5 —
     /// composition preserves proofs; the AT-MOST-BARELY-MULTI cell is
     /// a structural derivation from the already-lifted atomic bottom
     /// COUNT projection via one usize comparison against `2` under a
     /// two-arm match on the zero split, no new per-axis scan, no
-    /// allocation. THEORY.md §V.1 — knowable platform; naming the
+    /// allocation. Knowable platform; naming the
     /// CLOSED left-endpoint bracket on the atomic bottom row
     /// alongside its OPEN sibling BARELY-MULTI and its LEFT endpoint
     /// SINGLETON removes the ambiguity in "at or one past alone" that
@@ -34641,7 +34641,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis AT-MOST-BARELY-
     /// MULTI verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_at_most_barely_multi`], on the DUAL
     /// atomic top cell.
     ///
@@ -34751,7 +34751,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis AT-MOST-BARELY-
     /// MULTI verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_at_most_barely_multi`], on the COMPOUND
     /// polar cell derived structurally from the already-lifted
     /// [`Self::count_polar_axes`]. The CROSS-CELL CO-FIRE-UNSATISFIABLE
@@ -34848,7 +34848,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis AT-MOST-
     /// BARELY-MULTI verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_at_most_barely_multi`], on the DUAL
     /// COMPOUND interior cell.
     ///
@@ -34955,7 +34955,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis
     /// SATURATED-OR-SINGLETON verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::witness_count_saturated_or_singleton`], on the
     /// atomic bottom cell. The DISJOINT UNION of the two atomic
     /// count-half-line ENDPOINT cells names the SINGLE-FIRE-POLE
@@ -35044,7 +35044,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis
     /// SATURATED-OR-SINGLETON verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_saturated_or_singleton`], on the DUAL
     /// atomic top cell.
     ///
@@ -35136,7 +35136,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis
     /// SATURATED-OR-SINGLETON verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_saturated_or_singleton`], on the DUAL
     /// COMPOUND polar cell.
     ///
@@ -35227,7 +35227,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis
     /// SATURATED-OR-SINGLETON verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_saturated_or_singleton`], on the DUAL
     /// COMPOUND interior cell.
     ///
@@ -35311,7 +35311,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis BMNS verdict at
     /// compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::witness_count_barely_multi_or_nearly_saturated`], on
     /// the atomic bottom count.
     ///
@@ -35368,7 +35368,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis BMNS verdict at
     /// compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_barely_multi_or_nearly_saturated`], on
     /// the DUAL atomic top cell.
     ///
@@ -35421,7 +35421,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis BMNS verdict at
     /// compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_barely_multi_or_nearly_saturated`], on
     /// the COMPOUND polar cell.
     ///
@@ -35478,7 +35478,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis BMNS verdict
     /// at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_barely_multi_or_nearly_saturated`], on
     /// the DUAL COMPOUND interior cell.
     ///
@@ -35534,7 +35534,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis BOUNDARY-ZONE
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated`],
     /// on the atomic bottom cell.
     ///
@@ -35594,7 +35594,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis BOUNDARY-ZONE verdict
     /// at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`],
     /// on the DUAL atomic top cell.
     ///
@@ -35650,7 +35650,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis BOUNDARY-ZONE
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`],
     /// on the COMPOUND polar cell.
     ///
@@ -35710,7 +35710,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis BOUNDARY-ZONE
     /// verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`],
     /// on the DUAL COMPOUND interior cell.
     ///
@@ -35767,7 +35767,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the bottom-axis STRICT-INTERIOR-
     /// MIDDLE verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::witness_count_strict_interior_middle`], on the atomic
     /// bottom cell.
     ///
@@ -35812,7 +35812,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the top-axis STRICT-INTERIOR-
     /// MIDDLE verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_strict_interior_middle`], on the DUAL
     /// atomic top cell.
     ///
@@ -35858,7 +35858,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the polar-axis STRICT-INTERIOR-
     /// MIDDLE verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::bottom_axis_is_strict_interior_middle`], on the COMPOUND
     /// polar cell.
     ///
@@ -35906,7 +35906,7 @@ impl ResourceLimits {
     /// `const fn` so a caller can pin the interior-axis STRICT-INTERIOR-
     /// MIDDLE verdict at compile time.
     ///
-    /// Theory anchor: same as
+    /// Anchor: same as
     /// [`Self::polar_axis_is_strict_interior_middle`], on the DUAL
     /// COMPOUND interior cell.
     ///
@@ -35963,13 +35963,13 @@ impl MacroDef {
     /// (substitute path) consume the projection immediately and never
     /// outlive the borrow.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+    /// Anchor: generation over composition; two
     /// inline copies of the body-peel match is the ≥2 trigger, and the
     /// substrate names the projection ONCE so authoring surfaces and
     /// future expansion strategies (a third interpreter? a JIT? a
     /// debugger that wants to render the body without the outer
-    /// quasi-quote marker?) bind to ONE primitive. THEORY.md §II.1
-    /// invariant 2 — free middle; the two expansion strategies emit
+    /// quasi-quote marker?) bind to ONE primitive.
+    /// Invariant 2 — free middle; the two expansion strategies emit
     /// IDENTICAL output for the same (macro, args) pair, and sharing one
     /// body-projection makes that per-strategy agreement structural at
     /// the entry to the walker, not a two-site discipline the
@@ -36024,10 +36024,10 @@ impl MacroDef {
 /// index-keyed (`apply_compiled`) expansion strategies share ONE binder and
 /// can never drift.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid states
+/// Anchor: knowable platform / "make invalid states
 /// unrepresentable"; the lambda-list ordering (required → optional → rest,
-/// rest-is-last, at-most-one-rest) becomes structural. THEORY.md §VI.1 —
-/// generation over composition; the positional binding loop (verbatim in
+/// rest-is-last, at-most-one-rest) becomes structural.
+/// Generation over composition; the positional binding loop (verbatim in
 /// both `bind_args` and `apply_compiled`, the ≥2 PRIME-DIRECTIVE trigger) is
 /// lifted to ONE owner, `bind`, which the optional arm extends in one place.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -36061,10 +36061,10 @@ pub struct MacroParams {
 /// to that macro consumes the same parsed `Sexp` via `Clone`, never re-
 /// reading the source.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid states
+/// Anchor: knowable platform / "make invalid states
 /// unrepresentable"; the (name, default?) pair is one entry rather than two
-/// parallel `Vec`s a regression could desynchronize. THEORY.md §VI.1 —
-/// generation over composition; the binder's optional arm consults
+/// parallel `Vec`s a regression could desynchronize.
+/// Generation over composition; the binder's optional arm consults
 /// `param.default` in ONE place, so the substitute and bytecode strategies
 /// inherit identical default-resolution semantics from the shared `bind`.
 #[derive(Debug, Clone, PartialEq)]
@@ -36129,18 +36129,18 @@ impl OptionalParam {
     /// with no payload), so the no-default path is free of allocation
     /// beyond the function return slot.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid
+    /// Anchor: knowable platform / "make invalid
     /// states unrepresentable"; the "no-default-form floor" structural
     /// concept becomes a NAMED projection on [`OptionalParam`] rather than
     /// re-derived `param.default.clone().unwrap_or(Sexp::Nil)` arithmetic
     /// at every site that walks the bound optional run. Authoring tools
     /// (REPL, LSP, `tatara-check`) that want to render "this optional
     /// binds to {default-form|nil} when absent" bind to ONE method on the
-    /// typed param. THEORY.md §VI.1 — generation over composition; the
+    /// typed param. Generation over composition; the
     /// constructor pair `bare` / `with_default` defines the typed shapes
     /// and the `resolved_default` accessor names the symmetric
-    /// bound-value projection — the typed accessor companion. THEORY.md
-    /// §II.1 invariant 2 — free middle; both expansion strategies route
+    /// bound-value projection — the typed accessor companion.
+    /// Invariant 2 — free middle; both expansion strategies route
     /// through the SHARED `MacroParams::bind`, so the new accessor is
     /// exposed to the bytecode and substitute paths uniformly via that
     /// shared binder.
@@ -36184,11 +36184,11 @@ impl MacroParams {
     /// canonical `char` lead byte on the typed algebra, pinned by
     /// `macro_params_rest_marker_prefixed_by_lambda_list_keyword_lead`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (`&rest` rest-slot marker, canonical `&'static str`) pairing
     /// binds at ONE `pub const` on the typed [`MacroParams`] algebra
     /// regardless of which parser / authoring surface reaches in.
-    /// THEORY.md §V.1 — knowable platform; the canonical CL lambda-
+    /// Knowable platform; the canonical CL lambda-
     /// list `&rest` keyword becomes a TYPE-level constant on the
     /// typed macro-params algebra rather than an inline `"&rest"`
     /// literal at the parser's rest-slot dispatch arm.
@@ -36212,11 +36212,11 @@ impl MacroParams {
     /// — pinned by
     /// `macro_params_optional_marker_prefixed_by_lambda_list_keyword_lead`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (`&optional` section-switch marker, canonical `&'static str`)
     /// pairing binds at ONE `pub const` on the typed [`MacroParams`]
     /// algebra regardless of which parser / authoring surface reaches
-    /// in. THEORY.md §V.1 — knowable platform; the canonical CL
+    /// in. Knowable platform; the canonical CL
     /// lambda-list `&optional` keyword becomes a TYPE-level constant
     /// on the typed macro-params algebra rather than an inline
     /// `"&optional"` literal at the parser's optional-section
@@ -36267,11 +36267,11 @@ impl MacroParams {
     /// marker it aliased. Pinned structurally at
     /// `macro_params_lambda_list_keyword_lead_distinct_from_every_other_algebra_marker`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// (CL lambda-list-keyword LEAD byte, canonical `'&'`) pairing
     /// binds at ONE constant on the typed [`MacroParams`] algebra
     /// regardless of which of the two `&'static str` marker consumers
-    /// reaches in. THEORY.md §V.1 — knowable platform; the canonical
+    /// reaches in. Knowable platform; the canonical
     /// CL lambda-list-keyword LEAD byte becomes a TYPE-level constant
     /// on the substrate algebra rather than an inline `'&'` glyph at
     /// every docstring pinning the family disjointness contract.
@@ -36332,16 +36332,16 @@ impl MacroParams {
     /// Self::LAMBDA_LIST_KEYWORDS[j]` — pinned by
     /// `macro_params_lambda_list_keywords_pairwise_distinct`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// CL lambda-list-keyword family closure binds at ONE `pub const`
     /// on the typed [`MacroParams`] algebra regardless of which
     /// consumer (parser dispatch, family-wide contract sweep,
     /// authoring / rendering surface, `is_lambda_list_keyword`
-    /// membership gate) reaches in. THEORY.md §V.1 — knowable
+    /// membership gate) reaches in. Knowable
     /// platform; the family's cardinality becomes a TYPE-level
     /// constant on the substrate algebra rather than a per-consumer
-    /// hand-rolled enumeration of the two markers. THEORY.md §VI.1 —
-    /// generation over composition; the family-wide contract sweeps
+    /// hand-rolled enumeration of the two markers.
+    /// Generation over composition; the family-wide contract sweeps
     /// (LEAD-byte round-trip, pairwise disjointness, membership gate)
     /// emerge from the composition of TWO substrate primitives (this
     /// `pub const` array + the per-role `pub const REST_MARKER` /
@@ -36408,13 +36408,13 @@ impl MacroParams {
     ///     classify as `false` — pinned by
     ///     `macro_params_is_lambda_list_keyword_rejects_unrecognised_ampersand_prefixed_names`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// Anchor: invariant 2 — free middle; the
     /// closed-set membership gate binds at ONE typed method on the
     /// [`MacroParams`] algebra regardless of which consumer reaches
-    /// in. THEORY.md §III — the typescape; the "is this a CL
+    /// in. The typescape; the "is this a CL
     /// lambda-list keyword?" projection becomes a TYPE projection on
     /// the substrate algebra rather than per-consumer inline
-    /// enumeration of the two markers. THEORY.md §V.1 — knowable
+    /// enumeration of the two markers. Knowable
     /// platform; a future third marker (`&key`, `&aux`, `&body`)
     /// extends [`Self::LAMBDA_LIST_KEYWORDS`] ONCE and every
     /// membership-gate consumer picks up the new marker for free.
@@ -36477,17 +36477,17 @@ impl MacroParams {
     /// [`names`](Self::names) and to the `Vec::with_capacity` hint
     /// [`bind`](Self::bind) computes for the bound-values vec.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the structural
+    /// Anchor: knowable platform; the structural
     /// "rest-start boundary / rest-less max arity" concept becomes a
     /// named `&MacroParams` projection rather than re-derived arithmetic
     /// at every site that walks the bound run. Authoring tools (REPL,
     /// LSP, `tatara-check`) that want to render "this macro takes
     /// between `required.len()` and `fixed_arity()` args (or unbounded
     /// if `rest.is_some()`)" bind to ONE method on the typed param
-    /// list. THEORY.md §VI.1 — generation over composition; three
+    /// list. Generation over composition; three
     /// inline copies of the same arithmetic in one function is past
     /// the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
-    /// named. THEORY.md §II.1 invariant 2 — free middle; both
+    /// named. Invariant 2 — free middle; both
     /// expansion strategies route through the SHARED `bind`, so the
     /// new primitive is exposed to the bytecode and substitute paths
     /// uniformly — no per-strategy drift in how the boundary is
@@ -36532,15 +36532,15 @@ impl MacroParams {
     /// `macro_params_total_arity_matches_names_len` AND
     /// `macro_params_total_arity_equals_fixed_arity_plus_rest_bit`.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// "how many named slots does this macro declare?" projection
     /// becomes a NAMED `&MacroParams` accessor rather than re-derived
     /// arithmetic at [`Self::bind`]'s capacity hint AND at the
     /// [`Expander::register_macro_def`] arity-ceiling gate.
-    /// THEORY.md §VI.1 — generation over composition; two inline copies
+    /// Generation over composition; two inline copies
     /// of the same three-arm arithmetic across two consumers is the
     /// ≥2 PRIME-DIRECTIVE trigger once the structural shape is named.
-    /// THEORY.md §II.1 invariant 2 — free middle; both the binder AND
+    /// Invariant 2 — free middle; both the binder AND
     /// the arity-guard consult ONE primitive, so a regression that
     /// drifts the guard's arity computation from the binder's capacity
     /// hint (e.g. one counts `rest` as one slot, the other counts it
@@ -36708,7 +36708,7 @@ impl Expander {
     /// three-corner face on the resource-posture surface now binds at ONE
     /// typed bundle across ALL three surfaces.
     ///
-    /// Theory grounding: THEORY.md §II.1 invariants 1 + 2 — typed entry +
+    /// Grounding: invariants 1 + 2 — typed entry +
     /// free middle. Pre-lift the "expander with a chosen resource posture"
     /// concept was untyped: consumers composed [`Self::new`] +
     /// [`Self::set_resource_limits`] at their call site with no
@@ -37041,15 +37041,15 @@ impl Expander {
     /// is gated behind the conditional), so a substitute-only expander never
     /// emits the `compile_template`-side rejection chain.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+    /// Anchor: generation over composition; two
     /// byte-identical inline copies of the registration block across
     /// `with_macros` and `expand_program` is past the ≥2 PRIME-DIRECTIVE
-    /// trigger once the structural shape is named. THEORY.md §V.1 — knowable
+    /// trigger once the structural shape is named. Knowable
     /// platform; the macro-registration discipline becomes a NAMED primitive
     /// on the substrate's `Expander` surface rather than a per-consumer
     /// inline duplication that future emitters (an LSP, a REPL, a library-
-    /// merge operator) would have had to re-derive. THEORY.md §II.1
-    /// invariant 2 — free middle; both consumers route through the SAME
+    /// merge operator) would have had to re-derive.
+    /// Invariant 2 — free middle; both consumers route through the SAME
     /// registration primitive, so a regression that drifts ONE consumer's
     /// discipline from the other (one path skips the template pre-compile,
     /// one path inserts the `self.macros` entry in a different order, a
@@ -37262,13 +37262,13 @@ impl Expander {
     /// and a future third slice-side classifier consumer would have made
     /// the recur worse.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// Anchor: generation over composition; the
     /// two-step `expand + delegate` scaffold recurred at TWO from-forms
     /// slice-walking consumers on the `Expander` surface (past the ≥ 2
     /// PRIME-DIRECTIVE duplication trigger) and is lifted to ONE
     /// substrate primitive here, exactly as its from-source peer
     /// [`Self::with_source_forms`] lifted the `read + delegate` scaffold
-    /// at its five from-source consumers. THEORY.md §II.1 invariant 2
+    /// at its five from-source consumers. Invariant 2
     /// (free middle) — the expand-then-dispatch composition lives at ONE
     /// substrate primitive; a regression that drifts ONE consumer's
     /// `?`-ordering or expander-error propagation from the other becomes
@@ -37375,11 +37375,11 @@ impl Expander {
     /// lockstep, and a future sixth from-source consumer would have
     /// made the recur worse.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the two-step `read + delegate` scaffold recurred at FIVE
     /// from-source consumers on the `Expander` surface (well past the
     /// PRIME-DIRECTIVE ≥ 2 duplication trigger) and is lifted to ONE
-    /// substrate primitive here. THEORY.md §II.1 invariant 2 (free
+    /// substrate primitive here. Invariant 2 (free
     /// middle) — the reader-then-dispatch composition lives at ONE
     /// substrate primitive; a regression that drifts ONE consumer's
     /// `?`-ordering or reader-error propagation from the others
@@ -37465,14 +37465,14 @@ impl Expander {
     /// preserved by routing through this primitive instead of inlining
     /// the two-step chain.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+    /// Anchor: generation over composition; two
     /// inline copies of the `let forms = read(src)?; <expander>.expand_program(forms)`
     /// two-step chain across `RealizedCompiler::compile` and
     /// `realize_in_memory` is past the ≥2 PRIME-DIRECTIVE trigger once the
-    /// structural shape is named. THEORY.md §V.1 — knowable platform; the
+    /// structural shape is named. Knowable platform; the
     /// read-then-expand composition becomes a NAMED primitive on the
     /// substrate's `Expander` surface rather than a re-derived two-step
-    /// inline pipeline at every consumer. THEORY.md §II.1 invariant 2 —
+    /// inline pipeline at every consumer. Invariant 2 —
     /// free middle; both consumers route through the SAME composition
     /// primitive, so a regression that drifts ONE consumer's pipeline
     /// shape from the other cannot reach the substrate's runtime.
@@ -37577,23 +37577,23 @@ impl Expander {
     /// dispatcher composes with to extract a typed program from a
     /// post-expansion form set.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// two inline copies of the `Expander::new() + expand_program +
     /// iter_calls_to(_, T::KEYWORD) + map + collect` pipeline across
     /// `compile_typed` and `compile_named_from_forms` is past the ≥2
     /// PRIME-DIRECTIVE trigger once the structural shape is named.
-    /// THEORY.md §V.1 — knowable platform; the program-level walk's
+    /// Knowable platform; the program-level walk's
     /// typed-keyword-projection composition becomes a NAMED primitive
     /// on the substrate's `Expander` surface rather than a re-derived
     /// three-step inline pipeline at every consumer. Authoring tools
     /// (REPL, LSP, `tatara-check`) that want to walk a program by
     /// typed keyword bind to ONE method on the `Expander` instead of
-    /// re-implementing the composition. THEORY.md §II.1 invariant 1 —
+    /// re-implementing the composition. Invariant 1 —
     /// typed entry; the typed-keyword filter over an expanded program
     /// IS the rust-level typed-entry-batch gate, and naming its
     /// single shape lifts the gate from two-site duplication to one
     /// rust method the substrate's diagnostic promotions hang off of.
-    /// THEORY.md §II.1 invariant 2 — free middle; both consumers
+    /// Invariant 2 — free middle; both consumers
     /// route through the SAME composition primitive, each binding the
     /// per-form projection that fits its call site — a regression
     /// that drifts ONE dispatcher's pipeline shape from the other
@@ -37734,7 +37734,7 @@ impl Expander {
     /// (a live-registry classifier) bind through the registry's owned
     /// borrow with `&self` outliving the walk.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// Anchor: generation over composition; the
     /// keyword sibling [`Self::expand_and_collect_calls_to`] is now a
     /// CONSEQUENCE of this typed-decoded primitive + a constant-classifier
     /// decoder, parallel to how [`iter_calls_to`] is a consequence of
@@ -37744,14 +37744,14 @@ impl Expander {
     /// keyword pipeline's instrumentation from the classifier pipeline's
     /// instrumentation cannot reach the runtime — both compose through ONE
     /// `expand_program + iter_calls_to_any + map + collect` body, with the
-    /// keyword filter expressed as a closed-form classifier). THEORY.md
-    /// §V.1 — knowable platform; the typed-decoded expander walk becomes a
+    /// keyword filter expressed as a closed-form classifier).
+    /// Knowable platform; the typed-decoded expander walk becomes a
     /// NAMED primitive on the substrate's `Expander` surface rather than a
     /// future re-derived three-step inline pipeline per consumer.
     /// Authoring tools (REPL, LSP, `tatara-check`) that want to walk a
     /// program by typed-decoded classifier bind to ONE method on the
-    /// `Expander` instead of re-implementing the composition. THEORY.md
-    /// §II.1 invariant 2 — free middle; both expander-surface dispatchers
+    /// `Expander` instead of re-implementing the composition.
+    /// Invariant 2 — free middle; both expander-surface dispatchers
     /// (keyword + classifier) route through the SAME `expand_program +
     /// iter_calls_to_any + map + collect` composition primitive.
     ///
@@ -37863,14 +37863,14 @@ impl Expander {
     /// registered domain — binds to ONE method on the `Expander` instead of
     /// re-deriving the two-step `read + expand_and_collect_calls_to` chain.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition; four
+    /// Anchor: generation over composition; four
     /// inline copies of the `read(src)? + <expander>.expand_and_collect_calls_to`
     /// chain across the two fresh-expander dispatchers and the two
     /// preloaded-expander dispatchers is past the ≥2 PRIME-DIRECTIVE trigger
-    /// once the structural shape is named. THEORY.md §V.1 — knowable
+    /// once the structural shape is named. Knowable
     /// platform; the read-then-walk composition becomes a NAMED primitive on
     /// the substrate's `Expander` surface rather than a re-derived two-step
-    /// inline pipeline at every dispatcher. THEORY.md §II.1 invariant 2 —
+    /// inline pipeline at every dispatcher. Invariant 2 —
     /// free middle; all four dispatchers route through the SAME composition
     /// primitive, so a regression that drifts ONE dispatcher's read-then-walk
     /// pipeline from the others cannot reach the substrate's runtime — the
@@ -37980,7 +37980,7 @@ impl Expander {
     /// rejection chain inherits the from-forms typed-decoded primitive's
     /// shape verbatim, now sourced from `&str` via ONE composition point.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the (from-forms, from-source) × (keyword, classifier) 2×2 closes
     /// at the from-source classifier corner this method establishes —
     /// the prior runs' from-forms classifier sibling
@@ -37989,12 +37989,12 @@ impl Expander {
     /// b477d81) AND slice-side classifier sibling (`iter_calls_to_any`,
     /// run 38625e3) named three of the four corners; this lift names
     /// the fourth so the family is structurally complete at every
-    /// algebra level. THEORY.md §V.1 — knowable platform; the
+    /// algebra level. Knowable platform; the
     /// read-then-classifier-walk composition becomes a NAMED primitive
     /// on the substrate's `Expander` surface rather than a future
     /// re-derived `read(src)? + expand_and_collect_calls_to_any(…)`
     /// two-step chain at every consumer that wants to walk source text
-    /// by typed-decoded classifier. THEORY.md §II.1 invariant 2 — free
+    /// by typed-decoded classifier. Invariant 2 — free
     /// middle; the from-source keyword filter
     /// (`expand_source_and_collect_calls_to`) now routes through the
     /// from-source classifier filter via the constant-classifier
@@ -38144,22 +38144,22 @@ impl Expander {
     /// the first error via `Iterator::collect::<Result<Vec<R>, _>>()`
     /// inside [`Self::expand_and_collect_calls_to_any`].
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the (named × typed-decoded classifier) cell becomes a NAMED
     /// primitive on the `Expander` surface composed FROM TWO substrate
     /// primitives ([`Self::expand_and_collect_calls_to_any`] +
     /// [`crate::compile::split_name_slot`]) rather than re-derived
     /// inline at every named-classifier consumer's call site.
-    /// THEORY.md §II.1 invariant 1 — typed entry; the typed-decoded
+    /// Invariant 1 — typed entry; the typed-decoded
     /// classifier-filtered + NAME-shape-gated + caller-projected walk
     /// IS the typed-entry-batch gate for named-form dispatch at the
     /// `Expander` surface, with the `&'static str` keyword discipline
-    /// preserved through the decoder's return type. THEORY.md §II.1
-    /// invariant 2 — free middle; ALL four cells of the named-form
+    /// preserved through the decoder's return type.
+    /// Invariant 2 — free middle; ALL four cells of the named-form
     /// dispatcher matrix on the `Expander` surface route through ONE
     /// composition point — a regression that drifts ONE cell's
     /// instrumentation from the others is structurally impossible.
-    /// THEORY.md §V.1 — knowable platform; the named-form classifier
+    /// Knowable platform; the named-form classifier
     /// walk becomes a discoverable primitive that LSP / REPL /
     /// `tatara-check` consumers bind to ONE method on the `Expander`
     /// instead of re-implementing the two-step `expand_and_collect_calls_to_any
@@ -38254,12 +38254,12 @@ impl Expander {
     /// short-circuits at the first failing matched form via
     /// `Iterator::collect::<Result<Vec<R>, _>>()`.
     ///
-    /// Theory anchor: same as [`Self::expand_and_collect_named_calls_to_any`].
-    /// THEORY.md §VI.1 (generation over composition; the from-source
+    /// Anchor: same as [`Self::expand_and_collect_named_calls_to_any`].
+    /// (generation over composition; the from-source
     /// posture inherits the named-form gate composition through
     /// delegation rather than re-deriving the `read(src)? + walk + gate`
     /// chain at every from-source named-classifier consumer's call
-    /// site), THEORY.md §II.1 invariant 2 (free middle; the from-source
+    /// site), invariant 2 (free middle; the from-source
     /// posture and the from-forms posture route through the SAME named-
     /// form composition).
     pub fn expand_source_and_collect_named_calls_to_any<R, F, D, T>(
@@ -38346,19 +38346,19 @@ impl Expander {
     /// constant-keyword cells routing through the classifier cells via
     /// constant-classifier decoding.
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the `split_name_slot` composition lived at TWO sites pre-lift
     /// (`crate::compile::named_form_projection` body, which
     /// [`Self::expand_to_named`] routes through, AND
     /// [`Self::expand_and_collect_named_calls_to_any`] body, which the
     /// typed-decoded classifier consumers route through) — past the
     /// ≥2 PRIME-DIRECTIVE trigger once the named-form gate is named.
-    /// THEORY.md §V.1 — knowable platform; the named constant-keyword
+    /// Knowable platform; the named constant-keyword
     /// walk becomes a NAMED primitive on the `Expander` surface
     /// composable by any future consumer (REPL, LSP, `tatara-check`)
     /// instead of a re-derived two-line `expand_and_collect_named_
     /// calls_to_any(forms, constant-decoder, wrapper-projection)`
-    /// composition. THEORY.md §II.1 invariant 2 — free middle; both
+    /// composition. Invariant 2 — free middle; both
     /// the typed (`expand_to_named<T>`) and untyped (this method)
     /// constant-keyword named cells route through the SAME named
     /// classifier primitive — a regression that drifts ONE cell's
@@ -38443,13 +38443,13 @@ impl Expander {
     /// {from-forms, from-source}) close on the `Expander` surface
     /// post-lift, each routing through ONE composition point.
     ///
-    /// Theory anchor: same as [`Self::expand_and_collect_named_calls_to`].
-    /// THEORY.md §VI.1 (generation over composition; the from-source
+    /// Anchor: same as [`Self::expand_and_collect_named_calls_to`].
+    /// (generation over composition; the from-source
     /// posture inherits the constant-keyword named composition through
     /// delegation rather than re-deriving the
     /// `read(src)? + expand_and_collect_named_calls_to` chain at every
     /// from-source named-keyword consumer's call site),
-    /// THEORY.md §II.1 invariant 2 (free middle; the from-source
+    /// invariant 2 (free middle; the from-source
     /// posture and the from-forms posture route through the SAME
     /// composition).
     pub fn expand_source_and_collect_named_calls_to<R, F>(
@@ -38815,14 +38815,14 @@ fn contains_unquote(node: &Sexp) -> bool {
 /// (typed-shape enforcement on bound splice targets) ONE site to wrap
 /// rather than two inline arms to keep in lockstep.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the two
+/// Anchor: invariant 2 — free middle; the two
 /// expansion strategies MUST produce identical output for the same
 /// (macro, args) pair, and naming the splice coercion once makes that
 /// per-strategy agreement structural rather than a two-site discipline
 /// the `expansion_layers_agree_on_output_and_cache_wins` benchmark only
-/// observes after the fact. THEORY.md §V.1 — knowable platform; the
+/// observes after the fact. Knowable platform; the
 /// splice RESULT semantics becomes a NAMED primitive authoring tools and
-/// future runs bind to. THEORY.md §VI.1 — generation over composition;
+/// future runs bind to. Generation over composition;
 /// the two-site coercion is lifted to ONE function, closing the last
 /// inline-duplicated piece of the splice path the prior runs' gate lifts
 /// (02173dc gate-1, 68da647 gate-2, b456f1f composition) left behind.
@@ -38852,14 +38852,14 @@ fn splice_value_into(builder: &mut Vec<Sexp>, value: &Sexp) {
 /// authoring-tool substring greps (`tatara-check`, REPL) see no drift
 /// across the lift.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+/// Anchor: knowable platform; the closed set
 /// of bytecode-invariant failure modes becomes a TYPE rather than a
-/// free-form `message: String` slot. THEORY.md §VI.1 — generation over
+/// free-form `message: String` slot. Generation over
 /// composition; the typed enum lands the structural-completeness floor
 /// for the bytecode-runtime surface, parallel to how `CompilerSpecIoStage`
 /// lands the structural-completeness floor for the disk-persistence
 /// surface (`compiler_spec.rs`, the immediately prior claude-routine
-/// lift on a sibling file). THEORY.md §II.1 invariant 5 (composition
+/// lift on a sibling file). Invariant 5 (composition
 /// preserves proofs): a well-formed bytecode invariant is the proof
 /// that drives the interpreter; the structural variant makes the
 /// proof's REJECTION shape first-class — authoring tools (REPL, LSP,
@@ -38929,18 +38929,18 @@ fn template_invariant_violation(macro_name: &str, kind: TemplateInvariantKind) -
 /// lifetime of `args_by_index`, matching the call site's borrow
 /// posture.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// Anchor: generation over composition; two
 /// inline copies of the index-lookup-and-reject prelude across the
 /// `apply_compiled` body's `Subst` and `Splice` arms is past the ≥2
 /// PRIME-DIRECTIVE trigger once the structural shape is named.
-/// THEORY.md §V.1 — knowable platform / "make invalid states
+/// Knowable platform / "make invalid states
 /// unrepresentable"; the bytecode-runtime bound-arg-by-index lookup
 /// becomes a NAMED primitive on the substrate's `&[Sexp]` algebra
 /// rather than a re-derived `get + ok_or_else + template_invariant_
 /// violation` chain at every op-arm that reads by index. A future
 /// authoring tool (REPL, LSP, `tatara-check`) that wants to surface
 /// "this bytecode op's bound-arg lookup misfired at idx N" binds to
-/// ONE function. THEORY.md §II.1 invariant 2 — free middle; both
+/// ONE function. Invariant 2 — free middle; both
 /// expansion strategies route through the SHARED `MacroParams::bind`,
 /// AND the bytecode strategy's op-arms route through this SHARED
 /// `resolve_bound_arg` lookup — the bytecode-runtime's
@@ -39021,10 +39021,10 @@ fn resolve_bound_arg<'a>(
 /// it lands in the builder wraps ONE call boundary, not four inline
 /// `stack.last_mut().unwrap()` sites.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; four
+/// Anchor: generation over composition; four
 /// inline copies of the top-of-stack projection in one function is
 /// past the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
-/// named. THEORY.md §V.1 — knowable platform; the bytecode-runtime's
+/// named. Knowable platform; the bytecode-runtime's
 /// current-builder projection becomes a NAMED primitive on the
 /// substrate's `&mut [Vec<Sexp>]` slice algebra rather than a re-derived
 /// `last_mut + unwrap` chain at every op-arm that emits into the
@@ -39032,7 +39032,7 @@ fn resolve_bound_arg<'a>(
 /// ("bytecode-runtime invariant: at least one stack frame during
 /// op-loop") so a regression that drifts the loop's frame management
 /// surfaces a NAMED panic, not a silent `unwrap` over `None`.
-/// THEORY.md §II.1 invariant 2 — free middle; both expansion
+/// Invariant 2 — free middle; both expansion
 /// strategies route through the SHARED `MacroParams::bind` upstream
 /// AND the bytecode strategy's op-arms now route through this SHARED
 /// `current_builder_mut` projection downstream — the bytecode-runtime's
@@ -39127,20 +39127,20 @@ fn current_builder_mut(stack: &mut [Vec<Sexp>]) -> &mut Vec<Sexp> {
 /// wraps ONE call boundary rather than keeping two inline chains in
 /// lockstep at the production op-loop sites.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// Anchor: generation over composition; two
 /// inline copies of the stack-pop-and-reject projection across the
 /// `apply_compiled` body's `EndList` arm and post-loop final-pop is
 /// past the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
 /// named — the same threshold [`resolve_bound_arg`] (the index-lookup
 /// sibling) crossed in the prior claude-routine run on this file
 /// (492a235) and [`current_builder_mut`] (the top-frame-borrow
-/// sibling) crossed two runs ago (c6a5a9d). THEORY.md §V.1 — knowable
+/// sibling) crossed two runs ago (c6a5a9d). Knowable
 /// platform / "make invalid states unrepresentable"; the bytecode-
 /// runtime stack-frame consume operation becomes a NAMED primitive
 /// on the substrate's `&mut Vec<Vec<Sexp>>` algebra rather than a
 /// re-derived `pop + ok_or_else + template_invariant_violation`
-/// chain at every op-arm that consumes a frame. THEORY.md §II.1
-/// invariant 2 — free middle; both pop-emitting sites route through
+/// chain at every op-arm that consumes a frame.
+/// Invariant 2 — free middle; both pop-emitting sites route through
 /// the SHARED `pop_builder_frame` projection, so a regression that
 /// drifts ONE site's posture (e.g. accepts an empty-stack pop at the
 /// `EndList` arm but not the final pop, or swaps the kind constructor
@@ -39475,9 +39475,9 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
 /// copying the matched name into the variant is the cheapest way to keep
 /// `LispError` lifetime-free.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; four inline
-/// copies in one module is well past the three-times rule. THEORY.md §V.1 —
-/// knowable platform; the structural variant exposes `prefix` / `name` /
+/// Anchor: generation over composition; four inline
+/// copies in one module is well past the three-times rule.
+/// Knowable platform; the structural variant exposes `prefix` / `name` /
 /// `hint` as first-class fields so authoring tools (LSP, REPL,
 /// `tatara-check`) bind to the data shape instead of substring-parsing the
 /// rendered diagnostic.
@@ -39515,12 +39515,12 @@ fn unbound_template_var(prefix: UnquoteForm, name: &str, candidates: &[&str]) ->
 /// gate `,X/,@X` rejection variants now share ONE typed witness
 /// identity at their `got` slot.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; four
-/// inline copies in one module is past the three-times rule. THEORY.md
-/// §V.1 — knowable platform; the structural variant exposes `prefix` /
+/// Anchor: generation over composition; four
+/// inline copies in one module is past the three-times rule.
+/// Knowable platform; the structural variant exposes `prefix` /
 /// `got` as first-class fields so authoring tools (LSP, REPL,
 /// `tatara-check`) bind to the data shape instead of substring-parsing
-/// the rendered diagnostic. THEORY.md §II.1 invariant 1 — typed entry;
+/// the rendered diagnostic. Invariant 1 — typed entry;
 /// a non-symbol unquote target is exactly the failure mode the
 /// typed-entry gate exists to reject.
 fn non_symbol_unquote_target(prefix: UnquoteForm, got: &Sexp) -> LispError {
@@ -39570,19 +39570,19 @@ fn non_symbol_unquote_target(prefix: UnquoteForm, got: &Sexp) -> LispError {
 /// name)` (`compile_node`) or `bindings.get(name)` (`substitute`)
 /// without an intermediate allocation.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; four
+/// Anchor: generation over composition; four
 /// inline copies of the gate-1 projection (`compile_node`
 /// Unquote/UnquoteSplice + `substitute` Unquote + `substitute`
-/// list-inner UnquoteSplice) is past the three-times rule. THEORY.md
-/// §V.1 — knowable platform; the gate's identity becomes a NAMED
+/// list-inner UnquoteSplice) is past the three-times rule.
+/// Knowable platform; the gate's identity becomes a NAMED
 /// primitive consumer-binding rather than a four-times-inlined
 /// match-and-reject snippet — authoring surfaces (REPL, LSP,
 /// `tatara-check`) that want to surface "the typed-entry template-gate
 /// rejected your form because the unquote target wasn't a symbol" bind
-/// to ONE function. THEORY.md §II.1 invariant 1 — typed entry; an
+/// to ONE function. Invariant 1 — typed entry; an
 /// unquote target that isn't a symbol is exactly the failure mode the
-/// typed-entry template-gate exists to reject. THEORY.md §II.1
-/// invariant 2 — free middle; both bytecode AND substitute expansion
+/// typed-entry template-gate exists to reject.
+/// Invariant 2 — free middle; both bytecode AND substitute expansion
 /// paths now project through the SAME gate-1 primitive, so a macro
 /// that compiles under one strategy compiles under the other (the
 /// gate's posture is uniform across the two strategies, no
@@ -39630,19 +39630,19 @@ fn unquote_target_symbol(inner: &Sexp, form: UnquoteForm) -> Result<&str> {
 /// regression that drifts the marker becomes a type error at the call
 /// site, not a runtime substring drift.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// Anchor: generation over composition; two
 /// inline copies of the gate-2 projection in one match block, paired
 /// with the two substitute-path inline copies, is four copies in two
 /// functions — past the three-times rule once the structural shape is
-/// named. THEORY.md §V.1 — knowable platform; the gate's identity
+/// named. Knowable platform; the gate's identity
 /// becomes a NAMED primitive consumer-binding rather than a
 /// twice-inlined position-and-reject snippet — authoring surfaces
 /// (REPL, LSP, `tatara-check`) that want to surface "the typed-entry
 /// template-gate rejected your form because the name isn't bound in
-/// scope" bind to ONE function per path. THEORY.md §II.1 invariant 1 —
+/// scope" bind to ONE function per path. Invariant 1 —
 /// typed entry; an unbound template variable is exactly the failure
-/// mode the typed-entry template-gate exists to reject. THEORY.md
-/// §II.1 invariant 2 — free middle; both expansion strategies'
+/// mode the typed-entry template-gate exists to reject.
+/// Invariant 2 — free middle; both expansion strategies'
 /// gate-2 emit the SAME structural variant, so a macro that compiles
 /// under one strategy compiles under the other.
 fn resolve_param_index(name: &str, params: &[&str], form: UnquoteForm) -> Result<usize> {
@@ -39687,16 +39687,16 @@ fn resolve_param_index(name: &str, params: &[&str], form: UnquoteForm) -> Result
 /// that drifts the marker becomes a type error at the call site, not
 /// a runtime substring drift.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// Anchor: generation over composition; two
 /// inline copies of the gate-2 projection in the substitute walker,
 /// paired with the two compile-path inline copies, is four copies in
 /// two functions — past the three-times rule once the structural
-/// shape is named. THEORY.md §V.1 — knowable platform; the gate's
+/// shape is named. Knowable platform; the gate's
 /// identity becomes a NAMED primitive consumer-binding rather than a
-/// twice-inlined lookup-and-reject snippet. THEORY.md §II.1
-/// invariant 1 — typed entry; an unbound template variable is exactly
+/// twice-inlined lookup-and-reject snippet.
+/// Invariant 1 — typed entry; an unbound template variable is exactly
 /// the failure mode the typed-entry template-gate exists to reject.
-/// THEORY.md §II.1 invariant 2 — free middle; both expansion
+/// Invariant 2 — free middle; both expansion
 /// strategies' gate-2 emit the SAME structural variant.
 fn resolve_binding<'a>(
     bindings: &'a HashMap<String, Sexp>,
@@ -39752,16 +39752,16 @@ fn resolve_binding<'a>(
 /// `resolve_param_index(name, params, UnquoteForm::Splice)?` would
 /// type-check but render a misleading diagnostic).
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// gate-1+gate-2 SEQUENCE is itself a named primitive once both halves
 /// have been named (two prior runs landed the halves; this run lands the
-/// composition). THEORY.md §V.1 — knowable platform; the gate's
+/// composition). Knowable platform; the gate's
 /// composition is now load-bearing in the type system — gate-1 cannot be
 /// silently skipped, gate-2 cannot be silently reordered before gate-1,
-/// and the marker cannot drift between the two halves. THEORY.md §II.1
-/// invariant 1 — typed entry; the typed-entry template gate's full
+/// and the marker cannot drift between the two halves.
+/// Invariant 1 — typed entry; the typed-entry template gate's full
 /// rejection chain (non-symbol → unbound-symbol) is now ONE primitive.
-/// THEORY.md §II.1 invariant 2 — free middle; both expansion strategies
+/// Invariant 2 — free middle; both expansion strategies
 /// expose the gate's identity as ONE primitive per path, so a macro that
 /// passes the gate under one strategy passes under the other (no per-
 /// strategy composition drift can creep in).
@@ -39801,11 +39801,11 @@ fn resolve_unquote_in_params(inner: &Sexp, params: &[&str], form: UnquoteForm) -
 /// two; the gate's gate-1+gate-2 sequencing is structural across both
 /// expansion strategies.
 ///
-/// Theory anchor: same as `resolve_unquote_in_params`. THEORY.md §VI.1
+/// Anchor: same as `resolve_unquote_in_params`.
 /// (generation over composition; named composition of named gates),
-/// THEORY.md §V.1 (knowable platform; gate composition is type-system
-/// load-bearing), THEORY.md §II.1 invariant 1 (typed entry; the full
-/// rejection chain is ONE primitive), THEORY.md §II.1 invariant 2
+/// (knowable platform; gate composition is type-system
+/// load-bearing), invariant 1 (typed entry; the full
+/// rejection chain is ONE primitive), invariant 2
 /// (free middle; both strategies share the same composition shape).
 fn resolve_unquote_in_bindings<'a>(
     inner: &Sexp,
@@ -39843,15 +39843,15 @@ fn resolve_unquote_in_bindings<'a>(
 /// both paths with ONE structural variant — the typed-entry template gate
 /// is fully structural across both expansion strategies.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// Anchor: generation over composition; two
 /// emission sites (substitute + compile_template) for one failure mode is
-/// past the three-times rule once the structural shape is named. THEORY.md
-/// §V.1 — knowable platform; the structural variant exposes `got` as a
+/// past the three-times rule once the structural shape is named.
+/// Knowable platform; the structural variant exposes `got` as a
 /// first-class field so authoring tools (LSP, REPL, `tatara-check`) bind to
 /// the data shape instead of substring-parsing the rendered diagnostic.
-/// THEORY.md §II.1 invariant 1 — typed entry; a `,@X` at a position with no
+/// Invariant 1 — typed entry; a `,@X` at a position with no
 /// containing list is exactly the failure mode the typed-entry gate exists
-/// to reject. THEORY.md §II.1 invariant 2 — free middle; both expansion
+/// to reject. Invariant 2 — free middle; both expansion
 /// paths now reject the same set of templates, so a macro that registers
 /// successfully has the same expansion behavior under either strategy.
 fn splice_outside_list(inner: &Sexp) -> LispError {
@@ -39876,7 +39876,7 @@ fn splice_outside_list(inner: &Sexp) -> LispError {
 /// `LispError::Compile { … }` triples at TWO call sites; after this lift
 /// both sites share ONE structural variant. Two strategies that picked
 /// different code paths now emit the same structural variant for the same
-/// failure mode (THEORY.md §II.1 invariant 2 — free middle: which strategy
+/// failure mode (invariant 2 — free middle: which strategy
 /// you picked must not change which inputs you reject OR how the rejection
 /// is shaped). Same posture as `splice_outside_list`'s path-uniform
 /// rejection across substitute + compile_template.
@@ -39885,14 +39885,14 @@ fn splice_outside_list(inner: &Sexp) -> LispError {
 /// list; the variant's owned `String`s are formed at the boundary so
 /// `LispError` stays lifetime-free.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// Anchor: generation over composition; two
 /// inline copies of one shape is past the three-times-rule trigger once
 /// the structural variant is named (the test count gives this the
-/// fail-before-pass-after edge). THEORY.md §V.1 — knowable platform; the
+/// fail-before-pass-after edge). Knowable platform; the
 /// structural variant exposes `macro_name` / `param` as first-class
 /// fields so authoring tools (LSP, REPL, `tatara-check`) bind to the data
-/// shape instead of substring-parsing the rendered diagnostic. THEORY.md
-/// §II.1 invariant 1 — typed entry; a macro call with too few args is
+/// shape instead of substring-parsing the rendered diagnostic.
+/// Invariant 1 — typed entry; a macro call with too few args is
 /// exactly the failure mode the typed-entry gate exists to reject.
 fn missing_macro_arg(macro_name: &str, param: &str) -> LispError {
     LispError::MissingMacroArg {
@@ -39922,18 +39922,18 @@ fn missing_macro_arg(macro_name: &str, param: &str) -> LispError {
 /// formed at the boundary so `LispError` stays lifetime-free — same posture
 /// as `missing_macro_arg`.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// rest-less surplus-args gate is a SINGLE-OWNER named rejection, not a
 /// silent truncation re-asserted at every consumer that walks the bound
-/// values. THEORY.md §V.1 — knowable platform; the structural variant
+/// values. Knowable platform; the structural variant
 /// exposes `macro_name` / `expected` / `got` as first-class fields so
 /// authoring tools bind to the data shape instead of substring-parsing
-/// the rendered diagnostic. THEORY.md §II.1 invariant 1 — typed entry; a
+/// the rendered diagnostic. Invariant 1 — typed entry; a
 /// macro call with too many args (and no `&rest` slot to absorb them) is
 /// exactly the failure mode the typed-entry gate exists to reject —
 /// silently dropping `args[expected..]` is structurally indistinguishable
-/// from honoring them, the asymmetry this gate closes. THEORY.md §II.1
-/// invariant 2 — free middle; both expansion strategies route through the
+/// from honoring them, the asymmetry this gate closes.
+/// Invariant 2 — free middle; both expansion strategies route through the
 /// SHARED `MacroParams::bind`, so the new rejection lands once and the
 /// substitute + bytecode paths inherit it unable to drift.
 fn too_many_macro_args(macro_name: &str, expected: usize, got: usize) -> LispError {
@@ -39965,15 +39965,15 @@ fn too_many_macro_args(macro_name: &str, expected: usize, got: usize) -> LispErr
 /// `splice_outside_list`) and projects through `to_string()` so the
 /// variant stays lifetime-free.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; one
+/// Anchor: generation over composition; one
 /// inline copy still earns a named primitive once the structural shape
 /// is named (the test count gives this the fail-before-pass-after edge,
 /// parallel to how `OddKwargs` was lifted from a single site for the
-/// structural-completeness payoff). THEORY.md §V.1 — knowable platform;
+/// structural-completeness payoff). Knowable platform;
 /// the structural variant exposes `position` / `got` as first-class
 /// fields so authoring tools (LSP, REPL, `tatara-check`) bind to the
 /// data shape instead of substring-parsing the rendered diagnostic.
-/// THEORY.md §II.1 invariant 1 — typed entry; a non-symbol element
+/// Invariant 1 — typed entry; a non-symbol element
 /// inside a defmacro param list is exactly the failure mode the
 /// typed-entry gate exists to reject — and it must reject DEFINITIONS
 /// as readily as it rejects CALLS.
@@ -40007,15 +40007,15 @@ fn non_symbol_param(position: usize, got: &Sexp) -> LispError {
 /// through `to_string()` at the variant boundary so the variant stays
 /// lifetime-free.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; one
+/// Anchor: generation over composition; one
 /// inline copy still earns a named primitive once the structural shape
 /// is named (the test count gives this the fail-before-pass-after
 /// edge, parallel to how `non_symbol_param` was lifted from a single
-/// site for the structural-completeness payoff). THEORY.md §V.1 —
-/// knowable platform; the structural variant exposes `rest_position` /
+/// site for the structural-completeness payoff).
+/// Knowable platform; the structural variant exposes `rest_position` /
 /// `got` as first-class fields so authoring tools (LSP, REPL,
 /// `tatara-check`) bind to the data shape instead of substring-parsing
-/// the rendered diagnostic. THEORY.md §II.1 invariant 1 — typed entry;
+/// the rendered diagnostic. Invariant 1 — typed entry;
 /// a `&rest` marker followed by no name (or by a non-symbol) is
 /// exactly the failure mode the typed-entry gate exists to reject —
 /// and the gate must reject DEFINITIONS as readily as it rejects
@@ -40043,12 +40043,12 @@ fn rest_param_missing_name(rest_position: usize, got: Option<&Sexp>) -> LispErro
 /// non-empty (it is only built when `list[i + 2..].first()` is `Some`), so
 /// `trailing[0]` does not panic.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid states
+/// Anchor: knowable platform / "make invalid states
 /// unrepresentable"; a param list with tokens after `&rest <name>` is
 /// nonsense `MacroParams` cannot hold, so the gate must REJECT it rather
-/// than truncate to the representable prefix. THEORY.md §II.1 invariant 1 —
+/// than truncate to the representable prefix. Invariant 1 —
 /// typed entry; the gate rejects malformed DEFINITIONS as readily as
-/// malformed calls. THEORY.md §VI.1 — generation over composition; this
+/// malformed calls. Generation over composition; this
 /// closes the `parse_params` walker's last uncovered failure mode, making
 /// the sibling docs' "every distinct failure mode is a structural variant"
 /// claim finally true.
@@ -40075,10 +40075,10 @@ fn rest_param_trailing_tokens(rest_position: usize, trailing: &[Sexp]) -> LispEr
 /// first `&optional`, `second_position` the second — naming both lets an LSP
 /// quick-fix point at the redundant marker to delete.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid states
+/// Anchor: knowable platform / "make invalid states
 /// unrepresentable"; a param list with two `&optional` sections is nonsense
 /// `MacroParams` cannot hold, so the gate must REJECT rather than bind args
-/// to a marker symbol. THEORY.md §II.1 invariant 1 — typed entry; the gate
+/// to a marker symbol. Invariant 1 — typed entry; the gate
 /// rejects malformed DEFINITIONS as readily as malformed calls.
 fn optional_marker_repeated(first_position: usize, second_position: usize) -> LispError {
     LispError::OptionalMarkerRepeated {
@@ -40102,11 +40102,11 @@ fn optional_marker_repeated(first_position: usize, second_position: usize) -> Li
 /// `non_symbol_param`'s sibling acceptance path; the list form `&optional
 /// (x default)` is admitted iff this gate accepts the spec.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid states
+/// Anchor: knowable platform / "make invalid states
 /// unrepresentable"; an `&optional` list spec of any other shape is
 /// nonsense `MacroParams` cannot hold, so the gate must REJECT rather than
-/// bind args to a marker symbol or drop the extras silently. THEORY.md
-/// §II.1 invariant 1 — typed entry; a malformed default-form spec is
+/// bind args to a marker symbol or drop the extras silently.
+/// Invariant 1 — typed entry; a malformed default-form spec is
 /// exactly the failure mode the typed-entry gate exists to reject — and
 /// the gate must reject DEFINITIONS as readily as it rejects CALLS.
 fn optional_param_malformed(
@@ -40145,20 +40145,20 @@ fn optional_param_malformed(
 /// `LispError::CompilerSpecIo.stage`. `arity` is `usize` (the length
 /// of the form including the head element).
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; one
+/// Anchor: generation over composition; one
 /// inline copy still earns a named primitive once the structural
 /// shape is named (the test count gives this the fail-before/pass-
 /// after edge, parallel to how `non_symbol_param` and
 /// `rest_param_missing_name` were lifted from a single site for the
-/// structural-completeness payoff). THEORY.md §V.1 — knowable
+/// structural-completeness payoff). Knowable
 /// platform; the structural variant exposes `head` / `arity` as
 /// first-class fields so authoring tools (LSP, REPL, `tatara-check`)
 /// bind to the data shape instead of substring-parsing the rendered
-/// diagnostic. THEORY.md §II.1 invariant 1 — typed entry; a defmacro
+/// diagnostic. Invariant 1 — typed entry; a defmacro
 /// form with too few elements is exactly the failure mode the typed-
 /// entry gate exists to reject — and the gate must reject
-/// DEFINITIONS as readily as it rejects CALLS. THEORY.md §II.1
-/// invariant 2 — free middle; the arity gate fires inside
+/// DEFINITIONS as readily as it rejects CALLS.
+/// Invariant 2 — free middle; the arity gate fires inside
 /// `macro_def_from` BEFORE either expansion strategy runs, so both
 /// `Expander::new()` (bytecode) and `Expander::new_substitute_only()`
 /// (substitute) reject the SAME malformed defmacro at the SAME gate.
@@ -40206,20 +40206,20 @@ fn defmacro_arity(head: MacroDefHead, arity: usize) -> LispError {
 /// primitive on the substrate's Sexp-display-source rejection
 /// surface.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; one
+/// Anchor: generation over composition; one
 /// inline copy still earns a named primitive once the structural
 /// shape is named (the test count gives this the fail-before/pass-
 /// after edge, parallel to how `defmacro_arity`, `non_symbol_param`,
 /// and `rest_param_missing_name` were lifted from a single site for
-/// the structural-completeness payoff). THEORY.md §V.1 — knowable
+/// the structural-completeness payoff). Knowable
 /// platform; the structural variant exposes `head` / `got` as
 /// first-class fields so authoring tools (LSP, REPL,
 /// `tatara-check`) bind to the data shape instead of substring-
-/// parsing the rendered diagnostic. THEORY.md §II.1 invariant 1 —
+/// parsing the rendered diagnostic. Invariant 1 —
 /// typed entry; a defmacro form whose name slot isn't a symbol is
 /// exactly the failure mode the typed-entry gate exists to reject —
 /// and the gate must reject DEFINITIONS as readily as it rejects
-/// CALLS. THEORY.md §II.1 invariant 2 — free middle; the
+/// CALLS. Invariant 2 — free middle; the
 /// name-symbol gate fires inside `macro_def_from` BEFORE either
 /// expansion strategy runs, so both `Expander::new()` (bytecode) and
 /// `Expander::new_substitute_only()` (substitute) reject the SAME
@@ -40276,21 +40276,21 @@ fn defmacro_non_symbol_name(head: MacroDefHead, got: &Sexp) -> LispError {
 /// `defmacro_non_symbol_name`'s helpers after the typed-witness
 /// promotion of their `got` slots.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; one
+/// Anchor: generation over composition; one
 /// inline copy still earns a named primitive once the structural
 /// shape is named (the test count gives this the fail-before/pass-
 /// after edge, parallel to how `defmacro_arity`,
 /// `defmacro_non_symbol_name`, `non_symbol_param`, and
 /// `rest_param_missing_name` were lifted from a single site for
-/// the structural-completeness payoff). THEORY.md §V.1 — knowable
+/// the structural-completeness payoff). Knowable
 /// platform; the structural variant exposes `head` / `got` as
 /// first-class fields so authoring tools (LSP, REPL,
 /// `tatara-check`) bind to the data shape instead of substring-
-/// parsing the rendered diagnostic. THEORY.md §II.1 invariant 1 —
+/// parsing the rendered diagnostic. Invariant 1 —
 /// typed entry; a defmacro form whose param-list slot isn't a list
 /// is exactly the failure mode the typed-entry gate exists to
 /// reject — and the gate must reject DEFINITIONS as readily as it
-/// rejects CALLS. THEORY.md §II.1 invariant 2 — free middle; the
+/// rejects CALLS. Invariant 2 — free middle; the
 /// param-list gate fires inside `macro_def_from` BEFORE either
 /// expansion strategy runs, so both `Expander::new()` (bytecode)
 /// and `Expander::new_substitute_only()` (substitute) reject the
@@ -42132,7 +42132,7 @@ mod tests {
         // either path's rejection shape (or drops one path's rejection
         // entirely) fails-loudly here. Sibling of
         // `splice_outside_list_substitute_and_bytecode_paths_agree` —
-        // both close `THEORY.md §II.1 invariant 2 — free middle` for one
+        // both close `invariant 2 — free middle` for one
         // failure mode each.
         let src = "(defmacro need-two (a b) `(,a ,b)) (need-two 1)";
         let mut subst = Expander::new_substitute_only();
@@ -42343,7 +42343,7 @@ mod tests {
         // shared `MacroParams::bind` makes the rejection lands once and
         // both paths inherit it. Mirror of
         // `missing_macro_arg_substitute_and_bytecode_paths_agree` —
-        // both close `THEORY.md §II.1 invariant 2 — free middle` for
+        // both close `invariant 2 — free middle` for
         // one failure mode each.
         let src = "(defmacro pair (a b) `(cons ,a ,b)) (pair 1 2 3)";
         let mut subst = Expander::new_substitute_only();
@@ -42953,8 +42953,8 @@ mod tests {
     // `defmacro_non_list_params`). Every test in this block names
     // `MacroDefHead` directly — the symbol exists only after the
     // lift, so the entire block is fail-before/pass-after by
-    // construction (compile-time edge). Theory anchor: THEORY.md
-    // §VI.1 — three-times rule; THEORY.md §V.1 — the closed set is
+    // construction (compile-time edge). Anchor:
+    // three-times rule; the closed set is
     // a TYPE rather than a `matches!` literal.
 
     #[test]

@@ -51,7 +51,7 @@ use tatara_process::classification::{
 /// to this primitive AND inherits the commutativity + idempotence
 /// invariants it carries.
 ///
-/// Theory anchor: THEORY.md §III (typescape — the total-order
+/// Anchor: (typescape — the total-order
 /// lattice-axis primitive lifted to ONE substrate owner) + §II.1
 /// invariant 5 (composition preserves proofs — every downstream
 /// lattice-law property test that consumes `meet` inherits the
@@ -294,11 +294,11 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// `strictly_below ⇔ leq && !=` two-primitive seal on the
     /// direction-collapsed face.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the direction-collapsed strict-comparability
     /// peer is itself a typed named `bool` predicate composing
     /// [`Lattice::strictly_below`] and [`Lattice::strictly_above`] via
-    /// the trait's default) + THEORY.md §III (typescape — the strict-
+    /// the trait's default) + (typescape — the strict-
     /// direction-collapse comparability arm on every classification-
     /// axis lattice binds at ONE substrate owner on the [`Lattice`]
     /// algebra rather than at each consumer's hand-rolled `a.leq(&b) &&
@@ -394,10 +394,10 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// [`Lattice::leq`] holds. The predicate does NOT promote
     /// incomparable pairs to a strict-order verdict.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the strict-order peer of `leq` is itself a
     /// typed named `bool` predicate composing `leq` and `PartialEq::ne`
-    /// via the trait's default) + THEORY.md §III (typescape — the
+    /// via the trait's default) + (typescape — the
     /// strict-comparator arm on every classification-axis lattice
     /// binds at ONE substrate owner on the [`Lattice`] algebra rather
     /// than at each consumer's hand-rolled conjunction).
@@ -431,7 +431,7 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// byte-identity dual pin `a.strictly_above(&b) ⇔
     /// b.strictly_below(&a)`.
     ///
-    /// Theory anchor: same as [`Lattice::strictly_below`] on the dual
+    /// Anchor: same as [`Lattice::strictly_below`] on the dual
     /// strict arm.
     fn strictly_above(&self, other: &Self) -> bool {
         other.strictly_below(self)
@@ -475,9 +475,9 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// iterator without changing the result. Pinned via proptest on
     /// the DataClassification and CalmClassification axes below.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — every downstream N-ary meet consumer inherits
-    /// the fold through the default) + THEORY.md §III (typescape — the
+    /// the fold through the default) + (typescape — the
     /// N-ary refinement-composition arm on every classification axis
     /// binds at ONE substrate owner on the [`Lattice`] algebra).
     fn meet_all<'a, I>(iter: I) -> Self
@@ -518,8 +518,8 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// result. Pinned via proptest on the DataClassification and
     /// CalmClassification axes below.
     ///
-    /// Theory anchor: same as [`Lattice::meet_all`] on the dual arm —
-    /// THEORY.md §II.1 invariant 5 + §III.
+    /// Anchor: same as [`Lattice::meet_all`] on the dual arm —
+    /// invariant 5 + §III.
     fn join_all<'a, I>(iter: I) -> Self
     where
         I: IntoIterator<Item = &'a Self>,
@@ -594,10 +594,10 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// future closed-set lattice impl inherits the N-ary bound predicates
     /// for free.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the N-ary containment-from-below predicate is
     /// itself a typed named `bool` composing the pairwise partial-order
-    /// relation via [`Iterator::all`]) + THEORY.md §III (typescape — the
+    /// relation via [`Iterator::all`]) + (typescape — the
     /// N-ary Boolean-bound predicate on every classification-axis
     /// lattice binds at ONE substrate owner on the [`Lattice`] algebra
     /// rather than at each consumer's hand-rolled `iter.all(|x|
@@ -664,8 +664,8 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// [`Lattice::leq`] lands at ONE site and this dual inherits
     /// through the default.
     ///
-    /// Theory anchor: same as [`Lattice::is_lower_bound_of`] on the
-    /// dual arm — THEORY.md §II.1 invariant 5 + §III.
+    /// Anchor: same as [`Lattice::is_lower_bound_of`] on the
+    /// dual arm — invariant 5 + §III.
     fn is_upper_bound_of<'a, I>(&self, iter: I) -> bool
     where
         I: IntoIterator<Item = &'a Self>,
@@ -753,11 +753,11 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// short-circuit tweak in the standard library) lands at ONE site
     /// and this default inherits mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the strict N-ary containment-from-below
     /// predicate is itself a typed named `bool` composing the pairwise
-    /// strict partial-order relation via [`Iterator::all`]) + THEORY.md
-    /// §III (typescape — the strict N-ary Boolean-bound predicate on
+    /// strict partial-order relation via [`Iterator::all`]) +
+    /// (typescape — the strict N-ary Boolean-bound predicate on
     /// every classification-axis lattice binds at ONE substrate owner
     /// on the [`Lattice`] algebra rather than at each consumer's hand-
     /// rolled `iter.all(|x| self.strictly_below(x))`).
@@ -816,8 +816,8 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// [`Lattice::leq`] which `strictly_below` composes from) lands
     /// at ONE site and this dual inherits through the default.
     ///
-    /// Theory anchor: same as [`Lattice::is_strict_lower_bound_of`]
-    /// on the dual arm — THEORY.md §II.1 invariant 5 + §III.
+    /// Anchor: same as [`Lattice::is_strict_lower_bound_of`]
+    /// on the dual arm — invariant 5 + §III.
     fn is_strict_upper_bound_of<'a, I>(&self, iter: I) -> bool
     where
         I: IntoIterator<Item = &'a Self>,
@@ -896,11 +896,11 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// standard library) lands at ONE site and this default inherits
     /// mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the ∃ N-ary Boolean-disjunction bound
     /// predicate is a typed named `bool` composing [`Lattice::leq`]
     /// via [`Iterator::any`]; every downstream lattice-law consumer
-    /// inherits it mechanically. THEORY.md §III (typescape) — the ∃
+    /// inherits it mechanically. (typescape) — the ∃
     /// N-ary Boolean-disjunction lower-bound arm on every
     /// classification-axis lattice binds at ONE substrate owner
     /// rather than at each consumer's hand-authored `iter.any(|x|
@@ -996,8 +996,8 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// [`Lattice::leq`] lands at ONE site and this dual inherits
     /// through the default.
     ///
-    /// Theory anchor: same as [`Lattice::any_lower_bound_of`] on the
-    /// dual arm — THEORY.md §II.1 invariant 5 + §III. The ∃ N-ary
+    /// Anchor: same as [`Lattice::any_lower_bound_of`] on the
+    /// dual arm — invariant 5 + §III. The ∃ N-ary
     /// Boolean-disjunction bound predicate on every classification-
     /// axis lattice now binds through TWO substrate defaults
     /// ([`Lattice::any_lower_bound_of`], [`Lattice::any_upper_bound_of`])
@@ -1140,12 +1140,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// [`Iterator::any`] short-circuit tweak in the standard library)
     /// lands at ONE site and this default inherits mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the strict ∃ N-ary Boolean-disjunction lower-
     /// bound predicate is itself a typed named `bool` composing
     /// [`Lattice::strictly_below`] via [`Iterator::any`]; every
     /// downstream lattice-law consumer inherits it mechanically.
-    /// THEORY.md §III (typescape) — the strict ∃ N-ary Boolean-
+    /// (typescape) — the strict ∃ N-ary Boolean-
     /// disjunction lower-bound arm on every classification-axis
     /// lattice binds at ONE substrate owner rather than at each
     /// consumer's hand-authored `iter.any(|x| self.strictly_below(x))`.
@@ -1309,8 +1309,8 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// short-circuit tweak in the standard library) lands at ONE site
     /// and this default inherits mechanically.
     ///
-    /// Theory anchor: same as [`Lattice::any_strict_lower_bound_of`]
-    /// on the dual arm — THEORY.md §II.1 invariant 5 + §III. The
+    /// Anchor: same as [`Lattice::any_strict_lower_bound_of`]
+    /// on the dual arm — invariant 5 + §III. The
     /// strict ∃ N-ary Boolean-disjunction bound predicate on every
     /// classification-axis lattice now binds through FOUR substrate
     /// defaults ([`Lattice::any_lower_bound_of`],
@@ -1433,12 +1433,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// a silent distortion the type system did not gate pre-lift and
     /// now does through the method's parameter order.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the 3-ary interval-containment predicate is
     /// itself a typed named `bool` composing two [`Lattice::leq`]
     /// calls via the boolean `&&` conjunction. Every downstream
     /// lattice-law consumer inherits the predicate through the
-    /// default. THEORY.md §III — typescape; the interval-containment
+    /// default. Typescape; the interval-containment
     /// arm on every classification-axis lattice binds at ONE substrate
     /// owner on the [`Lattice`] algebra rather than at each consumer's
     /// hand-rolled `low.leq(&x) && x.leq(&high)` conjunction (a
@@ -1536,8 +1536,8 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// this default inherits mechanically. Same `(low, high)`
     /// parameter-order gating as [`Lattice::is_between`].
     ///
-    /// Theory anchor: same as [`Lattice::is_between`] on the strict
-    /// arm — THEORY.md §II.1 invariant 5 + §III. The interval-
+    /// Anchor: same as [`Lattice::is_between`] on the strict
+    /// arm — invariant 5 + §III. The interval-
     /// containment predicate on every classification-axis lattice now
     /// binds through TWO substrate defaults ([`Lattice::is_between`],
     /// [`Lattice::is_strictly_between`]) closing the (strict, non-
@@ -1693,12 +1693,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// every closed-set lattice impl inherits the bracket-projection
     /// combinator for free.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the 3-ary interval-projection combinator is
     /// itself a typed named `Self` composing one [`Lattice::join`] and
     /// one [`Lattice::meet`] call. Every downstream lattice-law
     /// consumer inherits the combinator through the default
-    /// mechanically. THEORY.md §III — typescape; the interval-
+    /// mechanically. Typescape; the interval-
     /// projection combinator on every classification-axis lattice
     /// binds at ONE substrate owner on the [`Lattice`] algebra rather
     /// than at each consumer's hand-rolled `self.join(low).meet(high)`
@@ -1838,12 +1838,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// closed-set lattice impl inherits the half-bracket-projection
     /// combinator for free.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the 2-ary lower-half interval-projection
     /// combinator is itself a typed named `Self` composing ONE
     /// [`Lattice::join`] call. Every downstream lattice-law consumer
     /// inherits the combinator through the default mechanically.
-    /// THEORY.md §III — typescape; the lower-half interval-projection
+    /// Typescape; the lower-half interval-projection
     /// combinator on every classification-axis lattice binds at ONE
     /// substrate owner on the [`Lattice`] algebra rather than at each
     /// consumer's hand-rolled `self.join(low)` composition,
@@ -1950,7 +1950,7 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// at [`Lattice::meet`] lands at ONE site and this default
     /// inherits mechanically.
     ///
-    /// Theory anchor: same as [`Lattice::clamped_below`] on the dual
+    /// Anchor: same as [`Lattice::clamped_below`] on the dual
     /// side.
     ///
     /// Frontier inspiration: [`Ord::min`] on total orders — dual of
@@ -2064,12 +2064,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// (a `Range` over a randomizing iterator) would otherwise break
     /// the structural predicate's determinism.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the structural chain predicate is itself a typed named
     /// `bool` composing [`Lattice::is_comparable`] via nested-loop
     /// pair iteration; every downstream lattice-law consumer inherits
-    /// the predicate through the default mechanically) + THEORY.md §III
-    /// (typescape — the structural comparability predicate on every
+    /// the predicate through the default mechanically)
+    /// + (typescape — the structural comparability predicate on every
     /// classification-axis lattice binds at ONE substrate owner on the
     /// [`Lattice`] algebra rather than at each consumer's hand-rolled
     /// `iter.iter().enumerate().all(|(i, x)| iter.iter().skip(i +
@@ -2186,8 +2186,8 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// buffer, guarded by `vs[i] != vs[j]` to filter duplicates. Same
     /// collect-once discipline as [`Lattice::is_chain`].
     ///
-    /// Theory anchor: same as [`Lattice::is_chain`] on the dual arm —
-    /// THEORY.md §II.1 invariant 5 + §III. The comparability axis on
+    /// Anchor: same as [`Lattice::is_chain`] on the dual arm —
+    /// invariant 5 + §III. The comparability axis on
     /// every classification-axis lattice now binds through FOUR algebra
     /// predicates ([`Lattice::is_comparable`], [`Lattice::is_incomparable`],
     /// [`Lattice::is_chain`], [`Lattice::is_antichain`]) closing the
@@ -2350,13 +2350,13 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// [`IntoIterator`] that yields distinct values on distinct calls
     /// cannot break the structural predicate's determinism.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the strict-arm structural comparability
     /// predicate is itself a typed named `bool` composing
     /// [`Lattice::is_strictly_comparable`] via nested-loop pair
     /// iteration; every downstream lattice-law consumer inherits the
-    /// predicate through the default mechanically) + THEORY.md §III
-    /// (typescape — the strict-comparability structural arm on every
+    /// predicate through the default mechanically)
+    /// + (typescape — the strict-comparability structural arm on every
     /// classification-axis lattice binds at ONE substrate owner on
     /// the [`Lattice`] algebra rather than at each consumer's
     /// hand-rolled `iter.iter().enumerate().all(|(i, x)|
@@ -2533,12 +2533,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// distinct values on distinct calls cannot break the structural
     /// predicate's determinism.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the strict-arm structural incomparability
     /// predicate is itself a typed named `bool` composing
     /// [`Lattice::is_incomparable`] via nested-loop pair iteration;
     /// every downstream lattice-law consumer inherits the predicate
-    /// through the default mechanically) + THEORY.md §III (typescape
+    /// through the default mechanically) + (typescape
     /// — the strict-incomparability structural arm on every
     /// classification-axis lattice binds at ONE substrate owner on
     /// the [`Lattice`] algebra rather than at each consumer's
@@ -2691,12 +2691,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// normalization at [`Lattice::leq`] lands at ONE site and this
     /// default inherits the sequence-shape peer mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the sequence-shape ascending predicate is
     /// itself a typed named `bool` composing [`Lattice::leq`] via
     /// [`slice::windows`] plus [`Iterator::all`]; every downstream
     /// lattice-law consumer inherits the predicate through the default
-    /// mechanically) + THEORY.md §III (typescape — the sequence-shape
+    /// mechanically) + (typescape — the sequence-shape
     /// monotonicity predicate on every classification-axis lattice
     /// binds at ONE substrate owner on the [`Lattice`] algebra rather
     /// than at each consumer's hand-rolled
@@ -2801,8 +2801,8 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// buffer, mirroring [`Lattice::is_ascending`]'s walk with the pair-
     /// level primitive swapped from [`Lattice::leq`] to [`Lattice::geq`].
     ///
-    /// Theory anchor: same as [`Lattice::is_ascending`] on the dual
-    /// pair-level primitive — THEORY.md §II.1 invariant 5 + §III. The
+    /// Anchor: same as [`Lattice::is_ascending`] on the dual
+    /// pair-level primitive — invariant 5 + §III. The
     /// consecutive-pair face on every classification-axis lattice now
     /// binds through TWO substrate defaults ([`Lattice::is_ascending`],
     /// [`Lattice::is_descending`]) closing the (leq, geq) direction
@@ -2923,12 +2923,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// through) lands at ONE site and this default inherits the strict
     /// sequence-shape peer mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the strict sequence-shape ascending predicate
     /// is itself a typed named `bool` composing [`Lattice::strictly_below`]
     /// via [`slice::windows`] plus [`Iterator::all`]; every downstream
     /// lattice-law consumer inherits the strict predicate through the
-    /// default mechanically) + THEORY.md §III (typescape — the strict
+    /// default mechanically) + (typescape — the strict
     /// sequence-shape monotonicity predicate on every classification-
     /// axis lattice binds at ONE substrate owner on the [`Lattice`]
     /// algebra rather than at each consumer's hand-rolled
@@ -3035,8 +3035,8 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// primitive swapped from [`Lattice::strictly_below`] to
     /// [`Lattice::strictly_above`].
     ///
-    /// Theory anchor: same as [`Lattice::is_strictly_ascending`] on the
-    /// dual pair-level primitive — THEORY.md §II.1 invariant 5 + §III.
+    /// Anchor: same as [`Lattice::is_strictly_ascending`] on the
+    /// dual pair-level primitive — invariant 5 + §III.
     /// The consecutive-pair face on every classification-axis lattice
     /// now binds through FOUR substrate defaults ([`Lattice::is_ascending`],
     /// [`Lattice::is_descending`], [`Lattice::is_strictly_ascending`],
@@ -3193,12 +3193,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// inherits universally on every impl without any per-impl
     /// override.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the equality-arm sequence-shape predicate
     /// is itself a typed named `bool` composing [`PartialEq::eq`] via
     /// [`slice::windows`] plus [`Iterator::all`]; every downstream
     /// lattice-law consumer inherits the predicate through the default
-    /// mechanically) + THEORY.md §III (typescape — the equality-arm
+    /// mechanically) + (typescape — the equality-arm
     /// sequence-shape monotonicity predicate on every classification-
     /// axis lattice binds at ONE substrate owner on the [`Lattice`]
     /// algebra rather than at each consumer's hand-rolled
@@ -3363,13 +3363,13 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// the two walks (ascending first, descending second) is
     /// deterministic but semantically symmetric via the disjunction.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the direction-collapsed sequence-shape
     /// predicate is itself a typed named `bool` composing
     /// [`Lattice::leq`] / [`Lattice::geq`] via [`slice::windows`] plus
     /// [`Iterator::all`] plus disjunction; every downstream lattice-
     /// law consumer inherits the predicate through the default
-    /// mechanically) + THEORY.md §III (typescape — the direction-
+    /// mechanically) + (typescape — the direction-
     /// collapsed sequence-shape monotonicity predicate on every
     /// classification-axis lattice binds at ONE substrate owner on
     /// the [`Lattice`] algebra rather than at each consumer's hand-
@@ -3492,8 +3492,8 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// swapped from [`Lattice::leq`] / [`Lattice::geq`] to
     /// [`Lattice::strictly_below`] / [`Lattice::strictly_above`].
     ///
-    /// Theory anchor: same as [`Lattice::is_monotone_sequence`] on the strict
-    /// pair-level primitives — THEORY.md §II.1 invariant 5 + §III.
+    /// Anchor: same as [`Lattice::is_monotone_sequence`] on the strict
+    /// pair-level primitives — invariant 5 + §III.
     /// The direction-collapsed face on every classification-axis
     /// lattice now binds through TWO substrate defaults
     /// ([`Lattice::is_monotone_sequence`], [`Lattice::is_strictly_monotone_sequence`])
@@ -3710,13 +3710,13 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// direction-free sequence-shape peer inherits the upgrade
     /// mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the direction-free sequence-shape
     /// comparability predicate is itself a typed named `bool`
     /// composing [`Lattice::is_comparable`] via [`slice::windows`]
     /// plus [`Iterator::all`]; every downstream lattice-law consumer
     /// inherits the predicate through the default mechanically) +
-    /// THEORY.md §III (typescape — the direction-free sequence-shape
+    /// (typescape — the direction-free sequence-shape
     /// comparability arm on every classification-axis lattice now
     /// binds at ONE substrate owner on the [`Lattice`] algebra,
     /// closing the (consecutive-pair, all-pairs) × (direction-free
@@ -3935,13 +3935,13 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// routes through) lands at ONE site and this direction-free
     /// sequence-shape peer inherits the upgrade mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the direction-free sequence-shape
     /// incomparability predicate is itself a typed named `bool`
     /// composing [`Lattice::is_incomparable`] via [`slice::windows`]
     /// plus [`Iterator::all`]; every downstream lattice-law consumer
     /// inherits the predicate through the default mechanically) +
-    /// THEORY.md §III (typescape — the direction-free sequence-shape
+    /// (typescape — the direction-free sequence-shape
     /// incomparability arm on every classification-axis lattice now
     /// binds at ONE substrate owner on the [`Lattice`] algebra,
     /// closing the (comparable, incomparable) × (sequence-shape
@@ -4187,13 +4187,13 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// arms) lands at ONE site and this direction-free sequence-shape
     /// strict peer inherits the upgrade mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the direction-free strict sequence-shape comparability
     /// predicate is itself a typed named `bool` composing [`Lattice::
     /// is_strictly_comparable`] via [`slice::windows`] plus
     /// [`Iterator::all`]; every downstream lattice-law consumer inherits
-    /// the predicate through the default mechanically) + THEORY.md §III
-    /// (typescape — the direction-free strict sequence-shape
+    /// the predicate through the default mechanically)
+    /// + (typescape — the direction-free strict sequence-shape
     /// comparability arm on every classification-axis lattice now binds
     /// at ONE substrate owner on the [`Lattice`] algebra, closing the
     /// (strict, non-strict) × (direction-free consecutive-pair
@@ -4372,12 +4372,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// normalization at [`Lattice::leq`] lands at ONE site and this
     /// default inherits mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the ∃-consecutive-pair ascending predicate is itself a
     /// typed named `bool` composing [`Lattice::leq`] via [`slice::windows`]
     /// plus [`Iterator::any`]; every downstream lattice-law consumer
     /// inherits the predicate through the default mechanically) +
-    /// THEORY.md §III (typescape — the ∃-consecutive-pair ascending arm
+    /// (typescape — the ∃-consecutive-pair ascending arm
     /// on every classification-axis lattice binds at ONE substrate owner
     /// on the [`Lattice`] algebra rather than at each consumer's hand-
     /// authored `vs.windows(2).any(|w| w[0].leq(&w[1]))` walk).
@@ -4566,12 +4566,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// walk's determinism. A future normalization at [`Lattice::geq`]
     /// lands at ONE site and this default inherits mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the ∃-consecutive-pair descending predicate is itself a
     /// typed named `bool` composing [`Lattice::geq`] via [`slice::windows`]
     /// plus [`Iterator::any`]; every downstream lattice-law consumer
     /// inherits the predicate through the default mechanically) +
-    /// THEORY.md §III (typescape — the ∃-consecutive-pair descending arm
+    /// (typescape — the ∃-consecutive-pair descending arm
     /// on every classification-axis lattice binds at ONE substrate owner
     /// on the [`Lattice`] algebra rather than at each consumer's hand-
     /// authored `vs.windows(2).any(|w| w[0].geq(&w[1]))` walk).
@@ -4780,12 +4780,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// normalization at [`Lattice::strictly_below`] lands at ONE site
     /// and this default inherits mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the strict ∃-consecutive-pair ascending predicate is
     /// itself a typed named `bool` composing [`Lattice::strictly_below`]
     /// via [`slice::windows`] plus [`Iterator::any`]; every downstream
     /// lattice-law consumer inherits the predicate through the default
-    /// mechanically) + THEORY.md §III (typescape — the strict ∃-
+    /// mechanically) + (typescape — the strict ∃-
     /// consecutive-pair ascending arm on every classification-axis
     /// lattice binds at ONE substrate owner on the [`Lattice`] algebra
     /// rather than at each consumer's hand-authored `vs.windows(2).any(
@@ -5009,12 +5009,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// normalization at [`Lattice::strictly_above`] lands at ONE site
     /// and this default inherits mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the strict ∃-consecutive-pair descending predicate is
     /// itself a typed named `bool` composing [`Lattice::strictly_above`]
     /// via [`slice::windows`] plus [`Iterator::any`]; every downstream
     /// lattice-law consumer inherits the predicate through the default
-    /// mechanically) + THEORY.md §III (typescape — the strict ∃-
+    /// mechanically) + (typescape — the strict ∃-
     /// consecutive-pair descending arm on every classification-axis
     /// lattice binds at ONE substrate owner on the [`Lattice`] algebra
     /// rather than at each consumer's hand-authored `vs.windows(2).any(
@@ -5275,13 +5275,13 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// `self.leq(other) || other.leq(self)`) lands at ONE site and this
     /// default inherits mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the direction-free ∃-consecutive-pair comparability
     /// predicate is itself a typed named `bool` composing
     /// [`Lattice::is_comparable`] via [`slice::windows`] plus
     /// [`Iterator::any`]; every downstream lattice-law consumer inherits
-    /// the predicate through the default mechanically) + THEORY.md §III
-    /// (typescape — the direction-free ∃-consecutive-pair comparability
+    /// the predicate through the default mechanically)
+    /// + (typescape — the direction-free ∃-consecutive-pair comparability
     /// arm on every classification-axis lattice binds at ONE substrate
     /// owner on the [`Lattice`] algebra rather than at each consumer's
     /// hand-authored `vs.windows(2).any(|w| w[0].is_comparable(&w[1]))`
@@ -5549,12 +5549,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// `self.is_comparable(other) && self != other`) lands at ONE site
     /// and this default inherits mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the direction-free strict ∃-consecutive-pair comparability
     /// predicate is itself a typed named `bool` composing [`Lattice::
     /// is_strictly_comparable`] via [`slice::windows`] plus [`Iterator::
     /// any`]; every downstream lattice-law consumer inherits the predicate
-    /// through the default mechanically) + THEORY.md §III (typescape — the
+    /// through the default mechanically) + (typescape — the
     /// direction-free strict ∃-consecutive-pair comparability arm on
     /// every classification-axis lattice binds at ONE substrate owner on
     /// the [`Lattice`] algebra rather than at each consumer's hand-
@@ -5813,12 +5813,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// the negated direction-collapse disjunction routes through) lands at
     /// ONE site and this default inherits mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the direction-free ∃-consecutive-pair incomparability
     /// predicate is itself a typed named `bool` composing [`Lattice::
     /// is_incomparable`] via [`slice::windows`] plus [`Iterator::any`];
     /// every downstream lattice-law consumer inherits the predicate
-    /// through the default mechanically) + THEORY.md §III (typescape — the
+    /// through the default mechanically) + (typescape — the
     /// direction-free ∃-consecutive-pair incomparability arm on every
     /// classification-axis lattice binds at ONE substrate owner on the
     /// [`Lattice`] algebra rather than at each consumer's hand-authored
@@ -6014,12 +6014,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// default inherits universally on every impl without any per-impl
     /// override.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the equality-arm ∃-consecutive-pair predicate is itself a
     /// typed named `bool` composing [`PartialEq::eq`] via [`slice::windows`]
     /// plus [`Iterator::any`]; every downstream lattice-law consumer inherits
-    /// the predicate through the default mechanically) + THEORY.md §III
-    /// (typescape — the equality-arm ∃-consecutive-pair predicate on every
+    /// the predicate through the default mechanically)
+    /// + (typescape — the equality-arm ∃-consecutive-pair predicate on every
     /// classification-axis lattice binds at ONE substrate owner on the
     /// [`Lattice`] algebra rather than at each consumer's hand-authored
     /// `vs.windows(2).any(|w| w[0] == w[1])` walk).
@@ -6200,12 +6200,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// did not gate pre-lift and now does through the method's
     /// parameter order.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the N-ary interval-containment predicate is
     /// itself a typed named `bool` composing [`Lattice::is_between`]
     /// via [`Iterator::all`]; every downstream lattice-law consumer
     /// inherits the predicate through the default mechanically) +
-    /// THEORY.md §III (typescape — the N-ary interval-containment arm
+    /// (typescape — the N-ary interval-containment arm
     /// on every classification-axis lattice binds at ONE substrate
     /// owner on the [`Lattice`] algebra rather than at each consumer's
     /// hand-rolled `iter.all(|x| low.leq(x) && x.leq(high))`
@@ -6387,13 +6387,13 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// iterable), a silent distortion the type system did not gate
     /// pre-lift and now does through the method's parameter order.
     ///
-    /// Theory anchor: same as [`Lattice::all_between`] on the strict
-    /// arm — THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: same as [`Lattice::all_between`] on the strict
+    /// arm — invariant 5 (composition preserves
     /// proofs — the strict-arm N-ary interval-containment predicate
     /// is itself a typed named `bool` composing [`Lattice::
     /// is_strictly_between`] via [`Iterator::all`]; every downstream
     /// lattice-law consumer inherits the predicate through the
-    /// default mechanically) + THEORY.md §III (typescape — the
+    /// default mechanically) + (typescape — the
     /// strict-arm N-ary interval-containment predicate on every
     /// classification-axis lattice binds at ONE substrate owner on
     /// the [`Lattice`] algebra rather than at each consumer's
@@ -6548,12 +6548,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// iterable), a silent distortion the type system did not gate
     /// pre-lift and now does through the method's parameter order.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the existential N-ary interval-containment
     /// predicate is itself a typed named `bool` composing [`Lattice::
     /// is_between`] via [`Iterator::any`]; every downstream lattice-
     /// law consumer inherits the predicate through the default
-    /// mechanically) + THEORY.md §III (typescape — the existential
+    /// mechanically) + (typescape — the existential
     /// N-ary interval-containment arm on every classification-axis
     /// lattice binds at ONE substrate owner on the [`Lattice`]
     /// algebra rather than at each consumer's hand-rolled `iter.any(
@@ -6764,12 +6764,12 @@ pub trait Lattice: Sized + Clone + PartialEq {
     /// tweak in the standard library) lands at ONE site and this
     /// default inherits mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the strict-arm existential N-ary interval-
     /// containment predicate is itself a typed named `bool` composing
     /// [`Lattice::is_strictly_between`] via [`Iterator::any`]; every
     /// downstream lattice-law consumer inherits the predicate through
-    /// the default mechanically) + THEORY.md §III (typescape — the
+    /// the default mechanically) + (typescape — the
     /// strict-arm existential N-ary interval-containment predicate on
     /// every classification-axis lattice binds at ONE substrate owner
     /// on the [`Lattice`] algebra rather than at each consumer's hand-
@@ -7324,13 +7324,13 @@ mod tests {
     /// gains the new arm's coverage mechanically without a
     /// per-strategy hand-edit.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// Anchor: (generation over composition
     /// — the two-arm inline `prop_oneof!` enumeration recurred at
     /// the sibling `any_data_class` slot pre-lift, was lifted to
     /// `from_all(&T::ALL)` on that axis, and this run closes the
     /// symmetry gap on the CALM axis so BOTH classification-axis
-    /// strategies route through ONE substrate primitive). THEORY.md
-    /// §II.1 invariant 5 (composition preserves proofs — both
+    /// strategies route through ONE substrate primitive).
+    /// Invariant 5 (composition preserves proofs — both
     /// strategies binding to `from_all(&T::ALL)` means a future
     /// normalization at the primitive lands at ONE site and every
     /// downstream classification-axis proptest consumer inherits

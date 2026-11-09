@@ -188,10 +188,10 @@ pub const ERROR_BACKOFF_SECONDS: u64 = 15;
 /// or at future consumers (a new phase handler tail, a new signal
 /// arm, a new top-level dispatcher).
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the intent recurred at 12 hand-authored production sites past
 /// the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
-/// ONE owner here). THEORY.md §II.1 invariant 5 (composition
+/// ONE owner here). Invariant 5 (composition
 /// preserves proofs — the intent → second-count mapping lives at
 /// ONE typed algebra projection; a regression that drifted the
 /// second-count would fail at the byte-shape pin below rather than
@@ -301,10 +301,10 @@ pub fn heartbeat() -> Action {
 /// callers or at future consumers (a new pool-adjacent controller,
 /// a new failure-sink axis).
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the intent recurred at 2 hand-authored production sites past
 /// the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
-/// ONE owner here). THEORY.md §II.1 invariant 5 (composition
+/// ONE owner here). Invariant 5 (composition
 /// preserves proofs — the intent → second-count mapping lives at
 /// ONE typed algebra projection; a regression that drifted the
 /// second-count would fail at the byte-shape pin below rather than

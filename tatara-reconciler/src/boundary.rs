@@ -108,10 +108,10 @@ impl Satisfaction {
     /// this composer instead of another hand-authored `format!(...)`
     /// with the same `<label> <ns>/<name> not found` shape.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the shape recurred at three sites past the PRIME-DIRECTIVE ≥ 2
-    /// duplication trigger, and is lifted to ONE owner here). THEORY
-    /// .md §II.1 invariant 5 (composition preserves proofs — the three
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// Invariant 5 (composition preserves proofs — the three
     /// evaluators now compose structurally through ONE primitive; a
     /// regression that drifted the wording at ONE site surfaces at
     /// [`satisfaction_resource_not_found_tests`] rather than as silent
@@ -188,10 +188,10 @@ impl Satisfaction {
     /// [`classify_job_status_tests::failed_job_projects_to_unsatisfied_with_counter_tail`]
     /// test already pinned.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the shape recurred at four sites past the PRIME-DIRECTIVE ≥ 2
-    /// duplication trigger, and is lifted to ONE owner here). THEORY
-    /// .md §II.1 invariant 5 (composition preserves proofs — the four
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// Invariant 5 (composition preserves proofs — the four
     /// callsites now compose structurally through ONE primitive; a
     /// regression that drifted the wording at ONE site surfaces at
     /// [`satisfaction_labeled_diagnostic_tests`] rather than as silent
@@ -267,10 +267,10 @@ impl Satisfaction {
 /// consumes, `JobEvaluatorLabel` owns the diagnostic-prefix identity
 /// of the Job-based sub-axes tatara's boundary evaluator verifies.
 ///
-/// Theory grounding: THEORY.md §VI.1 (generation over composition —
+/// Grounding: (generation over composition —
 /// the label recurred at four hand-authored production sites past the
 /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
-/// closed-set owner per variant here). THEORY.md §II.1 invariant 5
+/// closed-set owner per variant here). Invariant 5
 /// (composition preserves proofs — the per-variant mappings live at
 /// ONE typed algebra projection; a regression that drifted the label
 /// at ONE adjacent callsite would fail-loudly at this module's byte-
@@ -471,10 +471,10 @@ mod job_evaluator_label_tests {
 /// future new ConditionKind evaluator pick up the upgrade mechanically,
 /// with no per-evaluator hand-edit.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// three-invariant scaffold recurred at four kind-typed evaluators
 /// well past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
-/// lifted to ONE owner here). THEORY.md §II.1 invariant 5 (composition
+/// lifted to ONE owner here). Invariant 5 (composition
 /// preserves proofs — the four axis-typed evaluators now compose
 /// structurally through ONE primitive; a regression that drifted the
 /// wording or the Satisfaction variant at ONE axis surfaces at
@@ -529,11 +529,11 @@ fn parse_condition_params<T: serde::de::DeserializeOwned>(
 /// they partition the "parse-and-short-circuit" scaffold every
 /// kind-typed evaluator on this file dispatches through.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// four-line short-circuit scaffold recurred at four kind-typed
 /// evaluators past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and
-/// is lifted to ONE substrate macro here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — post-lift the
+/// is lifted to ONE substrate macro here).
+/// Invariant 5 (composition preserves proofs — post-lift the
 /// "parse-or-short-circuit" scaffold binds structurally through ONE
 /// macro; a regression that drifted the short-circuit posture at ONE
 /// evaluator surfaces at the macro's tests rather than as silent
@@ -842,10 +842,10 @@ struct JobStatusView {
 /// ONE substrate primitive and every downstream evaluator picks up
 /// the upgrade mechanically.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// three-invariant scaffold recurred at two Job-based evaluators
 /// past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted
-/// to ONE owner here). THEORY.md §II.1 invariant 5 (composition
+/// to ONE owner here). Invariant 5 (composition
 /// preserves proofs — the two evaluators now compose structurally
 /// through ONE primitive; a regression that drifted the wording at
 /// ONE axis surfaces at [`classify_job_status_tests`] rather than as
@@ -978,10 +978,10 @@ async fn require_succeeded_job(
 /// through the SAME three primitives, not another hand-authored
 /// three-invariant scaffold trio.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// three-invariant scaffold recurred at two Job-based evaluators past
 /// the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
-/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// owner here). Invariant 5 (composition preserves
 /// proofs — the two evaluators now compose structurally through ONE
 /// primitive; a regression that drifted the wording at ONE axis
 /// surfaces at [`classify_receipt_verdict_tests`] rather than as
@@ -1234,11 +1234,11 @@ async fn verify_receipt_cm(
 /// verdict variant added at [`ReceiptVerdict`]) reaches every
 /// downstream evaluator through this composer mechanically.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 4-line async-fetch → pure-classify shape recurred at two hand-
 /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger,
-/// and is lifted to ONE substrate owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — the `(ns, cm_name)`
+/// and is lifted to ONE substrate owner here).
+/// Invariant 5 (composition preserves proofs — the `(ns, cm_name)`
 /// pair now binds ONCE per call rather than at two per-callsite pairs
 /// where the fetch-time coordinates and the diagnostic-time coordinates
 /// could drift silently; a regression that inserted a normalization
@@ -1505,11 +1505,11 @@ impl UnmetDependency {
     /// arm rather than as a hand-authored struct literal at the
     /// callsite.
     ///
-    /// Theory grounding: THEORY.md §VI.1 (generation over composition
+    /// Grounding: (generation over composition
     /// — the 5-slot literal + the `<ns>/<name>` diagnostic prefix
     /// recurred at THREE hand-authored arms past the ★★
     /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
-    /// ONE typed composer trio here). THEORY.md §II.1 invariant 5
+    /// ONE typed composer trio here). Invariant 5
     /// (composition preserves proofs — a regression that swapped
     /// `name` and `namespace` at ONE arm would silently persist a
     /// slot-inverted diagnostic; the pins at

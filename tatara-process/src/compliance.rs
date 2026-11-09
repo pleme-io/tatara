@@ -227,12 +227,12 @@ impl ComplianceBinding {
 /// hypothetical `Continuous` checkpoint) reaches every downstream
 /// through the SAME closed-set walk with no per-caller edit.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// Anchor: invariant 5 — composition preserves
 /// proofs; the per-slice `phase` walk lives at ONE substrate site so
 /// every downstream (require-tag classifier, coherence check, editor
 /// completion) binds through the SAME shape rather than restating the
 /// `.iter().any(|b| b.phase == K)` closure body at each callsite.
-/// THEORY.md §VI.1 — generation over composition; a future
+/// Generation over composition; a future
 /// [`VerificationPhase`] variant lands at ONE `ALL` entry + ONE
 /// `as_str` arm on the closed set and the presence probe picks it up
 /// mechanically without further per-consumer edits.
@@ -321,7 +321,7 @@ pub trait ComplianceBindingSliceExt {
     /// [`Self::has_verification_phase`] absorbs a fresh variant with
     /// no probe-body edit.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the per-slice `phase.gates_phase()` walk
     /// lives at ONE substrate site so every downstream (require-tag
     /// classifier, control-plane compliance evaluator, editor
@@ -329,7 +329,7 @@ pub trait ComplianceBindingSliceExt {
     /// binding's control reported a violation") binds through the
     /// SAME shape rather than restating the `.iter().any(|b|
     /// b.phase.gates_phase() == Some(K))` closure body at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// callsite. Generation over composition; a
     /// future [`VerificationPhase`] variant lands at ONE `ALL` entry,
     /// one `as_str` arm, one `gates_phase` arm on the closed set,
     /// and both slice-level presence probes

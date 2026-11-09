@@ -1056,7 +1056,7 @@ mod tests {
     }
 
     /// WASI is refused as a group when the grant is absent, which is the
-    /// differential `BLUE-EXECUTION.md` M2's gate asks for: the same module,
+    /// differential the M2 gate asks for: the same module,
     /// admitted or refused purely by what the declaration carries.
     ///
     /// RED RUN (2026-08-13): `wasi_granted` forced to `true` →

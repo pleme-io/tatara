@@ -433,11 +433,11 @@ pub fn evaluate(
 /// return means the clock check fired for no observable reason — the
 /// attribute surfaces that as a warning at every call site.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 3-arg call with `chrono::Utc::now()` as the third argument recurred
 /// at 3 hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication trigger, lifted onto the ONE workspace-wide substrate
-/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// owner here). Invariant 5 (composition preserves
 /// proofs — the wall-clock projection lives at ONE site so a future
 /// clock swap reaches all three consumers through one edit).
 #[must_use]

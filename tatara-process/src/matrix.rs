@@ -551,11 +551,11 @@ impl EnvMatrixSpec {
 /// keys the three reachable breathe-dimension CR-kind / name-segment
 /// pairs on a typed marker identity.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+/// Anchor: knowable platform; the closed set
 /// of breathe-dimension keywords becomes a TYPE rather than three
 /// `&'static str` literals at one site and a raw-keyword `to_ascii_
 /// lowercase()` at another. A typo in any arm becomes a compile error
-/// against the typed projection. THEORY.md §VI.1 — generation over
+/// against the typed projection. Generation over
 /// composition; the (keyword-set, CR-kind, name-segment) triple was
 /// load-bearing across two sites yet enforced by per-site call-site
 /// discipline — past the ≥2 PRIME-DIRECTIVE trigger once the
@@ -722,14 +722,14 @@ impl BreatheDimensionKind {
 /// keys the three reachable matrix-axis aplicacao-field write targets
 /// on a typed marker identity.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
+/// Anchor: knowable platform; the closed set of
 /// `@`-prefixed magic targets becomes a TYPE rather than three
 /// `&'static str` literals scattered across [`apply_axis`]. A typo in
 /// any arm becomes a compile error against the typed projection.
-/// THEORY.md §VI.1 — generation over composition; the (path-literal,
+/// Generation over composition; the (path-literal,
 /// aplicacao-field) pairing appeared at three arms — past the ≥2
 /// PRIME-DIRECTIVE trigger once the structural shape is named.
-/// THEORY.md §II.1 invariant 1 — typed entry; the matrix-axis
+/// Invariant 1 — typed entry; the matrix-axis
 /// path-string to typed-target decoding IS the typed-entry gate at the
 /// `MatrixAxis::path` boundary, and naming the closed-set identity
 /// lifts the gate from per-site literal discipline to ONE method

@@ -207,13 +207,13 @@ pub fn compose_root(
 /// the return means the payload was serialized for no observable
 /// reason.
 ///
-/// # Theory anchor
+/// # Anchor
 ///
-/// THEORY.md §VI.1 (generation over composition — the
+/// (generation over composition — the
 /// `serde_json::to_vec(v).unwrap_or_default()` shape recurred at
 /// SIX hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication threshold, and lifts to ONE substrate owner here).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+/// Invariant 5 (composition preserves proofs —
 /// the byte-identity pin
 /// [`tests::pillar_bytes_matches_pre_lift_serde_json_to_vec_shape_bytewise`]
 /// binds the primitive byte-identically to the pre-lift spelling
@@ -323,12 +323,12 @@ pub fn pillar_bytes<T: Serialize + ?Sized>(v: &T) -> Vec<u8> {
 /// mask the drop with a compiler warning that this attribute
 /// surfaces).
 ///
-/// # Theory anchor
+/// # Anchor
 ///
-/// THEORY.md §VI.1 (generation over composition — the 2-link
+/// (generation over composition — the 2-link
 /// `serde_json::to_value → to_vec` chain recurred at two hand-authored
 /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
-/// lifted to ONE substrate owner here). THEORY.md §II.1 invariant 5
+/// lifted to ONE substrate owner here). Invariant 5
 /// (composition preserves proofs — the byte-identity pin
 /// [`tests::canonical_bytes_matches_pre_lift_to_value_to_vec_chain_bytewise`]
 /// binds the primitive byte-identically to both hand-authored

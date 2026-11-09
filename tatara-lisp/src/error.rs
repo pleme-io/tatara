@@ -835,10 +835,10 @@ const _: () = crate::ast::assert_str_array_slice_equals_str_array::<12, 12, 0>(
 /// kwarg gate), [`KwargPath`], [`SexpShape`], [`MacroDefHead`],
 /// [`UnquoteForm`] and [`CompilerSpecIoStage`].
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; a diagnostic that
+/// Anchor: knowable platform; a diagnostic that
 /// names the offending value but not the width it failed to fit is
 /// structurally incomplete, and the width is exactly the fact the
-/// author needs to fix the source. THEORY.md §II.1 invariant 1 — typed
+/// author needs to fix the source. Invariant 1 — typed
 /// entry; the target width is part of the proof of WHICH numeric gate
 /// rejected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, tatara_lisp_derive::ClosedSet)]
@@ -1154,7 +1154,7 @@ pub enum LispError {
     /// projection — `:query` for a keyword whose value got lost, or the
     /// literal form of a stray non-keyword. Naming both halves of the
     /// failure (the failure mode AND the offending element) is the
-    /// typed-entry gate's structural-completeness floor (THEORY.md §V.1):
+    /// typed-entry gate's structural-completeness floor:
     /// without it the operator must re-read the source to find what
     /// actually misfired.
     #[error("odd keyword arguments: dangling element `{dangling}`")]
@@ -1340,8 +1340,7 @@ pub enum LispError {
     /// expected (a symbol — the only form a no-evaluator template can
     /// substitute) and what was actually written (the literal value —
     /// `(list 1 2)`, `5`, `:foo`, etc.). Naming both halves of the
-    /// failure is the typed-entry gate's structural-completeness floor
-    /// (THEORY.md §V.1).
+    /// failure is the typed-entry gate's structural-completeness floor.
     ///
     /// Sibling of `UnboundTemplateVar { prefix, name, hint }` for the
     /// same template-side typed-entry surface — that variant fires when
@@ -1412,7 +1411,7 @@ pub enum LispError {
     /// (the literal value, renderable verbatim) without losing either
     /// side. Naming both the failure mode AND the offending element
     /// is the typed-entry gate's structural-completeness floor
-    /// (THEORY.md §V.1) — without it the operator must re-read the
+    /// — without it the operator must re-read the
     /// source to find what actually misfired. After this lift the
     /// structural identity is part of the variant's typed data shape;
     /// a regression that re-collapses `got` to a free-form `String`
@@ -1467,7 +1466,7 @@ pub enum LispError {
     /// substitute path's `bind_args` and the bytecode path's
     /// `apply_compiled` share ONE structural variant, parallel to how the
     /// template-gate's `SpliceOutsideList` is shared across both paths
-    /// (THEORY.md §II.1 invariant 2 — free middle: which strategy you
+    /// (invariant 2 — free middle: which strategy you
     /// picked must not change which inputs you reject). Before this lift
     /// the same failure mode emitted ONE `LispError::Compile { form:
     /// format!("call to {macro_name}"), message: format!("missing
@@ -1555,7 +1554,7 @@ pub enum LispError {
     /// they wrote (`5`, `"x"`, `:foo`, `(nested)`) instead of the bare
     /// "expected symbol" verdict. Naming both the position AND the
     /// offending element is the typed-entry gate's
-    /// structural-completeness floor (THEORY.md §V.1) — without both an
+    /// structural-completeness floor — without both an
     /// LSP that wants to surface "the third element of your param list
     /// isn't a symbol; you wrote `5`" must re-parse the source.
     ///
@@ -1610,7 +1609,7 @@ pub enum LispError {
     /// `None` when the marker was the last element in the list and
     /// nothing followed at all. Naming both the marker position AND
     /// the offending follower (or its absence) is the typed-entry
-    /// gate's structural-completeness floor (THEORY.md §V.1) —
+    /// gate's structural-completeness floor —
     /// without both, an LSP that wants to surface "your `&rest` at
     /// param-list position 1 has no name; you wrote `5` instead of
     /// a symbol" must re-parse the source.
@@ -1785,14 +1784,14 @@ pub enum LispError {
     /// prior-run `MacroDefHead` / `UnquoteForm` / `TemplateInvariantKind`
     /// / `CompilerSpecIoStage` closed-set lifts.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid
+    /// Anchor: knowable platform / "make invalid
     /// states unrepresentable"; the four malformed list-spec shapes are
     /// nonsense `MacroParams` cannot hold, so the gate must REJECT
     /// rather than bind args to a marker symbol or drop the extras
-    /// silently. THEORY.md §II.1 invariant 1 — typed entry; a malformed
+    /// silently. Invariant 1 — typed entry; a malformed
     /// default-form spec is exactly the failure mode the typed-entry
     /// gate exists to reject — and the gate must reject DEFINITIONS as
-    /// readily as it rejects CALLS. THEORY.md §II.1 invariant 2 — free
+    /// readily as it rejects CALLS. Invariant 2 — free
     /// middle; the gate fires inside `parse_params` BEFORE either
     /// expansion strategy runs, so both `Expander::new()` (bytecode) and
     /// `Expander::new_substitute_only()` (substitute) reject the SAME
@@ -1819,7 +1818,7 @@ pub enum LispError {
     /// `"defmacro"` / `"defpoint-template"` / `"defcheck"`); `arity`
     /// is the actual length of the form, including the head element.
     /// Naming the actual arity is the typed-entry gate's structural-
-    /// completeness floor (THEORY.md §V.1).
+    /// completeness floor.
     ///
     /// Sibling of `NonSymbolParam` and `RestParamMissingName` for
     /// the defmacro-syntax-gate's other definition-site failure
@@ -1882,7 +1881,7 @@ pub enum LispError {
     /// `"defpoint-template"` / `"defcheck"`); `got` is the offending
     /// `Sexp::Display` projection of the non-symbol element. Naming
     /// both the head AND the offending element is the typed-entry
-    /// gate's structural-completeness floor (THEORY.md §V.1).
+    /// gate's structural-completeness floor.
     ///
     /// Sibling of `DefmacroArity` and the `parse_params` pair
     /// (`NonSymbolParam`, `RestParamMissingName`) for the
@@ -1949,7 +1948,7 @@ pub enum LispError {
     /// `"defpoint-template"` / `"defcheck"`); `got` is the offending
     /// `Sexp::Display` projection of the non-list element. Naming both
     /// the head AND the offending element is the typed-entry gate's
-    /// structural-completeness floor (THEORY.md §V.1).
+    /// structural-completeness floor.
     ///
     /// Sibling of `DefmacroArity`, `DefmacroNonSymbolName`, and the
     /// `parse_params` pair (`NonSymbolParam`, `RestParamMissingName`)
@@ -2085,8 +2084,7 @@ pub enum LispError {
     /// `Some(g)` for the present-but-not-symbol case where `g` is
     /// the offending head's `Sexp::Display` projection. Naming both
     /// the failure mode AND the structural detail (empty vs. offending
-    /// head) is the typed-entry gate's structural-completeness floor
-    /// (THEORY.md §V.1).
+    /// head) is the typed-entry gate's structural-completeness floor.
     ///
     /// Sibling of `NotAListForm { keyword }` and `HeadMismatch
     /// { keyword, got }` — together the three close every distinct
@@ -2272,7 +2270,7 @@ pub enum LispError {
         got: SexpShape,
     },
     /// `rewrite_typed::<T>` — the typed-exit gate of the self-optimization
-    /// primitive (THEORY.md §II.1 invariant 3) — was handed a rewriter
+    /// primitive (invariant 3) — was handed a rewriter
     /// closure whose output, after typed round-trip through canonical JSON,
     /// did not project to `Sexp::List`. The round-trip contract is:
     /// serialize `T` → `Sexp::List` (alternating kwargs), hand the list
@@ -2319,7 +2317,7 @@ pub enum LispError {
     /// rejection surface across the substrate's seven entry-side gates.
     /// This eighth lift extends the typed-identity unification contract
     /// across BOTH boundaries of the typed-IR algebra
-    /// (THEORY.md §II.1 invariant 1 + invariant 3) — every
+    /// (invariant 1 + invariant 3) — every
     /// `Sexp::Display`-source `got` slot in the substrate, regardless of
     /// whether the rejection fires at typed-ENTRY (compile_from_sexp
     /// chain, template-gate, defmacro-syntax-gate, parse_params walker)
@@ -2606,14 +2604,14 @@ pub enum LispError {
     /// a closed-set typed enum whose `message()` projection feeds the
     /// Display rendering.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+    /// Anchor: knowable platform; the closed set
     /// of bytecode-invariant failure modes becomes a TYPE rather than a
-    /// runtime string-comparison-and-format dance. THEORY.md §VI.1 —
-    /// generation over composition; the typed enum lands the structural-
+    /// runtime string-comparison-and-format dance.
+    /// Generation over composition; the typed enum lands the structural-
     /// completeness floor for the bytecode-runtime surface, parallel to
     /// how `CompilerSpecIoStage` lands the structural-completeness floor
     /// for the disk-persistence surface and `MacroDefHead` lands it for
-    /// the macro-definition-head closed set. THEORY.md §II.1 invariant 5
+    /// the macro-definition-head closed set. Invariant 5
     /// (composition preserves proofs): a well-formed bytecode invariant
     /// is the proof that drives the interpreter; the structural variant
     /// makes the proof's REJECTION shape first-class.
@@ -2646,11 +2644,11 @@ pub enum LispError {
     /// case?" has both halves at the variant boundary without
     /// substring-parsing the rendered diagnostic.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// runaway-macro-expansion failure mode becomes a first-class
     /// typed rejection at the expander boundary instead of an
     /// unhandled stack overflow that aborts the process without
-    /// producing a `Result` at all. THEORY.md §II.1 invariant 1 —
+    /// producing a `Result` at all. Invariant 1 —
     /// typed entry; every macro-expansion failure mode the expander
     /// admits is a variant of `LispError`, so the below-floor abort
     /// is the last un-typed rejection in the expander's dispatch
@@ -2695,10 +2693,10 @@ pub enum LispError {
     /// byte offset is not what a runaway diagnostic anchors to; the
     /// (macro name, observed resource, ceiling) triple is.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// expansion-bomb failure mode becomes a first-class typed
     /// rejection at the expander boundary rather than a heap-exhausted
-    /// abort that never reaches a `Result`. THEORY.md §II.1 invariant
+    /// abort that never reaches a `Result`. Invariant
     /// 1 — typed entry; every resource-ceiling failure mode the
     /// expander admits (recursion, memory, output size) is now a
     /// variant of `LispError`, closing the "runaway macro" surface at
@@ -2740,11 +2738,11 @@ pub enum LispError {
     /// `size` is the observed `body.node_count()`; `limit` is the
     /// configured ceiling.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// authoring-bomb failure mode (a macro body large enough to hurt
     /// storage or template-compile time) becomes a first-class typed
-    /// rejection at the REGISTRATION boundary. THEORY.md §II.1
-    /// invariant 1 — typed entry; every resource-ceiling failure mode
+    /// rejection at the REGISTRATION boundary.
+    /// Invariant 1 — typed entry; every resource-ceiling failure mode
     /// the expander admits (expand-time recursion, expand-time
     /// memoization width, expand-time output size, register-time body
     /// size) is now a variant of `LispError`, closing the "runaway
@@ -2809,11 +2807,11 @@ pub enum LispError {
     /// anchors to; the (macro name, observed table count, ceiling)
     /// triple is.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// registration-bomb failure mode (unbounded macro-table growth)
     /// becomes a first-class typed rejection at the REGISTRATION
     /// boundary rather than an unhandled resource-drift that no
-    /// `Result` witnesses. THEORY.md §II.1 invariant 1 — typed entry;
+    /// `Result` witnesses. Invariant 1 — typed entry;
     /// every resource-ceiling failure mode the expander admits
     /// (expand-time recursion, expand-time memoization width,
     /// expand-time output size, register-time body size, register-
@@ -2893,11 +2891,11 @@ pub enum LispError {
     /// offset is not what an arity-bomb diagnostic anchors to; the
     /// (macro name, observed arity, ceiling) triple is.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// arity-bomb failure mode (an unbounded per-registration param
     /// list) becomes a first-class typed rejection at the REGISTRATION
     /// boundary rather than an unhandled per-call binder-walk cost
-    /// that no `Result` witnesses. THEORY.md §II.1 invariant 1 —
+    /// that no `Result` witnesses. Invariant 1 —
     /// typed entry; every resource-ceiling failure mode the expander
     /// admits (expand-time recursion, expand-time memoization width,
     /// expand-time output size, register-time body size, register-
@@ -2946,9 +2944,9 @@ pub enum LispError {
 /// (e.g., `load_from_str` for in-memory loads) requires extending this
 /// enum, which rustc-enforces matching at every projection site.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+/// Anchor: knowable platform; the closed set
 /// of (operation, stage) pairs becomes a TYPE rather than a runtime
-/// string-comparison-and-format dance. THEORY.md §VI.1 — generation
+/// string-comparison-and-format dance. Generation
 /// over composition; the typed enum lands the structural-completeness
 /// floor for the disk-persistence surface, parallel to how
 /// `MacroDefHead` lands the structural-completeness floor for the
@@ -3498,9 +3496,9 @@ impl std::str::FromStr for CompilerSpecIoStage {
 /// requires extending this enum, which rustc-enforces matching at the
 /// projection site.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+/// Anchor: knowable platform; the closed set
 /// of bytecode-invariant failure modes becomes a TYPE rather than a
-/// runtime string-format dance. THEORY.md §VI.1 — generation over
+/// runtime string-format dance. Generation over
 /// composition; the typed enum lands the structural-completeness floor
 /// for the bytecode-runtime surface, parallel to how `CompilerSpecIoStage`
 /// lands the structural-completeness floor for the disk-persistence
@@ -3989,9 +3987,9 @@ impl TemplateInvariantKind {
 /// The bidirection is the identity on the closed set —
 /// `from_keyword(k).unwrap().keyword() == k` for every canonical `k`.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
+/// Anchor: knowable platform; the closed set of
 /// macro-definition heads becomes a TYPE rather than a runtime
-/// string-comparison-and-format dance. THEORY.md §VI.1 — generation
+/// string-comparison-and-format dance. Generation
 /// over composition; the typed enum lands the structural-completeness
 /// floor for the macro-definition-head surface, parallel to how
 /// `CompilerSpecIoStage` lands it for the disk-persistence surface and
@@ -4234,11 +4232,11 @@ impl MacroDefHead {
 /// parallel to how `TemplateInvariantKind::message()` feeds
 /// `LispError::TemplateInvariant`'s Display.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
+/// Anchor: knowable platform; the closed set of
 /// optional-spec malformed shapes becomes a TYPE rather than a runtime
 /// string-comparison-and-format dance. A typo like `reason: "empty list
 /// "` (trailing space) is structurally unrepresentable; the four shapes
-/// are an exhaustive `match`. THEORY.md §VI.1 — generation over
+/// are an exhaustive `match`. Generation over
 /// composition; the typed enum lands the structural-completeness floor
 /// for the optional-section-malformed surface, parallel to how
 /// `TemplateInvariantKind` lands it for the bytecode-runtime surface and
@@ -4308,11 +4306,11 @@ impl OptionalParamMalformedReason {
     /// EITHER side must land at the semantic-scope site rather than at
     /// a shared canonical byte.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the (variant, canonical-bytes) pairing binds
     /// at ONE `pub const` on the typed algebra rather than at TWO
     /// sites (a match-arm literal AND a Display-test literal).
-    /// THEORY.md §III — the typescape; the canonical diagnostic bytes
+    /// The typescape; the canonical diagnostic bytes
     /// bind at ONE `pub const` on the closed-set algebra rather than
     /// at inline `.to_string()` literals in the [`Self::label`] match
     /// arms.
@@ -4389,15 +4387,15 @@ impl OptionalParamMalformedReason {
     /// to ONE `[&'static str; 3]` primitive rather than re-deriving
     /// the array inline per callsite.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the three
+    /// Anchor: the typescape; the three
     /// canonical rejection-label bytes bind at ONE typed
     /// `[&'static str; 3]` array on the closed-set algebra rather
     /// than at zero-primitive-plus-three-inline-`.to_string()`-literals
-    /// scattered across [`Self::label`]. THEORY.md §V.1 — knowable
+    /// scattered across [`Self::label`]. Knowable
     /// platform; the static-subset's cardinality becomes a TYPE-level
     /// constant on the substrate algebra rather than a per-consumer
-    /// runtime dispatch through the label match. THEORY.md §VI.1 —
-    /// generation over composition; the family-wide contract
+    /// runtime dispatch through the label match.
+    /// Generation over composition; the family-wide contract
     /// (alignment with the enum's static-label subset, membership
     /// through [`Self::label`]) emerges from the composition of FOUR
     /// substrate primitives (this `pub const` array + the three
@@ -4444,16 +4442,16 @@ impl OptionalParamMalformedReason {
     /// first per-family-canonical `usize` on the closed-set optional-
     /// spec-rejection algebra.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the canonical
+    /// Anchor: the typescape; the canonical
     /// accept-arity of the `&optional (NAME DEFAULT)` spec binds at ONE
     /// typed `pub const usize` on the closed-set algebra rather than at
     /// four literal-`2` sites scattered across parsers, projections, and
-    /// tests. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// tests. Invariant 5 — composition preserves proofs;
     /// a hypothetical bump to arity-3 (once an evaluator admits `(name
     /// default supplied-p)`) lands at ONE constant AND rustc-enforces
     /// that every downstream projection ([`Self::label`],
     /// [`Self::classify_arity`], every truth-table test) recomputes
-    /// against the new arity. THEORY.md §V.1 — knowable platform; the
+    /// against the new arity. Knowable platform; the
     /// parser's accept-arity becomes a TYPE-level constant on the
     /// substrate algebra rather than a per-callsite magic number.
     pub const OPTIONAL_PARAM_SPEC_ARITY: usize = 2;
@@ -4500,10 +4498,10 @@ impl OptionalParamMalformedReason {
     /// `TypedRewriter<OptionalParamMalformedReasonOp>` sweep that keys
     /// on this reason projection.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the arity→reason
+    /// Anchor: the typescape; the arity→reason
     /// projection binds at ONE typed function on the algebra rather than
-    /// at inline `match` bodies duplicated across parsers. THEORY.md
-    /// §II.1 invariant 1 (typed entry): every parser that accepts an
+    /// at inline `match` bodies duplicated across parsers.
+    /// Invariant 1 (typed entry): every parser that accepts an
     /// `&optional`-spec list threads its arity through this classifier
     /// before touching the head-symbol gate, closing the arity
     /// half of the rejection surface at a single typed site.
@@ -4579,16 +4577,16 @@ impl OptionalParamMalformedReason {
     /// `{ .. }` because the projection routes to `None` regardless
     /// of the `length` value.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the STATIC-
+    /// Anchor: the typescape; the STATIC-
     /// subset projection binds at ONE typed function on the
     /// algebra rather than at three inline `matches!` gates
-    /// scattered across consumers. THEORY.md §II.1 invariant 5 —
+    /// scattered across consumers. Invariant 5 —
     /// composition preserves proofs; a hypothetical fifth static
     /// rejection reason (e.g. `KeywordName` for `&optional (:foo
     /// default)`) extends this projection AND [`Self::STATIC_LABELS`]
     /// in lockstep — rustc's exhaustive-match check on this method
-    /// fails compilation without the new arm. THEORY.md §VI.1 —
-    /// generation over composition; [`Self::label`]'s dynamic body
+    /// fails compilation without the new arm.
+    /// Generation over composition; [`Self::label`]'s dynamic body
     /// emerges from the composition of TWO substrate primitives (this
     /// static-subset projection + the [`Self::ExtraElements`] format
     /// arm) rather than as four duplicated match arms.
@@ -4631,18 +4629,18 @@ impl OptionalParamMalformedReason {
     /// is ONE arm wide (`ExtraElements`) — the same carving idiom applied
     /// at asymmetric widths.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the canonical
+    /// Anchor: the typescape; the canonical
     /// noun-descriptor of the ExtraElements arm's dynamic format
     /// template binds at ONE typed `pub const &'static str` on the
     /// closed-set algebra rather than at an inline literal inside
-    /// [`Self::label`]'s `format!` body. THEORY.md §II.1 invariant 5 —
+    /// [`Self::label`]'s `format!` body. Invariant 5 —
     /// composition preserves proofs; a rename of the noun (e.g. from
     /// `"elements"` to `"items"` if an evaluator surface ever admits a
     /// more general list-shape) lands at ONE `pub const` edit — every
     /// downstream projection ([`Self::label_dynamic`],
     /// [`Self::DYNAMIC_DESCRIPTORS`], the [`Self::label`] composition,
     /// every truth-table test) recomputes against the new bytes.
-    /// THEORY.md §VI.1 — generation over composition; the shared format
+    /// Generation over composition; the shared format
     /// template that emitted the `"elements"` literal inline at ONE site
     /// pre-lift now composes ONE typed const AND ONE typed projection
     /// AND ONE typed arity, so future dynamic-arm siblings extend at
@@ -4697,14 +4695,14 @@ impl OptionalParamMalformedReason {
     /// ONE `[&'static str; 1]` primitive rather than re-deriving the
     /// array inline per callsite.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the ONE canonical
+    /// Anchor: the typescape; the ONE canonical
     /// dynamic-arm noun-descriptor byte binds at ONE typed
     /// `[&'static str; 1]` array on the closed-set algebra rather than
     /// at zero-primitive-plus-one-inline-literal inside [`Self::label`]'s
-    /// `format!` body. THEORY.md §V.1 — knowable platform; the DYNAMIC-
+    /// `format!` body. Knowable platform; the DYNAMIC-
     /// subset's cardinality becomes a TYPE-level constant on the
     /// substrate algebra rather than a per-consumer runtime dispatch
-    /// through the label match. THEORY.md §VI.1 — generation over
+    /// through the label match. Generation over
     /// composition; the family-wide contract (alignment with the enum's
     /// dynamic-label subset, membership through
     /// [`Self::descriptor_dynamic`]) emerges from the composition of TWO
@@ -4918,15 +4916,15 @@ impl OptionalParamMalformedReason {
 /// `CompilerSpecIoStage::operation()` / `label()` feed their respective
 /// `LispError::*` Display impls.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
+/// Anchor: knowable platform; the closed set of
 /// unquote markers becomes a TYPE rather than a runtime
 /// string-comparison-and-format dance. A typo like `prefix: ",,"` is
 /// structurally unrepresentable rather than re-asserted at the helper
-/// boundary. THEORY.md §VI.1 — generation over composition; the typed enum
+/// boundary. Generation over composition; the typed enum
 /// lands the structural-completeness floor for the template-marker surface,
 /// parallel to how `MacroDefHead` lands it for the macro-definition-head
 /// surface and `CompilerSpecIoStage` for the disk-persistence surface.
-/// THEORY.md §II.1 invariant 1 (typed entry): a non-symbol unquote target /
+/// Invariant 1 (typed entry): a non-symbol unquote target /
 /// an unbound template var is exactly the failure mode the typed-entry gate
 /// exists to reject, and the marker identity is part of the proof.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, tatara_lisp_derive::ClosedSet)]
@@ -5065,15 +5063,15 @@ impl UnquoteForm {
     /// on the two `[_; N]` arrays fails compilation if EITHER ALL
     /// array grows without the other.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// Anchor: the typescape; the two
     /// canonical template-marker bytes bind at ONE typed
     /// `[&'static str; 2]` array on the closed-set UnquoteForm algebra
     /// rather than at zero-primitive-on-this-subset-plus-two-inline-
-    /// lookups scattered across the substrate. THEORY.md §V.1 —
-    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// lookups scattered across the substrate.
+    /// Knowable platform; the family's cardinality becomes a TYPE-
     /// level constant on the substrate algebra rather than a per-
-    /// consumer runtime dispatch through the composition. THEORY.md
-    /// §VI.1 — generation over composition; the family-wide contract
+    /// consumer runtime dispatch through the composition.
+    /// Generation over composition; the family-wide contract
     /// sweeps (alignment with `ALL`, pairwise disjointness, membership
     /// through [`Self::marker`]) emerge from the composition of TWO
     /// substrate primitives (this `pub const` array + the two per-role
@@ -5181,19 +5179,19 @@ impl UnquoteForm {
     /// constants without re-deriving the 2-of-4 → 1-of-3 collapse
     /// inline.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the sole
+    /// Anchor: the typescape; the sole
     /// canonical distinct-lead byte on the substitution-subset
     /// carving binds at ONE typed `[char; 1]` array on the closed-set
     /// UnquoteForm algebra rather than as a zero-primitive-on-this-
     /// subset-plus-inline-lookup at each callsite. Closes the FIFTH
     /// per-role `pub const` axis on the UnquoteForm subset carving in
     /// lockstep with the same quintuple on [`crate::ast::QuoteForm`].
-    /// THEORY.md §V.1 — knowable platform; the SHAPE-ASYMMETRIC-
+    /// Knowable platform; the SHAPE-ASYMMETRIC-
     /// COLLAPSE distinct-lead-byte sub-vocabulary becomes load-bearing
     /// typed data on the substrate's substitution-subset closed set —
     /// the type-system carries the "both subset arms share ONE lead"
     /// invariant at the `[char; 1]` arity rather than as a comment on
-    /// a lookup site. THEORY.md §VI.1 — generation over composition;
+    /// a lookup site. Generation over composition;
     /// the family-wide contract sweeps (alignment with the parent
     /// [`crate::ast::QuoteForm::LEADS`]'s subset image, cardinality
     /// containment `Self::LEADS.len() <= Self::ALL.len()` — the
@@ -5306,20 +5304,20 @@ impl UnquoteForm {
     /// check on the two `[_; N]` arrays fails compilation if EITHER
     /// ALL array grows without the other.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// Anchor: the typescape; the two
     /// canonical iac-forge tag bytes bind at ONE typed
     /// `[&'static str; 2]` array on the closed-set UnquoteForm algebra
     /// rather than at zero-primitive-on-this-subset-plus-two-inline-
-    /// lookups scattered across the substrate. THEORY.md §V.1 —
-    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// lookups scattered across the substrate.
+    /// Knowable platform; the family's cardinality becomes a TYPE-
     /// level constant on the substrate algebra rather than a per-
-    /// consumer runtime dispatch through the composition. THEORY.md
-    /// §V.3 — three-pillar attestation; the canonical iac-forge tag
+    /// consumer runtime dispatch through the composition.
+    /// Three-pillar attestation; the canonical iac-forge tag
     /// bytes are the surface the substrate's cross-crate `intent_hash`
     /// pillar composes over for every substitution-subset arm of a
     /// homoiconic template AST — binding the two bytes on the typed
     /// algebra makes attestation-key drift a compile error rather than
-    /// a silent BLAKE3 mis-hash. THEORY.md §VI.1 — generation over
+    /// a silent BLAKE3 mis-hash. Generation over
     /// composition; the family-wide contract sweeps (alignment with
     /// `ALL`, pairwise disjointness, membership through
     /// [`Self::iac_forge_tag`]) emerge from the composition of TWO
@@ -5425,23 +5423,23 @@ impl UnquoteForm {
     /// the two `[_; N]` arrays fails compilation if EITHER array
     /// grows without the other.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// Anchor: the typescape; the two
     /// canonical diagnostic label bytes bind at ONE typed
     /// `[&'static str; 2]` array on the closed-set UnquoteForm algebra
     /// rather than at zero-primitive-on-this-subset-plus-two-inline-
     /// lookups scattered across the substrate. Closes the THIRD
     /// per-role `pub const` axis on the UnquoteForm subset carving in
     /// lockstep with the same triple on [`crate::ast::QuoteForm`].
-    /// THEORY.md §V.1 — knowable platform; the family's cardinality
+    /// Knowable platform; the family's cardinality
     /// becomes a TYPE-level constant on the substrate algebra rather
     /// than a per-consumer runtime dispatch through the composition.
-    /// THEORY.md §VI.1 — generation over composition; the family-wide
+    /// Generation over composition; the family-wide
     /// contract sweeps (alignment with `ALL`, pairwise disjointness,
     /// membership through [`Self::label`]) emerge from the composition
     /// of TWO substrate primitives (this `pub const` array + the two
     /// per-role `pub const *_LABEL` aliases) rather than as per-
     /// variant inline assertions duplicated at each call site.
-    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// Invariant 5 — composition preserves proofs;
     /// the alias-chain composition law `UnquoteForm::LABELS[i] ==
     /// UnquoteForm::ALL[i].to_quote_form().label()` binds the family-
     /// wide array to the composition through [`Self::to_quote_form`] +
@@ -5584,29 +5582,29 @@ impl UnquoteForm {
     /// check on the two `[_; N]` arrays fails compilation if EITHER
     /// array grows without the other.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// Anchor: the typescape; the two
     /// canonical cache-key bytes bind at ONE typed `[u8; 2]` array
     /// on the closed-set UnquoteForm algebra rather than at zero-
     /// primitive-on-this-subset-plus-two-inline-lookups scattered
     /// across the substrate. Closes the FOURTH per-role `pub const`
     /// axis on the UnquoteForm subset carving in lockstep with the
-    /// same quadruple on [`crate::ast::QuoteForm`]. THEORY.md §V.1 —
-    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// same quadruple on [`crate::ast::QuoteForm`].
+    /// Knowable platform; the family's cardinality becomes a TYPE-
     /// level constant on the substrate algebra rather than a per-
-    /// consumer runtime dispatch through the composition. THEORY.md
-    /// §V.3 — three-pillar attestation; the cache-key partition is
+    /// consumer runtime dispatch through the composition.
+    /// Three-pillar attestation; the cache-key partition is
     /// the substrate's outer [`Sexp`](crate::ast::Sexp) `intent_hash`
     /// composition axis for every substitution-subset arm — binding
     /// the two bytes on the typed algebra makes attestation-key
     /// drift a compile error rather than a silent BLAKE3 mis-hash.
-    /// THEORY.md §VI.1 — generation over composition; the family-
+    /// Generation over composition; the family-
     /// wide contract sweeps (alignment with `ALL`, pairwise
     /// disjointness, membership through
     /// [`Self::hash_discriminator`]) emerge from the composition of
     /// TWO substrate primitives (this `pub(crate) const` array + the
     /// two per-role `pub(crate) const *_HASH_DISCRIMINATOR` aliases)
     /// rather than as per-variant inline assertions duplicated at
-    /// each call site. THEORY.md §II.1 invariant 5 — composition
+    /// each call site. Invariant 5 — composition
     /// preserves proofs; the alias-chain composition law
     /// `UnquoteForm::HASH_DISCRIMINATORS[i] ==
     /// UnquoteForm::ALL[i].to_quote_form().hash_discriminator()`
@@ -5740,28 +5738,28 @@ impl UnquoteForm {
     /// [`crate::ast::QuoteForm::HASH_DISCRIMINATORS`] lifts carried
     /// before their downstream consumers materialized.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// reader's two-char quote-family classification IS the typed-
     /// entry gate on the `,@` boundary, and lifting the substitution-
     /// subset's promotion triple to ONE typed `[(Self, char, Self);
     /// 1]` primitive on the closed-set subset algebra closes the
     /// gate's two-char entry surface onto the subset algebra rather
     /// than at zero-primitive-on-this-subset dispatch through the
-    /// parent superset. THEORY.md §II.1 invariant 5 — composition
+    /// parent superset. Invariant 5 — composition
     /// preserves proofs; the (subset promotion triple, superset
     /// promotion triple) pairing binds at rustc time by identity
     /// composition through [`Self::to_quote_form`] on the head +
     /// promoted columns AND by direct alias on the middle
-    /// discriminator column. THEORY.md §III — the typescape; the
+    /// discriminator column. The typescape; the
     /// singleton promotion triple binds at ONE typed `pub const` on
     /// the closed-set [`UnquoteForm`] algebra rather than at zero-
     /// primitive-on-this-subset. Closes the FIFTH per-role
     /// `pub const` axis on the UnquoteForm subset carving in lockstep
     /// with the same-axis lift on [`crate::ast::QuoteForm`].
-    /// THEORY.md §V.1 — knowable platform; the family's cardinality
+    /// Knowable platform; the family's cardinality
     /// becomes a TYPE-level constant on the substrate algebra rather
     /// than a per-consumer runtime dispatch through the parent
-    /// superset's method surface. THEORY.md §VI.1 — generation over
+    /// superset's method surface. Generation over
     /// composition; the family-wide contract sweeps (alignment with
     /// [`Self::ALL`], cardinality, cross-algebra composition against
     /// [`crate::ast::QuoteForm::PROMOTIONS`]) emerge from the
@@ -5889,12 +5887,12 @@ impl UnquoteForm {
     /// [`Self::iac_forge_tag`]) bind at ONE typed projection
     /// rather than at parallel match arms each site re-derives.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// subset-to-superset projection becomes a TYPE projection on the
-    /// substrate algebra. THEORY.md §VI.1 — generation over
+    /// substrate algebra. Generation over
     /// composition; the (UnquoteForm variant, QuoteForm variant)
     /// pairing emerges from this ONE primitive rather than from
-    /// per-callsite per-variant literals. THEORY.md §II.1 invariant 1 —
+    /// per-callsite per-variant literals. Invariant 1 —
     /// typed entry; the typed subset-to-superset projection IS a
     /// substrate-owned theorem rather than a hand-inlined match-table
     /// duplication discipline N sites had to keep in lockstep.
@@ -5993,21 +5991,21 @@ impl UnquoteForm {
     /// superset's `wrap` and propagates through this subset method
     /// byte-for-byte.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// Anchor: invariant 1 — typed entry; the
     /// (UnquoteForm variant, `Sexp::*` tuple-variant constructor)
     /// pairing binds at ONE typed-algebra method on the subset algebra,
     /// routed through the ONE closed-set match on the superset algebra
-    /// the substrate already owns. THEORY.md §II.1 invariant 2 — free
+    /// the substrate already owns. Invariant 2 — free
     /// middle; every consumer that has an `UnquoteForm` marker and
     /// wants to build a wrapper `Sexp` routes through the SAME typed
     /// method, so a regression that drifts one consumer's pairing from
-    /// the others cannot reach the substrate's runtime. THEORY.md §V.1
-    /// — knowable platform; the typed-construct face becomes a TYPE
+    /// the others cannot reach the substrate's runtime.
+    /// Knowable platform; the typed-construct face becomes a TYPE
     /// projection on the subset algebra sitting next to the typed-
     /// project face [`crate::ast::Sexp::as_unquote`] on the outer
     /// [`crate::ast::Sexp`] algebra rather than a bare
     /// `to_quote_form().wrap(_)` two-step composition consumers had to
-    /// re-derive per site. THEORY.md §VI.1 — generation over
+    /// re-derive per site. Generation over
     /// composition; the (subset marker, wrapper `Sexp`) pairing emerges
     /// from ONE typed-algebra composition on the subset algebra rather
     /// than from parallel per-consumer per-variant literals.
@@ -6143,20 +6141,20 @@ impl UnquoteForm {
     /// [`SexpShape::as_unquote_form`] arm must grow in lockstep to
     /// preserve the round-trip identity.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the two canonical
+    /// Anchor: the typescape; the two canonical
     /// [`SexpShape`] embed targets bind at ONE typed `[SexpShape; 2]`
     /// array on the closed-set UnquoteForm subset algebra rather than at
     /// zero-primitive-on-this-subset-plus-two-inline-lookups-through-
-    /// two-hop-composition scattered across the substrate. THEORY.md
-    /// §II.1 invariant 2 — free middle; the (embed, project) pair binds
+    /// two-hop-composition scattered across the substrate.
+    /// Invariant 2 — free middle; the (embed, project) pair binds
     /// at THREE typed sites now — the projection method
     /// [`Self::sexp_shape`], this family-wide array, AND the peer inverse
     /// [`SexpShape::as_unquote_form`] — with rustc-enforced consistency
-    /// across all three via the array-indexed round-trip law. THEORY.md
-    /// §V.1 — knowable platform; the family's cardinality becomes a
+    /// across all three via the array-indexed round-trip law.
+    /// Knowable platform; the family's cardinality becomes a
     /// TYPE-level constant on the substrate algebra rather than a per-
     /// consumer runtime dispatch through the two-hop composition.
-    /// THEORY.md §VI.1 — generation over composition; the family-wide
+    /// Generation over composition; the family-wide
     /// contract sweeps (alignment with `ALL`, round-trip through
     /// `as_unquote_form`, membership through `sexp_shape`, pairwise
     /// injectivity across the two embed targets, alias byte-equality
@@ -6206,13 +6204,13 @@ impl UnquoteForm {
     /// [`SexpShape::as_unquote_form`] forms an `Iso(UnquoteForm,
     /// UnquoteShape ⊂ SexpShape)` on the substitution-subset carving.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (subset
+    /// Anchor: knowable platform; the (subset
     /// marker, outer shape) pairing becomes a TYPE projection on the
     /// substrate algebra rather than a per-callsite `.to_quote_form()
-    /// .sexp_shape()` two-step. THEORY.md §II.1 invariant 2 — free
+    /// .sexp_shape()` two-step. Invariant 2 — free
     /// middle; every consumer that has an `UnquoteForm` marker and
     /// wants the outer [`SexpShape`] routes through the SAME typed
-    /// method. THEORY.md §VI.1 — generation over composition; the
+    /// method. Generation over composition; the
     /// pairing emerges from ONE typed-algebra composition on the subset
     /// algebra rather than from parallel per-consumer per-variant
     /// literals.
@@ -6299,14 +6297,14 @@ impl UnquoteForm {
     /// [`crate::ast::QuoteForm::iac_forge_tag`]) now has a matching
     /// composition on the substitution subset.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (subset
+    /// Anchor: knowable platform; the (subset
     /// marker, canonical iac-forge tag) pairing becomes a TYPE
     /// projection on the substrate algebra rather than a per-callsite
-    /// `.to_quote_form().iac_forge_tag()` two-step. THEORY.md §II.1
-    /// invariant 2 — free middle; every consumer that has an
+    /// `.to_quote_form().iac_forge_tag()` two-step.
+    /// Invariant 2 — free middle; every consumer that has an
     /// `UnquoteForm` marker and wants the canonical iac-forge tag
-    /// routes through the SAME typed method. THEORY.md §VI.1 —
-    /// generation over composition; the pairing emerges from ONE
+    /// routes through the SAME typed method.
+    /// Generation over composition; the pairing emerges from ONE
     /// typed-algebra composition on the subset algebra rather than
     /// from parallel per-consumer per-variant literals. A future
     /// third template-substitution marker (e.g. `,~` reverse-unquote)
@@ -6398,14 +6396,14 @@ impl UnquoteForm {
     /// UnquoteForm subset now closes the SAME (inherent-diagnostic,
     /// trait-punctuation) split on its subset algebra.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// (subset marker, canonical diagnostic label) pairing becomes a
     /// TYPE projection on the substrate algebra rather than a per-
-    /// callsite `.to_quote_form().label()` two-step. THEORY.md §II.1
-    /// invariant 2 — free middle; every consumer that has an
+    /// callsite `.to_quote_form().label()` two-step.
+    /// Invariant 2 — free middle; every consumer that has an
     /// `UnquoteForm` marker and wants the canonical diagnostic label
-    /// routes through the SAME typed method. THEORY.md §VI.1 —
-    /// generation over composition; the pairing emerges from ONE
+    /// routes through the SAME typed method.
+    /// Generation over composition; the pairing emerges from ONE
     /// typed-algebra composition on the subset algebra rather than
     /// from parallel per-consumer per-variant literals. A future
     /// third template-substitution marker (e.g. `,~` reverse-unquote)
@@ -6496,15 +6494,15 @@ impl UnquoteForm {
     /// projection on the substrate's typed-shape family is
     /// crate-private.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (subset
+    /// Anchor: knowable platform; the (subset
     /// marker, cache-key byte) pairing becomes a TYPE projection on the
     /// substrate algebra rather than a per-callsite
-    /// `.to_quote_form().hash_discriminator()` two-step. THEORY.md
-    /// §II.1 invariant 2 — free middle; every consumer that has an
+    /// `.to_quote_form().hash_discriminator()` two-step.
+    /// Invariant 2 — free middle; every consumer that has an
     /// [`UnquoteForm`] marker and wants the outer-Sexp cache-key byte
     /// routes through the SAME typed method, so a regression that
     /// drifts ONE consumer's byte from the others cannot reach the
-    /// substrate's runtime cache. THEORY.md §VI.1 — generation over
+    /// substrate's runtime cache. Generation over
     /// composition; the pairing emerges from ONE typed-algebra
     /// composition on the subset algebra rather than from parallel
     /// per-consumer per-variant literals. A future third template-
@@ -6608,7 +6606,7 @@ impl UnquoteForm {
 /// ONE `Display` impl on this enum — the canonical literals (`":<key>"`
 /// / `":<key>[<idx>]"` / `"kwargs[<idx>]"`) live in ONE place, so a typo
 /// in any one of the three shapes can never drift independent of the
-/// others (THEORY.md §VI.1 three-times rule). Adding a fourth path shape
+/// others (the three-times rule). Adding a fourth path shape
 /// (e.g., `:<key>.<field>` for nested-struct kwarg failures or
 /// `:<key>::<variant>` for sum-typed kwarg failures) requires extending
 /// this enum, which rustc-enforces matching at the `Display` projection
@@ -6631,16 +6629,16 @@ impl UnquoteForm {
 /// `LispError` field). The closed-set structural-completeness floor is
 /// unchanged — only the data ownership changed.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
+/// Anchor: knowable platform; the closed set of
 /// kwargs-path shapes becomes a TYPE rather than three byte-identical
-/// `format!` literals scattered across helper definitions. THEORY.md
-/// §VI.1 — generation over composition; the typed enum lands the
+/// `format!` literals scattered across helper definitions.
+/// Generation over composition; the typed enum lands the
 /// structural-completeness floor for the kwargs-path surface, parallel
 /// to how `CompilerSpecIoStage` lands it for the disk-persistence
 /// surface, `MacroDefHead` for the macro-definition-head surface,
 /// `TemplateInvariantKind` for the bytecode-runtime surface, and
-/// `UnquoteForm` for the template-marker surface. THEORY.md §II.1
-/// invariant 1 — typed entry; the kwargs-path's renderable identity is
+/// `UnquoteForm` for the template-marker surface.
+/// Invariant 1 — typed entry; the kwargs-path's renderable identity is
 /// part of the proof of WHICH kwarg-gate fired, and the typed enum makes
 /// that identity first-class — now as load-bearing data on the
 /// `TypeMismatch` variant rather than as a projection-to-String.
@@ -6747,10 +6745,10 @@ impl std::fmt::Display for KwargPath {
 /// failures (`:<key>.<field>`) or `Variant` for sum-typed kwarg failures
 /// (`:<key>::<variant>`) — cannot land without bumping the constant.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the
+/// Anchor: knowable platform; the
 /// payload-stripped kind becomes a TYPE rather than three byte-identical
 /// `matches!` discriminator literals scattered across consumers.
-/// THEORY.md §VI.1 — generation over composition; the typed kind enum
+/// Generation over composition; the typed kind enum
 /// lands the structural-completeness floor for the path-shape category
 /// surface, parallel to how [`KwargPath`] lands it for the path-identity
 /// surface, [`ExpectedKwargShape`] for the expected-shape surface, etc.
@@ -6960,20 +6958,20 @@ impl KwargPathKind {
 /// `CompilerSpecIoStage::operation()` / `label()` feed their
 /// respective `LispError::*` Display impls.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+/// Anchor: knowable platform; the closed set
 /// of expected-shape labels becomes a TYPE rather than eleven
 /// `&'static str` literal call sites scattered across the kwarg
 /// extractors. A typo in any literal can never drift into the
 /// diagnostic at runtime; a regression that drifts the expected-shape
 /// label (e.g. a typo `"strin"` for `"string"`) becomes a type error
-/// at the call site, not a runtime substring drift. THEORY.md §VI.1 —
-/// generation over composition; the typed enum lands the structural-
+/// at the call site, not a runtime substring drift.
+/// Generation over composition; the typed enum lands the structural-
 /// completeness floor for the expected-shape surface, parallel to how
 /// `KwargPath` lands it for the kwargs-path surface, `MacroDefHead`
 /// for the macro-definition-head surface, `UnquoteForm` for the
 /// template-marker surface, `CompilerSpecIoStage` for the disk-
 /// persistence surface, and `TemplateInvariantKind` for the bytecode-
-/// runtime surface. THEORY.md §II.1 invariant 1 — typed entry; the
+/// runtime surface. Invariant 1 — typed entry; the
 /// expected-shape identity is part of the proof of WHICH typed-entry
 /// kwarg gate fired, and the typed enum makes that identity first-
 /// class as load-bearing data on the variant rather than as a
@@ -7496,19 +7494,19 @@ impl ExpectedKwargShape {
 /// `UnquoteForm::marker()`, and `CompilerSpecIoStage::operation()` /
 /// `label()` feed their respective `LispError::*` Display impls.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
+/// Anchor: knowable platform; the closed set of
 /// observed-Sexp shapes becomes a TYPE rather than a `&'static str`
 /// projection through a string-keyed helper. A regression that drifts the
 /// observed-shape label (e.g. a typo `"strin"` for `"string"`) becomes a
-/// type error at the call site, not a runtime substring drift. THEORY.md
-/// §VI.1 — generation over composition; the typed enum lands the
+/// type error at the call site, not a runtime substring drift.
+/// Generation over composition; the typed enum lands the
 /// structural-completeness floor for the observed-shape surface, parallel
 /// to how `ExpectedKwargShape` lands it for the expected-shape surface,
 /// `KwargPath` for the kwargs-path surface, `MacroDefHead` for the
 /// macro-definition-head surface, `UnquoteForm` for the template-marker
 /// surface, `CompilerSpecIoStage` for the disk-persistence surface, and
-/// `TemplateInvariantKind` for the bytecode-runtime surface. THEORY.md
-/// §II.1 invariant 1 — typed entry; the observed-shape identity is part
+/// `TemplateInvariantKind` for the bytecode-runtime surface.
+/// Invariant 1 — typed entry; the observed-shape identity is part
 /// of the proof of WHAT the typed-entry gate observed, and the typed enum
 /// makes that identity first-class as load-bearing data on the variant
 /// rather than as a projection-to-`&'static str` at the helper boundary.
@@ -7713,14 +7711,14 @@ impl SexpShape {
     /// lockstep — rustc's forced-arity check on the two `[_; N]` arrays
     /// fails compilation if EITHER ALL array grows without the other.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the twelve
+    /// Anchor: the typescape; the twelve
     /// canonical outer-shape label bytes bind at ONE typed `[&'static
     /// str; 12]` array on the closed-set outer [`SexpShape`] algebra
     /// rather than as twelve inline literals scattered across four
-    /// substrate sites. THEORY.md §V.1 — knowable platform; the family's
+    /// substrate sites. Knowable platform; the family's
     /// cardinality becomes a TYPE-level constant on the substrate
     /// algebra rather than a per-consumer hand-rolled enumeration of the
-    /// twelve labels. THEORY.md §VI.1 — generation over composition; the
+    /// twelve labels. Generation over composition; the
     /// family-wide contract sweeps (alignment with `ALL`, pairwise
     /// disjointness, membership through `label()`) emerge from the
     /// composition of TWO substrate primitives (this `pub const` array +
@@ -7855,17 +7853,17 @@ impl SexpShape {
     ///     correctness pinned at ONE site (the typed match here)
     ///     rather than across N per-metric inline `match` arms.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// (SexpShape variant, AtomKind variant) inverse pairing becomes a
     /// TYPE projection on the substrate algebra rather than an inline
-    /// 6-of-12 `match` re-derived per call site. THEORY.md §II.1
-    /// invariant 2 — free middle; the (atomic-payload, outer-shape)
+    /// 6-of-12 `match` re-derived per call site.
+    /// Invariant 2 — free middle; the (atomic-payload, outer-shape)
     /// algebra now binds at TWO typed sites (`AtomKind::sexp_shape`
     /// for the embed, `SexpShape::as_atom_kind` for the project), each
     /// rebuilding the same closed-set pairing — a regression that
     /// drifts ONE direction from the other fails the
     /// `atom_kind_sexp_shape_round_trips_through_as_atom_kind` round-
-    /// trip pin below. THEORY.md §VI.1 — generation over composition;
+    /// trip pin below. Generation over composition;
     /// the inverse pairing's ONE typed `match` displaces the speculative
     /// per-consumer 6-of-12 carving (LSP, REPL, `tatara-check`,
     /// metrics) the substrate's authoring surface roadmap anticipates.
@@ -7955,13 +7953,13 @@ impl SexpShape {
     /// `QuoteForm` directly off a rejected `SexpShape` via this
     /// projection.
     ///
-    /// Theory anchor: same as [`Self::as_atom_kind`]. THEORY.md §V.1
+    /// Anchor: same as [`Self::as_atom_kind`].
     /// (knowable platform; the inverse pairing is a TYPE projection
-    /// rather than an inline 4-of-12 `match`), THEORY.md §II.1
+    /// rather than an inline 4-of-12 `match`),
     /// invariant 2 (free middle; the embed/project pair binds at TWO
     /// typed sites — `QuoteForm::sexp_shape` for the embed,
     /// `SexpShape::as_quote_form` for the project — both rebuilding
-    /// the same closed-set pairing), THEORY.md §VI.1 (generation
+    /// the same closed-set pairing), (generation
     /// over composition; the inverse 4-of-12 carving lifts to ONE
     /// typed `match`).
     ///
@@ -8050,14 +8048,14 @@ impl SexpShape {
     /// [`UnquoteForm::sexp_shape`] closes the embed/project algebra
     /// dual on the substitution-subset carving.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the inverse
+    /// Anchor: knowable platform; the inverse
     /// 2-of-12 carving is a TYPE projection on the substrate algebra
     /// rather than an inline `.as_quote_form().and_then(...)` two-step.
-    /// THEORY.md §II.1 invariant 2 — free middle; the embed/project
+    /// Invariant 2 — free middle; the embed/project
     /// pair binds at TWO typed sites — [`UnquoteForm::sexp_shape`] for
     /// the embed, [`Self::as_unquote_form`] for the project — both
     /// composing through the parent quote-family carving's closed
-    /// pair. THEORY.md §VI.1 — generation over composition; the
+    /// pair. Generation over composition; the
     /// inverse 2-of-12 carving lifts to ONE typed projection.
     ///
     /// Frontier inspiration: MLIR's `mlir::dyn_cast<UnquoteFamilyOp>(op)`
@@ -8158,15 +8156,15 @@ impl SexpShape {
     ///     to `StructuralKind::ALL` for the "structural" completion
     ///     column rather than re-deriving `Nil | List` inline.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the inverse
+    /// Anchor: knowable platform; the inverse
     /// 2-of-12 residual carving is a TYPE projection on the substrate
     /// algebra rather than an inline `matches!(shape, SexpShape::Nil |
-    /// SexpShape::List)` two-arm predicate. THEORY.md §II.1 invariant
+    /// SexpShape::List)` two-arm predicate. Invariant
     /// 2 — free middle; the embed/project pair binds at TWO typed
     /// sites — [`StructuralKind::sexp_shape`] for the embed,
     /// [`Self::as_structural_kind`] for the project — completing the
     /// third and final closed-set carving of the outer-shape algebra.
-    /// THEORY.md §VI.1 — generation over composition; the residual
+    /// Generation over composition; the residual
     /// 2-of-12 carving lifts to ONE typed projection AND makes the
     /// partition-total invariant (every `SexpShape` is in EXACTLY ONE
     /// of the three carvings) a TYPED THEOREM rather than a runtime
@@ -8283,19 +8281,19 @@ impl SexpShape {
     /// exhaustiveness, with the composition through [`Self::as_quote_form`]
     /// pulling the new variant's tag into this projection mechanically.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// (SexpShape variant, canonical iac-forge tag) pairing becomes a
     /// TYPE projection on the outer-shape algebra rather than an inline
     /// `.as_quote_form().map(...)` two-step at every consumer. A typo
     /// or swap at the projection site is no longer a runtime tag drift
     /// but a compile error against the typed composition — the
     /// `SexpShape` ↔ `QuoteForm` ↔ tag string chain is rustc-enforced
-    /// end-to-end. THEORY.md §II.1 invariant 2 — free middle; the
+    /// end-to-end. Invariant 2 — free middle; the
     /// (outer shape, canonical iac-forge tag) pairing now binds at ONE
     /// site on the outer-shape algebra, composing through the pre-
     /// existing four-arm sub-carving's tag projection rather than
-    /// duplicating the four-arm match here. THEORY.md §VI.1 —
-    /// generation over composition; the outer-shape algebra's typed
+    /// duplicating the four-arm match here.
+    /// Generation over composition; the outer-shape algebra's typed
     /// projection surface closes over SEVEN methods (label,
     /// hash_discriminator, four carvings, iac_forge_tag) each keyed on
     /// the SAME closed twelve-arm set.
@@ -8431,19 +8429,19 @@ impl SexpShape {
     /// composition through [`Self::as_quote_form`] pulling the new
     /// variant's prefix into this projection mechanically.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// (SexpShape variant, reader-punctuation prefix) pairing becomes a
     /// TYPE projection on the outer-shape algebra rather than an inline
     /// `.as_quote_form().map(...)` two-step at every consumer. A typo
     /// or swap at the projection site is no longer a runtime prefix
     /// drift but a compile error against the typed composition — the
     /// `SexpShape` ↔ `QuoteForm` ↔ prefix character chain is
-    /// rustc-enforced end-to-end. THEORY.md §II.1 invariant 2 — free
+    /// rustc-enforced end-to-end. Invariant 2 — free
     /// middle; the (outer shape, reader-punctuation prefix) pairing now
     /// binds at ONE site on the outer-shape algebra, composing through
     /// the pre-existing four-arm sub-carving's prefix projection rather
-    /// than duplicating the four-arm match here. THEORY.md §VI.1 —
-    /// generation over composition; the outer-shape algebra's typed
+    /// than duplicating the four-arm match here.
+    /// Generation over composition; the outer-shape algebra's typed
     /// projection surface closes over EIGHT methods (label,
     /// hash_discriminator, four carvings, iac_forge_tag, prefix) each
     /// keyed on the SAME closed twelve-arm set.
@@ -8547,18 +8545,18 @@ impl SexpShape {
     /// binds the consistency through exhaustiveness over the closed
     /// [`SexpShape`] enum.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// (SexpShape variant, outer cache-key byte) pairing becomes a TYPE
     /// projection on the substrate's shape algebra rather than requiring
     /// a re-embed into [`crate::ast::Sexp`] followed by an outer
     /// dispatch. A typo or swap at the shape-level projection site is
     /// a compile error against the typed projection rather than a
-    /// silent runtime cache-key drift. THEORY.md §II.1 invariant 2 —
+    /// silent runtime cache-key drift. Invariant 2 —
     /// free middle; the outer-`Sexp` cache-key algebra now closes over
     /// FIVE typed layers (outer, shape, three sub-carvings) with rustc-
     /// enforced consistency across each — a regression that drifts ONE
     /// layer's discriminator bytes from the others cannot reach the
-    /// substrate's runtime cache. THEORY.md §VI.1 — generation over
+    /// substrate's runtime cache. Generation over
     /// composition; the shape-level projection is the missing algebra
     /// layer between the outer-`Sexp` and the three sub-carvings — the
     /// four pre-existing typed layers become a full FIVE-layer typed
@@ -8745,19 +8743,19 @@ impl SexpShape {
     /// closing the extensibility gap the pre-lift outer-shape algebra
     /// silently allowed at the [`Self::hash_discriminator`] match body.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the twelve
+    /// Anchor: the typescape; the twelve
     /// canonical outer-shape cache-key bytes bind at ONE typed
     /// `[u8; 12]` array on the closed-set outer [`SexpShape`] algebra
     /// rather than at zero-primitive-plus-runtime-dispatch through the
-    /// three sub-carvings' twelve-arm collapse. THEORY.md §V.1 —
-    /// knowable platform; the family's cardinality becomes a
+    /// three sub-carvings' twelve-arm collapse.
+    /// Knowable platform; the family's cardinality becomes a
     /// TYPE-level constant on the substrate algebra rather than a
-    /// per-consumer runtime dispatch through the match table. THEORY.md
-    /// §V.3 — three-pillar attestation; the outer-shape cache-key
+    /// per-consumer runtime dispatch through the match table.
+    /// Three-pillar attestation; the outer-shape cache-key
     /// partition is the substrate's outer `Sexp` `intent_hash`
     /// composition axis — binding the twelve-arm ALL array on the typed
     /// algebra makes attestation-key drift a compile error rather than
-    /// a silent BLAKE3 mis-hash. THEORY.md §VI.1 — generation over
+    /// a silent BLAKE3 mis-hash. Generation over
     /// composition; the family-wide contract sweeps (alignment with
     /// `ALL`, membership through [`Self::hash_discriminator`], partition
     /// closure onto `{0..=6}`) emerge from the composition of ONE
@@ -8834,15 +8832,15 @@ impl SexpShape {
 /// [`SexpShape`] outer-shape lattice, closing the three-carving
 /// partition.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the residual
+/// Anchor: knowable platform; the residual
 /// carving becomes a TYPE rather than an inline
 /// `matches!(shape, SexpShape::Nil | SexpShape::List)` predicate the
-/// substrate maintained by callsite discipline. THEORY.md §VI.1 —
-/// generation over composition; the typed enum lands the structural-
+/// substrate maintained by callsite discipline.
+/// Generation over composition; the typed enum lands the structural-
 /// completeness floor for the residual outer-shape surface, parallel
 /// to how [`crate::ast::AtomKind`] lands it for the atomic-payload
 /// carving and [`crate::ast::QuoteForm`] lands it for the quote-family
-/// carving. THEORY.md §II.1 invariant 1 — typed entry; the
+/// carving. Invariant 1 — typed entry; the
 /// (structural-residual identity, outer shape) pairing is first-class
 /// load-bearing data on the substrate algebra rather than a runtime
 /// negation of the two sibling carvings.
@@ -8988,15 +8986,15 @@ impl StructuralKind {
     /// arrays fails compilation if EITHER ALL array grows without the
     /// other.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// Anchor: the typescape; the two
     /// canonical structural-residual marker bytes bind at ONE typed
     /// `[&'static str; 2]` array on the closed-set StructuralKind
     /// algebra rather than at zero-primitive-on-this-subset-plus-two-
-    /// inline-lookups scattered across the substrate. THEORY.md §V.1
-    /// — knowable platform; the family's cardinality becomes a TYPE-
+    /// inline-lookups scattered across the substrate.
+    /// Knowable platform; the family's cardinality becomes a TYPE-
     /// level constant on the substrate algebra rather than a per-
-    /// consumer runtime dispatch through the composition. THEORY.md
-    /// §VI.1 — generation over composition; the family-wide contract
+    /// consumer runtime dispatch through the composition.
+    /// Generation over composition; the family-wide contract
     /// sweeps (alignment with `ALL`, pairwise disjointness, membership
     /// through [`Self::label`]) emerge from the composition of TWO
     /// substrate primitives (this `pub const` array + the two per-
@@ -9033,15 +9031,15 @@ impl StructuralKind {
     /// ([`Self::sexp_shape`] returns a `Copy` value and
     /// [`SexpShape::label`] yields `&'static str`).
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// StructuralKind ⊂ SexpShape label-vocabulary containment
     /// becomes a TYPED CONSEQUENCE of the [`Self::sexp_shape`] +
     /// [`SexpShape::label`] composition rather than literal discipline
-    /// at two sites. THEORY.md §VI.1 — generation over composition;
+    /// at two sites. Generation over composition;
     /// the two residual-arm labels live at ONE canonical site
     /// ([`SexpShape::label`]) and this method generates its identity
-    /// through the typed-projection composition. THEORY.md §II.1
-    /// invariant 2 — free middle; consumers of the [`StructuralKind`]
+    /// through the typed-projection composition.
+    /// Invariant 2 — free middle; consumers of the [`StructuralKind`]
     /// algebra route through ONE typed closed-set projection family
     /// with no per-consumer literal duplication.
     #[must_use]
@@ -9085,17 +9083,17 @@ impl StructuralKind {
     /// [`crate::ast::QuoteForm::sexp_shape`] arm, or this
     /// [`Self::sexp_shape`] arm) surfaces immediately.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// (StructuralKind variant, SexpShape variant) pairing becomes a
     /// TYPE projection on the substrate algebra rather than a runtime
     /// `matches!(shape, SexpShape::Nil | SexpShape::List)` predicate.
     /// A typo or swap at the shape-projection site is no longer a
     /// runtime drift but a compile error against the typed projection.
-    /// THEORY.md §II.1 invariant 2 — free middle; the (embed, project)
+    /// Invariant 2 — free middle; the (embed, project)
     /// pair binds at TWO typed sites — [`Self::sexp_shape`] for the
     /// embed, [`SexpShape::as_structural_kind`] for the project —
     /// completing the third and final closed-set carving of the
-    /// outer-shape algebra. THEORY.md §VI.1 — generation over
+    /// outer-shape algebra. Generation over
     /// composition; the two residual arms lift to ONE typed method,
     /// and the partition-total invariant across the three carvings
     /// becomes a TYPED THEOREM rather than a test assertion.
@@ -9219,26 +9217,26 @@ impl StructuralKind {
     /// [`SexpShape::as_structural_kind`] arm must grow in lockstep to
     /// preserve the round-trip identity.
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// Anchor: the typescape; the two
     /// canonical [`SexpShape`] embed targets bind at ONE typed
     /// `[SexpShape; 2]` array on the closed-set StructuralKind algebra
     /// rather than at zero-primitive-on-this-subset-plus-two-inline-
     /// lookups scattered across the substrate. Closes the THIRD
     /// per-role `pub const` axis on the StructuralKind carving
     /// alongside the pre-existing LABELS + HASH_DISCRIMINATORS axes.
-    /// THEORY.md §V.1 — knowable platform; the family's cardinality
+    /// Knowable platform; the family's cardinality
     /// becomes a TYPE-level constant on the substrate algebra rather
     /// than a per-consumer runtime dispatch through the composition. A
     /// regression that drifts the (StructuralKind variant, SexpShape
     /// variant) pairing at ONE of the three typed sites (per-role
     /// alias, family-wide array, projection method) fails-loudly at
     /// the array-indexed sweep rather than as a silent operator-facing
-    /// diagnostic drift. THEORY.md §II.1 invariant 2 — free middle;
+    /// diagnostic drift. Invariant 2 — free middle;
     /// the (embed, project) pair binds at THREE typed sites now — the
     /// projection method [`Self::sexp_shape`], this family-wide array,
     /// AND the peer inverse [`SexpShape::as_structural_kind`] — with
-    /// rustc-enforced consistency across all three. THEORY.md §VI.1
-    /// — generation over composition; the family-wide contract sweeps
+    /// rustc-enforced consistency across all three.
+    /// Generation over composition; the family-wide contract sweeps
     /// (alignment with `ALL`, round-trip through
     /// `as_structural_kind`, membership through `sexp_shape`, pairwise
     /// injectivity across the two embed targets) emerge from the
@@ -9301,20 +9299,20 @@ impl StructuralKind {
     /// [`crate::ast::AtomKind::hash_discriminator`] and
     /// [`crate::ast::QuoteForm::hash_discriminator`].
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// (StructuralKind variant, cache-key byte) pairing becomes a TYPE
     /// projection on the substrate algebra rather than two `0u8`/`2u8`
     /// inline literals in [`Hash for Sexp`](crate::ast::Sexp). A typo
     /// or swap at the hash-projection site is no longer a runtime
     /// cache-key drift but a compile error against the typed
-    /// projection. THEORY.md §II.1 invariant 2 — free middle; ALL
+    /// projection. Invariant 2 — free middle; ALL
     /// THREE closed-set carvings (atomic-payload via
     /// [`crate::ast::AtomKind::hash_discriminator`], quote-family via
     /// [`crate::ast::QuoteForm::hash_discriminator`], structural-
     /// residual via this method) now route through a typed
     /// closed-set match family, so a regression that drifts ONE
     /// carving's discriminator bytes from the others cannot reach
-    /// the substrate's runtime cache. THEORY.md §VI.1 — generation
+    /// the substrate's runtime cache. Generation
     /// over composition; the two `0u8`/`2u8` residual-arm literals
     /// appeared inline at [`Hash for Sexp`](crate::ast::Sexp) — past
     /// the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
@@ -9345,12 +9343,12 @@ impl StructuralKind {
     /// bytes at ONE `pub(crate) const` per variant PLUS a family-wide
     /// [`Self::HASH_DISCRIMINATORS`] array.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the alias-chain composition law
     /// `StructuralKind::HASH_DISCRIMINATORS[i] ==
     /// StructuralKind::ALL[i].hash_discriminator()` binds the family-
     /// wide array to the projection method at rustc time, pinned by
-    /// byte equality. THEORY.md §III — the typescape; the two
+    /// byte equality. The typescape; the two
     /// canonical cache-key bytes bind at ONE `pub(crate) const` per
     /// role on the typed algebra rather than as inline `u8` literals
     /// in the [`Self::hash_discriminator`] match arms.
@@ -9430,20 +9428,20 @@ impl StructuralKind {
     /// accidental re-use of the `1u8` outer-carve byte reserved for
     /// [`crate::ast::Sexp::Atom(_)`].
     ///
-    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// Anchor: the typescape; the two
     /// canonical cache-key bytes bind at ONE typed `[u8; 2]` array on
     /// the closed-set [`StructuralKind`] algebra rather than at zero-
     /// primitive-plus-two-inline-`u8`-literals scattered across the
-    /// [`Self::hash_discriminator`] match arms. THEORY.md §V.1 —
-    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// [`Self::hash_discriminator`] match arms.
+    /// Knowable platform; the family's cardinality becomes a TYPE-
     /// level constant on the substrate algebra rather than a per-
-    /// consumer runtime dispatch through the match table. THEORY.md
-    /// §V.3 — three-pillar attestation; the cache-key partition is
+    /// consumer runtime dispatch through the match table.
+    /// Three-pillar attestation; the cache-key partition is
     /// the substrate's outer [`Sexp`](crate::ast::Sexp) `intent_hash`
     /// composition axis for every structural-residual arm — binding
     /// the two bytes on the typed algebra makes attestation-key drift
     /// a compile error rather than a silent BLAKE3 mis-hash.
-    /// THEORY.md §VI.1 — generation over composition; the family-
+    /// Generation over composition; the family-
     /// wide contract sweeps (alignment with `ALL`, pairwise
     /// disjointness, membership through [`Self::hash_discriminator`])
     /// emerge from the composition of TWO substrate primitives (this
@@ -9561,17 +9559,17 @@ impl StructuralKind {
 /// with no per-variant edit — the same future-proofing posture
 /// `KwargPath`, `SexpShape`, and `ExpectedKwargShape` already carry.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform; the offending-
+/// Anchor: knowable platform; the offending-
 /// value's joint identity (structural shape + renderable literal)
 /// becomes a TYPE rather than a `String` projection at the helper
 /// boundary that discards the shape. After this primitive lands the
 /// substrate's understanding of "the offending Sexp at a typed-entry
 /// rejection" lives in ONE typed struct the diagnostic promotions
-/// hang off of. THEORY.md §VI.1 — generation over composition; seven
+/// hang off of. Generation over composition; seven
 /// inline `got.to_string()` projections at error-builder boundaries
 /// (six in `macro_expand.rs`, one in `domain.rs::missing_head_err`'s
-/// caller) is past the three-times-rule trigger. THEORY.md §II.1
-/// invariant 1 — typed entry; the offending Sexp's identity is part
+/// caller) is past the three-times-rule trigger.
+/// Invariant 1 — typed entry; the offending Sexp's identity is part
 /// of the proof of WHAT the typed-entry gate rejected, and the typed
 /// witness makes both halves of that identity (shape + literal)
 /// load-bearing data on the variant rather than the literal-only
@@ -13274,7 +13272,7 @@ mod tests {
         // — extending the typed-identity unification contract from
         // seven slots (typed-ENTRY only) to eight slots (typed-ENTRY +
         // typed-EXIT), CLOSING the contract across BOTH boundaries of
-        // the typed-IR algebra (THEORY.md §II.1 invariant 1 +
+        // the typed-IR algebra (invariant 1 +
         // invariant 3).
         let same_witness = SexpWitness::new(SexpShape::Int, "42");
         let rewriter_non_list = LispError::RewriterNonList {
@@ -17319,7 +17317,7 @@ mod tests {
         // those are direct-literal constants with no [`SexpShape`]
         // peer to alias through.
         //
-        // Theory anchor: THEORY.md §II.1 invariant 5 (composition
+        // Anchor: invariant 5 (composition
         // preserves proofs) — the alias-chain composition law
         // `ExpectedKwargShape::X_LABEL == SexpShape::X_LABEL` on the
         // 5-of-10 subset carving is a rustc-time typed identity, not a

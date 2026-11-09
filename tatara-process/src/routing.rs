@@ -247,13 +247,13 @@ impl RoutingSpec {
     /// `spec.routing.as_ref().is_some_and(|r| r.form() == kind)`
     /// closure body.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the scalar-carrier presence-probe body
     /// lives at ONE substrate site so every downstream
     /// (`routing-form-<kind>` require-tag family in tatara-check,
     /// closed-set audit dispatchers, future variant additions on
     /// [`RoutingForm`]) binds through the SAME `has(kind)` shape.
-    /// THEORY.md §VI.1 — generation over composition; a future
+    /// Generation over composition; a future
     /// variant lands at ONE `ALL` entry + one `as_str` arm + one
     /// `from_is_stable` widening on the closed set and the probe
     /// picks it up mechanically without further per-consumer
@@ -329,10 +329,10 @@ impl RoutingSpec {
 /// [`crate::crd::ProcessSpec::routing`] parent inherits the shift by
 /// construction.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// Anchor: invariant 5 (composition preserves
 /// proofs — the Option-carrier collapse lives at ONE substrate site
 /// so every downstream `routing-<axis>` require-tag family binds
-/// through the SAME shape). THEORY.md §VI.1 (generation over
+/// through the SAME shape). (generation over
 /// composition — a new probe on [`RoutingSpec`] reaches this trait
 /// through a peer method without a bespoke Option-arm at the caller).
 ///
@@ -457,11 +457,11 @@ impl RoutingHostname {
     /// `Some(<name>)` arm of the `instance` slot, [`Self::content_hashed`]
     /// fills the `None` arm.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `RoutingHostname { app, instance: Some(<i>), cluster: None }`
     /// fixture literal recurred at ten hand-authored sites past the
     /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
-    /// ONE owner here). THEORY.md §II.1 invariant 5 (composition
+    /// ONE owner here). Invariant 5 (composition
     /// preserves proofs — a regression that drifted the default-
     /// cluster sentinel from `None` to a hardcoded string, or
     /// reordered the three struct slots, surfaces at the
@@ -506,11 +506,11 @@ impl RoutingHostname {
     /// arm of the `instance` slot, [`Self::instanced`] fills the
     /// `Some(<name>)` arm.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `RoutingHostname { app, instance: None, cluster: None }`
     /// fixture literal recurred at nine hand-authored sites past the
     /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
-    /// ONE owner here). THEORY.md §II.1 invariant 5.
+    /// ONE owner here). Invariant 5.
     #[must_use]
     pub fn content_hashed(app: impl Into<String>) -> Self {
         Self {
@@ -556,12 +556,12 @@ impl RoutingBackend {
     /// `impl Into<String>` bound on `service` accepts every pre-lift
     /// caller shape verbatim.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `RoutingBackend { service, port, tls_issuer: None,
     /// ingress_annotations: BTreeMap::new() }` fixture literal recurred
     /// at seven hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// a regression that drifted the default `tls_issuer` sentinel
     /// from `None` to a hardcoded string, or reordered the four
     /// struct slots, surfaces at the

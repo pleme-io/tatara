@@ -60,11 +60,11 @@
 //! wording mechanically through the same
 //! [`required_secret`] call.
 //!
-//! Theory grounding: THEORY.md §VI.1 (generation over composition —
+//! Grounding: (generation over composition —
 //! the `std::env::var(NAME).context(...)` chain recurred at two
 //! hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-//! trigger and is lifted to ONE substrate owner here). THEORY.md §II.1
-//! invariant 5 (composition preserves proofs — the diagnostic
+//! trigger and is lifted to ONE substrate owner here).
+//! Invariant 5 (composition preserves proofs — the diagnostic
 //! wording is pinned by [`tests::required_secret_error_wording_is_canonical`]
 //! so a regression that reshaped the message surfaces at the test
 //! surface rather than as silent drift between the two pre-lift

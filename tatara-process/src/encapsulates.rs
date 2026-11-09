@@ -122,14 +122,14 @@ impl EncapsulatesSpec {
     /// downstream through ONE `ALL` entry on the closed set with the
     /// probe body untouched.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the scalar-carrier presence-probe body lives at ONE
     /// substrate site so every downstream (`encapsulation-mode-<kind>`
     /// require-tag family in `tatara-check`, closed-set audit
     /// dispatchers, future variant additions on [`EncapsulationMode`])
     /// binds through the SAME shape rather than restating the
     /// `encapsulates.mode == kind` closure body at each callsite.
-    /// THEORY.md §VI.1 — generation over composition; a future
+    /// Generation over composition; a future
     /// [`EncapsulationMode`] variant lands at ONE `ALL` entry + ONE
     /// `as_str` arm on the closed set and the probe picks it up
     /// mechanically without further per-consumer edits.
@@ -570,10 +570,10 @@ impl EncapsulationMode {
 /// at THIS ONE substrate owner and every current + future require-tag
 /// family inherits the shift by construction.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// Anchor: invariant 5 (composition preserves
 /// proofs — the Option-carrier collapse lives at ONE substrate site so
 /// every downstream `encapsulation-<axis>` require-tag family binds
-/// through the SAME shape). THEORY.md §VI.1 (generation over
+/// through the SAME shape). (generation over
 /// composition — a new probe on `EncapsulatesSpec` reaches this trait
 /// through a peer method without a bespoke Option-arm at the caller).
 ///

@@ -131,11 +131,11 @@ impl AllocationSpec {
     /// [`crate::spec::ProcessSpec::gate_compute_defaults`] (Process
     /// zero-arg-fixture composer; the 12-slot Process counterpart).
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 3-slot default tail recurred at NINE hand-authored sites
     /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, spanning
     /// two workspace crates, and is lifted onto the ONE workspace-
-    /// wide substrate owner here). THEORY.md §II.1 invariant 5
+    /// wide substrate owner here). Invariant 5
     /// (composition preserves proofs — the pin block below binds the
     /// primitive at fail-before-pass-after granularity so a
     /// regression that drifted any of the three default-tail slots
@@ -333,10 +333,10 @@ impl Requestor {
 /// [`crate::intent::IntentKind::ALL`],
 /// [`crate::lifetime_clock::TerminateReasonKind::ALL`].
 ///
-/// Theory anchor: THEORY.md §III — the typescape; the substrate's own
+/// Anchor: the typescape; the substrate's own
 /// requestor kinds become a TYPE rather than four `&'static str`
-/// literals at every author + docstring + fixture site. THEORY.md
-/// §V.1 — knowable platform; the closed-set view turns "which kinds
+/// literals at every author + docstring + fixture site.
+/// Knowable platform; the closed-set view turns "which kinds
 /// does the substrate actually emit" from a grep job into a method
 /// the compiler enforces exhaustively at every dispatch site.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, tatara_closed_set::DeriveClosedSet)]
@@ -562,11 +562,11 @@ impl AllocationStatus {
     /// callsite carries `&'static str` literal reasons and
     /// `format!(...)`-owned strings without widening the signature.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 4-slot phase-transition status-seed incantation recurred at
     /// four hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the pins bind the three always-present slots + the
     /// [`Default`]-defaulted rest + byte-identical parity with the
     /// pre-lift `json!({...})` triplet through serde round-trip, so a
@@ -629,11 +629,11 @@ impl AllocationStatus {
     /// the substrate primitive on the invariant it wraps rather than
     /// restating the wrapped shape inline.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `bound_pool + assigned_process` pair recurred at two hand-
     /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
-    /// invariant 5 (composition preserves proofs — the pins bind the
+    /// trigger, and is lifted to ONE owner here).
+    /// Invariant 5 (composition preserves proofs — the pins bind the
     /// pair + the composed base triplet + byte-identical parity with
     /// the pre-lift struct-update shape through serde round-trip, so a
     /// regression that drifted any surface at
@@ -723,11 +723,11 @@ impl AllocationStatus {
     /// transition composed for no observable reason — the attribute
     /// surfaces that as a warning at every call site.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 3-arg call with `chrono::Utc::now()` as the third argument
     /// recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE
     /// ≥ 2 duplication trigger, lifted onto the ONE workspace-wide
-    /// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+    /// substrate owner here). Invariant 5 (composition
     /// preserves proofs — the wall-clock projection lives at ONE site
     /// so a future clock swap reaches both consumers through one edit).
     #[must_use]
@@ -974,15 +974,15 @@ impl EphemeralAllocation {
     /// matching the pre-lift `AllocationPhase::Pending` fallback
     /// semantics verbatim.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// Anchor: (generation over composition
     /// — the two-link `.status.as_ref().map(|s| s.phase).unwrap_or
     /// (AllocationPhase::Pending)` chain recurred at both the
     /// [`crate::prelude::Process`] site (already lifted onto
     /// [`crate::prelude::Process::observed_phase_or_pending`]) AND
     /// the [`EphemeralAllocation`] site by hand, i.e. the SHAPE
     /// itself recurs past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-    /// trigger, and is lifted to ONE owner per CRD here). THEORY.md
-    /// §II.1 invariant 5 (composition preserves proofs — the pins
+    /// trigger, and is lifted to ONE owner per CRD here).
+    /// Invariant 5 (composition preserves proofs — the pins
     /// bind the missing-`status` sink to `Pending` + populated-
     /// status pass-through + every [`AllocationPhase`] variant
     /// round-trip + byte-identical parity with the pre-lift
@@ -1051,7 +1051,7 @@ impl EphemeralAllocation {
     /// existing peer accessors [`Self::observed_phase`] +
     /// [`Self::observed_phase_or_pending`] admit.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// Anchor: (generation over composition
     /// — the `.status.as_ref().and_then(|s| s.<structured-record>
     /// .<clone|as_ref>())` shape recurred as ONE hand-authored
     /// `.and_then(|s| s.bound_pool.clone())` chain in
@@ -1060,7 +1060,7 @@ impl EphemeralAllocation {
     /// [`crate::prelude::Process::observed_identity`] primitive
     /// already owned on the `Process` CRD's `status.identity` slot,
     /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger at
-    /// substrate-shape level. THEORY.md §II.1 invariant 5
+    /// substrate-shape level. Invariant 5
     /// (composition preserves proofs — the pins bind the missing-
     /// `status` corner + the empty-`bound_pool`-slot corner + the
     /// borrow-form `&AllocationRef` lifetime + the zero-copy
@@ -1127,7 +1127,7 @@ impl EphemeralAllocation {
     /// accessors [`Self::observed_phase`] +
     /// [`Self::observed_phase_or_pending`] admit.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `.status.as_ref().and_then(|s| s.<Copy-field>)` shape
     /// recurred as ONE hand-authored chain in
     /// [`tatara-pool-reconciler::allocation_decide::
@@ -1137,7 +1137,7 @@ impl EphemeralAllocation {
     /// trigger; the substrate now owns the third status-projection
     /// primitive on `EphemeralAllocation`, closing the copy-form family
     /// alongside the borrow-form [`Self::observed_bound_pool`]).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+    /// Invariant 5 (composition preserves proofs — the
     /// pins bind the missing-`status` corner + the empty-`expires_at`-
     /// slot corner + the copy-form `DateTime<Utc>` return + byte-
     /// identical parity with the pre-lift `.and_then(|s| s.expires_at)`
@@ -1211,12 +1211,12 @@ impl EphemeralAllocation {
     /// create call or a `Vec<EphemeralAllocation>` reconciler-input
     /// slot.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the 2-line construct-then-set-namespace chain recurred at
     /// TWO hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, spanning two workspace crates, and is
-    /// lifted to ONE substrate owner here). THEORY.md §II.1
-    /// invariant 5 (composition preserves proofs — the pins below
+    /// lifted to ONE substrate owner here).
+    /// Invariant 5 (composition preserves proofs — the pins below
     /// bind the (name-slot → metadata.name, ns-slot → metadata.
     /// namespace, spec-slot → spec) slot-projection triple + the
     /// byte-identical parity with the pre-lift 2-line chain across

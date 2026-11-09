@@ -185,10 +185,10 @@ impl EphemeralSpec {
     /// [`Boundary::has_condition_kind`] compose against — so the two
     /// struct-level union methods stay symmetric by construction.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the union body composes the SAME slice-level substrate
     /// primitive on both this ephemeral surface and the point-domain
-    /// [`Boundary`] surface). THEORY.md §VI.1 (generation over
+    /// [`Boundary`] surface). (generation over
     /// composition — a future [`ConditionKind`] variant added to `ALL`
     /// reaches both `condition-<kind>` require-tag surfaces mechanically
     /// through the SAME closed-set walk).
@@ -302,10 +302,10 @@ impl EphemeralSpec {
     /// parity contract now covers both refinements (bool via has,
     /// `&Condition` via find) on the condition axis.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the widened union body composes the SAME
     /// slice-level substrate primitive on both this ephemeral surface
-    /// and the point-domain [`Boundary`] surface). THEORY.md §VI.1
+    /// and the point-domain [`Boundary`] surface).
     /// (generation over composition — a future [`ConditionKind`]
     /// variant added to `ALL` reaches both surfaces' widened triads
     /// mechanically through the SAME closed-set walk).
@@ -395,10 +395,10 @@ impl EphemeralSpec {
     /// family that surfaces multiplicity to the operator) reaches
     /// this ONE method through `spec.iter_condition_kind(k).count()`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the widened stream body composes the SAME
     /// slice-level substrate primitive on both this ephemeral surface
-    /// and the point-domain [`Boundary`] surface). THEORY.md §VI.1
+    /// and the point-domain [`Boundary`] surface).
     /// (generation over composition — a future [`ConditionKind`]
     /// variant added to `ALL` reaches both surfaces' iterator triads
     /// mechanically through the SAME closed-set walk).
@@ -493,11 +493,11 @@ impl EphemeralSpec {
     /// the `.iter_condition_kind(k).count()` chain body at the
     /// callsite.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the scalar cardinality body composes the
     /// SAME slice-level substrate primitive on both this ephemeral
-    /// surface and the point-domain [`Boundary`] surface). THEORY.md
-    /// §VI.1 (generation over composition — a future
+    /// surface and the point-domain [`Boundary`] surface).
+    /// (generation over composition — a future
     /// [`ConditionKind`] variant added to `ALL` reaches both surfaces'
     /// count triads mechanically through the SAME closed-set walk).
     #[must_use]
@@ -585,11 +585,11 @@ impl EphemeralSpec {
     /// condition axis, byte-for-byte peer of the point-domain triad on
     /// [`crate::boundary::Boundary`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the closed-set-inversion aggregate composes the SAME
     /// slice-level substrate primitive on both this ephemeral surface
     /// and the point-domain [`crate::boundary::Boundary`] surface).
-    /// THEORY.md §VI.1 (generation over composition — a future
+    /// (generation over composition — a future
     /// [`ConditionKind`] variant added to `ALL` reaches both surfaces'
     /// distinct-set triads mechanically through the SAME closed-set
     /// walk).
@@ -709,10 +709,10 @@ impl EphemeralSpec {
     /// byte-for-byte peer of the point-domain triad on
     /// [`crate::boundary::Boundary`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the scalar cardinality composes the SAME closed-set
     /// walk on both this ephemeral surface and the point-domain
-    /// [`crate::boundary::Boundary`] surface). THEORY.md §VI.1
+    /// [`crate::boundary::Boundary`] surface).
     /// (generation over composition — a future [`ConditionKind`] variant
     /// added to `ALL` reaches both surfaces' distinct-kind-count triads
     /// mechanically through the SAME closed-set walk).
@@ -810,11 +810,11 @@ impl EphemeralSpec {
     /// condition axis, byte-for-byte peer of the point-domain triad on
     /// [`crate::boundary::Boundary`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the closed-set complement composes the SAME
     /// closed-set walk on both this ephemeral surface and the point-
     /// domain [`crate::boundary::Boundary`] surface).
-    /// THEORY.md §VI.1 (generation over composition — a future
+    /// (generation over composition — a future
     /// [`ConditionKind`] variant added to `ALL` reaches both surfaces'
     /// missing-set triads mechanically through the SAME closed-set walk).
     #[must_use]
@@ -934,11 +934,11 @@ impl EphemeralSpec {
     /// byte-for-byte peer of the point-domain triad on
     /// [`crate::boundary::Boundary`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the scalar cardinality composes the SAME closed-set
     /// walk under negation on both this ephemeral surface and the
     /// point-domain [`crate::boundary::Boundary`] surface).
-    /// THEORY.md §VI.1 (generation over composition — a future
+    /// (generation over composition — a future
     /// [`ConditionKind`] variant added to `ALL` reaches both surfaces'
     /// missing-kind-count triads mechanically through the SAME
     /// closed-set walk).
@@ -1023,11 +1023,11 @@ impl EphemeralSpec {
     /// scalar of the closed-set-inversion), byte-for-byte peer of the
     /// point-domain triad on [`crate::boundary::Boundary`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the earliest-element projection composes the
     /// SAME closed-set walk on both this ephemeral surface and the
     /// point-domain [`crate::boundary::Boundary`] surface under short-
-    /// circuit semantics). THEORY.md §VI.1 (generation over composition
+    /// circuit semantics). (generation over composition
     /// — a future [`ConditionKind`] variant added to `ALL` reaches both
     /// surfaces' first-distinct-kind triads mechanically through the
     /// SAME closed-set walk).
@@ -1111,12 +1111,12 @@ impl EphemeralSpec {
     /// closed-set-complement), byte-for-byte peer of the point-domain
     /// triad on [`crate::boundary::Boundary`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the complement-earliest-element projection
     /// composes the SAME closed-set walk on both this ephemeral
     /// surface and the point-domain [`crate::boundary::Boundary`]
     /// surface under short-circuit semantics with a negated predicate).
-    /// THEORY.md §VI.1 (generation over composition — a future
+    /// (generation over composition — a future
     /// [`ConditionKind`] variant added to `ALL` reaches both surfaces'
     /// first-missing-kind triads mechanically through the SAME closed-
     /// set walk).
@@ -1204,11 +1204,11 @@ impl EphemeralSpec {
     /// set-inversion (`last_distinct_*_kind`)). Byte-for-byte peer of
     /// the point-domain triad on [`crate::boundary::Boundary`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the latest-element projection composes the
     /// SAME reversed closed-set walk on both this ephemeral surface
     /// and the point-domain [`crate::boundary::Boundary`] surface
-    /// under short-circuit semantics). THEORY.md §VI.1 (generation
+    /// under short-circuit semantics). (generation
     /// over composition — a future [`ConditionKind`] variant added to
     /// `ALL` reaches both surfaces' last-distinct-kind triads
     /// mechanically through the SAME reversed closed-set walk).
@@ -1297,12 +1297,12 @@ impl EphemeralSpec {
     /// set-complement). Byte-for-byte peer of the point-domain triad
     /// on [`crate::boundary::Boundary`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the complement-latest-element projection
     /// composes the SAME reversed closed-set walk on both this
     /// ephemeral surface and the point-domain
     /// [`crate::boundary::Boundary`] surface under short-circuit
-    /// semantics with a negated predicate). THEORY.md §VI.1
+    /// semantics with a negated predicate).
     /// (generation over composition — a future [`ConditionKind`]
     /// variant added to `ALL` reaches both surfaces' last-missing-kind
     /// triads mechanically through the SAME reversed closed-set walk).
@@ -1385,11 +1385,11 @@ impl EphemeralSpec {
     /// cardinality, `is_condition_kind_saturated` collapses the
     /// scalar to its zero-arm Boolean projection.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the saturation-endpoint projection composes
     /// the SAME closed-set walk on both this ephemeral surface and the
     /// point-domain [`crate::boundary::Boundary`] surface under
-    /// short-circuit semantics). THEORY.md §VI.1 (generation over
+    /// short-circuit semantics). (generation over
     /// composition — a future [`ConditionKind`] variant added to `ALL`
     /// reaches both surfaces' saturation-predicate triads mechanically
     /// through the SAME closed-set walk).
@@ -1470,12 +1470,12 @@ impl EphemeralSpec {
     /// cardinality, `has_any_missing_condition_kind` collapses either
     /// to its `>= 1` halfspace Boolean.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the at-least-one halfspace projection
     /// composes the SAME closed-set walk under negation on both this
     /// ephemeral surface and the point-domain
     /// [`crate::boundary::Boundary`] surface under short-circuit
-    /// semantics). THEORY.md §VI.1 (generation over composition — a
+    /// semantics). (generation over composition — a
     /// future [`ConditionKind`] variant added to `ALL` reaches both
     /// surfaces' at-least-one halfspace triads mechanically through
     /// the SAME closed-set walk).
@@ -1555,11 +1555,11 @@ impl EphemeralSpec {
     /// cardinality, `has_any_distinct_condition_kind` collapses either
     /// to its `>= 1` halfspace Boolean.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the at-least-one halfspace projection
     /// composes the SAME closed-set walk on both this ephemeral
     /// surface and the point-domain [`crate::boundary::Boundary`]
-    /// surface under short-circuit semantics). THEORY.md §VI.1
+    /// surface under short-circuit semantics).
     /// (generation over composition — a future [`ConditionKind`]
     /// variant added to `ALL` reaches both surfaces' at-least-one
     /// halfspace triads mechanically through the SAME closed-set
@@ -1646,12 +1646,12 @@ impl EphemeralSpec {
     /// than as silent drift at either struct-level singleton-coverage
     /// caller.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality-mid-endpoint projection on
     /// the closed-set-inversion axis composes the SAME two-step
     /// short-circuit walk on both this ephemeral surface and the
-    /// point-domain [`crate::boundary::Boundary`] surface). THEORY.md
-    /// §VI.1 (generation over composition — a new [`ConditionKind`]
+    /// point-domain [`crate::boundary::Boundary`] surface).
+    /// (generation over composition — a new [`ConditionKind`]
     /// variant reaches both surfaces' cardinality-mid-endpoint triads
     /// mechanically through the delegated union primitive).
     #[must_use]
@@ -1735,11 +1735,11 @@ impl EphemeralSpec {
     /// law `unique_distinct_condition_kind().is_some() ==
     /// has_unique_distinct_condition_kind()` binds the two).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the exactly-one-hit witnessing projection
     /// composes the SAME two-step short-circuit walk on both this
     /// ephemeral surface and the point-domain
-    /// [`crate::boundary::Boundary`] surface). THEORY.md §VI.1
+    /// [`crate::boundary::Boundary`] surface).
     /// (generation over composition — a future [`ConditionKind`]
     /// variant added to `ALL` reaches both surfaces' unique-distinct-
     /// kind triads mechanically through the SAME two-step short-
@@ -1848,12 +1848,12 @@ impl EphemeralSpec {
     /// rather than allocating the closed-set-inversion scan or walking
     /// every slot to build the scalar cardinality.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality-many-arm projection on the
     /// distinct axis composes the SAME two-step short-circuit walk
     /// under a two-slice union on both this ephemeral surface and the
-    /// point-domain [`crate::boundary::Boundary`] surface). THEORY.md
-    /// §VI.1 (generation over composition — a new [`ConditionKind`]
+    /// point-domain [`crate::boundary::Boundary`] surface).
+    /// (generation over composition — a new [`ConditionKind`]
     /// variant reaches both surfaces' cardinality-many-arm triads
     /// mechanically through the delegated union primitive).
     #[must_use]
@@ -1959,12 +1959,12 @@ impl EphemeralSpec {
     /// kind — a subsequent bit-flip surfaces at ONE substrate call
     /// with no allocation.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality "≤ 1" projection on the
     /// distinct axis composes the SAME definitional negation of the
     /// many-arm two-step short-circuit walk on both this ephemeral
     /// surface and the point-domain [`crate::boundary::Boundary`]
-    /// surface). THEORY.md §VI.1 (generation over composition — a
+    /// surface). (generation over composition — a
     /// new [`ConditionKind`] variant reaches both surfaces'
     /// cardinality "≤ 1" triads mechanically through the delegated
     /// union primitive).
@@ -2050,12 +2050,12 @@ impl EphemeralSpec {
     /// the widened primitive to its emptiness Boolean or the scalar to
     /// its `== 0` cardinality-endpoint Boolean.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality zero-endpoint projection on
     /// the distinct axis composes the SAME definitional negation of
     /// the at-least-one halfspace short-circuit walk on both this
     /// ephemeral surface and the point-domain
-    /// [`crate::boundary::Boundary`] surface). THEORY.md §VI.1
+    /// [`crate::boundary::Boundary`] surface).
     /// (generation over composition — a new [`ConditionKind`] variant
     /// reaches both surfaces' cardinality zero-endpoint triads
     /// mechanically through the delegated union primitive).
@@ -2135,11 +2135,11 @@ impl EphemeralSpec {
     /// axis). Every ephemeral spec satisfies EXACTLY ONE of the three
     /// Boolean projections on any `N ≥ 1` closed set.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the parent-state middle-arm projection
     /// composes the SAME paired-halfspace body on both this ephemeral
     /// surface and the point-domain [`crate::boundary::Boundary`]
-    /// surface). THEORY.md §VI.1 (generation over composition — a new
+    /// surface). (generation over composition — a new
     /// [`ConditionKind`] variant reaches both surfaces' parent-state
     /// middle-arm triads mechanically through the delegated union
     /// primitive).
@@ -2238,12 +2238,12 @@ impl EphemeralSpec {
     /// missing kind rather than allocating the closed-set-complement
     /// scan or walking every slot to build the scalar cardinality.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality-mid-endpoint projection on
     /// the missing axis composes the SAME two-step short-circuit walk
     /// under a two-slice union negation on both this ephemeral
     /// surface and the point-domain
-    /// [`crate::boundary::Boundary`] surface). THEORY.md §VI.1
+    /// [`crate::boundary::Boundary`] surface).
     /// (generation over composition — a new [`ConditionKind`]
     /// variant reaches both surfaces' cardinality-mid-endpoint triads
     /// mechanically through the delegated union primitive).
@@ -2341,12 +2341,12 @@ impl EphemeralSpec {
     /// [`Self::first_missing_condition_kind`] at TWO independent
     /// walks.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the complement-exactly-one-hit witnessing
     /// projection composes the SAME two-step short-circuit walk on
     /// both this ephemeral surface and the point-domain
     /// [`crate::boundary::Boundary`] surface under a negated predicate).
-    /// THEORY.md §VI.1 (generation over composition — a future
+    /// (generation over composition — a future
     /// [`ConditionKind`] variant added to `ALL` reaches both surfaces'
     /// unique-missing-kind triads mechanically through the SAME two-
     /// step short-circuit walk).
@@ -2454,12 +2454,12 @@ impl EphemeralSpec {
     /// rather than allocating the closed-set-complement scan or
     /// walking every slot to build the scalar cardinality.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality-many-arm projection on the
     /// missing axis composes the SAME two-step short-circuit walk
     /// under a two-slice union negation on both this ephemeral
     /// surface and the point-domain
-    /// [`crate::boundary::Boundary`] surface). THEORY.md §VI.1
+    /// [`crate::boundary::Boundary`] surface).
     /// (generation over composition — a new [`ConditionKind`]
     /// variant reaches both surfaces' cardinality-many-arm triads
     /// mechanically through the delegated union primitive).
@@ -2567,12 +2567,12 @@ impl EphemeralSpec {
     /// kind — a subsequent bit-flip surfaces at ONE substrate call
     /// with no allocation.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the cardinality "≤ 1" projection on the
     /// missing axis composes the SAME definitional negation of the
     /// many-arm two-step short-circuit walk on both this ephemeral
     /// surface and the point-domain [`crate::boundary::Boundary`]
-    /// surface). THEORY.md §VI.1 (generation over composition — a
+    /// surface). (generation over composition — a
     /// new [`ConditionKind`] variant reaches both surfaces'
     /// cardinality "≤ 1" triads mechanically through the delegated
     /// union primitive).
@@ -2652,12 +2652,12 @@ impl EphemeralSpec {
     /// [`Self::has_condition_kind`] rather than allocating the
     /// closed-set-complement scan.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the per-kind closed-set-complement
     /// projection composes the SAME two-slice union negation on both
     /// this ephemeral surface and the point-domain
     /// [`crate::boundary::Boundary`] surface under definitional
-    /// negation). THEORY.md §VI.1 (generation over composition — a
+    /// negation). (generation over composition — a
     /// future [`ConditionKind`] variant reaches both surfaces'
     /// per-kind-complement triads mechanically through the delegated
     /// union primitive).
@@ -2759,12 +2759,12 @@ impl EphemeralSpec {
     /// `has-only-<kind>` classifier one struct-layer up under the
     /// SAME fused short-circuit walk shape.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the kind-scoped strict-refinement projection
     /// composes the SAME fused short-circuit closed-set walk under
     /// [`Self::has_condition_kind`] on both this ephemeral surface
     /// and the point-domain [`crate::boundary::Boundary`] surface).
-    /// THEORY.md §VI.1 (generation over composition — a future
+    /// (generation over composition — a future
     /// [`ConditionKind`] variant reaches both surfaces' kind-scoped
     /// strict-refinement triads mechanically through the delegated
     /// union primitive).
@@ -2883,12 +2883,12 @@ impl EphemeralSpec {
     /// `lacks-only-<kind>` classifier one struct-layer up under the
     /// SAME fused short-circuit walk shape.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the kind-scoped strict-refinement projection
     /// on the missing axis composes the SAME fused short-circuit
     /// closed-set walk under [`Self::has_condition_kind`] on both this
     /// ephemeral surface and the point-domain
-    /// [`crate::boundary::Boundary`] surface). THEORY.md §VI.1
+    /// [`crate::boundary::Boundary`] surface).
     /// (generation over composition — a future [`ConditionKind`]
     /// variant reaches both surfaces' kind-scoped-strict-refinement-
     /// on-missing triads mechanically through the delegated union
@@ -3480,14 +3480,14 @@ impl EphemeralSpec {
     /// two-surface symmetry means adding a variant on the closed set
     /// publishes it in lockstep across every downstream consumer.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the scalar-carrier presence-probe body lives
     /// at ONE substrate site per surface so every downstream
     /// (`teardown-policy-<kind>` require-tag families on both surfaces
     /// in tatara-check, closed-set audit dispatchers, future variant
     /// additions on [`TeardownPolicy`]) binds through the SAME
     /// `has(kind)` shape rather than restating the `<eph>.teardown ==
-    /// kind` closure body at each call site). THEORY.md §VI.1
+    /// kind` closure body at each call site).
     /// (generation over composition — a future variant lands at ONE
     /// `ALL` entry + one `as_str` arm on the closed set and the probe
     /// picks it up mechanically without further per-consumer edits).
@@ -3547,7 +3547,7 @@ impl EphemeralSpec {
     /// on the closed set publishes it in lockstep across every
     /// downstream consumer.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the derived-bool-predicate presence-probe
     /// body lives at ONE substrate site per surface, both composing
     /// the SAME [`TeardownPolicy::should_teardown_on`] projection, so
@@ -3557,7 +3557,7 @@ impl EphemeralSpec {
     /// [`TeardownPolicy`] or [`crate::phase::ProcessPhase`]) binds
     /// through the SAME `has_teardown_firing_on(phase)` shape rather
     /// than restating the `<eph>.teardown.should_teardown_on(phase)`
-    /// closure body at each call site). THEORY.md §VI.1 (generation
+    /// closure body at each call site). (generation
     /// over composition — a future variant lands at ONE `ALL` entry +
     /// one `as_str` arm + one `should_teardown_on` arm on the closed
     /// set and the probe picks it up mechanically without further
@@ -3612,13 +3612,13 @@ impl EphemeralSpec {
     /// lowered `ProcessSpec` and through THIS primitive on the same
     /// authored [`EphemeralSpec`].
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the `Option<Classification>` resolution body
     /// lives at ONE substrate primitive on the ephemeral surface so
     /// every downstream classification-axis probe binds through the
     /// SAME `resolved_classification()` shape rather than restating
     /// the `self.classification.as_ref().unwrap_or(&default_…)`
-    /// closure body at each callsite. THEORY.md §VI.1 — generation
+    /// closure body at each callsite. Generation
     /// over composition; a future classification-axis peer
     /// (`has_substrate`, `has_calm`, …) lands as ONE inherent method
     /// that delegates through the resolver's `has_<axis>(kind)` call
@@ -3714,12 +3714,12 @@ impl EphemeralSpec {
     /// partition landmark tests peer to the point-surface pins in
     /// `tatara-check.rs`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the [`ClassificationAxis::overlay`] trait
     /// owns the axis-dispatch proof at ONE site and this primitive
     /// extends the ONE-site guarantee to the (ephemeral-spec ×
     /// authored-classification × axis-overlay) construction shape.
-    /// THEORY.md §VI.1 — generation over composition; the 3-to-4-line
+    /// Generation over composition; the 3-to-4-line
     /// hand-authored classification-then-wrap shape recurred at ≥ 36
     /// hand-authored callsites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication threshold and is lifted onto ONE substrate owner
@@ -3775,7 +3775,7 @@ impl EphemeralSpec {
     /// families through the SAME closed-set walk with no per-caller
     /// edit.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-axis presence-probe body
     /// composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE closed-set
@@ -3831,7 +3831,7 @@ impl EphemeralSpec {
     /// sets) reaches BOTH surfaces' `<axis>-<kind>` prefix families
     /// through the SAME closed-set walk with no per-caller edit.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-axis presence-probe body
     /// composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE closed-set
@@ -3904,7 +3904,7 @@ impl EphemeralSpec {
     /// families through the SAME closed-set walk with no per-caller
     /// edit.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-axis presence-probe body
     /// composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE closed-set
@@ -3984,7 +3984,7 @@ impl EphemeralSpec {
     /// families through the SAME closed-set walk with no per-caller
     /// edit.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-axis presence-probe body
     /// composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE closed-set
@@ -4070,7 +4070,7 @@ impl EphemeralSpec {
     /// sets) reaches BOTH surfaces' `<axis>-<kind>` prefix families
     /// through the SAME closed-set walk with no per-caller edit.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-axis presence-probe body
     /// composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE closed-set
@@ -4160,7 +4160,7 @@ impl EphemeralSpec {
     /// families through the SAME closed-set walk with no per-caller
     /// edit.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-axis presence-probe body
     /// composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE closed-set
@@ -4275,7 +4275,7 @@ impl EphemeralSpec {
     /// ONE narrow substrate site before drifting through every
     /// unadorned ephemeral spec's baseline input-arity answer.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-axis presence-probe body
     /// composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE closed-set primitive
@@ -4372,7 +4372,7 @@ impl EphemeralSpec {
     /// ONE narrow substrate site before drifting through every
     /// unadorned ephemeral spec's baseline output-arity answer.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-axis presence-probe body
     /// composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE closed-set primitive
@@ -4465,7 +4465,7 @@ impl EphemeralSpec {
     /// through the SAME resolver hop) lands as ONE peer inherent
     /// method with the same nullary-derived body.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-axis derived-nullary-
     /// boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -4476,8 +4476,8 @@ impl EphemeralSpec {
     /// validators, future variant additions on [`HorizonKind`])
     /// binds through the SAME `horizon_terminates()` shape rather
     /// than restating either the resolver walk or the closed-set
-    /// projection composition at the callsite. THEORY.md §VI.1 —
-    /// generation over composition; a future [`HorizonKind`]
+    /// projection composition at the callsite.
+    /// Generation over composition; a future [`HorizonKind`]
     /// variant lands at ONE `ALL` entry + ONE `terminates` arm on
     /// the closed set and both surfaces pick it up mechanically.
     #[must_use]
@@ -4560,7 +4560,7 @@ impl EphemeralSpec {
     /// both surfaces' `metric-axes-required` fixed tags inherit the
     /// shift mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-axis derived-nullary-
     /// boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -4572,8 +4572,8 @@ impl EphemeralSpec {
     /// [`crate::classification::HorizonKind`]) binds through the
     /// SAME `horizon_requires_metric_axes()` shape rather than
     /// restating either the resolver walk or the closed-set
-    /// projection composition at the callsite. THEORY.md §VI.1 —
-    /// generation over composition; a future
+    /// projection composition at the callsite.
+    /// Generation over composition; a future
     /// [`crate::classification::HorizonKind`] variant lands at ONE
     /// `ALL` entry + ONE `requires_metric_axes` arm on the closed
     /// set and both surfaces pick it up mechanically.
@@ -4653,7 +4653,7 @@ impl EphemeralSpec {
     /// site and both surfaces' `coordination-required` fixed tags
     /// inherit the shift mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-axis derived-nullary-
     /// boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -4665,8 +4665,8 @@ impl EphemeralSpec {
     /// [`crate::classification::CalmClassification`]) binds through
     /// the SAME `calm_requires_coordination()` shape rather than
     /// restating either the resolver walk or the closed-set
-    /// projection composition at the callsite. THEORY.md §VI.1 —
-    /// generation over composition; a future
+    /// projection composition at the callsite.
+    /// Generation over composition; a future
     /// [`crate::classification::CalmClassification`] variant lands at
     /// ONE `ALL` entry + ONE `requires_coordination` arm on the
     /// closed set and both surfaces pick it up mechanically.
@@ -4747,7 +4747,7 @@ impl EphemeralSpec {
     /// site and both surfaces' `data-regulated` fixed tags inherit
     /// the shift mechanically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-data-axis derived-nullary-
     /// boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -4759,7 +4759,7 @@ impl EphemeralSpec {
     /// [`crate::classification::DataClassification`]) binds through
     /// the SAME `data_is_regulated()` shape rather than restating
     /// either the resolver walk or the closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// composition at the callsite. Generation
     /// over composition; a future
     /// [`crate::classification::DataClassification`] variant lands
     /// at ONE `ALL` entry + ONE `is_regulated` arm on the closed set
@@ -4850,7 +4850,7 @@ impl EphemeralSpec {
     /// `data_is_regulated() ⇒ data_is_restricted()` at this surface
     /// too.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-data-axis derived-nullary-
     /// boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -4862,7 +4862,7 @@ impl EphemeralSpec {
     /// [`crate::classification::DataClassification`]) binds through
     /// the SAME `data_is_restricted()` shape rather than restating
     /// either the resolver walk or the closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// composition at the callsite. Generation
     /// over composition; a future
     /// [`crate::classification::DataClassification`] variant lands
     /// at ONE `ALL` entry + ONE `is_restricted` arm on the closed set
@@ -4945,7 +4945,7 @@ impl EphemeralSpec {
     /// `convergence_point_type_buckets_cover_every_variant` composes
     /// through the resolver-hop layer as a substrate-wide theorem.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`point_type`-axis derived-
     /// nullary-boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -4957,7 +4957,7 @@ impl EphemeralSpec {
     /// [`crate::classification::ConvergencePointType`]) binds through
     /// the SAME `point_is_endomorphic()` shape rather than restating
     /// either the resolver walk or the closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation over
+    /// composition at the callsite. Generation over
     /// composition; a future
     /// [`crate::classification::ConvergencePointType`] variant lands
     /// at ONE `ALL` entry + ONE `is_endomorphic` arm on the closed
@@ -5033,7 +5033,7 @@ impl EphemeralSpec {
     /// mutex closes into the full three-way XOR partition composed
     /// through the resolver-hop layer as a substrate-wide theorem.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`point_type`-axis derived-
     /// nullary-boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -5045,7 +5045,7 @@ impl EphemeralSpec {
     /// [`crate::classification::ConvergencePointType`]) binds through
     /// the SAME `point_is_diffusive()` shape rather than restating
     /// either the resolver walk or the closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation over
+    /// composition at the callsite. Generation over
     /// composition; a future
     /// [`crate::classification::ConvergencePointType`] variant lands
     /// at ONE `ALL` entry + ONE `is_diffusive` arm on the closed set
@@ -5120,7 +5120,7 @@ impl EphemeralSpec {
     /// into the FULL three-way XOR partition contract composed
     /// through the resolver-hop layer as a substrate-wide theorem.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`point_type`-axis derived-
     /// nullary-boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -5132,7 +5132,7 @@ impl EphemeralSpec {
     /// [`crate::classification::ConvergencePointType`]) binds through
     /// the SAME `point_is_convergent()` shape rather than restating
     /// either the resolver walk or the closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation over
+    /// composition at the callsite. Generation over
     /// composition; a future
     /// [`crate::classification::ConvergencePointType`] variant lands
     /// at ONE `ALL` entry + ONE `is_convergent` arm on the closed set
@@ -5206,7 +5206,7 @@ impl EphemeralSpec {
     /// surface by
     /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`substrate`-axis derived-
     /// nullary-boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -5218,7 +5218,7 @@ impl EphemeralSpec {
     /// [`crate::classification::SubstrateType`]) binds through the
     /// SAME `substrate_is_resource()` shape rather than restating
     /// either the resolver walk or the closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// composition at the callsite. Generation
     /// over composition; a future
     /// [`crate::classification::SubstrateType`] variant lands at ONE
     /// `ALL` entry + ONE `is_resource` arm on the closed set and
@@ -5297,7 +5297,7 @@ impl EphemeralSpec {
     /// by
     /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`substrate`-axis derived-
     /// nullary-boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -5309,7 +5309,7 @@ impl EphemeralSpec {
     /// [`crate::classification::SubstrateType`]) binds through the
     /// SAME `substrate_is_policy()` shape rather than restating
     /// either the resolver walk or the closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// composition at the callsite. Generation
     /// over composition; a future
     /// [`crate::classification::SubstrateType`] variant lands at ONE
     /// `ALL` entry + ONE `is_policy` arm on the closed set and
@@ -5388,7 +5388,7 @@ impl EphemeralSpec {
     /// `point_type` axis was closed on this surface by
     /// `ephemeral_point_type_probes_form_three_way_xor_partition_over_all`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`substrate`-axis derived-
     /// nullary-boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -5400,7 +5400,7 @@ impl EphemeralSpec {
     /// [`crate::classification::SubstrateType`]) binds through the
     /// SAME `substrate_is_telemetry()` shape rather than restating
     /// either the resolver walk or the closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// composition at the callsite. Generation
     /// over composition; a future
     /// [`crate::classification::SubstrateType`] variant lands at ONE
     /// `ALL` entry + ONE `is_telemetry` arm on the closed set and
@@ -5485,7 +5485,7 @@ impl EphemeralSpec {
     /// the `horizon` axis is closed on the closed-set layer by
     /// `horizon_kind_terminate_xor_requires_metric_axes`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`calm`-axis derived-
     /// nullary-boolean probe body composes ONE resolver primitive
     /// ([`Self::resolved_classification`]) with ONE
@@ -5497,7 +5497,7 @@ impl EphemeralSpec {
     /// [`crate::classification::CalmClassification`]) binds through
     /// the SAME `calm_is_monotone()` shape rather than restating
     /// either the resolver walk or the closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation
+    /// composition at the callsite. Generation
     /// over composition; a future
     /// [`crate::classification::CalmClassification`] variant lands
     /// at ONE `ALL` entry + ONE `is_monotone` arm on the closed set
@@ -5586,7 +5586,7 @@ impl EphemeralSpec {
     /// `data_classification_public_xor_restricted` and composes
     /// through the resolver hop as a substrate-wide theorem.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`data_classification`-axis
     /// derived-nullary-boolean probe body composes ONE resolver
     /// primitive ([`Self::resolved_classification`]) with ONE
@@ -5599,7 +5599,7 @@ impl EphemeralSpec {
     /// [`crate::classification::DataClassification`]) binds through
     /// the SAME `data_is_public()` shape rather than restating either
     /// the resolver walk or the closed-set projection composition at
-    /// the callsite. THEORY.md §VI.1 — generation over composition; a
+    /// the callsite. Generation over composition; a
     /// future [`crate::classification::DataClassification`] variant
     /// lands at ONE `ALL` entry + ONE `is_public` arm on the closed
     /// set and both surfaces pick it up mechanically.
@@ -5678,7 +5678,7 @@ impl EphemeralSpec {
     /// (`monotone-calm ⊕ coordination-required`) and data-axis
     /// (`public-data ⊕ data-restricted`) closures on this surface.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`horizon.direction`-axis
     /// derived-nullary-boolean probe body composes ONE resolver
     /// primitive ([`Self::resolved_classification`]) with ONE
@@ -5690,7 +5690,7 @@ impl EphemeralSpec {
     /// [`crate::classification::OptimizationDirection`]) binds through
     /// the SAME `direction_prefers_lower()` shape rather than restating
     /// either the resolver walk or the closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation over
+    /// composition at the callsite. Generation over
     /// composition; a future
     /// [`crate::classification::OptimizationDirection`] variant lands
     /// at ONE `ALL` entry + ONE `prefers_lower` arm on the closed set
@@ -5780,7 +5780,7 @@ impl EphemeralSpec {
     /// and data-axis (`public-data ⊕ data-restricted`) closures on
     /// this surface.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`horizon.direction`-axis
     /// derived-nullary-boolean probe body composes ONE resolver
     /// primitive ([`Self::resolved_classification`]) with ONE
@@ -5792,7 +5792,7 @@ impl EphemeralSpec {
     /// [`crate::classification::OptimizationDirection`]) binds through
     /// the SAME `direction_prefers_higher()` shape rather than
     /// restating either the resolver walk or the closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation over
+    /// composition at the callsite. Generation over
     /// composition; a future
     /// [`crate::classification::OptimizationDirection`] variant lands
     /// at ONE `ALL` entry + ONE `prefers_higher` arm on the closed set
@@ -5881,7 +5881,7 @@ impl EphemeralSpec {
     /// axis (`prefers-lower-direction ⊕ prefers-higher-direction`)
     /// closures on this surface.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`point_type`-derived
     /// input-arity-axis derived-nullary-boolean probe body composes
     /// ONE resolver primitive ([`Self::resolved_classification`])
@@ -5894,7 +5894,7 @@ impl EphemeralSpec {
     /// [`crate::classification::ConvergencePointType`]) binds through
     /// the SAME `input_arity_is_one()` shape rather than restating
     /// either the resolver walk or the two-hop closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation over
+    /// composition at the callsite. Generation over
     /// composition; a future
     /// [`crate::classification::ConvergencePointType`] variant lands
     /// at ONE `ALL` entry + ONE `input_arity` arm on the closed set
@@ -5979,7 +5979,7 @@ impl EphemeralSpec {
     /// resolver-hop surface, opening the derived-typed-projection
     /// stratum on this surface for the first time.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`point_type`-derived
     /// input-arity-axis derived-nullary-boolean probe body composes
     /// ONE resolver primitive ([`Self::resolved_classification`])
@@ -5993,7 +5993,7 @@ impl EphemeralSpec {
     /// the SAME `input_arity_is_many()` shape rather than restating
     /// either `!self.input_arity_is_one()` or the two-hop
     /// `self.resolved_classification().point_type.input_arity().is_many()`
-    /// chain at each callsite. THEORY.md §VI.1 — generation over
+    /// chain at each callsite. Generation over
     /// composition; a future
     /// [`crate::classification::ConvergencePointType`] variant lands
     /// at ONE `ALL` entry + ONE `input_arity` arm on the closed set
@@ -6101,7 +6101,7 @@ impl EphemeralSpec {
     /// completing the DAG-composition arity PAIR on the ephemeral
     /// derived-typed-projection stratum.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`point_type`-derived
     /// output-arity-axis derived-nullary-boolean probe body composes
     /// ONE resolver primitive ([`Self::resolved_classification`])
@@ -6114,7 +6114,7 @@ impl EphemeralSpec {
     /// [`crate::classification::ConvergencePointType`]) binds through
     /// the SAME `output_arity_is_one()` shape rather than restating
     /// either the resolver walk or the two-hop closed-set projection
-    /// composition at the callsite. THEORY.md §VI.1 — generation over
+    /// composition at the callsite. Generation over
     /// composition; a future
     /// [`crate::classification::ConvergencePointType`] variant lands
     /// at ONE `ALL` entry + ONE `output_arity` arm on the closed set
@@ -6204,7 +6204,7 @@ impl EphemeralSpec {
     /// resolver-hop surface, completing the DAG-composition arity
     /// PAIR on the derived-typed-projection stratum of this surface.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the classification-`point_type`-derived
     /// output-arity-axis derived-nullary-boolean probe body composes
     /// ONE resolver primitive ([`Self::resolved_classification`])
@@ -6218,7 +6218,7 @@ impl EphemeralSpec {
     /// the SAME `output_arity_is_many()` shape rather than restating
     /// either `!self.output_arity_is_one()` or the two-hop
     /// `self.resolved_classification().point_type.output_arity().is_many()`
-    /// chain at each callsite. THEORY.md §VI.1 — generation over
+    /// chain at each callsite. Generation over
     /// composition; a future
     /// [`crate::classification::ConvergencePointType`] variant lands
     /// at ONE `ALL` entry + ONE `output_arity` arm on the closed set
@@ -6297,7 +6297,7 @@ impl EphemeralSpec {
     /// variant on the closed set publishes it in lockstep across
     /// every downstream consumer.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the Option-gated derived-scalar-carrier
     /// presence-probe body lives at ONE substrate site per surface
     /// so every downstream (`routing-form-<kind>` require-tag families
@@ -6305,7 +6305,7 @@ impl EphemeralSpec {
     /// future variant additions on [`RoutingForm`]) binds through the
     /// SAME `has(kind)` shape rather than restating the
     /// `spec.routing.as_ref().is_some_and(|r| r.has_form(kind))`
-    /// closure body at each call site). THEORY.md §VI.1 (generation
+    /// closure body at each call site). (generation
     /// over composition — a future variant lands at ONE `ALL` entry +
     /// one `as_str` arm on the closed set and the probe picks it up
     /// mechanically without further per-consumer edits).
@@ -6373,13 +6373,13 @@ impl EphemeralSpec {
     /// compose against — so the two struct-level union methods stay
     /// symmetric by construction.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+    /// Anchor: invariant 5 (composition preserves
     /// proofs — the walk composes the SAME slice-level substrate
     /// primitive on both this ephemeral surface and the
     /// [`crate::lifetime::EphemeralLifetime`] surface, so a regression
     /// at the compound `(when, phase) → fires_on(phase)` chain fails
     /// at ONE site rather than as silent drift between the two peers).
-    /// THEORY.md §VI.1 (generation over composition — a future
+    /// (generation over composition — a future
     /// [`ProcessPhase`] variant or a future [`crate::export::ExportTrigger`]
     /// variant reaches both `exports-fire-on-<phase>` require-tag
     /// surfaces mechanically through the SAME closed-set walk).

@@ -86,10 +86,10 @@ pub const RECEIPT_VERSION: &str = "tatara-receipt/v1";
 /// dashboards template on — neither may drift from its published
 /// spelling silently.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// `<job_name>-receipt` shape recurred at three production sites past
 /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold and is lifted to
-/// ONE substrate const + composer here. THEORY.md §III — the
+/// ONE substrate const + composer here. The
 /// typescape; the substrate's own receipt-CM naming convention
 /// becomes a NAMED PRIMITIVE rather than a shape spelled out by hand
 /// at every derivation site.
@@ -185,7 +185,7 @@ pub fn default_receipt_config_map_name(job_name: &str) -> String {
 /// optional-override projection every postcondition evaluator
 /// wraps around the composer's output.
 ///
-/// Theory anchor: THEORY.md §III — the typescape; the
+/// Anchor: the typescape; the
 /// override-then-fallback resolution rule for a postcondition-facing
 /// wire-name becomes a NAMED PRIMITIVE rather than a chain spelled
 /// out at every postcondition site.
@@ -253,11 +253,11 @@ pub fn resolve_receipt_config_map_name(override_name: Option<&str>, job_name: &s
 /// consts together define the substrate's receipt-CM wire contract at
 /// ONE surface.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// two payload-key literals recurred at FOUR production sites past
 /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold and are lifted
 /// to ONE substrate-owned pair of constants + ONE reader-side
-/// lookup-gate composer here. THEORY.md §V.1 — knowable platform;
+/// lookup-gate composer here. Knowable platform;
 /// the (primary, fallback) ordering that the reader-side gate encodes
 /// becomes a NAMED PRIMITIVE ([`RECEIPT_CM_KEYS`]) rather than an
 /// implicit hand-coded chain reader consumers had to grok from a
@@ -345,13 +345,13 @@ pub const RECEIPT_CM_MISSING_KEY_MSG: &str =
 /// the parse call that consumes this borrow, so the lifetime binding
 /// composes cleanly.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// (primary-key, fallback-key, string-scalar-projection) 3-link
 /// combinator chain recurred at ONE production reader site with the
 /// (primary, fallback) ordering as a load-bearing invariant nowhere
 /// bound at the substrate — post-lift ONE substrate primitive owns
 /// the chain AND [`RECEIPT_CM_KEYS`] pins the ordering the primitive
-/// iterates through. THEORY.md §V.1 — knowable platform; the reader-
+/// iterates through. Knowable platform; the reader-
 /// side (primary, fallback) precedence becomes a NAMED PRIMITIVE the
 /// receipt-inspection surfaces (LSP hover, `tatara-check` receipt-
 /// inspect report, REPL) bind to for reading the wire contract from
@@ -437,10 +437,10 @@ pub fn extract_receipt_payload_json(data: Option<&serde_json::Value>) -> Option<
 /// [`crate::intent::IntentKind::ALL`],
 /// [`crate::lifetime_clock::TerminateReasonKind::ALL`].
 ///
-/// Theory anchor: THEORY.md §III — the typescape; the substrate's own
+/// Anchor: the typescape; the substrate's own
 /// receipt kinds become a TYPE rather than four `&'static str` literals
 /// at every author site and a docstring header that drifts the moment
-/// any rename happens off-script. THEORY.md §V.3 — three-pillar
+/// any rename happens off-script. Three-pillar
 /// attestation; the `kind` field is the *what-am-I* discriminator on
 /// every receipt that chains into a [`ProcessAttestation`], and the
 /// typed variant is the substrate's shared vocabulary for "which kind
@@ -891,15 +891,15 @@ impl ReceiptEnvelope {
     /// [`crate::boundary::ConditionKind::ALL`],
     /// [`crate::intent::IntentKind::ALL`].
     ///
-    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// Anchor: generation over composition;
     /// the three inline pillar-emptiness checks recurred at THREE
     /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
     /// and are lifted to ONE closed-set table + ONE shared rejection
-    /// peer. THEORY.md §V.1 — knowable platform; the enumeration of
+    /// peer. Knowable platform; the enumeration of
     /// required-pillar field names lives at ONE surface a
     /// documentation surface, an LSP hover, or a `tatara-check`
     /// receipt-inspector binds to for enumerating the receipt's
-    /// structural invariants. THEORY.md §V.3 — three-pillar
+    /// structural invariants. Three-pillar
     /// attestation; the (mandatory, may-be-absent) split of the
     /// three-pillar-plus-composed-root wire form is a typed
     /// substrate contract, not a per-consumer discipline.
@@ -1034,16 +1034,16 @@ impl ReceiptEnvelope {
     /// `ControlStep::{Ran(hash), Skipped}` enum) lands at ONE method
     /// here rather than at every consumer that inspects the pillar.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// Anchor: knowable platform; the
     /// wire-vs-typed projection lives at ONE substrate method so a
     /// consumer reads the pillar's typed-Option contract from the
     /// receipt directly, not from three parallel inline conditionals
     /// scattered across `build` / `verify_root` / `to_attestation`.
-    /// THEORY.md §VI.1 — generation over composition; the
+    /// Generation over composition; the
     /// `is_empty() ? None : Some(&self.control_hash)` two-arm
     /// projection recurred at THREE inline sites past the ★★
     /// PRIME-DIRECTIVE ≥ 2 duplication threshold and is lifted to ONE
-    /// owner here. THEORY.md §V.3 — three-pillar attestation; the
+    /// owner here. Three-pillar attestation; the
     /// receipt's second pillar (control step) has ONE typed projection
     /// site the composition primitives
     /// ([`three_pillar::compose_root`], [`ProcessAttestation::compose`])
@@ -1075,7 +1075,7 @@ impl ReceiptEnvelope {
 /// lands at ONE substrate primitive rather than at both the
 /// inherent method and its pre-construction free-fn peer.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// Anchor: generation over composition;
 /// the pre-construction peer of the pillar projection lives at ONE
 /// substrate primitive alongside the post-construction inherent
 /// method, so the two receipt-lifecycle stages (pre-envelope in
@@ -1117,12 +1117,12 @@ fn empty_to_none(s: &str) -> Option<&str> {
 /// should have rejected) is a name-typo, not a silent semantic
 /// swap.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// Anchor: generation over composition;
 /// the "empty is a required-pillar failure" three-line inline
 /// conditional recurred at THREE sites past the ★★ PRIME-DIRECTIVE
 /// ≥ 2 duplication threshold and is lifted to ONE substrate primitive
 /// composed through the [`ReceiptEnvelope::REQUIRED_PILLARS`] table.
-/// THEORY.md §V.1 — knowable platform; the two emptiness projections
+/// Knowable platform; the two emptiness projections
 /// live at ONE typed vocabulary the receipt-inspection surfaces (LSP
 /// hover, `tatara-check` report, REPL) bind to for reading the
 /// receipt's structural contract from the substrate directly.

@@ -60,12 +60,12 @@
 //! per-key `-finalizer` suffix, per-key `tatara.pleme.io/` prefix,
 //! cross-key uniqueness).
 //!
-//! Theory grounding: THEORY.md §VI.1 (generation over composition —
+//! Grounding: (generation over composition —
 //! the `tatara.pleme.io/<owner>-finalizer` wire-form shape recurred
 //! at THREE hand-authored declaration sites past the ★★
 //! PRIME-DIRECTIVE ≥ 2 duplication threshold; lifted to ONE
 //! per-owner const + ONE `ALL` slice + four family-invariant pins
-//! here). THEORY.md §II.1 invariant 5 (composition preserves proofs
+//! here). Invariant 5 (composition preserves proofs
 //! — the invariant pins bind the family shape at fail-before-pass-
 //! after granularity; a future rename that drifted the group prefix
 //! or the suffix at ONE arm surfaces at [`tests::all_share_group_prefix`]

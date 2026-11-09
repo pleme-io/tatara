@@ -112,11 +112,11 @@ use std::fmt::Debug;
 /// distinguish "the API returned the pre-delete body" from "the API
 /// returned bare status" reads the `Either` directly at its callsite.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 2-link `api.delete(&name, &DeleteParams::default())` chain recurred
 /// at 7 hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// trigger and is lifted onto the ONE workspace-wide substrate owner
-/// here). THEORY.md §II.1 invariant 5 (composition preserves proofs —
+/// here). Invariant 5 (composition preserves proofs —
 /// the pin block below binds the primitive at fail-before-pass-after
 /// granularity, so a regression that drifts `DeleteParams::default()`
 /// to a non-default posture — a stray `grace_period_seconds`, an

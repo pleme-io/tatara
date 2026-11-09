@@ -85,10 +85,10 @@ pub const FIELD_MANAGER: &str = "tatara-reconciler";
 /// the primitive exists to be consumed at a wire-side write, not to
 /// probe field-manager state.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// `.apply(<mgr>).force()` chain recurred at 3 hand-authored sites
 /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
-/// lifted to ONE owner here). THEORY.md §II.1 invariant 5
+/// lifted to ONE owner here). Invariant 5
 /// (composition preserves proofs — the pin block below binds the
 /// field-manager const-read + the `force = true` slot + the
 /// byte-identical parity with the pre-lift chain, so a regression
@@ -195,10 +195,10 @@ fn ownership_kv_pair(process_ref: &str) -> serde_json::Map<String, Value> {
 /// holds by construction rather than by two open-coded copies
 /// staying in sync.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 2-slot shape recurred at five hand-authored sites well past the
 /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
-/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// owner here). Invariant 5 (composition preserves
 /// proofs — a regression that drifted the annotation key or the
 /// field manager string at ONE site surfaces at
 /// [`tests::ownership_annotations_produces_field_manager_and_process_ref`]
@@ -275,10 +275,10 @@ pub fn ownership_annotations(process_ref: &str) -> serde_json::Map<String, Value
 /// holds by construction rather than by two open-coded copies
 /// staying in sync.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the 2-slot labels shape recurred at three hand-authored sites
 /// past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted
-/// to ONE owner here). THEORY.md §II.1 invariant 5 (composition
+/// to ONE owner here). Invariant 5 (composition
 /// preserves proofs — a regression that drifted the label key or
 /// the field manager string at ONE site surfaces at
 /// [`tests::ownership_labels_produces_field_manager_and_process_ref`]
@@ -338,10 +338,10 @@ pub fn ownership_labels(process_ref: &str) -> serde_json::Map<String, Value> {
 /// rather than as silent operator-facing drift across the four
 /// callsites.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the double-nested composition recurred at four hand-authored
 /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and
-/// is lifted to ONE owner here). THEORY.md §II.1 invariant 5
+/// is lifted to ONE owner here). Invariant 5
 /// (composition preserves proofs — the pins bind the composed
 /// primitive to the direct-primitive-of-composed-ref composition
 /// byte-identically, so a regression in either half surfaces at
@@ -407,10 +407,10 @@ pub fn ownership_annotations_by_coord(ns: &str, name: &str) -> serde_json::Map<S
 /// [`ownership_annotations_by_coord`] to all three Flux emit sites
 /// mechanically.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the 3-slot Flux metadata shape recurred at three hand-authored
 /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and
-/// is lifted to ONE owner here). THEORY.md §II.1 invariant 5
+/// is lifted to ONE owner here). Invariant 5
 /// (composition preserves proofs — the pins in
 /// [`tests::owned_flux_metadata_*`] bind the composed primitive to
 /// the pre-lift hand-authored shape byte-identically, so a
@@ -486,11 +486,11 @@ pub fn owned_flux_metadata(ns: &str, name: &str) -> Value {
 /// projection — a future unification of the two scaffolds would
 /// land at ONE substrate primitive here + ONE at the edge site.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the 4-slot Flux-owned resource shape recurred at three hand-
 /// authored emit sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-/// trigger, and is lifted to ONE owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — the pins in
+/// trigger, and is lifted to ONE owner here).
+/// Invariant 5 (composition preserves proofs — the pins in
 /// [`tests::owned_flux_resource_*`] bind the composed primitive to
 /// the pre-lift hand-authored shape byte-identically, so a
 /// regression that reordered a slot, dropped one, or drifted the
@@ -592,11 +592,11 @@ pub fn owned_flux_resource(variant: FluxResource, ns: &str, name: &str, spec: Va
 /// `format!("{name}/{ns}")` or `format!("{ns}-{name}")` typo
 /// would.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the `<ns>/<name>` shape recurred at ten hand-authored sites
 /// well past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
 /// lifted to ONE substrate owner in `tatara-process`).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
+/// Invariant 5 (composition preserves proofs — a
 /// regression that swapped the two axes or the separator at ONE
 /// site surfaces at
 /// [`tests::qualified_process_ref_joins_ns_and_name_with_slash`]
@@ -674,11 +674,11 @@ pub fn qualified_process_ref(ns: &str, name: &str) -> String {
 /// into either slot); the type system rejects that at the
 /// definition site.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the `.as_deref().unwrap_or(default_ns)` incantation recurred at
 /// five hand-authored sites well past the PRIME-DIRECTIVE ≥ 2
 /// duplication trigger, and is lifted to ONE owner here).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// Invariant 5 (composition preserves proofs — the
 /// pins bind both branches of the fallback gate + the
 /// argument-order invariant, so a regression surfaces at
 /// [`tests::resolve_target_namespace_falls_back_to_default_when_explicit_is_none`]
@@ -878,14 +878,14 @@ pub fn api_resource_of(identity: K8sWireIdentity) -> Result<ApiResource> {
 /// variants that `boundary::fetch_job_status` +
 /// `boundary::verify_receipt_cm` already name.
 ///
-/// Theory grounding: THEORY.md §II.1 invariant 5 (composition
+/// Grounding: invariant 5 (composition
 /// preserves proofs — the two-slot `(apiVersion, kind)` pair now binds
 /// structurally at the typed identity, so a hypothetical slot-inversion
 /// regression that got past `.wire_identity()`'s per-variant coherence
 /// pin would fail-loudly at the identity's positional pin
 /// [`tatara_process::k8s_wire_identity::tests::new_pairs_api_version_and_kind_by_position`]
 /// rather than as a silent wire-time 404 at every fetch consumer).
-/// THEORY.md §VI.1 (generation over composition — the raw two-slot
+/// (generation over composition — the raw two-slot
 /// fetch signature was called at three hand-authored sites past the
 /// ≥ 2 duplication trigger, each threading the pair off a closed-set
 /// variant; post-lift the pair rides through ONE typed argument).
@@ -1002,13 +1002,13 @@ pub async fn fetch_by_identity(
 /// after granularity rather than as operator-visible log skew across
 /// the three downstream consumers.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// Anchor: invariant 5 (composition preserves
 /// proofs — the label's `kind` half + the `<ns>/<name>` half bind
 /// structurally through `identity.kind` + `qualified_error_ctx`
 /// (which itself delegates to `qualified_process_ref`), so a
 /// regression that reworded either surfaces at the sibling pins
 /// rather than as silent operator-facing log skew at every downstream
-/// fetch consumer). THEORY.md §VI.1 (generation over composition —
+/// fetch consumer). (generation over composition —
 /// the `.map_err(|e| anyhow!(...))?` incantation recurred at three
 /// hand-authored sites past the PRIME-DIRECTIVE ≥ 2 duplication
 /// trigger, and is lifted to ONE composer here — which now routes
@@ -1104,13 +1104,13 @@ fn flux_ref_fetch_error_context(r: &FluxResourceRef) -> String {
 /// direct closed-set-variant `boundary` fetches now on
 /// [`fetch_by_identity`]).
 ///
-/// Theory grounding: THEORY.md §II.1 invariant 5 (composition
+/// Grounding: invariant 5 (composition
 /// preserves proofs — the 4-slot fetch tuple + the diagnostic label
 /// bind structurally through [`FluxResourceRef::fetch_coords`] +
 /// [`flux_ref_fetch_error_context`], so a regression that drifted the
 /// slot order or the wording at ONE site would fail-loudly at the two
 /// sibling pins rather than as silent operator-facing wire-form skew
-/// at every downstream Flux fetch consumer). THEORY.md §VI.1
+/// at every downstream Flux fetch consumer).
 /// (generation over composition — the 5-slot splat + wrap
 /// incantation recurred at two hand-authored sites past the ≥ 2
 /// duplication trigger, and is lifted to ONE composer here).
@@ -1299,11 +1299,11 @@ fn build_owner_reference(p: &Process) -> Result<Value> {
 /// helpers inherit the upgrade mechanically — no per-site hand-edit at
 /// `inject_owner_reference` / `inject_annotations`.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// three-step `resource → &mut metadata` walk recurred at two adjacent
 /// hand-authored sites past the PRIME-DIRECTIVE ≥ 2 duplication
-/// trigger, and is lifted to ONE owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — a regression that
+/// trigger, and is lifted to ONE owner here).
+/// Invariant 5 (composition preserves proofs — a regression that
 /// drifted the error message wording, silently swallowed a mistyped
 /// metadata slot, or reshaped the get-or-create default surfaces at
 /// [`tests::metadata_object_mut_seeds_metadata_when_absent`] /

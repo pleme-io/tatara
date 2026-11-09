@@ -298,12 +298,12 @@ pub const API_VERSION: &str = "tatara.pleme.io/v1alpha1";
 /// reads through this ONE const rather than re-composing the pair
 /// from [`API_VERSION`] + [`PROCESS_KIND`] separately.
 ///
-/// Theory grounding: THEORY.md §II.1 invariant 5 — composition
+/// Grounding: invariant 5 — composition
 /// preserves proofs. The two-slot (apiVersion, kind) composition
 /// lives at ONE typed algebra projection here; a regression that
 /// drifted either slot surfaces at this module's pins rather than as
-/// silent operator-visible OwnerReference skew. THEORY.md §III —
-/// typescape. The typed [`k8s_wire_identity::K8sWireIdentity`] pair
+/// silent operator-visible OwnerReference skew.
+/// Typescape. The typed [`k8s_wire_identity::K8sWireIdentity`] pair
 /// bounds the axis of variation at the type level — a callsite that
 /// receives a `K8sWireIdentity` cannot skew the two slots at compose
 /// time.
@@ -350,7 +350,7 @@ pub fn api_version() -> String {
 /// composer and the eleven downstream scope guards inherit the shape
 /// mechanically.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// Anchor: invariant 5 — composition preserves
 /// proofs. A regression that drifted the URL prefix at ONE site (a
 /// group typo, a `/apis/` → `/api/` mis-spelling, a stale `v1alpha1`
 /// left behind after a workspace-wide `VERSION` bump) surfaces at the
@@ -406,10 +406,10 @@ pub fn api_url_prefix() -> String {
 /// selector, owner metadata, export-worker run-id fallback,
 /// receipt-owner filter) inherits the upgrade mechanically.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the `<ns>/<name>` shape recurred at hand-authored sites past the
 /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted onto
-/// the ONE workspace-wide owner here). THEORY.md §II.1 invariant 5
+/// the ONE workspace-wide owner here). Invariant 5
 /// (composition preserves proofs — a regression that swapped the
 /// two axes or the separator at ONE site surfaces at
 /// [`qualified_process_ref_tests::qualified_process_ref_joins_ns_and_name_with_slash`]
@@ -509,11 +509,11 @@ pub fn qualified_process_ref(ns: &str, name: &str) -> String {
 /// silently drops the diagnostic head entirely, which is never the
 /// intended semantic at any pre-lift or post-lift consumer.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the 4-slot `<verb> <Kind> <ns>/<name>` shape recurred at 2 peer
 /// per-Kind composers past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// trigger, and is lifted onto the ONE workspace-wide substrate
-/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// owner here). Invariant 5 (composition preserves
 /// proofs — a regression that reordered the head slots, dropped
 /// the fixed `<Kind>` word, or routed the `<ns>/<name>` join
 /// through a bare inline `format!` — bypassing
@@ -717,11 +717,11 @@ pub fn owner_references_json(name: &str, uid: &str) -> Vec<serde_json::Value> {
 /// mechanically — no per-callsite hand-edit at `controller_pool` /
 /// `controller_allocation` / any future CRD's `reconcile_inner`.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the paired 5-line `.metadata.<slot>.clone().ok_or_else` chain
 /// recurred at two hand-authored sites past the ★★ PRIME-DIRECTIVE
 /// ≥ 2 duplication trigger, and is lifted onto ONE trait method
-/// here). THEORY.md §II.1 invariant 5 (composition preserves
+/// here). Invariant 5 (composition preserves
 /// proofs — the pins bind the missing-namespace corner, the
 /// missing-name corner, the missing-both corner (namespace error
 /// wins), the both-slots-present happy path, AND the
@@ -819,12 +819,12 @@ impl<T> NamespacedApiCoordinates for T where T: kube::Resource<DynamicType = ()>
 /// routes through this trait picks it up without a per-callsite
 /// hand-edit.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the `.metadata.deletion_timestamp.is_some()` projection recurred
 /// as TWO byte-identical inherent implementations on
 /// [`crate::prelude::Process`] + [`crate::prelude::EphemeralPool`]
 /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is
-/// lifted onto ONE trait method here). THEORY.md §II.1 invariant 5
+/// lifted onto ONE trait method here). Invariant 5
 /// (composition preserves proofs — the pins bind the missing-
 /// tombstone corner + the present-tombstone corner + the copy-form
 /// `bool` return + the byte-identical parity with the pre-lift
@@ -902,11 +902,11 @@ impl<T> DeletionTombstoned for T where T: kube::Resource<DynamicType = ()> {}
 /// as a follow-up sweep, the three inherent-preferred callsites
 /// automatically inherit any trait-level upgrade too.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the annotation-lookup shape recurred as ONE inherent forwarder on
 /// `Process` PLUS a hand-authored chain on `ConfigMap` past the
 /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted onto
-/// ONE trait method here). THEORY.md §II.1 invariant 5 (composition
+/// ONE trait method here). Invariant 5 (composition
 /// preserves proofs — the pins bind the missing-annotations corner +
 /// the missing-key corner + the borrow-form `&str` lifetime + the
 /// byte-identical parity with the pre-lift 3-line chain + the
@@ -1002,7 +1002,7 @@ impl<T> Annotated for T where T: kube::Resource<DynamicType = ()> {}
 /// the upgrade mechanically, and the two per-CRD `new_in` composers
 /// inherit it for free through their one-line forwarders.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// Anchor: invariant 5 (composition preserves
 /// proofs — the pins bind `<CRD>::new(name, spec).in_namespace(ns)
 /// .metadata.namespace == Some(ns.to_string())` on every corner of
 /// the (CRD ∈ {`Process`, `EphemeralPool`, `EphemeralAllocation`,
@@ -1012,7 +1012,7 @@ impl<T> Annotated for T where T: kube::Resource<DynamicType = ()> {}
 /// at `placed_in_namespace_tests::*` rather than as silent
 /// operator-facing skew between the tatara-reconciler render
 /// fixture, the two per-CRD `new_in` composers, and any future
-/// CRD-adjacent namespace-stamping consumer). THEORY.md §VI.1
+/// CRD-adjacent namespace-stamping consumer).
 /// (generation over composition — the mutation recurred as three
 /// substrate copies past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// trigger).
@@ -3216,7 +3216,7 @@ mod annotations_pins {
     //! operator-facing skew between the writer and the tatara-process
     //! reader tests that still spell the literal.
     //!
-    //! Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    //! Anchor: invariant 5 (composition
     //! preserves proofs — the wire-form value each downstream reader
     //! depends on now has a compile-time pin at the substrate).
     use crate::annotations;

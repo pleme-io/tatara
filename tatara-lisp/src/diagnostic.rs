@@ -9,7 +9,7 @@
 //! point at the byte that broke instead of leaving the operator to
 //! hunt for it.
 //!
-//! Theory grounding: THEORY.md §V.1 — knowable platform / constructive
+//! Grounding: knowable platform / constructive
 //! diagnostics. An error whose location cannot be projected to source
 //! is not knowable. Inspiration: rustc's `DiagnosticBuilder` snippet
 //! format; translation through pleme-io primitives is byte-offset
@@ -26,7 +26,7 @@ use crate::error::LispError;
 /// self, s) { self.push_str(s); Ok(()) } }` — so every
 /// `writeln!`/`write!` into it returns `Ok(())`; the inline
 /// `.expect("writes to a String never fail")` triple recurred at four
-/// sites (THEORY.md §VI.1 three-times rule, crossed decisively).
+/// sites (the three-times rule, crossed decisively).
 ///
 /// Lifting it into ONE macro centralizes the canonical panic message:
 /// a typo in the expect-string can never drift across the four
@@ -34,7 +34,7 @@ use crate::error::LispError;
 /// non-newline-terminated single-write case (the trailing caret line
 /// in `format_diagnostic`).
 ///
-/// Theory grounding: THEORY.md §VI.1 — the four-times duplication of
+/// Grounding: the four-times duplication of
 /// `.expect("writes to a String never fail")` collapses into one
 /// named primitive. The macro names the invariant ("infallible write
 /// to String") as a primitive of the diagnostic-rendering substrate,
@@ -58,7 +58,7 @@ macro_rules! infallible_writeln {
 /// concatenating the rendered diagnostic into a longer message see the
 /// caret as the final character, not the line after it). Same
 /// `String`-infallibility invariant; same canonical panic message;
-/// same theory-anchor (THEORY.md §VI.1).
+/// same theory-anchor.
 macro_rules! infallible_write {
     ($out:expr, $($t:tt)*) => {{
         use ::std::fmt::Write as _;
@@ -103,11 +103,11 @@ pub struct LineCol {
 /// column-counting semantics (chars vs bytes), or EOF-clamp corner
 /// reaches every consumer through ONE edit.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform / constructive
+/// Anchor: knowable platform / constructive
 /// diagnostics. The byte-offset → rendered-components projection is
 /// exposed as ONE typed value so downstream renderers cannot silently
 /// drift the tab-mirror discipline or the 1-based origin from the
-/// substrate. THEORY.md §VI.1 — generation over composition; the
+/// substrate. Generation over composition; the
 /// three-helper composition inside `format_diagnostic` is named as
 /// ONE typed projection every future emitter binds to rather than
 /// re-derives.
@@ -192,12 +192,12 @@ impl<'a> SourceProjection<'a> {
     /// glyph, a trailing-newline drift) reaches every consumer
     /// through ONE edit at the substrate boundary.
     ///
-    /// Theory anchor: THEORY.md §V.1 — knowable platform /
+    /// Anchor: knowable platform /
     /// constructive diagnostics. The rustc-style snippet template is
     /// named as a first-class substrate primitive so downstream
     /// header-owning consumers (warnings, notes, JSON emitters, LSP)
     /// cannot silently drift the gutter/arrow/pipe/caret shape from
-    /// the substrate. THEORY.md §VI.1 — generation over composition;
+    /// the substrate. Generation over composition;
     /// the four-emission-site snippet template inside
     /// [`format_diagnostic`] is named as ONE typed renderer every
     /// future header-owning emitter binds to rather than re-derives.
@@ -279,7 +279,7 @@ fn line_at(src: &str, byte_offset: usize) -> &str {
 /// discipline mechanically — the visual-width invariant lives at ONE
 /// projection on the diagnostic-rendering surface.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform / constructive
+/// Anchor: knowable platform / constructive
 /// diagnostics. A caret whose column drifts under a tab-indented
 /// source is not knowable to the operator. Inspiration: rustc's
 /// `SnippetData::render_source_line` tab-mirror idiom; translation
@@ -312,10 +312,10 @@ fn mirror_source_prefix_as_pad(line_text: &str, column: usize) -> String {
 /// Every downstream renderer inherits the header shape from the
 /// substrate mechanically.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform / constructive
+/// Anchor: knowable platform / constructive
 /// diagnostics. The header prefix is a typed enum discriminant so
 /// downstream consumers cannot silently drift the shape from the
-/// substrate. THEORY.md §VI.1 — generation over composition; the
+/// substrate. Generation over composition; the
 /// four spellings of the header prefix that would otherwise recur at
 /// every consumer are named as ONE closed sum every future emitter
 /// binds to rather than restates.
@@ -445,10 +445,10 @@ impl Level {
 /// out-of-range literal, a drift from the LSP spec) reaches every
 /// consumer through ONE edit at the substrate boundary.
 ///
-/// Theory anchor: THEORY.md §V.1 — knowable platform / constructive
+/// Anchor: knowable platform / constructive
 /// diagnostics. The LSP wire code is a typed enum discriminant so
 /// downstream LSP surfaces cannot silently emit an illegal severity
-/// (e.g. `0` or `5`) from the substrate. THEORY.md §VI.1 — generation
+/// (e.g. `0` or `5`) from the substrate. Generation
 /// over composition; the four spellings of the LSP wire code that
 /// would otherwise recur at every LSP-facing consumer are named as
 /// ONE closed sum every future emitter binds to rather than

@@ -155,9 +155,9 @@ use syn::{parse_macro_input, Attribute, Data, DeriveInput, Fields, Ident, LitStr
 /// }
 /// ```
 ///
-/// ## Theory grounding
+/// ## Grounding
 ///
-/// THEORY.md §VI.1 — generation over composition; the derive IS the
+/// Generation over composition; the derive IS the
 /// generative shape — new closed-set enums add ONE `#[derive(ClosedSet)]`
 /// line + the attribute that names their inherent projection method
 /// instead of re-deriving the eight-line `impl ClosedSet` + `impl FromStr`
@@ -623,14 +623,14 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
 /// [`wrap_with_missing_key_default`] give on their own recurring
 /// scaffolds.
 ///
-/// Theory grounding: THEORY.md §VI.1 — generation over composition.
+/// Grounding: generation over composition.
 /// The three-line dispatch scaffold recurred at TWO peers on the
 /// derive's `parse_nested_meta`-callback surface, past the ★★
 /// PRIME-DIRECTIVE ≥ 2 duplication threshold, and is lifted to ONE
 /// substrate primitive here — exactly as the two-line UFCS-bracket
 /// scaffold was lifted onto [`trait_dispatch_call`] and the two-line
 /// diagnostic-wording scaffold was lifted onto
-/// [`format_syn_parse_error`]. THEORY.md §II.1 invariant 5
+/// [`format_syn_parse_error`]. Invariant 5
 /// (composition preserves proofs) — the two peers now compose
 /// structurally through ONE primitive, so a regression that drifted
 /// the dispatch discipline at ONE peer would surface at the
@@ -694,7 +694,7 @@ fn on_matching_sub_key(
 /// sections up carries the same primitive / meta-level wrapper motif
 /// — the derive crate's convention for two-shape sub-key primitives.
 ///
-/// Theory grounding: THEORY.md §VI.1 — generation over composition.
+/// Grounding: generation over composition.
 /// The three-times-rule signal fires at three sites of the string-
 /// valued sub-key idiom; the primitive names the composition as ONE
 /// substrate entry so a new arm of the same shape adds as ONE line, and
@@ -745,7 +745,7 @@ fn try_lit_str_sub_key(
 /// that primitive's doc for the sibling-shape motif that mirrors the
 /// [`parse_lit_str`] / [`read_meta_lit_str`] pair.
 ///
-/// Theory grounding: THEORY.md §VI.1 — generation over composition.
+/// Grounding: generation over composition.
 /// The two sites of the bare-flag sub-key idiom cross the three-times-
 /// rule signal when composed with the sibling string-valued primitive
 /// (five sites in aggregate on the SAME `parse_nested_meta` callback);
@@ -1214,12 +1214,12 @@ fn snake_to_kebab(snake: &str) -> String {
 /// boundary rather than as a per-author `.unwrap_or_else(path)` at
 /// the compile_from_args call site.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+/// Anchor: invariant 1 (typed entry) — the
 /// three-way authoring shape becomes a typed enum at the derive's
 /// projection boundary, not a lossy `bool` that drops the
 /// path-payload; the missing-kwarg branch is a typed CONSEQUENCE of
-/// the projection rather than a per-author workaround. THEORY.md
-/// §V.1 (knowable platform) — the derive's missing-kwarg semantics
+/// the projection rather than a per-author workaround.
+/// (knowable platform) — the derive's missing-kwarg semantics
 /// now match serde's byte-for-byte on the `#[serde(default = "…")]`
 /// axis, so authors reading serde's docs get the semantics the docs
 /// promise without a per-author consultation of the derive's
@@ -1405,17 +1405,17 @@ fn has_serde_default(field: &syn::Field) -> bool {
 /// at the derive's `syn::Type -> emitted extractor call` boundary
 /// through ONE trait-per-axis-family substrate primitive.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// Anchor: generation over composition;
 /// the (parse-payload-as-turbofish, wrap-in-mode-specific-trait-call)
 /// two-step recurred at the eight axis-mode arms (well past the
 /// PRIME-DIRECTIVE ≥2 trigger) and is lifted to one owner here,
 /// exactly as the atom skeleton was lifted on the domain side.
-/// THEORY.md §II.1 invariant 3 — typed exit; the per-narrow-type
+/// Invariant 3 — typed exit; the per-narrow-type
 /// narrowing rejection is a typed exit through the trait's
 /// associated `Wide` type + `WIDTH` const, so a caller cannot
 /// accidentally invoke the int-mode arm against a float-axis
 /// narrow width because the trait's `type Wide` binding routes
-/// axis identity at rustc time. THEORY.md §II.1 invariant 5 —
+/// axis identity at rustc time. Invariant 5 —
 /// composition preserves proofs; the eight arms now compose
 /// structurally through ONE helper at FOUR method names (not eight),
 /// so a future third wide axis lands as ZERO new emit strings and
@@ -1480,11 +1480,11 @@ fn has_serde_default(field: &syn::Field) -> bool {
 /// `tatara_lisp::domain` side, and the property the three per-axis
 /// trait-dispatch helpers already give at their own emission surfaces.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// (resolve-method-as-Ident, wrap-in-arg-shape-and-`?`) two-step
 /// recurred across the three axis-typed trait-dispatch helpers (well
 /// past the PRIME-DIRECTIVE ≥2 trigger) and is lifted to one owner
-/// here. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+/// here. Invariant 5 — composition preserves proofs;
 /// the three axis-typed helpers now compose structurally through ONE
 /// tail primitive, so a regression that drifted any of the three tail
 /// invariants at ONE axis would surface at the [`trait_dispatch_tail_tests`]
@@ -1592,10 +1592,10 @@ pub(crate) const DESERIALIZE_TRAIT_PATH: &str = "::tatara_lisp::domain::Deserial
 /// `impl AtomKwarg<'_> for _` block on the substrate — without a
 /// per-arm inline `&str` literal at the derive dispatch site.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// Anchor: generation over composition;
 /// the four inline byte-identical `"& str"` slot literals across
 /// [`extractor_for`]'s four string-axis arms collapse onto ONE
-/// closed-set owner. THEORY.md §II.1 invariant 2 — free middle;
+/// closed-set owner. Invariant 2 — free middle;
 /// the (string-axis, atom-Self-type-source-literal) pairing binds
 /// at ONE `pub(crate) const` on the derive-internal namespace so
 /// every string-axis atom-family arm inherits the identity through
@@ -1614,7 +1614,7 @@ pub(crate) const ATOM_STRING_SELF_TY: &str = "& str";
 /// dispatches through via [`atom_trait_dispatch_call`]. Sibling of
 /// [`ATOM_STRING_SELF_TY`] on the string axis — see that const's
 /// docstring for the lift posture, the substrate-primitive parse
-/// discipline, the closed-set enumeration, and the theory anchor.
+/// discipline, the closed-set enumeration, and the anchor.
 ///
 /// The four-character source spelling `"bool"` matches the
 /// proc_macro2 tokenization the [`parse_self_ty`] shape gate
@@ -1705,14 +1705,14 @@ pub(crate) const ATOM_BOOL_SELF_TY: &str = "bool";
 /// rather than restating the five UFCS-bracket invariants a
 /// third time.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// Anchor: generation over composition;
 /// the five UFCS-bracket invariants recurred at the numeric-
 /// narrowed and universal-serde-fallthrough helpers' quote blocks
 /// (well past the PRIME-DIRECTIVE ≥ 2 trigger) and are lifted to
 /// one owner here, exactly as the trailing tail was lifted onto
 /// [`trait_dispatch_tail`] and the atom / numeric / serde
-/// skeletons were lifted onto their per-axis helpers. THEORY.md
-/// §II.1 invariant 5 — composition preserves proofs; the two
+/// skeletons were lifted onto their per-axis helpers.
+/// Invariant 5 — composition preserves proofs; the two
 /// axis-typed helpers now compose structurally through ONE
 /// primitive, so a regression that drifted the UFCS-bracket
 /// shape at ONE axis would surface at
@@ -1827,7 +1827,7 @@ fn trait_dispatch_call(
 /// `SerdeDefault::Path`'s `syn::parse_str::<syn::Path>` sharpen
 /// (72f3a19) carries on the operator-facing attribute axis.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+/// Anchor: invariant 1 (typed entry) — the
 /// self-type axis at the derive's two trait-dispatch peers was
 /// previously an untyped `&'static str` that passed a lexer-level
 /// gate; post-lift the payload is validated at a syntactic-level
@@ -1836,7 +1836,7 @@ fn trait_dispatch_call(
 /// the underlying `syn::Error`. Invalid self types become
 /// UNREPRESENTABLE at the primitive's typed-entry boundary rather
 /// than surfacing as broken emit tokens at every downstream
-/// trait-dispatched arm's implementor. THEORY.md §VI.1 (generation
+/// trait-dispatched arm's implementor. (generation
 /// over composition) — the `rust_ty.parse::<TokenStream2>().unwrap()`
 /// two-step recurred at the numeric-narrowed and atom-family peers'
 /// own emission blocks (well past the PRIME-DIRECTIVE ≥ 2
@@ -1884,14 +1884,14 @@ fn parse_self_ty(rust_ty: &str) -> syn::Type {
 /// matching how [`parse_self_ty`] gives the same "future axis pays
 /// zero at the parse gate" property on the self-type axis.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — the
+/// Anchor: invariant 1 (typed entry — the
 /// substrate-internal trait-path axis is validated at a syntactic-
 /// level gate whose Err surfaces at the primitive's own Err
 /// boundary with a spanned diagnostic that names both the offending
 /// literal AND the underlying `syn::Error`; invalid trait paths
 /// become UNREPRESENTABLE at the primitive's typed-entry boundary
 /// rather than surfacing as broken emit tokens at every downstream
-/// trait-dispatched arm's implementor). THEORY.md §VI.1
+/// trait-dispatched arm's implementor).
 /// (generation over composition — the substrate's `&str -> syn::<T>`
 /// panic-gate now lives at ONE generic primitive
 /// [`parse_syn_str_or_panic`], and the two per-axis wrappers are
@@ -1966,17 +1966,17 @@ fn parse_trait_path(trait_path: &str) -> syn::Path {
 /// on the missing-kwarg wrap axis, and [`trait_dispatch_tail`] gives
 /// the trailing tail on the emission surface.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// four-invariant diagnostic-wording scaffold recurred at the two peer
 /// disposition-axis wrappers, past the PRIME-DIRECTIVE ≥ 2
 /// duplication trigger, and is lifted to ONE substrate primitive
-/// here). THEORY.md §II.1 invariant 3 (typed exit — the shared
+/// here). Invariant 3 (typed exit — the shared
 /// diagnostic-message shape is a typed CONSEQUENCE of the three
 /// `(kind_label, source, e)` inputs, not a per-peer format-string
 /// choice baked into each callsite; a caller cannot invoke a peer
 /// with the wrong wording because the wording ORIGINATES at one
 /// substrate primitive rather than being restated per-peer).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// Invariant 5 (composition preserves proofs — the
 /// two disposition peers now compose structurally through ONE
 /// primitive, so a regression that drifts the diagnostic wording at
 /// ONE peer becomes impossible: both peers route through the SAME
@@ -2085,11 +2085,11 @@ fn format_syn_parse_error(kind_label: &'static str, source: &str, e: &syn::Error
 /// [`emit_compile_error`] gives the compile-error emission arms
 /// on the derive's Err surface.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the four-invariant sharpened-panic parse scaffold recurred at
 /// the two peer per-axis wrappers, past the PRIME-DIRECTIVE ≥ 2
 /// duplication trigger, and is lifted to ONE substrate primitive
-/// here). THEORY.md §II.1 invariant 5 (composition preserves
+/// here). Invariant 5 (composition preserves
 /// proofs — the two axis wrappers now compose structurally
 /// through ONE primitive, so a regression that drifts the parse
 /// discipline at ONE axis would surface at the primitive's own
@@ -2158,13 +2158,13 @@ fn parse_syn_str_or_panic<T: syn::parse::Parse>(source: &str, kind_label: &'stat
 /// [`parse_syn_str_or_panic`]'s `kind_label` slot owns the same
 /// static-string contract on the substrate-internal panic axis.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 3 (typed exit — the parse
+/// Anchor: invariant 3 (typed exit — the parse
 /// Err surface is the diagnostic-message `String` every downstream
 /// `spanned_compile_error` composition on the derive's Err axis routes
 /// through, byte-identical in shape to the panic peer's `panic!`
 /// message so a shared-diagnostic-format regression at ONE axis
 /// surfaces at that axis's own test pins rather than as silent drift
-/// at every downstream parse site). THEORY.md §VI.1 (generation over
+/// at every downstream parse site). (generation over
 /// composition — the shared four-invariant parse scaffold now lives at
 /// TWO substrate primitives, one per disposition axis; the pre-lift
 /// inline `syn::parse_str(...).map_err(|e| format!(...))?` two-step at
@@ -2307,17 +2307,17 @@ fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) ->
 /// distinct trait dispatch (numeric-narrowing on one, atom-family
 /// list-family on the other).
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// (parse-payload-as-atom-type, wrap-in-mode-specific-trait-call)
 /// two-step recurred at the four axis-mode arms (well past the
 /// PRIME-DIRECTIVE ≥2 trigger) and is lifted to one owner here,
 /// exactly as its numeric-narrowed peer was lifted onto
-/// [`narrow_trait_dispatch_call`]. THEORY.md §II.1 invariant 3 —
+/// [`narrow_trait_dispatch_call`]. Invariant 3 —
 /// typed exit; the per-atom-type owned-element rejection is a typed
 /// exit through the trait's associated `Owned` type, so a caller
 /// cannot accidentally invoke the string-axis emit against a
 /// bool-axis field because the trait's `type Owned` binding routes
-/// axis identity at rustc time. THEORY.md §II.1 invariant 5 —
+/// axis identity at rustc time. Invariant 5 —
 /// composition preserves proofs; the four arms now compose
 /// structurally through ONE helper at TWO method names (not four),
 /// so a future third atom axis lands as ZERO new emit strings and a
@@ -2459,13 +2459,13 @@ fn atom_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> T
 /// give the atom-family and numeric-narrowed axes on the derive
 /// side.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// Anchor: generation over composition;
 /// the (resolve-method-as-Ident, wrap-in-UFCS-trait-call) one-step
 /// recurred at the four universal-serde-fallthrough arms (well
 /// past the PRIME-DIRECTIVE ≥ 2 trigger) and is lifted to one
 /// owner here, exactly as its numeric-narrowed and atom-family
 /// peers were lifted onto [`narrow_trait_dispatch_call`] and
-/// [`atom_trait_dispatch_call`]. THEORY.md §II.1 invariant 5 —
+/// [`atom_trait_dispatch_call`]. Invariant 5 —
 /// composition preserves proofs; the four arms now compose
 /// structurally through ONE helper, so a future new
 /// universal-serde-fallthrough mode lands as ONE new one-line
@@ -2553,13 +2553,13 @@ fn deserialize_trait_dispatch_call(
 /// expression + ONE-LINE delegate through this primitive rather than
 /// restating the four-invariant wrap shape a third time.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// four missing-kwarg wrap invariants recurred at the two
 /// fallback-carrying arms of [`extractor_for`] (past the
 /// PRIME-DIRECTIVE ≥ 2 trigger) and are lifted to ONE substrate
 /// primitive here, exactly as [`trait_dispatch_tail`] lifted the
 /// trailing arm shape and [`trait_dispatch_call`] lifted the UFCS
-/// bracket scaffold. THEORY.md §II.1 invariant 5 — composition
+/// bracket scaffold. Invariant 5 — composition
 /// preserves proofs; the two participating arms now compose
 /// structurally through ONE primitive, so a regression that drifted
 /// the wrap shape at ONE arm would surface at
@@ -2609,7 +2609,7 @@ fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenSt
     // lands as ONE new [`MalformedGenericArg`] variant, and its
     // Display projection carries the operator-facing message
     // through this gate mechanically — no per-arm scaffold at the
-    // extractor boundary. Theory anchor: THEORY.md §II.1 invariant 1
+    // extractor boundary. Anchor: invariant 1
     // (typed entry — the malformed-outer-wrapper axis is validated
     // at the derive's outer boundary with a spanned diagnostic that
     // names both the offending field type AND the underlying
@@ -3249,19 +3249,19 @@ enum Kind {
 /// module can iterate this const instead so per-width test
 /// coverage auto-extends when a width lands here).
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+/// Anchor: invariant 1 — typed entry; the
 /// pattern-payload identity across the classifier's numeric arms
 /// IS the derive's rust-level typed-entry projection for narrowed
 /// widths, and lifting it to ONE per-width const makes the
 /// identity load-bearing in the source rather than in twenty-four
-/// hand-restated string literals. THEORY.md §VI.1 (generation over
+/// hand-restated string literals. (generation over
 /// composition) — the (match-arm, payload) pair recurred at TWELVE
 /// numeric arms in [`crate::classify`] (well past the
 /// PRIME-DIRECTIVE ≥ 2 duplication threshold), and each pair
 /// restated the same width literal twice against a different
 /// hand-written string; lifting the width to ONE per-arm `w`
-/// variable closes the twelve pairs at rustc time. THEORY.md
-/// §V.1 (knowable platform) — an authoring surface that wants to
+/// variable closes the twelve pairs at rustc time.
+/// (knowable platform) — an authoring surface that wants to
 /// enumerate the supported narrowing widths (e.g. `tatara-check`'s
 /// diagnostic renderer, an LSP hover hint listing which widths a
 /// hypothetical typo would be closer to, a documentation
@@ -3363,16 +3363,16 @@ pub(crate) const NARROW_FLOAT_WIDTHS: &[&str] = &["f32", "f64"];
 ///    entry to this const. The classifier picks the axis up
 ///    mechanically through the iteration.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the two `if let` short-circuits inside [`classify`] recurred
 /// past the PRIME-DIRECTIVE ≥ 2 duplication threshold; lifting the
 /// (widths, constructor) pair to ONE closed-set table closes them
-/// at rustc time). THEORY.md §II.1 invariant 1 (typed entry — the
+/// at rustc time). Invariant 1 (typed entry — the
 /// (widths, constructor) pairing is a typed-entry gate at the
 /// const boundary; a mis-pairing regression rejects at the const
 /// initializer's type-gate rather than as silent drift at every
 /// downstream implementor with a field on the mis-paired axis).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// Invariant 5 (composition preserves proofs — the
 /// two axis-loops now compose structurally through ONE iteration
 /// site, so a regression that drifts the axis fall-through order
 /// at ONE cell surfaces at
@@ -3460,14 +3460,14 @@ pub(crate) const NARROW_AXES: &[NarrowAxis] = &[
 /// last axis, to the [`Kind::Deserialize`] universal-serde
 /// fallthrough).
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// (find-matching-width, wrap-in-axis-typed-Kind) two-step recurred
 /// at the two numeric axes' loop bodies inside [`classify`], past the
 /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
 /// substrate primitive here, exactly as the trailing UFCS-arm tail
 /// was lifted onto [`trait_dispatch_tail`] and the shared
 /// UFCS-bracket scaffold was lifted onto [`trait_dispatch_call`]).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// Invariant 5 (composition preserves proofs — the
 /// two axis loops now compose structurally through ONE primitive, so
 /// a regression that drifted the lookup discipline at ONE axis would
 /// surface at [`classify_narrowed_width_tests`] rather than as silent
@@ -3704,12 +3704,12 @@ fn classify_vec(last: &syn::PathSegment, ty: &Type) -> Kind {
 /// [`NARROW_FLOAT_WIDTHS`] / [`ClosedSet`] give the derive's
 /// numeric-narrowing + closed-set-carrier axes.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 3 (typed exit — the
+/// Anchor: invariant 3 (typed exit — the
 /// primitive's Err surface is a typed enum whose variant identity
 /// IS the rejection class, not a substring on a String payload;
 /// authoring surfaces bind structurally via `PartialEq` rather than
 /// through `LispError::KwargDeserialize`-shaped substring greps).
-/// THEORY.md §VI.1 (generation over composition — the two `.into()`-
+/// (generation over composition — the two `.into()`-
 /// allocated String payloads at the primitive's Err path collapse
 /// to ONE per-variant const-projection through the Display impl,
 /// closing a dead per-callsite allocation axis).
@@ -3811,11 +3811,11 @@ fn first_generic_type(seg: &syn::PathSegment) -> Result<&Type, MalformedGenericA
 /// found in the walk wins, matching how a compile-error diagnostic
 /// stops at the first source of drift rather than aggregating.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — the
+/// Anchor: invariant 1 (typed entry — the
 /// malformed-outer-wrapper axis becomes UNREPRESENTABLE at the
 /// derive's Err boundary rather than surfacing as an opaque
 /// trait-bound-not-satisfied error at every downstream
-/// implementor). THEORY.md §VI.1 (generation over composition —
+/// implementor). (generation over composition —
 /// the walk composes structurally against the peer classifier's
 /// recursor shape at ONE dedicated primitive; a future third
 /// malformed mode picks up the derive-time diagnostic at ZERO
@@ -3900,13 +3900,13 @@ mod narrow_width_tables_tests {
     // derive's numeric-narrowing dispatch surface at both the source
     // (the closed-set data) and the projection (the classify function).
     //
-    // Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    // Anchor: invariant 1 — typed entry; the
     // (pattern-string, payload-string) identity across the twelve
     // classifier arms IS the derive's rust-level typed-entry
     // projection for narrowed widths, and lifting the identity to ONE
     // per-width const makes the identity load-bearing in the source
     // rather than in twenty-four hand-restated string literals.
-    // THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    // Invariant 5 — composition preserves proofs; the
     // future-width extension flow ("adding a width lands as ONE
     // const entry, classifier + tests + emit code inherit
     // mechanically") IS the composition-preserving property this
@@ -4097,14 +4097,14 @@ mod narrow_axes_tests {
     //!    dispatch compose byte-identically to the pre-lift two-
     //!    `if let`-block classifier body.
     //!
-    //! Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    //! Anchor: invariant 5 (composition
     //! preserves proofs) — the two axis-loops inside
     //! [`super::classify`] now compose structurally through ONE
     //! iteration site; a regression that drifts the axis
     //! fall-through order OR the (widths, constructor) pairing at
     //! ONE cell surfaces here rather than as silent drift at every
     //! downstream implementor with a field on the drifted axis.
-    //! THEORY.md §VI.1 (generation over composition) — the
+    //! (generation over composition) — the
     //! future-axis extension flow ("adding a numeric-narrowing axis
     //! lands as ONE tuple entry in [`super::NARROW_AXES`],
     //! classifier + tests inherit mechanically") IS the composition-
@@ -4329,7 +4329,7 @@ mod classify_narrowed_width_tests {
     //!    (both duplicates carry the same string), preserving
     //!    payload identity regardless of iteration order.
     //!
-    //! Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    //! Anchor: invariant 5 (composition
     //! preserves proofs) — the two axis loops inside [`super::classify`]
     //! now compose structurally through ONE primitive; a regression at
     //! ONE axis surfaces here rather than as silent drift at every
@@ -6524,15 +6524,15 @@ mod narrow_trait_dispatch_call_tests {
     // modules close the derive's `syn::Type -> emitted extractor
     // call` end-to-end pipeline at the test-module boundary.
     //
-    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+    // Anchor: invariant 1 (typed entry) — the
     // helper IS the derive's rust-level typed-entry projection at the
     // numeric field's `syn::Type -> emitted extractor call` boundary;
     // naming its SIX emission promises as pinned facts here makes
     // future upgrades (a caller-supplied diagnostic span, a `?`-
     // suppressed variant, a new mode, or a new wide axis) fail at
     // the boundary of the shape they change rather than at
-    // downstream implementors' compile-time noise. THEORY.md §II.1
-    // invariant 3 (typed exit) — the axis identity riding the UFCS
+    // downstream implementors' compile-time noise.
+    // Invariant 3 (typed exit) — the axis identity riding the UFCS
     // type parameter routes through `<T as NarrowNumeric>::Wide` at
     // rustc time, so the emit-time collapse across axes preserves
     // the per-narrow-type rejection identity.
@@ -6888,15 +6888,15 @@ mod atom_trait_dispatch_call_tests {
     // two modules close every trait-dispatched arm's emission at the
     // test-module boundary.
     //
-    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+    // Anchor: invariant 1 (typed entry) — the
     // helper IS the derive's rust-level typed-entry projection at the
     // atom-family list-family field's `syn::Type -> emitted extractor
     // call` boundary; naming its SIX emission promises as pinned
     // facts here makes future upgrades (a caller-supplied diagnostic
     // span, a `?`-suppressed variant, a new mode, or a new atom axis)
     // fail at the boundary of the shape they change rather than at
-    // downstream implementors' compile-time noise. THEORY.md §II.1
-    // invariant 3 (typed exit) — the axis identity riding the UFCS
+    // downstream implementors' compile-time noise.
+    // Invariant 3 (typed exit) — the axis identity riding the UFCS
     // type parameter routes through `<T as AtomKwarg>::Owned` at
     // rustc time, so the emit-time collapse across axes preserves
     // the per-atom-type owned-element identity.
@@ -7407,7 +7407,7 @@ mod deserialize_trait_dispatch_call_tests {
     //    `quote!` scaffold. Same posture the atom-family peer's
     //    test module gives on its two token-equivalence pins.
     //
-    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) —
+    // Anchor: invariant 1 (typed entry) —
     // the helper IS the derive's rust-level typed-entry
     // projection at the universal-serde-fallthrough field's
     // `syn::Type -> emitted extractor call` boundary; naming its
@@ -7647,14 +7647,14 @@ mod trait_dispatch_call_tests {
     // stays hand-rolled to preserve its `>>` byte-joined form at
     // the atom-axis test module.
     //
-    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+    // Anchor: invariant 1 (typed entry) — the
     // primitive IS the derive's rust-level typed-entry projection at
     // the UFCS-bracket boundary; naming its FOUR emission promises
     // as pinned facts here makes future upgrades (a caller-supplied
     // diagnostic span at the trait-path segment, a `?`-suppressed
     // variant, an alternative dispatch shape) fail at the boundary
     // of the shape they change rather than at downstream implementors'
-    // compile-time noise. THEORY.md §II.1 invariant 5 (composition
+    // compile-time noise. Invariant 5 (composition
     // preserves proofs) — the two participating axis-typed helpers
     // now compose structurally through ONE primitive, so a regression
     // that drifted the UFCS-bracket shape at ONE axis would surface
@@ -8044,7 +8044,7 @@ mod wrap_with_missing_key_default_tests {
     // primitive at all, so its emission carries neither the
     // `contains_key` gate nor an `else` branch.
     //
-    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+    // Anchor: invariant 1 (typed entry) — the
     // primitive IS the derive's rust-level typed-entry projection at
     // the missing-kwarg wrap boundary; naming its FOUR emission
     // promises as pinned facts here makes future upgrades (a
@@ -8053,7 +8053,7 @@ mod wrap_with_missing_key_default_tests {
     // a `Result` chain, an alternative gate predicate, or a new
     // fallback mode) fail at the boundary of the shape they change
     // rather than at downstream implementors' compile-time noise.
-    // THEORY.md §II.1 invariant 5 (composition preserves proofs) —
+    // Invariant 5 (composition preserves proofs) —
     // the two participating fallback-carrying arms now compose
     // structurally through ONE primitive, so a regression that
     // drifted the wrap shape at ONE arm would surface here rather
@@ -8433,7 +8433,7 @@ mod trait_dispatch_tail_tests {
     // arm's emission at the derive's `syn::Type -> emitted extractor
     // call` boundary at the test-module surface.
     //
-    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+    // Anchor: invariant 1 (typed entry) — the
     // tail IS the derive's rust-level typed-entry projection at the
     // trait-dispatch call boundary; naming its THREE emission
     // promises as pinned facts here makes future upgrades (a
@@ -8442,8 +8442,8 @@ mod trait_dispatch_tail_tests {
     // through a `Result` chain rather than a `?`, an extension of
     // the two-arg positional shape with a callsite-derived context
     // frame) fail at the boundary of the shape they change rather
-    // than at downstream implementors' compile-time noise. THEORY.md
-    // §II.1 invariant 5 (composition preserves proofs) — the tail's
+    // than at downstream implementors' compile-time noise.
+    // Invariant 5 (composition preserves proofs) — the tail's
     // axis-agnosticism means a future FOURTH trait axis (a
     // hypothetical `SymbolKwarg`, `PathKwarg`, or `EnumVariantKwarg`)
     // reuses this primitive rather than restating the three

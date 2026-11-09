@@ -46,11 +46,11 @@ impl PoolContext {
     /// out of `alloc.owned_coordinates_required()?` / `pool.
     /// owned_coordinates_required()?` and pass `&ns`.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `Api::namespaced(ctx.kube.clone(), &ns)` chain recurred at
     /// two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
     /// duplication trigger, and is lifted to ONE owner here).
-    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// Invariant 5 (composition preserves proofs —
     /// the primitive binds the (client, namespace, typed collection)
     /// triple structurally; a regression that drifted any slot at the
     /// primitive's own site surfaces at the sibling `pool_api_*`
@@ -174,12 +174,12 @@ impl PoolContext {
     /// cluster-wide `EphemeralPool` read lands at ONE substrate
     /// method here rather than being restated at every consumer.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// Anchor: (generation over composition —
     /// the `Api::all(client.clone())` chain recurred at TWO
     /// hand-authored sites in this crate's `main.rs` past the ★★
     /// PRIME-DIRECTIVE ≥ 2 duplication trigger, alongside the peer
     /// primitive already open on `tatara-reconciler::context`, and is
-    /// lifted onto ONE owner here). THEORY.md §II.1 invariant 5
+    /// lifted onto ONE owner here). Invariant 5
     /// (composition preserves proofs — the primitive binds the
     /// (client, cluster-scoped, typed collection) triple structurally;
     /// a regression that drifted the client-slot or the resource

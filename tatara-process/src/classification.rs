@@ -81,10 +81,10 @@ impl Classification {
     /// or similar named variant lands as a sibling method here when a
     /// second unremarkable-baseline shape opens.
     ///
-    /// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+    /// Anchor: (generation over composition — the
     /// six-line struct-literal shape recurred at TEN hand-authored sites
     /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is lifted
-    /// onto ONE workspace-wide owner here). THEORY.md §II.1 invariant 5
+    /// onto ONE workspace-wide owner here). Invariant 5
     /// (composition preserves proofs — a regression that drifted the
     /// baseline axis choice at only one consumer, or that broke the
     /// sibling-default correspondence, surfaces at this primitive's tests
@@ -165,14 +165,14 @@ impl Classification {
     /// downstream through ONE `ALL` entry on the closed set with the
     /// probe body untouched.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the scalar-carrier presence-probe body lives at ONE
     /// substrate site so every downstream (`point-type-<kind>`
     /// require-tag family in `tatara-check`, closed-set audit
     /// dispatchers, future variant additions on
     /// [`ConvergencePointType`]) binds through the SAME shape rather
     /// than restating the `classification.point_type == kind` closure
-    /// body at each callsite. THEORY.md §VI.1 — generation over
+    /// body at each callsite. Generation over
     /// composition; a future [`ConvergencePointType`] variant lands at
     /// ONE `ALL` entry + ONE `as_str` arm on the closed set and the
     /// probe picks it up mechanically without further per-consumer
@@ -247,14 +247,14 @@ impl Classification {
     /// substrates) reaches every downstream through ONE `ALL` entry
     /// on the closed set with the probe body untouched.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// Anchor: invariant 5 — composition preserves
     /// proofs; the scalar-carrier presence-probe body lives at ONE
     /// substrate site so every downstream (`substrate-<kind>`
     /// require-tag family in `tatara-check`, closed-set audit
     /// dispatchers, future variant additions on [`SubstrateType`])
     /// binds through the SAME shape rather than restating the
     /// `classification.substrate == kind` closure body at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// callsite. Generation over composition; a
     /// future [`SubstrateType`] variant lands at ONE `ALL` entry +
     /// ONE `as_str` arm on the closed set and the probe picks it up
     /// mechanically without further per-consumer edits.
@@ -352,14 +352,14 @@ impl Classification {
     /// schema) reaches every downstream through ONE `ALL` entry on
     /// the closed set with the probe body untouched.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the scalar-carrier presence-probe body
     /// lives at ONE substrate site so every downstream
     /// (`calm-<kind>` require-tag family in `tatara-check`,
     /// closed-set audit dispatchers, future variant additions on
     /// [`CalmClassification`]) binds through the SAME shape rather
     /// than restating the `classification.calm == kind` closure body
-    /// at each callsite. THEORY.md §VI.1 — generation over
+    /// at each callsite. Generation over
     /// composition; a future [`CalmClassification`] variant lands at
     /// ONE `ALL` entry + ONE `as_str` arm on the closed set and the
     /// probe picks it up mechanically without further per-consumer
@@ -446,7 +446,7 @@ impl Classification {
     /// ONE `as_str` arm + ONE `sensitivity_rank` arm + one arm per
     /// predicate with the probe body untouched.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the scalar-carrier presence-probe body
     /// lives at ONE substrate site so every downstream
     /// (`data-classification-<kind>` require-tag family in
@@ -454,7 +454,7 @@ impl Classification {
     /// additions on [`DataClassification`]) binds through the SAME
     /// shape rather than restating the
     /// `classification.data_classification == kind` closure body at
-    /// each callsite. THEORY.md §VI.1 — generation over composition;
+    /// each callsite. Generation over composition;
     /// a future [`DataClassification`] variant lands at ONE `ALL`
     /// entry + ONE `as_str` arm on the closed set and the probe
     /// picks it up mechanically without further per-consumer edits.
@@ -533,7 +533,7 @@ impl Classification {
     /// `requires_metric_axes` arm on the closed set with the probe
     /// body untouched.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the nested-struct-scalar-carrier presence-
     /// probe body lives at ONE substrate site so every downstream
     /// (`horizon-<kind>` require-tag family in `tatara-check`, future
@@ -541,7 +541,7 @@ impl Classification {
     /// additions on [`HorizonKind`]) binds through the SAME
     /// `has(kind)` shape rather than restating the
     /// `classification.horizon.kind == kind` closure body at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// callsite. Generation over composition; a
     /// future [`HorizonKind`] variant lands at ONE `ALL` entry + ONE
     /// `as_str` arm on the closed set and the probe picks it up
     /// mechanically without further per-consumer edits.
@@ -656,7 +656,7 @@ impl Classification {
     /// `is_improvement` arm on the closed set with the probe body
     /// untouched.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the nested-struct-Option-scalar-carrier
     /// presence-probe body lives at ONE substrate site so every
     /// downstream (`optimization-direction-<kind>` require-tag family
@@ -665,7 +665,7 @@ impl Classification {
     /// [`OptimizationDirection`]) binds through the SAME
     /// `has(kind)` shape rather than restating the
     /// `classification.horizon.direction.unwrap_or_default() == kind`
-    /// closure body at each callsite. THEORY.md §VI.1 — generation
+    /// closure body at each callsite. Generation
     /// over composition; a future [`OptimizationDirection`] variant
     /// lands at ONE `ALL` entry + ONE `as_str` arm on the closed set
     /// and the probe picks it up mechanically without further
@@ -758,7 +758,7 @@ impl Classification {
     /// untouched — the many-to-one projection means the bucket
     /// membership shift lands exactly at the projection's own site.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-typed-projection presence-probe
     /// body lives at ONE substrate site so every downstream
     /// (`input-arity-<kind>` require-tag family in `tatara-check`,
@@ -766,7 +766,7 @@ impl Classification {
     /// on [`ConvergencePointType`]) binds through the SAME
     /// `has(kind)` shape rather than restating the
     /// `classification.point_type.input_arity() == kind` closure body
-    /// at each callsite. THEORY.md §VI.1 — generation over
+    /// at each callsite. Generation over
     /// composition; a future [`Arity`] variant (a hypothetical `Zero`
     /// for sinks) lands at ONE `ALL` entry + ONE `as_str` arm on the
     /// closed set + ONE arm on each `input_arity`/`output_arity`
@@ -864,14 +864,14 @@ impl Classification {
     /// not at every consumer that previously restated the bucket in
     /// code.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the second derived-typed-projection presence-
     /// probe body over the SAME `self.point_type` carrier lives at ONE
     /// substrate site so every downstream (`output-arity-<kind>`
     /// require-tag family in `tatara-check`, future DAG-composition
     /// validators, future variant additions on
     /// [`ConvergencePointType`]) binds through the SAME `has(kind)`
-    /// shape. THEORY.md §VI.1 — generation over composition; a future
+    /// shape. Generation over composition; a future
     /// [`Arity`] variant lands at ONE `ALL` entry + ONE `as_str` arm
     /// on the closed set + ONE arm on each `input_arity`/`output_arity`
     /// projection and both probes pick it up mechanically.
@@ -966,7 +966,7 @@ impl Classification {
     /// `:requires (terminating-horizon)` audit answers the same
     /// question on both surfaces.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `terminating-horizon` fixed tag in [`tatara-check`], future
@@ -974,7 +974,7 @@ impl Classification {
     /// additions on [`HorizonKind`]) binds through the SAME
     /// `horizon_terminates()` shape rather than restating the
     /// `classification.horizon.kind.terminates()` chain at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// callsite. Generation over composition; a
     /// future [`HorizonKind`] variant lands at ONE `ALL` entry +
     /// ONE `terminates` arm on the closed set and this probe picks
     /// it up mechanically.
@@ -1054,7 +1054,7 @@ impl Classification {
     /// `:requires (metric-axes-required)` audit answers the same
     /// question on both surfaces.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `metric-axes-required` fixed tag in `tatara-check`, future
@@ -1062,7 +1062,7 @@ impl Classification {
     /// additions on [`HorizonKind`]) binds through the SAME
     /// `horizon_requires_metric_axes()` shape rather than restating
     /// the `classification.horizon.kind.requires_metric_axes()` chain
-    /// at each callsite. THEORY.md §VI.1 — generation over
+    /// at each callsite. Generation over
     /// composition; a future [`HorizonKind`] variant lands at ONE
     /// `ALL` entry + ONE `requires_metric_axes` arm on the closed set
     /// and this probe picks it up mechanically.
@@ -1148,7 +1148,7 @@ impl Classification {
     /// every scheduler / coordination-mode chooser downstream binds
     /// through the SAME `calm_requires_coordination()` shape.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `coordination-required` fixed tag in `tatara-check`, future
@@ -1156,7 +1156,7 @@ impl Classification {
     /// additions on [`CalmClassification`]) binds through the SAME
     /// `calm_requires_coordination()` shape rather than restating the
     /// `classification.calm.requires_coordination()` chain at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// callsite. Generation over composition; a
     /// future [`CalmClassification`] variant lands at ONE `ALL` entry +
     /// ONE `requires_coordination` arm on the closed set and this probe
     /// picks it up mechanically.
@@ -1261,7 +1261,7 @@ impl Classification {
     /// substrate site and every compliance-mode chooser downstream
     /// binds through the SAME `data_is_regulated()` shape.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `data-regulated` fixed tag in `tatara-check`, future
@@ -1269,7 +1269,7 @@ impl Classification {
     /// variant additions on [`DataClassification`]) binds through
     /// the SAME `data_is_regulated()` shape rather than restating the
     /// `classification.data_classification.is_regulated()` chain at
-    /// each callsite. THEORY.md §VI.1 — generation over composition;
+    /// each callsite. Generation over composition;
     /// a future [`DataClassification`] variant lands at ONE `ALL`
     /// entry + ONE `is_regulated` arm on the closed set and this
     /// probe picks it up mechanically.
@@ -1382,7 +1382,7 @@ impl Classification {
     /// substrate site and every compliance-mode chooser downstream
     /// binds through the SAME `data_is_restricted()` shape.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `data-restricted` fixed tag in `tatara-check`, future
@@ -1391,7 +1391,7 @@ impl Classification {
     /// through the SAME `data_is_restricted()` shape rather than
     /// restating the
     /// `classification.data_classification.is_restricted()` chain at
-    /// each callsite. THEORY.md §VI.1 — generation over composition;
+    /// each callsite. Generation over composition;
     /// a future [`DataClassification`] variant lands at ONE `ALL`
     /// entry + ONE `is_restricted` arm on the closed set and this
     /// probe picks it up mechanically.
@@ -1493,7 +1493,7 @@ impl Classification {
     /// `terminates ^ requires_metric_axes` composes through this
     /// corner today.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `endomorphic-point` fixed tag in `tatara-check`, future DAG
@@ -1501,7 +1501,7 @@ impl Classification {
     /// additions on [`ConvergencePointType`]) binds through the SAME
     /// `point_is_endomorphic()` shape rather than restating the
     /// `classification.point_type.is_endomorphic()` chain at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// callsite. Generation over composition; a
     /// future [`ConvergencePointType`] variant lands at ONE `ALL`
     /// entry + ONE `is_endomorphic` arm on the closed set and this
     /// probe picks it up mechanically.
@@ -1592,7 +1592,7 @@ impl Classification {
     /// `:requires (diffusive-point)` audit answers the same question
     /// on both surfaces.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `diffusive-point` fixed tag in `tatara-check`, future DAG
@@ -1600,7 +1600,7 @@ impl Classification {
     /// additions on [`ConvergencePointType`]) binds through the SAME
     /// `point_is_diffusive()` shape rather than restating the
     /// `classification.point_type.is_diffusive()` chain at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// callsite. Generation over composition; a
     /// future [`ConvergencePointType`] variant lands at ONE `ALL`
     /// entry + ONE `is_diffusive` arm on the closed set and this
     /// probe picks it up mechanically.
@@ -1695,7 +1695,7 @@ impl Classification {
     /// `:requires (convergent-point)` audit answers the same question
     /// on both surfaces.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `convergent-point` fixed tag in `tatara-check`, future DAG
@@ -1703,7 +1703,7 @@ impl Classification {
     /// additions on [`ConvergencePointType`]) binds through the SAME
     /// `point_is_convergent()` shape rather than restating the
     /// `classification.point_type.is_convergent()` chain at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// callsite. Generation over composition; a
     /// future [`ConvergencePointType`] variant lands at ONE `ALL`
     /// entry + ONE `is_convergent` arm on the closed set and this
     /// probe picks it up mechanically.
@@ -1800,7 +1800,7 @@ impl Classification {
     /// `point_type` axis by
     /// `classification_point_type_probes_form_three_way_xor_partition_over_all`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `resource-substrate` fixed tag in `tatara-check`, future
@@ -1808,7 +1808,7 @@ impl Classification {
     /// variant additions on [`SubstrateType`]) binds through the
     /// SAME `substrate_is_resource()` shape rather than restating
     /// the `classification.substrate.is_resource()` chain at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// callsite. Generation over composition; a
     /// future [`SubstrateType`] variant lands at ONE `ALL` entry +
     /// ONE `is_resource` arm on the closed set and this probe picks
     /// it up mechanically.
@@ -1907,7 +1907,7 @@ impl Classification {
     /// `point_type` axis by
     /// `classification_point_type_probes_form_three_way_xor_partition_over_all`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `policy-substrate` fixed tag in `tatara-check`, future
@@ -1915,7 +1915,7 @@ impl Classification {
     /// variant additions on [`SubstrateType`]) binds through the
     /// SAME `substrate_is_policy()` shape rather than restating
     /// the `classification.substrate.is_policy()` chain at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// callsite. Generation over composition; a
     /// future [`SubstrateType`] variant lands at ONE `ALL` entry +
     /// ONE `is_policy` arm on the closed set and this probe picks
     /// it up mechanically.
@@ -2012,7 +2012,7 @@ impl Classification {
     /// axis by
     /// `classification_point_type_probes_form_three_way_xor_partition_over_all`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `telemetry-substrate` fixed tag in `tatara-check`, future
@@ -2020,7 +2020,7 @@ impl Classification {
     /// variant additions on [`SubstrateType`]) binds through the
     /// SAME `substrate_is_telemetry()` shape rather than restating
     /// the `classification.substrate.is_telemetry()` chain at each
-    /// callsite. THEORY.md §VI.1 — generation over composition; a
+    /// callsite. Generation over composition; a
     /// future [`SubstrateType`] variant lands at ONE `ALL` entry +
     /// ONE `is_telemetry` arm on the closed set and this probe picks
     /// it up mechanically.
@@ -2126,7 +2126,7 @@ impl Classification {
     /// the parent-composed layer's own XOR partition test on the
     /// calm axis.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `monotone-calm` fixed tag in `tatara-check`, future scheduler
@@ -2134,8 +2134,8 @@ impl Classification {
     /// framing, future variant additions on [`CalmClassification`])
     /// binds through the SAME `calm_is_monotone()` shape rather than
     /// restating either `!self.calm_requires_coordination()` or
-    /// `self.calm.is_monotone()` at the callsite. THEORY.md §VI.1 —
-    /// generation over composition; a future [`CalmClassification`]
+    /// `self.calm.is_monotone()` at the callsite.
+    /// Generation over composition; a future [`CalmClassification`]
     /// variant lands at ONE `ALL` entry + ONE `is_monotone` arm on
     /// the closed set and this probe picks it up mechanically.
     #[must_use]
@@ -2255,7 +2255,7 @@ impl Classification {
     /// — mirror of the calm axis's parent-composed binary XOR closure
     /// `classification_calm_probes_form_binary_xor_partition_over_all`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `public-data` fixed tag in `tatara-check`, future compliance-
@@ -2264,7 +2264,7 @@ impl Classification {
     /// [`DataClassification`]) binds through the SAME
     /// `data_is_public()` shape rather than restating either
     /// `!self.data_is_restricted()` or `self.data_classification.is_public()`
-    /// at the callsite. THEORY.md §VI.1 — generation over composition;
+    /// at the callsite. Generation over composition;
     /// a future [`DataClassification`] variant lands at ONE `ALL`
     /// entry + ONE `is_public` arm on the closed set and this probe
     /// picks it up mechanically.
@@ -2357,7 +2357,7 @@ impl Classification {
     /// and data-axis (`public-data ⊕ data-restricted`) closures — as
     /// the SECOND occupant on the axis.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body lives
     /// at ONE substrate site so every downstream (the
     /// `prefers-lower-direction` fixed tag in `tatara-check`, future
@@ -2366,7 +2366,7 @@ impl Classification {
     /// [`OptimizationDirection`]) binds through the SAME
     /// `direction_prefers_lower()` shape rather than restating the
     /// `classification.horizon.direction.unwrap_or_default().prefers_lower()`
-    /// chain at each callsite. THEORY.md §VI.1 — generation over
+    /// chain at each callsite. Generation over
     /// composition; a future [`OptimizationDirection`] variant lands at
     /// ONE `ALL` entry + ONE `prefers_lower` arm on the closed set and
     /// this probe picks it up mechanically.
@@ -2480,7 +2480,7 @@ impl Classification {
     /// classification axis to reach the closed XOR partition landmark
     /// at this corner.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the
     /// `prefers-higher-direction` fixed tag in `tatara-check`, future
@@ -2490,7 +2490,7 @@ impl Classification {
     /// through the SAME `direction_prefers_higher()` shape rather
     /// than restating either `!self.direction_prefers_lower()` or
     /// `self.horizon.direction.unwrap_or_default().prefers_higher()`
-    /// at the callsite. THEORY.md §VI.1 — generation over composition;
+    /// at the callsite. Generation over composition;
     /// a future [`OptimizationDirection`] variant lands at ONE `ALL`
     /// entry + ONE `prefers_higher` arm on the closed set and this
     /// probe picks it up mechanically.
@@ -2573,7 +2573,7 @@ impl Classification {
     /// `:requires (single-input-arity)` audit answers the same
     /// question on both surfaces.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the future
     /// `single-input-arity` fixed tag in `tatara-check`, DAG
@@ -2581,7 +2581,7 @@ impl Classification {
     /// future variant additions on [`ConvergencePointType`]) binds
     /// through the SAME `input_arity_is_one()` shape rather than
     /// restating the two-hop `self.point_type.input_arity().is_one()`
-    /// chain at each callsite. THEORY.md §VI.1 — generation over
+    /// chain at each callsite. Generation over
     /// composition; a future [`ConvergencePointType`] variant lands
     /// at ONE `ALL` entry + ONE `input_arity` arm on the closed set
     /// and this probe picks it up mechanically.
@@ -2641,7 +2641,7 @@ impl Classification {
     /// composed layer as a substrate-wide theorem, closing the
     /// axis at the SEVENTH-classification-axis landmark.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the future
     /// `multi-input-arity` fixed tag, DAG composition validators
@@ -2650,7 +2650,7 @@ impl Classification {
     /// `input_arity_is_many()` shape rather than restating either
     /// `!self.input_arity_is_one()` or
     /// `self.point_type.input_arity().is_many()` at each callsite.
-    /// THEORY.md §VI.1 — generation over composition; a future
+    /// Generation over composition; a future
     /// [`ConvergencePointType`] variant lands at ONE `ALL` entry +
     /// ONE `input_arity` arm on the closed set and this probe picks
     /// it up mechanically.
@@ -2764,7 +2764,7 @@ impl Classification {
     /// `:requires (single-output-arity)` audit answers the same
     /// question on both surfaces.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the future
     /// `single-output-arity` fixed tag in `tatara-check`, DAG
@@ -2772,7 +2772,7 @@ impl Classification {
     /// future variant additions on [`ConvergencePointType`]) binds
     /// through the SAME `output_arity_is_one()` shape rather than
     /// restating the two-hop `self.point_type.output_arity().is_one()`
-    /// chain at each callsite. THEORY.md §VI.1 — generation over
+    /// chain at each callsite. Generation over
     /// composition; a future [`ConvergencePointType`] variant lands
     /// at ONE `ALL` entry + ONE `output_arity` arm on the closed set
     /// and this probe picks it up mechanically.
@@ -2841,7 +2841,7 @@ impl Classification {
     /// stored-slot walks into DAG-composition typed projections
     /// systematically.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-nullary-bool predicate body
     /// lives at ONE substrate site so every downstream (the future
     /// `multi-output-arity` fixed tag, DAG composition validators
@@ -2850,7 +2850,7 @@ impl Classification {
     /// `output_arity_is_many()` shape rather than restating either
     /// `!self.output_arity_is_one()` or
     /// `self.point_type.output_arity().is_many()` at each callsite.
-    /// THEORY.md §VI.1 — generation over composition; a future
+    /// Generation over composition; a future
     /// [`ConvergencePointType`] variant lands at ONE `ALL` entry +
     /// ONE `output_arity` arm on the closed set and this probe picks
     /// it up mechanically.
@@ -2894,11 +2894,11 @@ impl Classification {
     /// the next-lift target) binds through the SAME trait rather than
     /// a five-arm dispatch on axis identity.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the four-baseline-slot restatement is the
     /// composition proof `gate_compute` already carries at ONE site;
     /// this primitive extends the ONE-site composition guarantee
-    /// through the per-axis mutation shape). THEORY.md §VI.1
+    /// through the per-axis mutation shape).
     /// (generation over composition — a future sixth axis lands as
     /// ONE ClassificationAxis impl and every test fixture picks it
     /// up mechanically).
@@ -2962,12 +2962,12 @@ impl Classification {
     /// composer family (`gate_compute_with_axes2`,
     /// `gate_compute_with_axes3`, …).
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// Anchor: invariant 5 (composition
     /// preserves proofs — the per-axis overlay is the axis-local
     /// composition proof [`ClassificationAxis::overlay`] owns at ONE
     /// site; this primitive lifts the ONE-axis composition guarantee
     /// through arbitrary chaining without a per-arity dispatch
-    /// path). THEORY.md §VI.1 (generation over composition — a
+    /// path). (generation over composition — a
     /// future N-axis-conjunction test lands as ONE chained
     /// `.with_axis(...)` sequence versus a fresh N+1-field struct-
     /// literal per callsite).
@@ -2998,7 +2998,7 @@ impl Classification {
 /// audit primitive binds through the SAME trait rather than
 /// restating the five-per-axis assignment shape at its own body.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+/// Anchor: invariant 5 — composition
 /// preserves proofs. The five per-axis assignments each carry an
 /// axis-local composition proof (nested-struct `horizon.kind` gets
 /// a fresh `Horizon::default()` around the mutation; direct-scalar

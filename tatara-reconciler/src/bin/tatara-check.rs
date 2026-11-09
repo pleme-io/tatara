@@ -783,12 +783,12 @@ impl std::fmt::Display for PrefixHint {
 /// executor's shared pipeline) declares its vocabulary through the
 /// SAME macro rather than restating the walk at yet another callsite.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+/// Anchor: invariant 2 — free middle; the
 /// caller's row list is data (prefix literals + closed-set types +
 /// probe closures), the macro is generation; both compose
 /// independently, so a regression that drifted one row's
 /// strip/parse discipline from another becomes structurally
-/// impossible. THEORY.md §VI.1 — generation over composition;
+/// impossible. Generation over composition;
 /// the three-step (`strip_prefix` → `parse::<K>` → `probe`) chain now
 /// dispatches every closed-set prefix family across both surfaces
 /// through ONE generation site.
@@ -1817,10 +1817,10 @@ fn evaluate_point_require_tag(
 /// every future closed-set prefix family inherit the shift by
 /// construction.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// three-step chain now dispatches TWENTY-ONE closed-set prefix
 /// families past the ≥2 PRIME-DIRECTIVE trigger through ONE
-/// substrate owner. THEORY.md §II.1 invariant 2 — free middle; the
+/// substrate owner. Invariant 2 — free middle; the
 /// caller composes the closed-set choice (via the generic `K`) and
 /// the presence probe (via the `probe` closure) independently, so a
 /// regression that drifted one prefix family's strip/parse discipline
@@ -1931,13 +1931,13 @@ struct FixedTagArm<S: 'static> {
 /// third consumer routes through ONE substrate primitive rather than
 /// re-scanning the source for `match tag { ... }` literals.
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// THEORY.md §V.1 — knowable platform; the fixed-tag miss path
+/// Knowable platform; the fixed-tag miss path
 /// gains a diagnostic hint that composes through the SAME suggest
 /// metric every closed-set near-miss already routes through, closing
 /// the diagnostic-uniformity gap between the prefix vocabulary and
-/// the fixed vocabulary. THEORY.md §VI.1 — generation over
+/// the fixed vocabulary. Generation over
 /// composition; the fixed-tag miss diagnostic emerges from the
 /// composition of TWO substrate primitives (this table walk +
 /// [`tatara_lisp::domain::suggest`]) rather than as a per-arm
@@ -3730,13 +3730,13 @@ struct CompiledSource {
 /// hard-coded `[0]`) lands at THIS ONE substrate owner and every
 /// current + future peer inherits the shift.
 ///
-/// # Theory grounding
+/// # Grounding
 ///
-/// THEORY.md §II.1 invariant 2 — free middle; the (defs, evaluator)
+/// Invariant 2 — free middle; the (defs, evaluator)
 /// pair is pure data at the call boundary, so the composition
 /// (`count = defs.len()`, `classify = Box::new(move |tag| evaluator(
-/// &defs[0].spec, tag))`) can never drift between peers. THEORY.md
-/// §VI.1 — generation over composition; the classify closure is
+/// &defs[0].spec, tag))`) can never drift between peers.
+/// Generation over composition; the classify closure is
 /// generated once for every current + future domain rather than
 /// hand-authored per-arm.
 fn build_compiled_source<S: 'static>(
@@ -3790,15 +3790,15 @@ fn build_compiled_source<S: 'static>(
 /// ≥ 2 duplication threshold — post-lift both arms + every future
 /// peer route through ONE substrate owner.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+/// Anchor: invariant 2 — free middle; the
 /// domain-specific compile + classify + diagnostic-prose steps are
 /// pure functions on `(&str, &str) → …`, so a future consumer
 /// (a documentation generator that lists every domain's require-tag
 /// vocabulary, an editor completion provider suggesting known domain
 /// names, a linter that flags a `:requires <tag>` against the domain's
 /// known vocabulary before submission) routes through the SAME
-/// primitive rather than restating the dispatch table. THEORY.md
-/// §II.1 invariant 5 — composition preserves proofs; the shared
+/// primitive rather than restating the dispatch table.
+/// Invariant 5 — composition preserves proofs; the shared
 /// [`CompiledSource`] return shape means the executor's pipeline
 /// discipline (min-defs gate, requires-loop, pass-summary prose)
 /// binds ONCE for every current AND future domain.
@@ -3978,10 +3978,10 @@ fn parse_kwargs(rest: &[Sexp]) -> Vec<(String, Sexp)> {
 /// NAME).and_then(Sexp::as_list)` — this primitive names the
 /// string-shape corner (the only shape both current callers walked).
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// Anchor: generation over composition; two
 /// byte-identical five-line inline compositions collapse onto ONE
-/// substrate owner past the ≥2 PRIME-DIRECTIVE trigger. THEORY.md
-/// §II.1 invariant 2 — free middle; both current executors AND every
+/// substrate owner past the ≥2 PRIME-DIRECTIVE trigger.
+/// Invariant 2 — free middle; both current executors AND every
 /// future `:name-list` slot on a new check axis route through the
 /// SAME parsed-kwargs-to-owned-string-list projection, so a
 /// regression that drifts one caller's discipline from the others
@@ -4018,7 +4018,7 @@ fn find_kw_string_list(
 /// delegate rather than as a fresh copy of the pre-lift four-line
 /// `find_map` shape at yet another `check_*` body.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition. The
+/// Anchor: generation over composition. The
 /// (name-equality gate, `Option<&Sexp>` return) pair is a substrate
 /// primitive on the parsed-kwargs slice; callers compose their per-slot
 /// projection through the shared `Option` type rather than restating the
@@ -4075,11 +4075,11 @@ const MISSING_ARG_SLUG: &str = "<missing>";
 /// hypothetical `(helmrelease-shape <Kind> ...)` shape check) inherit
 /// the upgrade mechanically.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// three-line `args.first().and_then(...).unwrap_or(...)` chain
 /// recurred at TWO executor bodies past the ≥2 PRIME-DIRECTIVE
 /// trigger, and is lifted to ONE substrate owner here.
-/// THEORY.md §II.1 invariant 5 — composition preserves proofs; both
+/// Invariant 5 — composition preserves proofs; both
 /// callers routing through the SAME substrate primitive means a
 /// future sentinel or projection change lands at ONE site and every
 /// downstream head-arg consumer inherits the shift by construction.
@@ -4142,11 +4142,11 @@ fn head_symbol_or_missing(args: &[Sexp]) -> &str {
 /// and every current caller plus every future positional-string
 /// executor inherits the upgrade mechanically.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// Anchor: generation over composition; the
 /// two-token `args.<get|first>(N).and_then(Sexp::as_string)` chain
 /// recurred at FIVE executor bodies past the ≥2 PRIME-DIRECTIVE
 /// trigger, and is lifted to ONE substrate owner here.
-/// THEORY.md §II.1 invariant 5 — composition preserves proofs; all
+/// Invariant 5 — composition preserves proofs; all
 /// five callers routing through the SAME substrate primitive means a
 /// future projection or lifetime shift lands at ONE site and every
 /// downstream positional-string consumer inherits the shift by
@@ -4231,11 +4231,11 @@ fn positional_string(args: &[Sexp], index: usize) -> Option<&str> {
 /// [`String`] through the `&str` slot without an intervening
 /// allocation — the primitive doesn't need to own either slot.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// let-else + `report.fail(label, expected)` early-return chain
 /// recurred at 5 hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
 /// duplication trigger and is lifted onto ONE substrate owner here).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// Invariant 5 (composition preserves proofs — the
 /// pin block below binds the primitive at fail-before-pass-after
 /// granularity so a regression that drifted the `Report::fail`
 /// side-effect on the `None` arm, dropped the borrowed-lifetime
@@ -4294,10 +4294,10 @@ fn required_positional_string<'a>(
 /// construction — no per-arm restatement of the shortfall-format
 /// discipline.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// Anchor: generation over composition; two
 /// byte-identical four-line inline compositions collapse onto ONE
-/// substrate owner past the ≥ 2 PRIME-DIRECTIVE trigger. THEORY.md
-/// §II.1 invariant 5 — composition preserves proofs; both current
+/// substrate owner past the ≥ 2 PRIME-DIRECTIVE trigger.
+/// Invariant 5 — composition preserves proofs; both current
 /// arms routing through the SAME substrate primitive means a future
 /// diagnostic-shape shift lands at ONE site and every downstream
 /// definition-count consumer inherits it by construction.
@@ -4391,11 +4391,11 @@ fn min_defs_shortfall_msg(defs_len: usize, min_defs: usize) -> Option<String> {
 /// `report.pass(label)` / `report.fail(label, ...)` calls that
 /// follow the read).
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the four-link read + fail chain recurred at 4 hand-authored
 /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and
-/// is lifted onto ONE substrate owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — the pin block below
+/// is lifted onto ONE substrate owner here).
+/// Invariant 5 (composition preserves proofs — the pin block below
 /// binds the primitive at fail-before-pass-after granularity so a
 /// regression that drifted the `"read: {e}"` prefix, dropped the
 /// `report.fail` side-effect on the `Err` arm, or flipped the
@@ -4516,11 +4516,11 @@ fn read_or_fail(path: &Path, label: &str, report: &mut Report) -> Option<String>
 /// current + future check executor whose shape matches
 /// `read → parse → pass/fail` composes through both.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// Anchor: (generation over composition —
 /// the four-link terminal `Result` sink recurred at 2 hand-
 /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 /// trigger and is lifted onto ONE substrate owner here).
-/// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+/// Invariant 5 (composition preserves proofs —
 /// both consumers routing through the SAME substrate primitive
 /// means a future diagnostic-shape shift lands at ONE site and
 /// every downstream terminal-report consumer inherits the shift
@@ -4595,11 +4595,11 @@ fn report_result_prefixed<T, E>(
 /// a startup-side failure remain distinguishable by prefix alone at
 /// the reader.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// `"tatara-check: "` prefix + colon separator recurred at 4 hand-
 /// authored `eprintln!` sites in [`main`] past the ★★ PRIME-DIRECTIVE
 /// ≥ 2 duplication trigger and is lifted onto ONE substrate owner
-/// here). THEORY.md §II.1 invariant 5 (composition preserves proofs —
+/// here). Invariant 5 (composition preserves proofs —
 /// the pins bind the byte shape at fail-before-pass-after granularity
 /// so a regression that drifted the prefix, dropped the colon-space
 /// separator, or dropped the detail forwarding surfaces HERE rather
@@ -4674,12 +4674,12 @@ fn startup_diagnostic(detail: impl std::fmt::Display) -> String {
 /// current + future startup-side bail inherits the upgrade
 /// mechanically.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// two-step `eprintln!("tatara-check: <detail>"); return
 /// ExitCode::from(2);` chain recurred at 4 hand-authored sites in
 /// [`main`] past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and
-/// is lifted onto ONE substrate owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — every startup-side
+/// is lifted onto ONE substrate owner here).
+/// Invariant 5 (composition preserves proofs — every startup-side
 /// bail routing through the SAME substrate primitive means a future
 /// diagnostic shape or exit-code shift lands at ONE site and every
 /// downstream bail consumer inherits the shift by construction).

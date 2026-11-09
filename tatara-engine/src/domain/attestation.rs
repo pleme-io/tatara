@@ -58,10 +58,10 @@ use serde::{Deserialize, Serialize};
 /// surfaces HERE rather than as silent cross-crate composed-root /
 /// pillar-hash parse drift.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// Anchor: invariant 5 (composition preserves
 /// proofs — the wire-form scheme literal at ONE substrate owner means
 /// every WRITE-side wrap and every READ-side predicate agree
-/// bytewise by construction). THEORY.md §V.3 (three-pillar
+/// bytewise by construction). (three-pillar
 /// attestation — the canonical pillar-hash shape is `"blake3:{hex}"`;
 /// this constant pins the scheme prefix half of that shape at the
 /// intra-crate scheme-owner axis).
@@ -129,12 +129,12 @@ pub(crate) const BLAKE3_SCHEME_PREFIX: &str = "blake3:";
 /// the hash was computed for no observable reason — the attribute
 /// surfaces that as a warning at every call site.
 ///
-/// Theory anchor: THEORY.md §V.3 (three-pillar attestation — the
+/// Anchor: (three-pillar attestation — the
 /// canonical pillar-hash shape is `"blake3:{hex}"`; this substrate
-/// pins the shape at ONE owner). THEORY.md §VI.1 (generation over
+/// pins the shape at ONE owner). (generation over
 /// composition — the two-link chain recurred at FOUR hand-authored
 /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
-/// lifted to ONE substrate owner here). THEORY.md §II.1 invariant 5
+/// lifted to ONE substrate owner here). Invariant 5
 /// (composition preserves proofs — the pin below binds the primitive
 /// byte-identically to the pre-lift spelling so a regression at ONE
 /// substrate function surfaces at ONE pin rather than as silent
@@ -212,16 +212,16 @@ pub(crate) fn pillar_hash(bytes: &[u8]) -> String {
 /// was performed for no observable reason; the attribute surfaces
 /// that as a warning at every call site.
 ///
-/// Theory anchor: THEORY.md §V.3 (three-pillar attestation — the
+/// Anchor: (three-pillar attestation — the
 /// canonical pillar-hash shape is `"blake3:{hex}"`; this primitive
 /// owns the wrap-only half of that shape on the `blake3::Hash` input
 /// axis, sibling to [`pillar_hash`] on the byte-buffer input axis
 /// and to [`compose_root`] on the incremental-hasher input axis).
-/// THEORY.md §VI.1 (generation over composition — the one-link
+/// (generation over composition — the one-link
 /// `format!("blake3:{}", <blake3::Hash>)` chain recurred at TWO
 /// production emit sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-/// trigger, and is lifted to ONE substrate owner here). THEORY.md
-/// §II.1 invariant 5 (composition preserves proofs — routing both
+/// trigger, and is lifted to ONE substrate owner here).
+/// Invariant 5 (composition preserves proofs — routing both
 /// producer sites through the SAME wrap primitive means a future
 /// scheme change lands at ONE substrate site and every downstream
 /// pillar / composed-root emit inherits the shift by construction).
@@ -285,9 +285,9 @@ pub struct ConvergenceAttestation {
 /// future scheme change (a length tag, a version discriminator, a
 /// per-fleet suffix) lands at this ONE call.
 ///
-/// Theory anchor: THEORY.md §V.3 (three-pillar attestation — the
+/// Anchor: (three-pillar attestation — the
 /// canonical `artifact ⊕ control ⊕ intent → BLAKE3 Merkle` composition
-/// is defined here). THEORY.md §II.1 invariant 5 (composition
+/// is defined here). Invariant 5 (composition
 /// preserves proofs — the produce/verify byte-identity invariant now
 /// holds by construction, pinned at
 /// [`tests::compose_root_produce_and_verify_use_the_same_composition_by_construction`]).

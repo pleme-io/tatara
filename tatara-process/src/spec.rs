@@ -182,12 +182,12 @@ impl From<MustReachPhase> for ProcessPhase {
 /// semantic gate that guards this) reaches every downstream through
 /// the SAME closed-set walk with no per-caller edit.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// Anchor: invariant 5 — composition preserves
 /// proofs; the per-slice `must_reach` walk lives at ONE substrate site
 /// so every downstream (require-tag classifier, coherence check,
 /// editor completion) binds through the SAME shape rather than
 /// restating the `.iter().any(|d| d.must_reach == K)` closure body at
-/// each callsite. THEORY.md §VI.1 — generation over composition; a
+/// each callsite. Generation over composition; a
 /// future [`MustReachPhase`] variant lands at ONE `ALL` entry + ONE
 /// `as_str` arm on the closed set and the presence probe picks it up
 /// mechanically without further per-consumer edits.
@@ -305,14 +305,14 @@ impl SignalPolicy {
     /// the same `strip_and_classify_prefixed_kind::<K, _>` shape in
     /// `tatara-check`.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the scalar-carrier presence-probe body lives at
     /// ONE substrate site so every downstream
     /// (`sighup-<kind>` require-tag family in tatara-check, closed-set
     /// audit dispatchers, future variant additions on
     /// [`SighupStrategy`]) binds through the SAME shape rather than
     /// restating the `signals.sighup_strategy == kind` closure body at
-    /// each callsite. THEORY.md §VI.1 — generation over composition;
+    /// each callsite. Generation over composition;
     /// a future [`SighupStrategy`] variant (a `Suspend` that maps SIGHUP
     /// onto [`crate::phase::ProcessPhase::Zombie`] via
     /// [`SighupStrategy::sighup_target`]) lands at ONE `ALL` entry + ONE
@@ -401,7 +401,7 @@ impl SignalPolicy {
     /// new `sighup_target` arm with a new `ALL` entry — again ONE
     /// substrate edit and every downstream inherits the shift.
     ///
-    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// Anchor: invariant 5 — composition
     /// preserves proofs; the derived-Option-child presence-probe
     /// composition (`self.sighup_strategy.has_target(phase)`) lives
     /// at ONE substrate site so every downstream
@@ -411,7 +411,7 @@ impl SignalPolicy {
     /// [`crate::phase::ProcessPhase`]) binds through the SAME
     /// `has_sighup_target(phase)` shape rather than restating the
     /// `signals.sighup_strategy.sighup_target() == Some(phase)` chain at
-    /// each callsite. THEORY.md §VI.1 — generation over composition;
+    /// each callsite. Generation over composition;
     /// the [`SighupStrategy::sighup_target`] projection is the ONE
     /// per-variant edit site every future strategy variant reaches
     /// through, and this method inherits the shift automatically.

@@ -84,10 +84,10 @@
 //! hash was computed for no observable reason; the attribute surfaces
 //! that as a warning at every consumer site.
 //!
-//! Theory anchor: THEORY.md §V.3 (three-pillar attestation — the
+//! Anchor: (three-pillar attestation — the
 //! canonical `serde_json → BLAKE3 → hex` value-identity projection is
 //! defined at the substrate; this composer routes every workspace
-//! run/theme/store identity slot onto the SAME shape). THEORY.md §VI.1
+//! run/theme/store identity slot onto the SAME shape).
 //! (generation over composition — the two-line chain recurred at THREE
 //! hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
 //! trigger, and is lifted to ONE substrate owner here).
@@ -149,10 +149,10 @@ use std::fmt::Display;
 /// [`hex_blake3_of_json`] on the value-input axis) and the
 /// three-pillar `pillar_hash` composer.
 ///
-/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// Anchor: invariant 5 (composition preserves
 /// proofs — the wire-form scheme literal at ONE substrate owner
 /// means every WRITE-side wrap and every READ-side predicate agree
-/// bytewise by construction). THEORY.md §V.3 (three-pillar
+/// bytewise by construction). (three-pillar
 /// attestation — the canonical pillar-hash shape is `"blake3:{hex}"`;
 /// this constant pins the scheme prefix half of that shape on the
 /// wrap-only axis).
@@ -219,11 +219,11 @@ pub const BLAKE3_SCHEME_PREFIX: &str = "blake3:";
 /// HERE rather than as silent operator-facing drift at every WRITE
 /// consumer.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// one-line `format!("blake3:{<hex>}")` chain recurred at TWO
 /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-/// trigger, and is lifted to ONE substrate owner here). THEORY.md
-/// §V.3 (three-pillar attestation — the canonical pillar-hash shape
+/// trigger, and is lifted to ONE substrate owner here).
+/// (three-pillar attestation — the canonical pillar-hash shape
 /// is `"blake3:{hex}"`; this primitive owns the wrap-only half of
 /// that shape at the workspace root, sibling to the compute-and-wrap
 /// owner `pillar_hash` in `tatara-engine`).
@@ -318,11 +318,11 @@ pub fn blake3_scheme_display<H: Display>(hex: H) -> String {
 ///   Consumers that need the scheme-prefixed form compose
 ///   `blake3_scheme_display(hex_blake3_of_bytes(bytes))`.
 ///
-/// Theory anchor: THEORY.md §V.3 (three-pillar attestation — the
+/// Anchor: (three-pillar attestation — the
 /// canonical `bytes → BLAKE3 → hex` byte-identity projection is the
 /// value-input axis's counterpart to the JSON-input axis, and the two
-/// peers now share ONE spelling at this crate's layer). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — the JSON-input peer
+/// peers now share ONE spelling at this crate's layer).
+/// Invariant 5 (composition preserves proofs — the JSON-input peer
 /// routes through this byte-input peer, so a future spelling change
 /// lands at ONE site and both peers inherit the shift by construction).
 #[must_use]
@@ -425,15 +425,15 @@ pub fn hex_blake3_of_bytes(bytes: &[u8]) -> String {
 ///   three shape primitives on the identity-projection axis through
 ///   ONE call site.
 ///
-/// Theory anchor: THEORY.md §V.3 (three-pillar attestation — the
+/// Anchor: (three-pillar attestation — the
 /// canonical `blake3::Hash → hex` encoding step is defined at ONE
 /// substrate owner; every workspace pillar-hash / composed-root /
 /// stable-name identity slot inherits the spelling by construction).
-/// THEORY.md §VI.1 (generation over composition — the one-link
+/// (generation over composition — the one-link
 /// `<hash>.to_hex().to_string()` / `hex::encode(<hash>.as_bytes())`
 /// step recurred at TWO hand-authored owners past the ★★
 /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
-/// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+/// substrate owner here). Invariant 5 (composition
 /// preserves proofs — every peer routes through the SAME primitive,
 /// so a future spelling change lands at ONE substrate function and
 /// reaches every downstream consumer mechanically).
@@ -553,11 +553,11 @@ pub fn hex_blake3_of_json<T: Serialize + ?Sized>(v: &T) -> String {
 /// binding all three shape primitives on the identity-projection axis
 /// through ONE call site.
 ///
-/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// Anchor: (generation over composition — the
 /// 1-link `.chars().take(N).collect()` prefix step recurred at TWO
 /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-/// trigger, and is lifted to ONE substrate owner here). THEORY.md §II.1
-/// invariant 5 (composition preserves proofs — the pin block below
+/// trigger, and is lifted to ONE substrate owner here).
+/// Invariant 5 (composition preserves proofs — the pin block below
 /// binds the primitive at fail-before-pass-after granularity so a
 /// regression that byte-sliced the receiver, padded the short-input
 /// corner, or drifted the character-take semantics surfaces at THESE

@@ -18,9 +18,11 @@
 
 #![cfg(feature = "runtime-wasmtime")]
 
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -48,7 +50,11 @@ const HTTP_LINKED: bool = cfg!(feature = "wasi-http");
 /// The async, epoch-interrupted wasmtime engine components run on.
 pub struct ComponentHost {
     engine: Engine,
+    compiled: Mutex<HashMap<Arc<[u8]>, Component>>,
+    compilations: AtomicU64,
 }
+
+pub const COMPILED_COMPONENTS_HELD: usize = 32;
 
 impl ComponentHost {
     /// Build the engine and start its epoch ticker. The ticker holds only a
@@ -74,7 +80,33 @@ impl ComponentHost {
                 }
             })
             .map_err(|e| WasmEngineError::Instantiate(e.to_string()))?;
-        Ok(Self { engine })
+        Ok(Self {
+            engine,
+            compiled: Mutex::new(HashMap::new()),
+            compilations: AtomicU64::new(0),
+        })
+    }
+
+    #[must_use]
+    pub fn compilations(&self) -> u64 {
+        self.compilations.load(Ordering::Relaxed)
+    }
+
+    fn component_of(&self, bytes: Vec<u8>) -> Result<Component, WasmEngineError> {
+        let key: Arc<[u8]> = Arc::from(bytes);
+        if let Some(hit) = self.compiled.lock().ok().and_then(|c| c.get(&key).cloned()) {
+            return Ok(hit);
+        }
+        let component = Component::new(&self.engine, &key)
+            .map_err(|e| WasmEngineError::Compile(format!("{e:#}")))?;
+        self.compilations.fetch_add(1, Ordering::Relaxed);
+        if let Ok(mut compiled) = self.compiled.lock() {
+            if compiled.len() >= COMPILED_COMPONENTS_HELD {
+                compiled.clear();
+            }
+            compiled.insert(key, component.clone());
+        }
+        Ok(component)
     }
 
     /// Start `spawn`'s component and return at once.
@@ -92,8 +124,7 @@ impl ComponentHost {
         let runtime = tokio::runtime::Handle::try_current()
             .map_err(|_| WasmEngineError::NoAsyncRuntime)?;
         let bytes = read_module(&spawn.boot.module)?;
-        let component = Component::new(&self.engine, &bytes)
-            .map_err(|e| WasmEngineError::Compile(format!("{e:#}")))?;
+        let component = self.component_of(bytes)?;
         let ty = component.component_type();
         check_component_imports(
             &spawn.boot.capabilities,

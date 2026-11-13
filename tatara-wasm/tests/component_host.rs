@@ -15,6 +15,7 @@ use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use tatara_wasm::component::ComponentHost;
 use tatara_wasm::{
     engine_for, fixtures, GuestStream, NetworkGrant, OutputSink, Peer, Preopen, WasiGrant,
     WasiPreview, WasmBoot, WasmCapabilities, WasmEngineError, WasmExit, WasmFeatures, WasmLimits,
@@ -507,6 +508,30 @@ async fn a_command_reads_a_graceful_stop_as_a_stop() {
     p.stop_within(Duration::from_secs(30));
     assert_eq!(ended(&mut p).await, WasmExit::Stopped);
     assert!(asked.elapsed() < Duration::from_secs(2));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_restart_of_the_same_component_reuses_its_compilation() {
+    let host = ComponentHost::new().expect("host");
+    let spawn = spawn_of(
+        fixtures::PROBE,
+        grant(&["exit", "0"], NetworkGrant::default(), vec![]),
+        WasmLimits::default(),
+    );
+    for _ in 0..4 {
+        let mut p = host
+            .spawn(&spawn, Arc::new(Captured::default()))
+            .expect("spawn");
+        assert_eq!(ended(&mut p).await, WasmExit::Code { code: 0 });
+    }
+    assert_eq!(host.compilations(), 1);
+    let other = spawn_of(
+        fixtures::GREETER,
+        grant(&[], NetworkGrant::default(), vec![]),
+        WasmLimits::default(),
+    );
+    let _ = host.spawn(&other, Arc::new(Captured::default()));
+    assert_eq!(host.compilations(), 2);
 }
 
 #[test]

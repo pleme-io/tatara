@@ -32,9 +32,8 @@ use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, ResourceLimiter, Store, UpdateDeadline};
 use wasmtime_wasi::cli::{IsTerminal, StdoutStream};
 use wasmtime_wasi::p2::bindings::CommandPre;
-use wasmtime_wasi::{
-    DirPerms, FilePerms, I32Exit, SocketAddrUse, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView,
-};
+use wasmtime_wasi::sockets::SocketAddrUse;
+use wasmtime_wasi::{FsPerms, I32Exit, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 use crate::engine::{
     check_component_imports, read_module, GuestStream, Halt, NetworkGrant, OutputSink, WasiGrant,
@@ -65,7 +64,6 @@ impl ComponentHost {
     /// be built.
     pub fn new() -> Result<Self, WasmEngineError> {
         let mut config = Config::new();
-        config.async_support(true);
         config.wasm_component_model(true);
         config.epoch_interruption(true);
         let engine = Engine::new(&config).map_err(instantiate)?;
@@ -121,8 +119,8 @@ impl ComponentHost {
         spawn: &WasmSpawn,
         sink: Arc<dyn OutputSink>,
     ) -> Result<WasmProcess, WasmEngineError> {
-        let runtime = tokio::runtime::Handle::try_current()
-            .map_err(|_| WasmEngineError::NoAsyncRuntime)?;
+        let runtime =
+            tokio::runtime::Handle::try_current().map_err(|_| WasmEngineError::NoAsyncRuntime)?;
         let bytes = read_module(&spawn.boot.module)?;
         let component = self.component_of(bytes)?;
         let ty = component.component_type();
@@ -135,12 +133,9 @@ impl ComponentHost {
 
         let mut linker = Linker::<Guest>::new(&self.engine);
         if spawn.boot.capabilities.wasi.is_some() {
-            let mut options = wasmtime_wasi::p2::bindings::LinkOptions::default();
-            options.cli_exit_with_code(true);
-            wasmtime_wasi::p2::add_to_linker_with_options_async(&mut linker, &options)
-                .map_err(instantiate)?;
+            wasmtime_wasi::p2::add_to_linker_async(&mut linker).map_err(instantiate)?;
             #[cfg(feature = "wasi-http")]
-            wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)
+            wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
                 .map_err(instantiate)?;
         }
         let pre = linker.instantiate_pre(&component).map_err(instantiate)?;
@@ -214,7 +209,7 @@ impl Recipe {
             #[cfg(feature = "wasi-http")]
             http: wasmtime_wasi_http::WasiHttpCtx::new(),
             memory: Ceiling::new(self.limits.memory_bytes),
-            network,
+            network: Peers(network),
         };
         let mut store = Store::new(engine, guest);
         store.limiter(|g| &mut g.memory);
@@ -222,7 +217,10 @@ impl Recipe {
         match throttle_pause(self.limits.cpu_millis) {
             None => store.epoch_deadline_async_yield_and_update(1),
             Some(pause) => store.epoch_deadline_callback(move |_| {
-                Ok(UpdateDeadline::YieldCustom(1, Box::pin(tokio::time::sleep(pause))))
+                Ok(UpdateDeadline::YieldCustom(
+                    1,
+                    Box::pin(tokio::time::sleep(pause)),
+                ))
             }),
         }
         Ok(store)
@@ -237,8 +235,11 @@ struct Guest {
     http: wasmtime_wasi_http::WasiHttpCtx,
     memory: Ceiling,
     #[cfg_attr(not(feature = "wasi-http"), allow(dead_code))]
-    network: Arc<NetworkGrant>,
+    network: Peers,
 }
+
+#[cfg_attr(not(feature = "wasi-http"), allow(dead_code))]
+struct Peers(Arc<NetworkGrant>);
 
 impl WasiView for Guest {
     fn ctx(&mut self) -> WasiCtxView<'_> {
@@ -301,13 +302,13 @@ pub(crate) fn apply_grant(
         builder.args(&grant.argv);
     }
     for p in &grant.preopens {
-        let (dir_perms, file_perms) = if p.writable {
-            (DirPerms::all(), FilePerms::all())
+        let perms = if p.writable {
+            FsPerms::ReadWrite
         } else {
-            (DirPerms::READ, FilePerms::READ)
+            FsPerms::ReadOnly
         };
         builder
-            .preopened_dir(&p.host_path, &p.guest_path, dir_perms, file_perms)
+            .preopened_dir(&p.host_path, &p.guest_path, perms)
             .map_err(|e| WasmEngineError::Io(format!("preopen {}: {e}", p.host_path.display())))?;
     }
     Ok(())
@@ -315,15 +316,18 @@ pub(crate) fn apply_grant(
 
 /// Whether `net` admits a guest's use of `addr`.
 ///
-/// A bind is admitted on a declared port (or an ephemeral one, once a peer
-/// is declared). A connect or datagram is admitted only to a declared peer's
-/// port, at an address that peer's host is or resolves to.
+/// A bind or listen is admitted on a declared port (or an ephemeral one, once
+/// a peer is declared). A connect or sent datagram is admitted only to a
+/// declared peer's port, at an address that peer's host is or resolves to.
+/// An accepted connection or a received datagram is admitted while the grant
+/// is open.
 pub async fn admits_socket(net: &NetworkGrant, addr: SocketAddr, use_: SocketAddrUse) -> bool {
     match use_ {
-        SocketAddrUse::TcpBind | SocketAddrUse::UdpBind => net.admits_bind(addr.port()),
-        SocketAddrUse::TcpConnect
-        | SocketAddrUse::UdpConnect
-        | SocketAddrUse::UdpOutgoingDatagram => {
+        SocketAddrUse::TcpBind | SocketAddrUse::TcpListen | SocketAddrUse::UdpBind => {
+            net.admits_bind(addr.port())
+        }
+        SocketAddrUse::TcpAccept | SocketAddrUse::UdpReceive => !net.is_closed(),
+        SocketAddrUse::TcpConnect | SocketAddrUse::UdpSend => {
             let want = canonical(addr.ip());
             for peer in net.connect.iter().filter(|p| p.port == addr.port()) {
                 if let Ok(ip) = peer.host.parse::<IpAddr>() {
@@ -416,11 +420,11 @@ impl ResourceLimiter for Ceiling {
         current: usize,
         desired: usize,
         _maximum: Option<usize>,
-    ) -> anyhow::Result<bool> {
+    ) -> wasmtime::Result<bool> {
         let held = self.held.saturating_add(desired.saturating_sub(current));
         if let Some(limit) = self.limit {
             if held > limit {
-                return Err(anyhow::Error::new(CeilingHit { limit }));
+                return Err(wasmtime::Error::new(CeilingHit { limit }));
             }
         }
         self.held = held;
@@ -432,7 +436,7 @@ impl ResourceLimiter for Ceiling {
         _current: usize,
         _desired: usize,
         _maximum: Option<usize>,
-    ) -> anyhow::Result<bool> {
+    ) -> wasmtime::Result<bool> {
         Ok(true)
     }
 }
@@ -451,7 +455,7 @@ fn throttle_pause(cpu_millis: Option<u32>) -> Option<Duration> {
 }
 
 /// Read a run's result into an exit.
-fn classify(result: anyhow::Result<Result<(), ()>>) -> WasmExit {
+fn classify(result: wasmtime::Result<Result<(), ()>>) -> WasmExit {
     match result {
         Ok(Ok(())) => WasmExit::Code { code: 0 },
         Ok(Err(())) => WasmExit::Code { code: 1 },
@@ -471,7 +475,7 @@ fn classify(result: anyhow::Result<Result<(), ()>>) -> WasmExit {
     }
 }
 
-fn found<T: std::error::Error + Send + Sync + 'static>(e: &anyhow::Error) -> Option<&T> {
+fn found<T: std::error::Error + Send + Sync + 'static>(e: &wasmtime::Error) -> Option<&T> {
     e.downcast_ref::<T>()
         .or_else(|| e.chain().find_map(|c| c.downcast_ref::<T>()))
 }
@@ -534,48 +538,59 @@ async fn run_command(
 #[cfg(feature = "wasi-http")]
 mod proxy {
     use std::convert::Infallible;
+    use std::future::Future;
     use std::net::Ipv4Addr;
     use std::sync::Arc;
 
     use http_body_util::BodyExt;
     use hyper::body::Bytes;
+    use hyper::http::uri::{Authority, Scheme as UriScheme};
     use tokio::sync::watch;
-    use wasmtime::component::{InstancePre, ResourceTable};
-    use wasmtime_wasi_http::bindings::http::types::{ErrorCode, Scheme};
-    use wasmtime_wasi_http::bindings::ProxyPre;
-    use wasmtime_wasi_http::body::HyperOutgoingBody;
+    use wasmtime::component::InstancePre;
     use wasmtime_wasi_http::io::TokioIo;
-    use wasmtime_wasi_http::types::{
-        default_send_request, HostFutureIncomingResponse, OutgoingRequestConfig,
+    use wasmtime_wasi_http::p2::bindings::http::types::Scheme;
+    use wasmtime_wasi_http::p2::bindings::ProxyPre;
+    use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
+    use wasmtime_wasi_http::{
+        default_hooks, Error, RequestOptions, WasiBody, WasiHttpCtxView, WasiHttpHooks,
+        WasiHttpView,
     };
-    use wasmtime_wasi_http::{HttpResult, WasiHttpCtx, WasiHttpView};
 
-    use super::{any_halt, asked, classify, elapsed, halt_now, instantiate, Guest, Recipe};
+    use super::{any_halt, asked, classify, elapsed, halt_now, instantiate, Guest, Peers, Recipe};
     use crate::engine::{GuestStream, Halt, WasmEngineError, WasmExit};
 
+    type Settled = Box<dyn Future<Output = Result<(), Error>> + Send>;
+    type Sent =
+        Box<dyn Future<Output = Result<(hyper::Response<WasiBody>, Settled), Error>> + Send>;
+
     impl WasiHttpView for Guest {
-        fn ctx(&mut self) -> &mut WasiHttpCtx {
-            &mut self.http
+        fn http(&mut self) -> WasiHttpCtxView<'_> {
+            WasiHttpCtxView {
+                ctx: &mut self.http,
+                table: &mut self.table,
+                hooks: &mut self.network,
+            }
         }
+    }
 
-        fn table(&mut self) -> &mut ResourceTable {
-            &mut self.table
-        }
-
+    impl WasiHttpHooks for Peers {
         fn send_request(
             &mut self,
-            request: hyper::Request<HyperOutgoingBody>,
-            config: OutgoingRequestConfig,
-        ) -> HttpResult<HostFutureIncomingResponse> {
-            let authority = request.uri().authority();
-            let host = authority.map_or("", |a| a.host());
+            request: hyper::Request<WasiBody>,
+            options: Option<RequestOptions>,
+            fut: Settled,
+        ) -> Sent {
+            let uri = request.uri();
+            let authority = uri.authority();
+            let host = authority.map_or("", Authority::host);
+            let use_tls = uri.scheme() == Some(&UriScheme::HTTPS);
             let port = authority
-                .and_then(hyper::http::uri::Authority::port_u16)
-                .unwrap_or(if config.use_tls { 443 } else { 80 });
-            if !self.network.names_peer(host, port) {
-                return Err(ErrorCode::HttpRequestDenied.into());
+                .and_then(Authority::port_u16)
+                .unwrap_or(if use_tls { 443 } else { 80 });
+            if !self.0.names_peer(host, port) {
+                return Box::new(async { Err(Error::HttpRequestDenied) });
             }
-            Ok(default_send_request(request, config))
+            default_hooks().send_request(request, options, fut)
         }
     }
 
@@ -701,10 +716,12 @@ mod proxy {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let incoming = store
             .data_mut()
+            .http()
             .new_incoming_request(Scheme::Http, req)
             .map_err(|e| format!("{e:#}"))?;
         let out = store
             .data_mut()
+            .http()
             .new_response_outparam(sender)
             .map_err(|e| format!("{e:#}"))?;
         let deadline = recipe.limits.deadline;
@@ -739,7 +756,7 @@ mod proxy {
     fn empty() -> HyperOutgoingBody {
         http_body_util::Empty::<Bytes>::new()
             .map_err(|never: Infallible| match never {})
-            .boxed()
+            .boxed_unsync()
     }
 }
 
@@ -800,10 +817,27 @@ mod tests {
         for (addr, use_) in [
             ("0.0.0.0:80", SocketAddrUse::TcpBind),
             ("127.0.0.1:80", SocketAddrUse::TcpConnect),
-            ("127.0.0.1:53", SocketAddrUse::UdpOutgoingDatagram),
+            ("127.0.0.1:53", SocketAddrUse::UdpSend),
+            ("0.0.0.0:80", SocketAddrUse::TcpListen),
+            ("10.0.0.9:40000", SocketAddrUse::TcpAccept),
+            ("10.0.0.9:53", SocketAddrUse::UdpReceive),
         ] {
-            assert!(!admits_socket(&n, at(addr), use_).await, "{addr} was admitted");
+            assert!(
+                !admits_socket(&n, at(addr), use_).await,
+                "{addr} {use_:?} was admitted"
+            );
         }
+    }
+
+    #[tokio::test]
+    async fn listen_follows_bind_and_an_open_grant_admits_what_arrives() {
+        let n = net(&[8080], &[("127.0.0.1", 53)]);
+        assert!(admits_socket(&n, at("0.0.0.0:8080"), SocketAddrUse::TcpListen).await);
+        assert!(!admits_socket(&n, at("0.0.0.0:9090"), SocketAddrUse::TcpListen).await);
+        assert!(admits_socket(&n, at("127.0.0.1:53"), SocketAddrUse::UdpSend).await);
+        assert!(!admits_socket(&n, at("127.0.0.1:54"), SocketAddrUse::UdpSend).await);
+        assert!(admits_socket(&n, at("10.0.0.9:40000"), SocketAddrUse::TcpAccept).await);
+        assert!(admits_socket(&n, at("10.0.0.9:53"), SocketAddrUse::UdpReceive).await);
     }
 
     /// RED RUN (2026-10-27): `memory_growing` returning `Ok(true)` before the
@@ -816,7 +850,9 @@ mod tests {
             .memory_growing(0, 60, None)
             .expect_err("growth past the ceiling was allowed");
         assert!(err.downcast_ref::<CeilingHit>().is_some());
-        assert!(c.memory_growing(60, 100, None).expect("growth to the limit fits"));
+        assert!(c
+            .memory_growing(60, 100, None)
+            .expect("growth to the limit fits"));
     }
 
     #[test]
@@ -833,11 +869,13 @@ mod tests {
         assert_eq!(classify(Ok(Ok(()))), WasmExit::Code { code: 0 });
         assert_eq!(classify(Ok(Err(()))), WasmExit::Code { code: 1 });
         assert_eq!(
-            classify(Err(anyhow::Error::new(I32Exit(7)).context("in run"))),
+            classify(Err(wasmtime::Error::new(I32Exit(7)).context("in run"))),
             WasmExit::Code { code: 7 }
         );
         assert_eq!(
-            classify(Err(anyhow::Error::new(CeilingHit { limit: 64 }).context("grow"))),
+            classify(Err(
+                wasmtime::Error::new(CeilingHit { limit: 64 }).context("grow")
+            )),
             WasmExit::MemoryLimit { limit_bytes: 64 }
         );
     }

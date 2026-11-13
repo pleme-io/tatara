@@ -15,7 +15,7 @@ path = "src/lib.rs"
 default = ["runtime-wasmtime"]
 
 # Runtime backends — each pluggable, each can coexist at consumer choice.
-runtime-wasmtime = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:anyhow", "dep:hyper"]
+runtime-wasmtime = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:hyper"]
 runtime-wasmer   = ["dep:wasmer"]
 runtime-wasmi    = ["dep:wasmi"]
 runtime-wamr     = []       # H.4 follow-up — needs C build harness.
@@ -32,10 +32,9 @@ wasi-clocks = []  # Clocks (baseline p2 — enabled by default per runtime).
 wasi-sockets = [] # Raw socket imports.
 
 [dependencies]
-wasmtime      = { version = "36", optional = true, default-features = false, features = ["runtime", "cranelift", "component-model", "async", "std", "wat", "parallel-compilation", "addr2line"] }
-wasmtime-wasi = { version = "36", optional = true }
-wasmtime-wasi-http = { version = "36", optional = true }
-anyhow        = { version = "1", optional = true }
+wasmtime      = { version = "48", optional = true, default-features = false, features = ["runtime", "cranelift", "component-model", "async", "std", "wat", "parallel-compilation", "addr2line"] }
+wasmtime-wasi = { version = "48", optional = true }
+wasmtime-wasi-http = { version = "48", optional = true }
 hyper         = { version = "1", optional = true, features = ["server", "http1"] }
 http-body-util = { version = "0.1", optional = true }
 wasmer        = { version = "6.1", optional = true, default-features = false, features = ["cranelift", "sys"] }

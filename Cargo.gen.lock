@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "d850720106c9b9bb7eb303dee1791ec772e4ae362b2497dfb23cd54f49c69b6b",
+  "cargo_lock_sha256": "66250735f7c393b2d079d4185049a2d5147676f2f00da3c8890f3c7ad25a9362",
   "manifest_sha256": {
     "Cargo.toml": "6c76f510dbe2bf44593c5e11d35913a4659ba049ced5d9558dbf1b37fcb2b326",
     "ro-cli/Cargo.toml": "788b06ea1b09d94e42c8e1faa8b23fa173b673dc51955908214afce96746fcff",
@@ -34,7 +34,7 @@
     "tatara-testing/Cargo.toml": "711da4ca4ce6b28b51af7b368442ea042079b9389defc0ce8691937712d51c49",
     "tatara-ui/Cargo.toml": "7bb49801c13f8f1ea2d4d2ff45612217895b696ea53fd2edc70169c2e4dd4797",
     "tatara-vm/Cargo.toml": "c5c76757f35fb1bea39b16ad67176a2aa0529c189b868a0dd434188039147986",
-    "tatara-wasm/Cargo.toml": "78b04bce829cc25484b990c6b7465357077fa2fb05663d3787caab38523ef156"
+    "tatara-wasm/Cargo.toml": "7485467e8c0f8a4a60fe99d597d033de1f5ded46a6a81f631eccf176b2fc310e"
   },
   "target_resolves": {
     "base": {
@@ -43,11 +43,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "addr2line-0.25.1": {
+      "addr2line-0.26.1": {
         "runtime_dependencies": [
           {
             "name": "gimli",
-            "package_key": "gimli-0.32.3",
+            "package_key": "gimli-0.33.0",
             "kind": "normal",
             "features": [
               "read"
@@ -321,7 +321,7 @@
           "default"
         ]
       },
-      "anyhow-1.0.102": {
+      "anyhow-1.0.104": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": [
@@ -2793,221 +2793,6 @@
           "std"
         ]
       },
-      "cap-fs-ext-3.4.5": {
-        "runtime_dependencies": [
-          {
-            "name": "cap_primitives",
-            "package_key": "cap-primitives-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cap_std",
-            "package_key": "cap-std-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": true,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "io_lifetimes",
-            "package_key": "io-lifetimes-2.0.4",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": [
-          "cap-std",
-          "default",
-          "std"
-        ]
-      },
-      "cap-net-ext-3.4.5": {
-        "runtime_dependencies": [
-          {
-            "name": "cap_primitives",
-            "package_key": "cap-primitives-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cap_std",
-            "package_key": "cap-std-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "rustix",
-            "package_key": "rustix-1.1.4",
-            "kind": "normal",
-            "features": [
-              "net"
-            ],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "smallvec",
-            "package_key": "smallvec-1.15.1",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": []
-      },
-      "cap-rand-3.4.5": {
-        "runtime_dependencies": [
-          {
-            "name": "ambient_authority",
-            "package_key": "ambient-authority-0.0.2",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "rand",
-            "package_key": "rand-0.8.6",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": [
-          "default",
-          "small_rng"
-        ]
-      },
-      "cap-std-3.4.5": {
-        "runtime_dependencies": [
-          {
-            "name": "cap_primitives",
-            "package_key": "cap-primitives-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "io_extras",
-            "package_key": "io-extras-0.18.4",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "io_lifetimes",
-            "package_key": "io-lifetimes-2.0.4",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "rustix",
-            "package_key": "rustix-1.1.4",
-            "kind": "normal",
-            "features": [
-              "fs"
-            ],
-            "uses_default_features": true,
-            "optional": false,
-            "target": "cfg(not(windows))",
-            "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": [
-          "default"
-        ]
-      },
-      "cap-time-ext-3.4.5": {
-        "runtime_dependencies": [
-          {
-            "name": "ambient_authority",
-            "package_key": "ambient-authority-0.0.2",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cap_primitives",
-            "package_key": "cap-primitives-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "iana_time_zone",
-            "package_key": "iana-time-zone-0.1.65",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "rustix",
-            "package_key": "rustix-1.1.4",
-            "kind": "normal",
-            "features": [
-              "time"
-            ],
-            "uses_default_features": true,
-            "optional": false,
-            "target": "cfg(not(windows))",
-            "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": []
-      },
       "cc-1.2.63": {
         "runtime_dependencies": [
           {
@@ -3070,7 +2855,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3441,12 +3226,31 @@
           "std"
         ]
       },
-      "cranelift-assembler-x64-0.123.19": {
+      "cpp_demangle-0.5.1": {
+        "runtime_dependencies": [
+          {
+            "name": "cfg_if",
+            "package_key": "cfg-if-1.0.4",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": [
+          "alloc",
+          "std"
+        ]
+      },
+      "cranelift-assembler-x64-0.135.8": {
         "runtime_dependencies": [],
         "build_dependencies": [
           {
             "name": "cranelift_assembler_x64_meta",
-            "package_key": "cranelift-assembler-x64-meta-0.123.19",
+            "package_key": "cranelift-assembler-x64-meta-0.135.8",
             "kind": "build",
             "features": [],
             "uses_default_features": true,
@@ -3457,11 +3261,11 @@
         ],
         "features": []
       },
-      "cranelift-assembler-x64-meta-0.123.19": {
+      "cranelift-assembler-x64-meta-0.135.8": {
         "runtime_dependencies": [
           {
             "name": "cranelift_srcgen",
-            "package_key": "cranelift-srcgen-0.123.19",
+            "package_key": "cranelift-srcgen-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3473,11 +3277,21 @@
         "build_dependencies": [],
         "features": []
       },
-      "cranelift-bforest-0.123.19": {
+      "cranelift-bforest-0.135.8": {
         "runtime_dependencies": [
           {
             "name": "cranelift_entity",
-            "package_key": "cranelift-entity-0.123.19",
+            "package_key": "cranelift-entity-0.135.8",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "wasmtime_core",
+            "package_key": "wasmtime-internal-core-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3489,7 +3303,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "cranelift-bitset-0.123.19": {
+      "cranelift-bitset-0.135.8": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -3512,6 +3326,16 @@
             "optional": true,
             "target": null,
             "tree": "host"
+          },
+          {
+            "name": "wasmtime_core",
+            "package_key": "wasmtime-internal-core-48.0.8",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
           }
         ],
         "build_dependencies": [],
@@ -3519,7 +3343,7 @@
           "enable-serde"
         ]
       },
-      "cranelift-codegen-0.123.19": {
+      "cranelift-codegen-0.135.8": {
         "runtime_dependencies": [
           {
             "name": "bumpalo",
@@ -3533,7 +3357,7 @@
           },
           {
             "name": "cranelift_assembler_x64",
-            "package_key": "cranelift-assembler-x64-0.123.19",
+            "package_key": "cranelift-assembler-x64-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3543,7 +3367,7 @@
           },
           {
             "name": "cranelift_bforest",
-            "package_key": "cranelift-bforest-0.123.19",
+            "package_key": "cranelift-bforest-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3553,7 +3377,7 @@
           },
           {
             "name": "cranelift_bitset",
-            "package_key": "cranelift-bitset-0.123.19",
+            "package_key": "cranelift-bitset-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3563,7 +3387,7 @@
           },
           {
             "name": "cranelift_codegen_shared",
-            "package_key": "cranelift-codegen-shared-0.123.19",
+            "package_key": "cranelift-codegen-shared-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3573,17 +3397,17 @@
           },
           {
             "name": "cranelift_control",
-            "package_key": "cranelift-control-0.123.19",
+            "package_key": "cranelift-control-0.135.8",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
           },
           {
             "name": "cranelift_entity",
-            "package_key": "cranelift-entity-0.123.19",
+            "package_key": "cranelift-entity-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3593,11 +3417,10 @@
           },
           {
             "name": "gimli",
-            "package_key": "gimli-0.32.3",
+            "package_key": "gimli-0.33.0",
             "kind": "normal",
             "features": [
               "read",
-              "std",
               "write"
             ],
             "uses_default_features": false,
@@ -3607,10 +3430,22 @@
           },
           {
             "name": "hashbrown",
-            "package_key": "hashbrown-0.15.5",
+            "package_key": "hashbrown-0.17.1",
+            "kind": "normal",
+            "features": [
+              "default-hasher"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "libm",
+            "package_key": "libm-0.2.16",
             "kind": "normal",
             "features": [],
-            "uses_default_features": false,
+            "uses_default_features": true,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -3626,8 +3461,20 @@
             "tree": "target"
           },
           {
+            "name": "postcard",
+            "package_key": "postcard-1.1.3",
+            "kind": "normal",
+            "features": [
+              "alloc"
+            ],
+            "uses_default_features": false,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "pulley_interpreter",
-            "package_key": "pulley-interpreter-36.0.19",
+            "package_key": "pulley-interpreter-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3637,7 +3484,7 @@
           },
           {
             "name": "regalloc2",
-            "package_key": "regalloc2-0.12.2",
+            "package_key": "regalloc2-0.15.2",
             "kind": "normal",
             "features": [
               "checker"
@@ -3652,8 +3499,40 @@
             "package_key": "rustc-hash-2.1.2",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde",
+            "package_key": "serde-1.0.228",
+            "kind": "normal",
+            "features": [
+              "alloc"
+            ],
+            "uses_default_features": false,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde_derive",
+            "package_key": "serde_derive-1.0.228",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": true,
+            "target": null,
+            "tree": "host"
+          },
+          {
+            "name": "sha2",
+            "package_key": "sha2-0.10.9",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -3680,8 +3559,8 @@
             "tree": "target"
           },
           {
-            "name": "wasmtime_math",
-            "package_key": "wasmtime-internal-math-36.0.19",
+            "name": "wasmtime_core",
+            "package_key": "wasmtime-internal-core-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3693,7 +3572,7 @@
         "build_dependencies": [
           {
             "name": "cranelift_codegen_meta",
-            "package_key": "cranelift-codegen-meta-0.123.19",
+            "package_key": "cranelift-codegen-meta-0.135.8",
             "kind": "build",
             "features": [],
             "uses_default_features": true,
@@ -3703,7 +3582,7 @@
           },
           {
             "name": "cranelift_isle",
-            "package_key": "cranelift-isle-0.123.19",
+            "package_key": "cranelift-isle-0.135.8",
             "kind": "build",
             "features": [],
             "uses_default_features": true,
@@ -3713,19 +3592,25 @@
           }
         ],
         "features": [
+          "enable-serde",
           "gimli",
           "host-arch",
+          "incremental-cache",
+          "postcard",
           "pulley",
+          "serde",
+          "serde_derive",
+          "sha2",
           "std",
           "timing",
           "unwind"
         ]
       },
-      "cranelift-codegen-meta-0.123.19": {
+      "cranelift-codegen-meta-0.135.8": {
         "runtime_dependencies": [
           {
             "name": "cranelift_assembler_x64_meta",
-            "package_key": "cranelift-assembler-x64-meta-0.123.19",
+            "package_key": "cranelift-assembler-x64-meta-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3735,7 +3620,7 @@
           },
           {
             "name": "cranelift_codegen_shared",
-            "package_key": "cranelift-codegen-shared-0.123.19",
+            "package_key": "cranelift-codegen-shared-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3745,7 +3630,7 @@
           },
           {
             "name": "cranelift_srcgen",
-            "package_key": "cranelift-srcgen-0.123.19",
+            "package_key": "cranelift-srcgen-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3765,7 +3650,7 @@
           },
           {
             "name": "pulley_interpreter",
-            "package_key": "pulley-interpreter-36.0.19",
+            "package_key": "pulley-interpreter-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3779,12 +3664,12 @@
           "pulley"
         ]
       },
-      "cranelift-codegen-shared-0.123.19": {
+      "cranelift-codegen-shared-0.135.8": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
       },
-      "cranelift-control-0.123.19": {
+      "cranelift-control-0.135.8": {
         "runtime_dependencies": [
           {
             "name": "arbitrary",
@@ -3799,15 +3684,14 @@
         ],
         "build_dependencies": [],
         "features": [
-          "default",
           "fuzz"
         ]
       },
-      "cranelift-entity-0.123.19": {
+      "cranelift-entity-0.135.8": {
         "runtime_dependencies": [
           {
             "name": "cranelift_bitset",
-            "package_key": "cranelift-bitset-0.123.19",
+            "package_key": "cranelift-bitset-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3836,6 +3720,16 @@
             "optional": true,
             "target": null,
             "tree": "host"
+          },
+          {
+            "name": "wasmtime_core",
+            "package_key": "wasmtime-internal-core-48.0.8",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
           }
         ],
         "build_dependencies": [],
@@ -3845,16 +3739,25 @@
           "serde_derive"
         ]
       },
-      "cranelift-frontend-0.123.19": {
+      "cranelift-frontend-0.135.8": {
         "runtime_dependencies": [
           {
             "name": "cranelift_codegen",
-            "package_key": "cranelift-codegen-0.123.19",
+            "package_key": "cranelift-codegen-0.135.8",
             "kind": "normal",
             "features": [
-              "std",
               "unwind"
             ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "hashbrown",
+            "package_key": "hashbrown-0.17.1",
+            "kind": "normal",
+            "features": [],
             "uses_default_features": false,
             "optional": false,
             "target": null,
@@ -3899,21 +3802,20 @@
           "std"
         ]
       },
-      "cranelift-isle-0.123.19": {
+      "cranelift-isle-0.135.8": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": [
           "default"
         ]
       },
-      "cranelift-native-0.123.19": {
+      "cranelift-native-0.135.8": {
         "runtime_dependencies": [
           {
             "name": "cranelift_codegen",
-            "package_key": "cranelift-codegen-0.123.19",
+            "package_key": "cranelift-codegen-0.135.8",
             "kind": "normal",
             "features": [
-              "std",
               "unwind"
             ],
             "uses_default_features": false,
@@ -3938,7 +3840,7 @@
           "std"
         ]
       },
-      "cranelift-srcgen-0.123.19": {
+      "cranelift-srcgen-0.135.8": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
@@ -5234,14 +5136,6 @@
           "std"
         ]
       },
-      "fallible-iterator-0.3.0": {
-        "runtime_dependencies": [],
-        "build_dependencies": [],
-        "features": [
-          "alloc",
-          "std"
-        ]
-      },
       "fast_chemail-0.9.6": {
         "runtime_dependencies": [
           {
@@ -6289,14 +6183,34 @@
           "sys_rng"
         ]
       },
-      "gimli-0.32.3": {
+      "gimli-0.33.0": {
         "runtime_dependencies": [
+          {
+            "name": "fnv",
+            "package_key": "fnv-1.0.7",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "hashbrown",
+            "package_key": "hashbrown-0.16.1",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          },
           {
             "name": "indexmap",
             "package_key": "indexmap-2.14.0",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": true,
             "target": null,
             "tree": "target"
@@ -6451,16 +6365,6 @@
             "optional": true,
             "target": null,
             "tree": "target"
-          },
-          {
-            "name": "serde",
-            "package_key": "serde-1.0.228",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": true,
-            "target": null,
-            "tree": "target"
           }
         ],
         "build_dependencies": [],
@@ -6470,8 +6374,7 @@
           "default-hasher",
           "equivalent",
           "inline-more",
-          "raw-entry",
-          "serde"
+          "raw-entry"
         ]
       },
       "hashbrown-0.16.1": {
@@ -6520,9 +6423,33 @@
         ]
       },
       "hashbrown-0.17.1": {
-        "runtime_dependencies": [],
+        "runtime_dependencies": [
+          {
+            "name": "foldhash",
+            "package_key": "foldhash-0.2.0",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde_core",
+            "package_key": "serde_core-1.0.228",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          }
+        ],
         "build_dependencies": [],
-        "features": []
+        "features": [
+          "default-hasher",
+          "serde"
+        ]
       },
       "headers-0.4.1": {
         "runtime_dependencies": [
@@ -7389,7 +7316,7 @@
           },
           {
             "name": "socket2",
-            "package_key": "socket2-0.6.4",
+            "package_key": "socket2-0.5.10",
             "kind": "normal",
             "features": [
               "all"
@@ -7956,11 +7883,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "io-extras-0.18.4": {
+      "io-extras-0.19.0": {
         "runtime_dependencies": [
           {
             "name": "io_lifetimes",
-            "package_key": "io-lifetimes-2.0.4",
+            "package_key": "io-lifetimes-3.0.1",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7975,6 +7902,11 @@
         ]
       },
       "io-lifetimes-2.0.4": {
+        "runtime_dependencies": [],
+        "build_dependencies": [],
+        "features": []
+      },
+      "io-lifetimes-3.0.1": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": [
@@ -9678,7 +9610,7 @@
           "std"
         ]
       },
-      "object-0.37.3": {
+      "object-0.39.1": {
         "runtime_dependencies": [
           {
             "name": "crc32fast",
@@ -9692,7 +9624,7 @@
           },
           {
             "name": "hashbrown",
-            "package_key": "hashbrown-0.15.5",
+            "package_key": "hashbrown-0.17.1",
             "kind": "normal",
             "features": [
               "default-hasher"
@@ -10989,11 +10921,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "pulley-interpreter-36.0.19": {
+      "pulley-interpreter-48.0.8": {
         "runtime_dependencies": [
           {
             "name": "cranelift_bitset",
-            "package_key": "cranelift-bitset-0.123.19",
+            "package_key": "cranelift-bitset-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -11013,7 +10945,7 @@
           },
           {
             "name": "pulley_macros",
-            "package_key": "pulley-macros-36.0.19",
+            "package_key": "pulley-macros-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -11022,8 +10954,8 @@
             "tree": "host"
           },
           {
-            "name": "wasmtime_math",
-            "package_key": "wasmtime-internal-math-36.0.19",
+            "name": "wasmtime_core",
+            "package_key": "wasmtime-internal-core-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -11041,7 +10973,7 @@
           "std"
         ]
       },
-      "pulley-macros-36.0.19": {
+      "pulley-macros-48.0.8": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -11152,7 +11084,7 @@
           },
           {
             "name": "socket2",
-            "package_key": "socket2-0.6.4",
+            "package_key": "socket2-0.5.10",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -11356,7 +11288,7 @@
           },
           {
             "name": "socket2",
-            "package_key": "socket2-0.6.4",
+            "package_key": "socket2-0.5.10",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -11502,7 +11434,6 @@
           "getrandom",
           "libc",
           "rand_chacha",
-          "small_rng",
           "std",
           "std_rng"
         ]
@@ -11770,7 +11701,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "regalloc2-0.12.2": {
+      "regalloc2-0.15.2": {
         "runtime_dependencies": [
           {
             "name": "allocator_api2",
@@ -11798,7 +11729,7 @@
           },
           {
             "name": "hashbrown",
-            "package_key": "hashbrown-0.15.5",
+            "package_key": "hashbrown-0.17.1",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -11827,6 +11758,19 @@
             "tree": "target"
           },
           {
+            "name": "serde",
+            "package_key": "serde-1.0.228",
+            "kind": "normal",
+            "features": [
+              "alloc",
+              "derive"
+            ],
+            "uses_default_features": false,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "smallvec",
             "package_key": "smallvec-1.15.1",
             "kind": "normal",
@@ -11843,6 +11787,8 @@
         "features": [
           "checker",
           "default",
+          "enable-serde",
+          "serde",
           "std"
         ]
       },
@@ -12431,7 +12377,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -12607,6 +12553,13 @@
           "std"
         ]
       },
+      "rustc-demangle-0.1.27": {
+        "runtime_dependencies": [],
+        "build_dependencies": [],
+        "features": [
+          "std"
+        ]
+      },
       "rustc-hash-2.1.2": {
         "runtime_dependencies": [],
         "build_dependencies": [],
@@ -12630,6 +12583,38 @@
         ],
         "build_dependencies": [],
         "features": []
+      },
+      "rustix-linux-procfs-0.1.1": {
+        "runtime_dependencies": [
+          {
+            "name": "once_cell",
+            "package_key": "once_cell-1.21.4",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "rustix",
+            "package_key": "rustix-1.1.4",
+            "kind": "normal",
+            "features": [
+              "alloc",
+              "fs"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": [
+          "default",
+          "std"
+        ]
       },
       "rustls-0.23.40": {
         "runtime_dependencies": [
@@ -14184,6 +14169,24 @@
         "build_dependencies": [],
         "features": []
       },
+      "socket2-0.5.10": {
+        "runtime_dependencies": [
+          {
+            "name": "libc",
+            "package_key": "libc-0.2.186",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": "cfg(unix)",
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": [
+          "all"
+        ]
+      },
       "socket2-0.6.4": {
         "runtime_dependencies": [
           {
@@ -14504,69 +14507,6 @@
           "proc-macro"
         ]
       },
-      "system-interface-0.27.3": {
-        "runtime_dependencies": [
-          {
-            "name": "bitflags",
-            "package_key": "bitflags-2.11.1",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cap_std",
-            "package_key": "cap-std-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": true,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cap_std",
-            "package_key": "cap-std-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": "cfg(windows)",
-            "tree": "target"
-          },
-          {
-            "name": "io_lifetimes",
-            "package_key": "io-lifetimes-2.0.4",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "rustix",
-            "package_key": "rustix-0.38.44",
-            "kind": "normal",
-            "features": [
-              "fs",
-              "net"
-            ],
-            "uses_default_features": true,
-            "optional": false,
-            "target": "cfg(not(windows))",
-            "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": [
-          "cap-std",
-          "cap_std_impls",
-          "default"
-        ]
-      },
       "tap-1.0.1": {
         "runtime_dependencies": [],
         "build_dependencies": [],
@@ -14576,15 +14516,14 @@
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": [
-          "default",
-          "std"
+          "default"
         ]
       },
       "tatara-api-0.2.832": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -14830,7 +14769,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15199,7 +15138,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15449,7 +15388,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15653,7 +15592,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16033,7 +15972,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16229,7 +16168,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16624,7 +16563,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17018,7 +16957,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17256,7 +17195,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17653,7 +17592,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17911,7 +17850,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18099,7 +18038,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18497,7 +18436,7 @@
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18851,16 +18790,6 @@
       "tatara-wasm-0.2.832": {
         "runtime_dependencies": [
           {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": true,
-            "target": null,
-            "tree": "target"
-          },
-          {
             "name": "hyper",
             "package_key": "hyper-1.10.1",
             "kind": "normal",
@@ -18923,7 +18852,7 @@
           },
           {
             "name": "wasmtime",
-            "package_key": "wasmtime-36.0.19",
+            "package_key": "wasmtime-48.0.8",
             "kind": "normal",
             "features": [
               "addr2line",
@@ -18942,7 +18871,7 @@
           },
           {
             "name": "wasmtime_wasi",
-            "package_key": "wasmtime-wasi-36.0.13",
+            "package_key": "wasmtime-wasi-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18952,7 +18881,7 @@
           },
           {
             "name": "wat",
-            "package_key": "wat-1.251.0",
+            "package_key": "wat-1.263.0",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21250,7 +21179,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "wasm-encoder-0.236.1": {
+      "wasm-encoder-0.254.2": {
         "runtime_dependencies": [
           {
             "name": "leb128fmt",
@@ -21259,6 +21188,19 @@
             "features": [],
             "uses_default_features": false,
             "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "wasmparser",
+            "package_key": "wasmparser-0.254.2",
+            "kind": "normal",
+            "features": [
+              "simd",
+              "simd"
+            ],
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           }
@@ -21267,10 +21209,11 @@
         "features": [
           "component-model",
           "default",
-          "std"
+          "std",
+          "wasmparser"
         ]
       },
-      "wasm-encoder-0.251.0": {
+      "wasm-encoder-0.263.0": {
         "runtime_dependencies": [
           {
             "name": "leb128fmt",
@@ -21289,7 +21232,64 @@
           "std"
         ]
       },
-      "wasmparser-0.236.1": {
+      "wasm-metadata-0.254.2": {
+        "runtime_dependencies": [
+          {
+            "name": "anyhow",
+            "package_key": "anyhow-1.0.104",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "indexmap",
+            "package_key": "indexmap-2.14.0",
+            "kind": "normal",
+            "features": [
+              "serde",
+              "std"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "wasm_encoder",
+            "package_key": "wasm-encoder-0.254.2",
+            "kind": "normal",
+            "features": [
+              "component-model",
+              "std"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "wasmparser",
+            "package_key": "wasmparser-0.254.2",
+            "kind": "normal",
+            "features": [
+              "component-model",
+              "hash-collections",
+              "simd",
+              "std"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": []
+      },
+      "wasmparser-0.254.2": {
         "runtime_dependencies": [
           {
             "name": "bitflags",
@@ -21298,6 +21298,28 @@
             "features": [],
             "uses_default_features": true,
             "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "hashbrown",
+            "package_key": "hashbrown-0.17.1",
+            "kind": "normal",
+            "features": [
+              "default-hasher"
+            ],
+            "uses_default_features": false,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "indexmap",
+            "package_key": "indexmap-2.14.0",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -21328,13 +21350,14 @@
         "features": [
           "component-model",
           "features",
+          "hash-collections",
           "serde",
           "simd",
           "std",
           "validate"
         ]
       },
-      "wasmparser-0.251.0": {
+      "wasmparser-0.263.0": {
         "runtime_dependencies": [
           {
             "name": "bitflags",
@@ -21364,14 +21387,14 @@
           "std"
         ]
       },
-      "wasmprinter-0.236.1": {
+      "wasmprinter-0.254.2": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -21388,7 +21411,7 @@
           },
           {
             "name": "wasmparser",
-            "package_key": "wasmparser-0.236.1",
+            "package_key": "wasmparser-0.254.2",
             "kind": "normal",
             "features": [
               "simd",
@@ -21408,11 +21431,11 @@
           "validate"
         ]
       },
-      "wasmtime-environ-36.0.19": {
+      "wasmtime-environ-48.0.8": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -21421,8 +21444,18 @@
             "tree": "target"
           },
           {
+            "name": "cranelift_bforest",
+            "package_key": "cranelift-bforest-0.135.8",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "cranelift_bitset",
-            "package_key": "cranelift-bitset-0.123.19",
+            "package_key": "cranelift-bitset-0.135.8",
             "kind": "normal",
             "features": [
               "enable-serde"
@@ -21434,7 +21467,7 @@
           },
           {
             "name": "cranelift_entity",
-            "package_key": "cranelift-entity-0.123.19",
+            "package_key": "cranelift-entity-0.135.8",
             "kind": "normal",
             "features": [
               "enable-serde"
@@ -21446,10 +21479,22 @@
           },
           {
             "name": "gimli",
-            "package_key": "gimli-0.32.3",
+            "package_key": "gimli-0.33.0",
             "kind": "normal",
             "features": [
               "read"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "hashbrown",
+            "package_key": "hashbrown-0.17.1",
+            "kind": "normal",
+            "features": [
+              "default-hasher"
             ],
             "uses_default_features": false,
             "optional": false,
@@ -21480,7 +21525,7 @@
           },
           {
             "name": "object",
-            "package_key": "object-0.37.3",
+            "package_key": "object-0.39.1",
             "kind": "normal",
             "features": [
               "elf",
@@ -21538,6 +21583,16 @@
             "tree": "host"
           },
           {
+            "name": "sha2",
+            "package_key": "sha2-0.10.9",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "smallvec",
             "package_key": "smallvec-1.15.1",
             "kind": "normal",
@@ -21562,7 +21617,7 @@
           },
           {
             "name": "wasm_encoder",
-            "package_key": "wasm-encoder-0.236.1",
+            "package_key": "wasm-encoder-0.254.2",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21572,7 +21627,7 @@
           },
           {
             "name": "wasmparser",
-            "package_key": "wasmparser-0.236.1",
+            "package_key": "wasmparser-0.254.2",
             "kind": "normal",
             "features": [
               "features",
@@ -21587,7 +21642,7 @@
           },
           {
             "name": "wasmprinter",
-            "package_key": "wasmprinter-0.236.1",
+            "package_key": "wasmprinter-0.254.2",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21597,11 +21652,23 @@
           },
           {
             "name": "wasmtime_component_util",
-            "package_key": "wasmtime-internal-component-util-36.0.19",
+            "package_key": "wasmtime-internal-component-util-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
             "optional": true,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "wasmtime_core",
+            "package_key": "wasmtime-internal-core-48.0.8",
+            "kind": "normal",
+            "features": [
+              "serde"
+            ],
+            "uses_default_features": true,
+            "optional": false,
             "target": null,
             "tree": "target"
           }
@@ -21610,30 +21677,20 @@
         "features": [
           "compile",
           "component-model",
-          "std"
+          "gc",
+          "gc-copying",
+          "gc-drc",
+          "gc-null",
+          "stack-switching",
+          "std",
+          "threads"
         ]
       },
-      "wasmtime-internal-asm-macros-36.0.19": {
-        "runtime_dependencies": [
-          {
-            "name": "cfg_if",
-            "package_key": "cfg-if-1.0.4",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": []
-      },
-      "wasmtime-internal-component-macro-36.0.19": {
+      "wasmtime-internal-component-macro-48.0.8": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -21675,7 +21732,7 @@
           },
           {
             "name": "wasmtime_component_util",
-            "package_key": "wasmtime-internal-component-util-36.0.19",
+            "package_key": "wasmtime-internal-component-util-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21685,7 +21742,7 @@
           },
           {
             "name": "wasmtime_wit_bindgen",
-            "package_key": "wasmtime-internal-wit-bindgen-36.0.19",
+            "package_key": "wasmtime-internal-wit-bindgen-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21695,7 +21752,7 @@
           },
           {
             "name": "wit_parser",
-            "package_key": "wit-parser-0.236.1",
+            "package_key": "wit-parser-0.254.2",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21709,26 +21766,28 @@
           "async"
         ]
       },
-      "wasmtime-internal-component-util-36.0.19": {
+      "wasmtime-internal-component-util-48.0.8": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
       },
-      "wasmtime-internal-cranelift-36.0.19": {
+      "wasmtime-internal-core-48.0.8": {
         "runtime_dependencies": [
           {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "name": "hashbrown",
+            "package_key": "hashbrown-0.17.1",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "default-hasher"
+            ],
             "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
           },
           {
-            "name": "cfg_if",
-            "package_key": "cfg-if-1.0.4",
+            "name": "libm",
+            "package_key": "libm-0.2.16",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21737,12 +21796,33 @@
             "tree": "target"
           },
           {
+            "name": "serde",
+            "package_key": "serde-1.0.228",
+            "kind": "normal",
+            "features": [
+              "alloc"
+            ],
+            "uses_default_features": false,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": [
+          "serde",
+          "std"
+        ]
+      },
+      "wasmtime-internal-cranelift-48.0.8": {
+        "runtime_dependencies": [
+          {
             "name": "cranelift_codegen",
-            "package_key": "cranelift-codegen-0.123.19",
+            "package_key": "cranelift-codegen-0.135.8",
             "kind": "normal",
             "features": [
               "host-arch",
-              "std",
+              "incremental-cache",
               "timing",
               "unwind"
             ],
@@ -21753,17 +21833,17 @@
           },
           {
             "name": "cranelift_control",
-            "package_key": "cranelift-control-0.123.19",
+            "package_key": "cranelift-control-0.135.8",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
           },
           {
             "name": "cranelift_entity",
-            "package_key": "cranelift-entity-0.123.19",
+            "package_key": "cranelift-entity-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21773,7 +21853,7 @@
           },
           {
             "name": "cranelift_frontend",
-            "package_key": "cranelift-frontend-0.123.19",
+            "package_key": "cranelift-frontend-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21783,7 +21863,7 @@
           },
           {
             "name": "cranelift_native",
-            "package_key": "cranelift-native-0.123.19",
+            "package_key": "cranelift-native-0.135.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21793,7 +21873,7 @@
           },
           {
             "name": "gimli",
-            "package_key": "gimli-0.32.3",
+            "package_key": "gimli-0.33.0",
             "kind": "normal",
             "features": [
               "read",
@@ -21826,7 +21906,7 @@
           },
           {
             "name": "object",
-            "package_key": "object-0.37.3",
+            "package_key": "object-0.39.1",
             "kind": "normal",
             "features": [
               "elf",
@@ -21841,7 +21921,7 @@
           },
           {
             "name": "pulley_interpreter",
-            "package_key": "pulley-interpreter-36.0.19",
+            "package_key": "pulley-interpreter-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21883,7 +21963,7 @@
           },
           {
             "name": "wasmparser",
-            "package_key": "wasmparser-0.236.1",
+            "package_key": "wasmparser-0.254.2",
             "kind": "normal",
             "features": [
               "simd"
@@ -21895,10 +21975,16 @@
           },
           {
             "name": "wasmtime_environ",
-            "package_key": "wasmtime-environ-36.0.19",
+            "package_key": "wasmtime-environ-48.0.8",
             "kind": "normal",
             "features": [
-              "compile"
+              "compile",
+              "component-model",
+              "gc-copying",
+              "gc-drc",
+              "gc-null",
+              "stack-switching",
+              "threads"
             ],
             "uses_default_features": true,
             "optional": false,
@@ -21906,8 +21992,8 @@
             "tree": "target"
           },
           {
-            "name": "wasmtime_math",
-            "package_key": "wasmtime-internal-math-36.0.19",
+            "name": "wasmtime_core",
+            "package_key": "wasmtime-internal-core-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21916,8 +22002,20 @@
             "tree": "target"
           },
           {
+            "name": "wasmtime_unwinder",
+            "package_key": "wasmtime-internal-unwinder-48.0.8",
+            "kind": "normal",
+            "features": [
+              "cranelift"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "wasmtime_versioned_export_macros",
-            "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+            "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21928,32 +22026,11 @@
         ],
         "build_dependencies": [],
         "features": [
-          "component-model",
           "pulley"
         ]
       },
-      "wasmtime-internal-fiber-36.0.19": {
+      "wasmtime-internal-fiber-48.0.8": {
         "runtime_dependencies": [
-          {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cfg_if",
-            "package_key": "cfg-if-1.0.4",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
           {
             "name": "libc",
             "package_key": "libc-0.2.186",
@@ -21977,8 +22054,8 @@
             "tree": "target"
           },
           {
-            "name": "wasmtime_asm_macros",
-            "package_key": "wasmtime-internal-asm-macros-36.0.19",
+            "name": "wasmtime_environ",
+            "package_key": "wasmtime-environ-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -21988,7 +22065,7 @@
           },
           {
             "name": "wasmtime_versioned_export_macros",
-            "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+            "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -22010,7 +22087,7 @@
           },
           {
             "name": "wasmtime_versioned_export_macros",
-            "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+            "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
             "kind": "build",
             "features": [],
             "uses_default_features": true,
@@ -22023,11 +22100,11 @@
           "std"
         ]
       },
-      "wasmtime-internal-jit-debug-36.0.19": {
+      "wasmtime-internal-jit-debug-48.0.8": {
         "runtime_dependencies": [
           {
             "name": "wasmtime_versioned_export_macros",
-            "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+            "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -22049,7 +22126,7 @@
           },
           {
             "name": "wasmtime_versioned_export_macros",
-            "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+            "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
             "kind": "build",
             "features": [],
             "uses_default_features": true,
@@ -22062,28 +22139,8 @@
           "std"
         ]
       },
-      "wasmtime-internal-jit-icache-coherence-36.0.19": {
+      "wasmtime-internal-jit-icache-coherence-48.0.8": {
         "runtime_dependencies": [
-          {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cfg_if",
-            "package_key": "cfg-if-1.0.4",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
           {
             "name": "libc",
             "package_key": "libc-0.2.186",
@@ -22093,16 +22150,10 @@
             "optional": false,
             "target": "cfg(any(target_os = \"linux\", target_vendor = \"apple\", target_os = \"freebsd\", target_os = \"android\"))",
             "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": []
-      },
-      "wasmtime-internal-math-36.0.19": {
-        "runtime_dependencies": [
+          },
           {
-            "name": "libm",
-            "package_key": "libm-0.2.16",
+            "name": "wasmtime_core",
+            "package_key": "wasmtime-internal-core-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -22112,43 +22163,15 @@
           }
         ],
         "build_dependencies": [],
-        "features": [
-          "std"
-        ]
-      },
-      "wasmtime-internal-slab-36.0.19": {
-        "runtime_dependencies": [],
-        "build_dependencies": [],
         "features": []
       },
-      "wasmtime-internal-unwinder-36.0.19": {
+      "wasmtime-internal-unwinder-48.0.8": {
         "runtime_dependencies": [
-          {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cfg_if",
-            "package_key": "cfg-if-1.0.4",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
           {
             "name": "cranelift_codegen",
-            "package_key": "cranelift-codegen-0.123.19",
+            "package_key": "cranelift-codegen-0.135.8",
             "kind": "normal",
             "features": [
-              "std",
               "unwind"
             ],
             "uses_default_features": false,
@@ -22168,13 +22191,23 @@
           },
           {
             "name": "object",
-            "package_key": "object-0.37.3",
+            "package_key": "object-0.39.1",
             "kind": "normal",
             "features": [
               "elf",
               "read_core"
             ],
             "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "wasmtime_environ",
+            "package_key": "wasmtime-environ-48.0.8",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -22186,7 +22219,7 @@
           "default"
         ]
       },
-      "wasmtime-internal-versioned-export-macros-36.0.19": {
+      "wasmtime-internal-versioned-export-macros-48.0.8": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -22224,121 +22257,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "wasmtime-internal-winch-36.0.19": {
+      "wasmtime-internal-wit-bindgen-48.0.8": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cranelift_codegen",
-            "package_key": "cranelift-codegen-0.123.19",
-            "kind": "normal",
-            "features": [
-              "std",
-              "unwind"
-            ],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "gimli",
-            "package_key": "gimli-0.32.3",
-            "kind": "normal",
-            "features": [
-              "read",
-              "std"
-            ],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "object",
-            "package_key": "object-0.37.3",
-            "kind": "normal",
-            "features": [
-              "elf",
-              "read_core",
-              "std"
-            ],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "target_lexicon",
-            "package_key": "target-lexicon-0.13.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "wasmparser",
-            "package_key": "wasmparser-0.236.1",
-            "kind": "normal",
-            "features": [
-              "simd"
-            ],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "wasmtime_environ",
-            "package_key": "wasmtime-environ-36.0.19",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "wasmtime_cranelift",
-            "package_key": "wasmtime-internal-cranelift-36.0.19",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "winch_codegen",
-            "package_key": "winch-codegen-36.0.19",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": [
-          "component-model"
-        ]
-      },
-      "wasmtime-internal-wit-bindgen-36.0.19": {
-        "runtime_dependencies": [
-          {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -22370,15 +22293,27 @@
             "name": "indexmap",
             "package_key": "indexmap-2.14.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "std"
+            ],
             "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
           },
           {
+            "name": "wit_component",
+            "package_key": "wit-component-0.254.2",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "wit_parser",
-            "package_key": "wit-parser-0.236.1",
+            "package_key": "wit-parser-0.254.2",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -22392,18 +22327,8 @@
           "async"
         ]
       },
-      "wasmtime-wasi-36.0.13": {
+      "wasmtime-wasi-48.0.8": {
         "runtime_dependencies": [
-          {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
           {
             "name": "async_trait",
             "package_key": "async-trait-0.1.89",
@@ -22435,60 +22360,8 @@
             "tree": "target"
           },
           {
-            "name": "cap_fs_ext",
-            "package_key": "cap-fs-ext-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cap_net_ext",
-            "package_key": "cap-net-ext-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cap_rand",
-            "package_key": "cap-rand-3.4.5",
-            "kind": "normal",
-            "features": [
-              "small_rng"
-            ],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cap_std",
-            "package_key": "cap-std-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cap_time_ext",
-            "package_key": "cap-time-ext-3.4.5",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "fs_set_times",
-            "package_key": "fs-set-times-0.20.3",
+            "name": "public_cap_primitives",
+            "package_key": "cap-primitives-4.0.3",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -22507,10 +22380,13 @@
             "tree": "target"
           },
           {
-            "name": "io_lifetimes",
-            "package_key": "io-lifetimes-2.0.4",
+            "name": "rand",
+            "package_key": "rand-0.10.1",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "std_rng",
+              "thread_rng"
+            ],
             "uses_default_features": false,
             "optional": false,
             "target": null,
@@ -22544,15 +22420,13 @@
             "tree": "target"
           },
           {
-            "name": "system_interface",
-            "package_key": "system-interface-0.27.3",
+            "name": "rustix_linux_procfs",
+            "package_key": "rustix-linux-procfs-0.1.1",
             "kind": "normal",
-            "features": [
-              "cap_std_impls"
-            ],
+            "features": [],
             "uses_default_features": true,
             "optional": false,
-            "target": null,
+            "target": "cfg(unix)",
             "tree": "target"
           },
           {
@@ -22589,8 +22463,11 @@
             "name": "tracing",
             "package_key": "tracing-0.1.44",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
+            "features": [
+              "attributes",
+              "std"
+            ],
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -22607,11 +22484,9 @@
           },
           {
             "name": "wasmtime",
-            "package_key": "wasmtime-36.0.19",
+            "package_key": "wasmtime-48.0.8",
             "kind": "normal",
             "features": [
-              "async",
-              "component-model",
               "runtime",
               "std"
             ],
@@ -22622,7 +22497,7 @@
           },
           {
             "name": "wasmtime_wasi_io",
-            "package_key": "wasmtime-wasi-io-36.0.19",
+            "package_key": "wasmtime-wasi-io-48.0.8",
             "kind": "normal",
             "features": [
               "std"
@@ -22634,7 +22509,7 @@
           },
           {
             "name": "wiggle",
-            "package_key": "wiggle-36.0.13",
+            "package_key": "wiggle-48.0.8",
             "kind": "normal",
             "features": [
               "wasmtime"
@@ -22648,21 +22523,12 @@
         "build_dependencies": [],
         "features": [
           "default",
-          "preview1"
+          "p1",
+          "p2"
         ]
       },
-      "wasmtime-wasi-io-36.0.19": {
+      "wasmtime-wasi-io-48.0.8": {
         "runtime_dependencies": [
-          {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
           {
             "name": "async_trait",
             "package_key": "async-trait-0.1.89",
@@ -22694,8 +22560,18 @@
             "tree": "target"
           },
           {
+            "name": "tracing",
+            "package_key": "tracing-0.1.44",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "wasmtime",
-            "package_key": "wasmtime-36.0.19",
+            "package_key": "wasmtime-48.0.8",
             "kind": "normal",
             "features": [
               "async",
@@ -22713,7 +22589,7 @@
           "std"
         ]
       },
-      "wast-251.0.0": {
+      "wast-263.0.0": {
         "runtime_dependencies": [
           {
             "name": "bumpalo",
@@ -22757,7 +22633,7 @@
           },
           {
             "name": "wasm_encoder",
-            "package_key": "wasm-encoder-0.251.0",
+            "package_key": "wasm-encoder-0.263.0",
             "kind": "normal",
             "features": [
               "std"
@@ -22790,11 +22666,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "wat-1.251.0": {
+      "wat-1.263.0": {
         "runtime_dependencies": [
           {
             "name": "wast",
-            "package_key": "wast-251.0.0",
+            "package_key": "wast-263.0.0",
             "kind": "normal",
             "features": [
               "wasm-module"
@@ -22843,28 +22719,8 @@
         "build_dependencies": [],
         "features": []
       },
-      "wiggle-36.0.13": {
+      "wiggle-48.0.8": {
         "runtime_dependencies": [
-          {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "async_trait",
-            "package_key": "async-trait-0.1.89",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "host"
-          },
           {
             "name": "bitflags",
             "package_key": "bitflags-2.11.1",
@@ -22890,14 +22746,14 @@
             "package_key": "tracing-0.1.44",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
           },
           {
             "name": "wasmtime",
-            "package_key": "wasmtime-36.0.19",
+            "package_key": "wasmtime-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -22906,8 +22762,18 @@
             "tree": "target"
           },
           {
+            "name": "wasmtime_environ",
+            "package_key": "wasmtime-environ-48.0.8",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "wiggle_macro",
-            "package_key": "wiggle-macro-36.0.13",
+            "package_key": "wiggle-macro-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -22921,18 +22787,8 @@
           "wasmtime"
         ]
       },
-      "wiggle-generate-36.0.13": {
+      "wiggle-generate-48.0.8": {
         "runtime_dependencies": [
-          {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
           {
             "name": "heck",
             "package_key": "heck-0.5.0",
@@ -22976,6 +22832,16 @@
             "tree": "target"
           },
           {
+            "name": "wasmtime_environ",
+            "package_key": "wasmtime-environ-48.0.8",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "witx",
             "package_key": "witx-0.9.1",
             "kind": "normal",
@@ -22989,7 +22855,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "wiggle-macro-36.0.13": {
+      "wiggle-macro-48.0.8": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -23025,145 +22891,7 @@
           },
           {
             "name": "wiggle_generate",
-            "package_key": "wiggle-generate-36.0.13",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": []
-      },
-      "winch-codegen-36.0.19": {
-        "runtime_dependencies": [
-          {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cranelift_assembler_x64",
-            "package_key": "cranelift-assembler-x64-0.123.19",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "cranelift_codegen",
-            "package_key": "cranelift-codegen-0.123.19",
-            "kind": "normal",
-            "features": [
-              "std",
-              "unwind",
-              "unwind"
-            ],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "gimli",
-            "package_key": "gimli-0.32.3",
-            "kind": "normal",
-            "features": [
-              "read"
-            ],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "regalloc2",
-            "package_key": "regalloc2-0.12.2",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "smallvec",
-            "package_key": "smallvec-1.15.1",
-            "kind": "normal",
-            "features": [
-              "union"
-            ],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "target_lexicon",
-            "package_key": "target-lexicon-0.13.5",
-            "kind": "normal",
-            "features": [
-              "std"
-            ],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "thiserror",
-            "package_key": "thiserror-2.0.18",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "wasmparser",
-            "package_key": "wasmparser-0.236.1",
-            "kind": "normal",
-            "features": [
-              "simd"
-            ],
-            "uses_default_features": false,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "wasmtime_environ",
-            "package_key": "wasmtime-environ-36.0.19",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "wasmtime_cranelift",
-            "package_key": "wasmtime-internal-cranelift-36.0.19",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "wasmtime_math",
-            "package_key": "wasmtime-internal-math-36.0.19",
+            "package_key": "wiggle-generate-48.0.8",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -23196,21 +22924,21 @@
           "std"
         ]
       },
-      "wit-parser-0.236.1": {
+      "wit-component-0.254.2": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
           },
           {
-            "name": "id_arena",
-            "package_key": "id-arena-2.3.0",
+            "name": "bitflags",
+            "package_key": "bitflags-2.11.1",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -23225,6 +22953,147 @@
             "features": [
               "std"
             ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "log",
+            "package_key": "log-0.4.30",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde",
+            "package_key": "serde-1.0.228",
+            "kind": "normal",
+            "features": [
+              "alloc"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde_derive",
+            "package_key": "serde_derive-1.0.228",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "host"
+          },
+          {
+            "name": "serde_json",
+            "package_key": "serde_json-1.0.150",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "wasm_encoder",
+            "package_key": "wasm-encoder-0.254.2",
+            "kind": "normal",
+            "features": [
+              "std",
+              "wasmparser"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "wasm_metadata",
+            "package_key": "wasm-metadata-0.254.2",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "wasmparser",
+            "package_key": "wasmparser-0.254.2",
+            "kind": "normal",
+            "features": [
+              "component-model",
+              "simd",
+              "simd",
+              "std"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "wit_parser",
+            "package_key": "wit-parser-0.254.2",
+            "kind": "normal",
+            "features": [
+              "decoding",
+              "serde"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": []
+      },
+      "wit-parser-0.254.2": {
+        "runtime_dependencies": [
+          {
+            "name": "anyhow",
+            "package_key": "anyhow-1.0.104",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "hashbrown",
+            "package_key": "hashbrown-0.17.1",
+            "kind": "normal",
+            "features": [
+              "default-hasher"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "id_arena",
+            "package_key": "id-arena-2.3.0",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "indexmap",
+            "package_key": "indexmap-2.14.0",
+            "kind": "normal",
+            "features": [],
             "uses_default_features": false,
             "optional": false,
             "target": null,
@@ -23283,8 +23152,8 @@
             "tree": "target"
           },
           {
-            "name": "unicode_xid",
-            "package_key": "unicode-xid-0.2.6",
+            "name": "unicode_ident",
+            "package_key": "unicode-ident-1.0.24",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -23294,7 +23163,7 @@
           },
           {
             "name": "wasmparser",
-            "package_key": "wasmparser-0.236.1",
+            "package_key": "wasmparser-0.254.2",
             "kind": "normal",
             "features": [
               "component-model",
@@ -23314,14 +23183,15 @@
           "decoding",
           "default",
           "serde",
-          "serde_json"
+          "serde_json",
+          "std"
         ]
       },
       "witx-0.9.1": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
+            "package_key": "anyhow-1.0.104",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -23871,7 +23741,7 @@
               "std"
             ]
           },
-          "cap-primitives-3.4.5": {
+          "cap-primitives-4.0.3": {
             "runtime_dependencies": [
               {
                 "name": "ambient_authority",
@@ -23895,7 +23765,7 @@
               },
               {
                 "name": "io_extras",
-                "package_key": "io-extras-0.18.4",
+                "package_key": "io-extras-0.19.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -23905,7 +23775,7 @@
               },
               {
                 "name": "io_lifetimes",
-                "package_key": "io-lifetimes-2.0.4",
+                "package_key": "io-lifetimes-3.0.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -24175,19 +24045,8 @@
               "fallback"
             ]
           },
-          "mach2-0.4.3": {
-            "runtime_dependencies": [
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.186",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(any(target_os = \"macos\", target_os = \"ios\"))",
-                "tree": "target"
-              }
-            ],
+          "mach2-0.6.0": {
+            "runtime_dependencies": [],
             "build_dependencies": [],
             "features": [
               "default"
@@ -24400,14 +24259,10 @@
             "build_dependencies": [],
             "features": [
               "alloc",
-              "default",
-              "fs",
               "libc-extra-traits",
-              "net",
               "std",
               "stdio",
-              "termios",
-              "use-libc-auxv"
+              "termios"
             ]
           },
           "rustix-1.1.4": {
@@ -24755,25 +24610,15 @@
             "build_dependencies": [],
             "features": []
           },
-          "wasmtime-36.0.19": {
+          "wasmtime-48.0.8": {
             "runtime_dependencies": [
               {
                 "name": "addr2line",
-                "package_key": "addr2line-0.25.1",
+                "package_key": "addr2line-0.26.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -24808,16 +24653,6 @@
                 "tree": "target"
               },
               {
-                "name": "cfg_if",
-                "package_key": "cfg-if-1.0.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "encoding_rs",
                 "package_key": "encoding_rs-0.8.35",
                 "kind": "normal",
@@ -24829,35 +24664,13 @@
               },
               {
                 "name": "gimli",
-                "package_key": "gimli-0.32.3",
+                "package_key": "gimli-0.33.0",
                 "kind": "normal",
                 "features": [
                   "read"
                 ],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hashbrown",
-                "package_key": "hashbrown-0.15.5",
-                "kind": "normal",
-                "features": [
-                  "default-hasher"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "indexmap",
-                "package_key": "indexmap-2.14.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -24883,7 +24696,7 @@
               },
               {
                 "name": "mach2",
-                "package_key": "mach2-0.4.3",
+                "package_key": "mach2-0.6.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -24893,7 +24706,7 @@
               },
               {
                 "name": "object",
-                "package_key": "object-0.37.3",
+                "package_key": "object-0.39.1",
                 "kind": "normal",
                 "features": [
                   "elf",
@@ -24929,7 +24742,7 @@
               },
               {
                 "name": "pulley_interpreter",
-                "package_key": "pulley-interpreter-36.0.19",
+                "package_key": "pulley-interpreter-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -25016,7 +24829,7 @@
               },
               {
                 "name": "wasmparser",
-                "package_key": "wasmparser-0.236.1",
+                "package_key": "wasmparser-0.254.2",
                 "kind": "normal",
                 "features": [
                   "simd"
@@ -25028,7 +24841,7 @@
               },
               {
                 "name": "wasmtime_environ",
-                "package_key": "wasmtime-environ-36.0.19",
+                "package_key": "wasmtime-environ-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -25037,18 +24850,8 @@
                 "tree": "target"
               },
               {
-                "name": "wasmtime_asm_macros",
-                "package_key": "wasmtime-internal-asm-macros-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "wasmtime_component_macro",
-                "package_key": "wasmtime-internal-component-macro-36.0.19",
+                "package_key": "wasmtime-internal-component-macro-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -25058,7 +24861,7 @@
               },
               {
                 "name": "wasmtime_component_util",
-                "package_key": "wasmtime-internal-component-util-36.0.19",
+                "package_key": "wasmtime-internal-component-util-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -25067,8 +24870,20 @@
                 "tree": "target"
               },
               {
+                "name": "wasmtime_core",
+                "package_key": "wasmtime-internal-core-48.0.8",
+                "kind": "normal",
+                "features": [
+                  "serde"
+                ],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
                 "name": "wasmtime_cranelift",
-                "package_key": "wasmtime-internal-cranelift-36.0.19",
+                "package_key": "wasmtime-internal-cranelift-48.0.8",
                 "kind": "normal",
                 "features": [
                   "pulley"
@@ -25080,7 +24895,7 @@
               },
               {
                 "name": "wasmtime_fiber",
-                "package_key": "wasmtime-internal-fiber-36.0.19",
+                "package_key": "wasmtime-internal-fiber-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -25090,27 +24905,7 @@
               },
               {
                 "name": "wasmtime_jit_icache_coherence",
-                "package_key": "wasmtime-internal-jit-icache-coherence-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_math",
-                "package_key": "wasmtime-internal-math-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_slab",
-                "package_key": "wasmtime-internal-slab-36.0.19",
+                "package_key": "wasmtime-internal-jit-icache-coherence-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -25120,7 +24915,7 @@
               },
               {
                 "name": "wasmtime_unwinder",
-                "package_key": "wasmtime-internal-unwinder-36.0.19",
+                "package_key": "wasmtime-internal-unwinder-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -25130,7 +24925,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -25140,7 +24935,7 @@
               },
               {
                 "name": "wat",
-                "package_key": "wat-1.251.0",
+                "package_key": "wat-1.263.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -25162,7 +24957,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "build",
                 "features": [],
                 "uses_default_features": true,
@@ -25248,7 +25043,7 @@
               "std"
             ]
           },
-          "cap-primitives-3.4.5": {
+          "cap-primitives-4.0.3": {
             "runtime_dependencies": [
               {
                 "name": "ambient_authority",
@@ -25272,7 +25067,7 @@
               },
               {
                 "name": "io_extras",
-                "package_key": "io-extras-0.18.4",
+                "package_key": "io-extras-0.19.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -25282,7 +25077,7 @@
               },
               {
                 "name": "io_lifetimes",
-                "package_key": "io-lifetimes-2.0.4",
+                "package_key": "io-lifetimes-3.0.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -25545,12 +25340,8 @@
               "elf",
               "errno",
               "general",
-              "if_ether",
               "ioctl",
-              "net",
-              "netlink",
-              "no_std",
-              "xdp"
+              "no_std"
             ]
           },
           "memfd-0.6.5": {
@@ -25832,14 +25623,10 @@
             "build_dependencies": [],
             "features": [
               "alloc",
-              "default",
-              "fs",
               "libc-extra-traits",
-              "net",
               "std",
               "stdio",
-              "termios",
-              "use-libc-auxv"
+              "termios"
             ]
           },
           "rustix-1.1.4": {
@@ -25952,38 +25739,6 @@
               "time"
             ]
           },
-          "rustix-linux-procfs-0.1.1": {
-            "runtime_dependencies": [
-              {
-                "name": "once_cell",
-                "package_key": "once_cell-1.21.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "rustix",
-                "package_key": "rustix-1.1.4",
-                "kind": "normal",
-                "features": [
-                  "alloc",
-                  "fs"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "default",
-              "std"
-            ]
-          },
           "rustls-native-certs-0.7.3": {
             "runtime_dependencies": [
               {
@@ -26086,25 +25841,15 @@
             "build_dependencies": [],
             "features": []
           },
-          "wasmtime-36.0.19": {
+          "wasmtime-48.0.8": {
             "runtime_dependencies": [
               {
                 "name": "addr2line",
-                "package_key": "addr2line-0.25.1",
+                "package_key": "addr2line-0.26.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -26139,16 +25884,6 @@
                 "tree": "target"
               },
               {
-                "name": "cfg_if",
-                "package_key": "cfg-if-1.0.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "encoding_rs",
                 "package_key": "encoding_rs-0.8.35",
                 "kind": "normal",
@@ -26160,35 +25895,13 @@
               },
               {
                 "name": "gimli",
-                "package_key": "gimli-0.32.3",
+                "package_key": "gimli-0.33.0",
                 "kind": "normal",
                 "features": [
                   "read"
                 ],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hashbrown",
-                "package_key": "hashbrown-0.15.5",
-                "kind": "normal",
-                "features": [
-                  "default-hasher"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "indexmap",
-                "package_key": "indexmap-2.14.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -26224,7 +25937,7 @@
               },
               {
                 "name": "object",
-                "package_key": "object-0.37.3",
+                "package_key": "object-0.39.1",
                 "kind": "normal",
                 "features": [
                   "elf",
@@ -26260,7 +25973,7 @@
               },
               {
                 "name": "pulley_interpreter",
-                "package_key": "pulley-interpreter-36.0.19",
+                "package_key": "pulley-interpreter-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -26347,7 +26060,7 @@
               },
               {
                 "name": "wasmparser",
-                "package_key": "wasmparser-0.236.1",
+                "package_key": "wasmparser-0.254.2",
                 "kind": "normal",
                 "features": [
                   "simd"
@@ -26359,7 +26072,7 @@
               },
               {
                 "name": "wasmtime_environ",
-                "package_key": "wasmtime-environ-36.0.19",
+                "package_key": "wasmtime-environ-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -26368,18 +26081,8 @@
                 "tree": "target"
               },
               {
-                "name": "wasmtime_asm_macros",
-                "package_key": "wasmtime-internal-asm-macros-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "wasmtime_component_macro",
-                "package_key": "wasmtime-internal-component-macro-36.0.19",
+                "package_key": "wasmtime-internal-component-macro-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -26389,7 +26092,7 @@
               },
               {
                 "name": "wasmtime_component_util",
-                "package_key": "wasmtime-internal-component-util-36.0.19",
+                "package_key": "wasmtime-internal-component-util-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -26398,8 +26101,20 @@
                 "tree": "target"
               },
               {
+                "name": "wasmtime_core",
+                "package_key": "wasmtime-internal-core-48.0.8",
+                "kind": "normal",
+                "features": [
+                  "serde"
+                ],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
                 "name": "wasmtime_cranelift",
-                "package_key": "wasmtime-internal-cranelift-36.0.19",
+                "package_key": "wasmtime-internal-cranelift-48.0.8",
                 "kind": "normal",
                 "features": [
                   "pulley"
@@ -26411,7 +26126,7 @@
               },
               {
                 "name": "wasmtime_fiber",
-                "package_key": "wasmtime-internal-fiber-36.0.19",
+                "package_key": "wasmtime-internal-fiber-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -26421,27 +26136,7 @@
               },
               {
                 "name": "wasmtime_jit_icache_coherence",
-                "package_key": "wasmtime-internal-jit-icache-coherence-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_math",
-                "package_key": "wasmtime-internal-math-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_slab",
-                "package_key": "wasmtime-internal-slab-36.0.19",
+                "package_key": "wasmtime-internal-jit-icache-coherence-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -26451,7 +26146,7 @@
               },
               {
                 "name": "wasmtime_unwinder",
-                "package_key": "wasmtime-internal-unwinder-36.0.19",
+                "package_key": "wasmtime-internal-unwinder-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -26461,7 +26156,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -26471,7 +26166,7 @@
               },
               {
                 "name": "wat",
-                "package_key": "wat-1.251.0",
+                "package_key": "wat-1.263.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -26493,7 +26188,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "build",
                 "features": [],
                 "uses_default_features": true,
@@ -26579,7 +26274,7 @@
               "std"
             ]
           },
-          "cap-primitives-3.4.5": {
+          "cap-primitives-4.0.3": {
             "runtime_dependencies": [
               {
                 "name": "ambient_authority",
@@ -26603,7 +26298,7 @@
               },
               {
                 "name": "io_extras",
-                "package_key": "io-extras-0.18.4",
+                "package_key": "io-extras-0.19.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -26613,7 +26308,7 @@
               },
               {
                 "name": "io_lifetimes",
-                "package_key": "io-lifetimes-2.0.4",
+                "package_key": "io-lifetimes-3.0.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -26876,12 +26571,8 @@
               "elf",
               "errno",
               "general",
-              "if_ether",
               "ioctl",
-              "net",
-              "netlink",
-              "no_std",
-              "xdp"
+              "no_std"
             ]
           },
           "memfd-0.6.5": {
@@ -27163,14 +26854,10 @@
             "build_dependencies": [],
             "features": [
               "alloc",
-              "default",
-              "fs",
               "libc-extra-traits",
-              "net",
               "std",
               "stdio",
-              "termios",
-              "use-libc-auxv"
+              "termios"
             ]
           },
           "rustix-1.1.4": {
@@ -27283,38 +26970,6 @@
               "time"
             ]
           },
-          "rustix-linux-procfs-0.1.1": {
-            "runtime_dependencies": [
-              {
-                "name": "once_cell",
-                "package_key": "once_cell-1.21.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "rustix",
-                "package_key": "rustix-1.1.4",
-                "kind": "normal",
-                "features": [
-                  "alloc",
-                  "fs"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "default",
-              "std"
-            ]
-          },
           "rustls-native-certs-0.7.3": {
             "runtime_dependencies": [
               {
@@ -27417,25 +27072,15 @@
             "build_dependencies": [],
             "features": []
           },
-          "wasmtime-36.0.19": {
+          "wasmtime-48.0.8": {
             "runtime_dependencies": [
               {
                 "name": "addr2line",
-                "package_key": "addr2line-0.25.1",
+                "package_key": "addr2line-0.26.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -27470,16 +27115,6 @@
                 "tree": "target"
               },
               {
-                "name": "cfg_if",
-                "package_key": "cfg-if-1.0.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "encoding_rs",
                 "package_key": "encoding_rs-0.8.35",
                 "kind": "normal",
@@ -27491,35 +27126,13 @@
               },
               {
                 "name": "gimli",
-                "package_key": "gimli-0.32.3",
+                "package_key": "gimli-0.33.0",
                 "kind": "normal",
                 "features": [
                   "read"
                 ],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hashbrown",
-                "package_key": "hashbrown-0.15.5",
-                "kind": "normal",
-                "features": [
-                  "default-hasher"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "indexmap",
-                "package_key": "indexmap-2.14.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -27555,7 +27168,7 @@
               },
               {
                 "name": "object",
-                "package_key": "object-0.37.3",
+                "package_key": "object-0.39.1",
                 "kind": "normal",
                 "features": [
                   "elf",
@@ -27591,7 +27204,7 @@
               },
               {
                 "name": "pulley_interpreter",
-                "package_key": "pulley-interpreter-36.0.19",
+                "package_key": "pulley-interpreter-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -27678,7 +27291,7 @@
               },
               {
                 "name": "wasmparser",
-                "package_key": "wasmparser-0.236.1",
+                "package_key": "wasmparser-0.254.2",
                 "kind": "normal",
                 "features": [
                   "simd"
@@ -27690,7 +27303,7 @@
               },
               {
                 "name": "wasmtime_environ",
-                "package_key": "wasmtime-environ-36.0.19",
+                "package_key": "wasmtime-environ-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -27699,18 +27312,8 @@
                 "tree": "target"
               },
               {
-                "name": "wasmtime_asm_macros",
-                "package_key": "wasmtime-internal-asm-macros-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "wasmtime_component_macro",
-                "package_key": "wasmtime-internal-component-macro-36.0.19",
+                "package_key": "wasmtime-internal-component-macro-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -27720,7 +27323,7 @@
               },
               {
                 "name": "wasmtime_component_util",
-                "package_key": "wasmtime-internal-component-util-36.0.19",
+                "package_key": "wasmtime-internal-component-util-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -27729,8 +27332,20 @@
                 "tree": "target"
               },
               {
+                "name": "wasmtime_core",
+                "package_key": "wasmtime-internal-core-48.0.8",
+                "kind": "normal",
+                "features": [
+                  "serde"
+                ],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
                 "name": "wasmtime_cranelift",
-                "package_key": "wasmtime-internal-cranelift-36.0.19",
+                "package_key": "wasmtime-internal-cranelift-48.0.8",
                 "kind": "normal",
                 "features": [
                   "pulley"
@@ -27742,7 +27357,7 @@
               },
               {
                 "name": "wasmtime_fiber",
-                "package_key": "wasmtime-internal-fiber-36.0.19",
+                "package_key": "wasmtime-internal-fiber-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -27752,27 +27367,7 @@
               },
               {
                 "name": "wasmtime_jit_icache_coherence",
-                "package_key": "wasmtime-internal-jit-icache-coherence-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_math",
-                "package_key": "wasmtime-internal-math-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_slab",
-                "package_key": "wasmtime-internal-slab-36.0.19",
+                "package_key": "wasmtime-internal-jit-icache-coherence-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -27782,7 +27377,7 @@
               },
               {
                 "name": "wasmtime_unwinder",
-                "package_key": "wasmtime-internal-unwinder-36.0.19",
+                "package_key": "wasmtime-internal-unwinder-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -27792,7 +27387,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -27802,7 +27397,7 @@
               },
               {
                 "name": "wat",
-                "package_key": "wat-1.251.0",
+                "package_key": "wat-1.263.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -27824,7 +27419,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "build",
                 "features": [],
                 "uses_default_features": true,
@@ -27920,7 +27515,7 @@
               "std"
             ]
           },
-          "cap-primitives-3.4.5": {
+          "cap-primitives-4.0.3": {
             "runtime_dependencies": [
               {
                 "name": "ambient_authority",
@@ -27944,7 +27539,7 @@
               },
               {
                 "name": "io_extras",
-                "package_key": "io-extras-0.18.4",
+                "package_key": "io-extras-0.19.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -27954,7 +27549,7 @@
               },
               {
                 "name": "io_lifetimes",
-                "package_key": "io-lifetimes-2.0.4",
+                "package_key": "io-lifetimes-3.0.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -28256,19 +27851,8 @@
               "fallback"
             ]
           },
-          "mach2-0.4.3": {
-            "runtime_dependencies": [
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.186",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(any(target_os = \"macos\", target_os = \"ios\"))",
-                "tree": "target"
-              }
-            ],
+          "mach2-0.6.0": {
+            "runtime_dependencies": [],
             "build_dependencies": [],
             "features": [
               "default"
@@ -28461,14 +28045,10 @@
             "build_dependencies": [],
             "features": [
               "alloc",
-              "default",
-              "fs",
               "libc-extra-traits",
-              "net",
               "std",
               "stdio",
-              "termios",
-              "use-libc-auxv"
+              "termios"
             ]
           },
           "rustix-1.1.4": {
@@ -28806,25 +28386,15 @@
             "build_dependencies": [],
             "features": []
           },
-          "wasmtime-36.0.19": {
+          "wasmtime-48.0.8": {
             "runtime_dependencies": [
               {
                 "name": "addr2line",
-                "package_key": "addr2line-0.25.1",
+                "package_key": "addr2line-0.26.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -28859,16 +28429,6 @@
                 "tree": "target"
               },
               {
-                "name": "cfg_if",
-                "package_key": "cfg-if-1.0.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "encoding_rs",
                 "package_key": "encoding_rs-0.8.35",
                 "kind": "normal",
@@ -28880,35 +28440,13 @@
               },
               {
                 "name": "gimli",
-                "package_key": "gimli-0.32.3",
+                "package_key": "gimli-0.33.0",
                 "kind": "normal",
                 "features": [
                   "read"
                 ],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hashbrown",
-                "package_key": "hashbrown-0.15.5",
-                "kind": "normal",
-                "features": [
-                  "default-hasher"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "indexmap",
-                "package_key": "indexmap-2.14.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -28934,7 +28472,7 @@
               },
               {
                 "name": "mach2",
-                "package_key": "mach2-0.4.3",
+                "package_key": "mach2-0.6.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -28944,7 +28482,7 @@
               },
               {
                 "name": "object",
-                "package_key": "object-0.37.3",
+                "package_key": "object-0.39.1",
                 "kind": "normal",
                 "features": [
                   "elf",
@@ -28980,7 +28518,7 @@
               },
               {
                 "name": "pulley_interpreter",
-                "package_key": "pulley-interpreter-36.0.19",
+                "package_key": "pulley-interpreter-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -29067,7 +28605,7 @@
               },
               {
                 "name": "wasmparser",
-                "package_key": "wasmparser-0.236.1",
+                "package_key": "wasmparser-0.254.2",
                 "kind": "normal",
                 "features": [
                   "simd"
@@ -29079,7 +28617,7 @@
               },
               {
                 "name": "wasmtime_environ",
-                "package_key": "wasmtime-environ-36.0.19",
+                "package_key": "wasmtime-environ-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -29088,18 +28626,8 @@
                 "tree": "target"
               },
               {
-                "name": "wasmtime_asm_macros",
-                "package_key": "wasmtime-internal-asm-macros-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "wasmtime_component_macro",
-                "package_key": "wasmtime-internal-component-macro-36.0.19",
+                "package_key": "wasmtime-internal-component-macro-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -29109,7 +28637,7 @@
               },
               {
                 "name": "wasmtime_component_util",
-                "package_key": "wasmtime-internal-component-util-36.0.19",
+                "package_key": "wasmtime-internal-component-util-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -29118,8 +28646,20 @@
                 "tree": "target"
               },
               {
+                "name": "wasmtime_core",
+                "package_key": "wasmtime-internal-core-48.0.8",
+                "kind": "normal",
+                "features": [
+                  "serde"
+                ],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
                 "name": "wasmtime_cranelift",
-                "package_key": "wasmtime-internal-cranelift-36.0.19",
+                "package_key": "wasmtime-internal-cranelift-48.0.8",
                 "kind": "normal",
                 "features": [
                   "pulley"
@@ -29131,7 +28671,7 @@
               },
               {
                 "name": "wasmtime_fiber",
-                "package_key": "wasmtime-internal-fiber-36.0.19",
+                "package_key": "wasmtime-internal-fiber-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -29141,27 +28681,7 @@
               },
               {
                 "name": "wasmtime_jit_icache_coherence",
-                "package_key": "wasmtime-internal-jit-icache-coherence-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_math",
-                "package_key": "wasmtime-internal-math-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_slab",
-                "package_key": "wasmtime-internal-slab-36.0.19",
+                "package_key": "wasmtime-internal-jit-icache-coherence-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -29171,7 +28691,7 @@
               },
               {
                 "name": "wasmtime_unwinder",
-                "package_key": "wasmtime-internal-unwinder-36.0.19",
+                "package_key": "wasmtime-internal-unwinder-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -29181,7 +28701,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -29191,7 +28711,7 @@
               },
               {
                 "name": "wat",
-                "package_key": "wat-1.251.0",
+                "package_key": "wat-1.263.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -29213,7 +28733,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "build",
                 "features": [],
                 "uses_default_features": true,
@@ -29309,7 +28829,7 @@
               "std"
             ]
           },
-          "cap-primitives-3.4.5": {
+          "cap-primitives-4.0.3": {
             "runtime_dependencies": [
               {
                 "name": "ambient_authority",
@@ -29333,7 +28853,7 @@
               },
               {
                 "name": "io_extras",
-                "package_key": "io-extras-0.18.4",
+                "package_key": "io-extras-0.19.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -29343,7 +28863,7 @@
               },
               {
                 "name": "io_lifetimes",
-                "package_key": "io-lifetimes-2.0.4",
+                "package_key": "io-lifetimes-3.0.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -29638,12 +29158,8 @@
               "elf",
               "errno",
               "general",
-              "if_ether",
               "ioctl",
-              "net",
-              "netlink",
-              "no_std",
-              "xdp"
+              "no_std"
             ]
           },
           "memfd-0.6.5": {
@@ -29905,14 +29421,10 @@
             "build_dependencies": [],
             "features": [
               "alloc",
-              "default",
-              "fs",
               "libc-extra-traits",
-              "net",
               "std",
               "stdio",
-              "termios",
-              "use-libc-auxv"
+              "termios"
             ]
           },
           "rustix-1.1.4": {
@@ -30025,38 +29537,6 @@
               "time"
             ]
           },
-          "rustix-linux-procfs-0.1.1": {
-            "runtime_dependencies": [
-              {
-                "name": "once_cell",
-                "package_key": "once_cell-1.21.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "rustix",
-                "package_key": "rustix-1.1.4",
-                "kind": "normal",
-                "features": [
-                  "alloc",
-                  "fs"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "default",
-              "std"
-            ]
-          },
           "rustls-native-certs-0.7.3": {
             "runtime_dependencies": [
               {
@@ -30159,25 +29639,15 @@
             "build_dependencies": [],
             "features": []
           },
-          "wasmtime-36.0.19": {
+          "wasmtime-48.0.8": {
             "runtime_dependencies": [
               {
                 "name": "addr2line",
-                "package_key": "addr2line-0.25.1",
+                "package_key": "addr2line-0.26.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -30212,16 +29682,6 @@
                 "tree": "target"
               },
               {
-                "name": "cfg_if",
-                "package_key": "cfg-if-1.0.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "encoding_rs",
                 "package_key": "encoding_rs-0.8.35",
                 "kind": "normal",
@@ -30233,35 +29693,13 @@
               },
               {
                 "name": "gimli",
-                "package_key": "gimli-0.32.3",
+                "package_key": "gimli-0.33.0",
                 "kind": "normal",
                 "features": [
                   "read"
                 ],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hashbrown",
-                "package_key": "hashbrown-0.15.5",
-                "kind": "normal",
-                "features": [
-                  "default-hasher"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "indexmap",
-                "package_key": "indexmap-2.14.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -30297,7 +29735,7 @@
               },
               {
                 "name": "object",
-                "package_key": "object-0.37.3",
+                "package_key": "object-0.39.1",
                 "kind": "normal",
                 "features": [
                   "elf",
@@ -30333,7 +29771,7 @@
               },
               {
                 "name": "pulley_interpreter",
-                "package_key": "pulley-interpreter-36.0.19",
+                "package_key": "pulley-interpreter-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -30420,7 +29858,7 @@
               },
               {
                 "name": "wasmparser",
-                "package_key": "wasmparser-0.236.1",
+                "package_key": "wasmparser-0.254.2",
                 "kind": "normal",
                 "features": [
                   "simd"
@@ -30432,7 +29870,7 @@
               },
               {
                 "name": "wasmtime_environ",
-                "package_key": "wasmtime-environ-36.0.19",
+                "package_key": "wasmtime-environ-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -30441,18 +29879,8 @@
                 "tree": "target"
               },
               {
-                "name": "wasmtime_asm_macros",
-                "package_key": "wasmtime-internal-asm-macros-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "wasmtime_component_macro",
-                "package_key": "wasmtime-internal-component-macro-36.0.19",
+                "package_key": "wasmtime-internal-component-macro-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -30462,7 +29890,7 @@
               },
               {
                 "name": "wasmtime_component_util",
-                "package_key": "wasmtime-internal-component-util-36.0.19",
+                "package_key": "wasmtime-internal-component-util-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -30471,8 +29899,20 @@
                 "tree": "target"
               },
               {
+                "name": "wasmtime_core",
+                "package_key": "wasmtime-internal-core-48.0.8",
+                "kind": "normal",
+                "features": [
+                  "serde"
+                ],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
                 "name": "wasmtime_cranelift",
-                "package_key": "wasmtime-internal-cranelift-36.0.19",
+                "package_key": "wasmtime-internal-cranelift-48.0.8",
                 "kind": "normal",
                 "features": [
                   "pulley"
@@ -30484,7 +29924,7 @@
               },
               {
                 "name": "wasmtime_fiber",
-                "package_key": "wasmtime-internal-fiber-36.0.19",
+                "package_key": "wasmtime-internal-fiber-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -30494,27 +29934,7 @@
               },
               {
                 "name": "wasmtime_jit_icache_coherence",
-                "package_key": "wasmtime-internal-jit-icache-coherence-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_math",
-                "package_key": "wasmtime-internal-math-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_slab",
-                "package_key": "wasmtime-internal-slab-36.0.19",
+                "package_key": "wasmtime-internal-jit-icache-coherence-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -30524,7 +29944,7 @@
               },
               {
                 "name": "wasmtime_unwinder",
-                "package_key": "wasmtime-internal-unwinder-36.0.19",
+                "package_key": "wasmtime-internal-unwinder-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -30534,7 +29954,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -30544,7 +29964,7 @@
               },
               {
                 "name": "wat",
-                "package_key": "wat-1.251.0",
+                "package_key": "wat-1.263.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -30566,7 +29986,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "build",
                 "features": [],
                 "uses_default_features": true,
@@ -30662,7 +30082,7 @@
               "std"
             ]
           },
-          "cap-primitives-3.4.5": {
+          "cap-primitives-4.0.3": {
             "runtime_dependencies": [
               {
                 "name": "ambient_authority",
@@ -30686,7 +30106,7 @@
               },
               {
                 "name": "io_extras",
-                "package_key": "io-extras-0.18.4",
+                "package_key": "io-extras-0.19.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -30696,7 +30116,7 @@
               },
               {
                 "name": "io_lifetimes",
-                "package_key": "io-lifetimes-2.0.4",
+                "package_key": "io-lifetimes-3.0.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -30991,12 +30411,8 @@
               "elf",
               "errno",
               "general",
-              "if_ether",
               "ioctl",
-              "net",
-              "netlink",
-              "no_std",
-              "xdp"
+              "no_std"
             ]
           },
           "memfd-0.6.5": {
@@ -31258,14 +30674,10 @@
             "build_dependencies": [],
             "features": [
               "alloc",
-              "default",
-              "fs",
               "libc-extra-traits",
-              "net",
               "std",
               "stdio",
-              "termios",
-              "use-libc-auxv"
+              "termios"
             ]
           },
           "rustix-1.1.4": {
@@ -31378,38 +30790,6 @@
               "time"
             ]
           },
-          "rustix-linux-procfs-0.1.1": {
-            "runtime_dependencies": [
-              {
-                "name": "once_cell",
-                "package_key": "once_cell-1.21.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "rustix",
-                "package_key": "rustix-1.1.4",
-                "kind": "normal",
-                "features": [
-                  "alloc",
-                  "fs"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "default",
-              "std"
-            ]
-          },
           "rustls-native-certs-0.7.3": {
             "runtime_dependencies": [
               {
@@ -31512,25 +30892,15 @@
             "build_dependencies": [],
             "features": []
           },
-          "wasmtime-36.0.19": {
+          "wasmtime-48.0.8": {
             "runtime_dependencies": [
               {
                 "name": "addr2line",
-                "package_key": "addr2line-0.25.1",
+                "package_key": "addr2line-0.26.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -31565,16 +30935,6 @@
                 "tree": "target"
               },
               {
-                "name": "cfg_if",
-                "package_key": "cfg-if-1.0.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "encoding_rs",
                 "package_key": "encoding_rs-0.8.35",
                 "kind": "normal",
@@ -31586,35 +30946,13 @@
               },
               {
                 "name": "gimli",
-                "package_key": "gimli-0.32.3",
+                "package_key": "gimli-0.33.0",
                 "kind": "normal",
                 "features": [
                   "read"
                 ],
                 "uses_default_features": false,
                 "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hashbrown",
-                "package_key": "hashbrown-0.15.5",
-                "kind": "normal",
-                "features": [
-                  "default-hasher"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "indexmap",
-                "package_key": "indexmap-2.14.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
                 "target": null,
                 "tree": "target"
               },
@@ -31650,7 +30988,7 @@
               },
               {
                 "name": "object",
-                "package_key": "object-0.37.3",
+                "package_key": "object-0.39.1",
                 "kind": "normal",
                 "features": [
                   "elf",
@@ -31686,7 +31024,7 @@
               },
               {
                 "name": "pulley_interpreter",
-                "package_key": "pulley-interpreter-36.0.19",
+                "package_key": "pulley-interpreter-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -31773,7 +31111,7 @@
               },
               {
                 "name": "wasmparser",
-                "package_key": "wasmparser-0.236.1",
+                "package_key": "wasmparser-0.254.2",
                 "kind": "normal",
                 "features": [
                   "simd"
@@ -31785,7 +31123,7 @@
               },
               {
                 "name": "wasmtime_environ",
-                "package_key": "wasmtime-environ-36.0.19",
+                "package_key": "wasmtime-environ-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -31794,18 +31132,8 @@
                 "tree": "target"
               },
               {
-                "name": "wasmtime_asm_macros",
-                "package_key": "wasmtime-internal-asm-macros-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
                 "name": "wasmtime_component_macro",
-                "package_key": "wasmtime-internal-component-macro-36.0.19",
+                "package_key": "wasmtime-internal-component-macro-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -31815,7 +31143,7 @@
               },
               {
                 "name": "wasmtime_component_util",
-                "package_key": "wasmtime-internal-component-util-36.0.19",
+                "package_key": "wasmtime-internal-component-util-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -31824,8 +31152,20 @@
                 "tree": "target"
               },
               {
+                "name": "wasmtime_core",
+                "package_key": "wasmtime-internal-core-48.0.8",
+                "kind": "normal",
+                "features": [
+                  "serde"
+                ],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
                 "name": "wasmtime_cranelift",
-                "package_key": "wasmtime-internal-cranelift-36.0.19",
+                "package_key": "wasmtime-internal-cranelift-48.0.8",
                 "kind": "normal",
                 "features": [
                   "pulley"
@@ -31837,7 +31177,7 @@
               },
               {
                 "name": "wasmtime_fiber",
-                "package_key": "wasmtime-internal-fiber-36.0.19",
+                "package_key": "wasmtime-internal-fiber-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -31847,27 +31187,7 @@
               },
               {
                 "name": "wasmtime_jit_icache_coherence",
-                "package_key": "wasmtime-internal-jit-icache-coherence-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_math",
-                "package_key": "wasmtime-internal-math-36.0.19",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "wasmtime_slab",
-                "package_key": "wasmtime-internal-slab-36.0.19",
+                "package_key": "wasmtime-internal-jit-icache-coherence-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -31877,7 +31197,7 @@
               },
               {
                 "name": "wasmtime_unwinder",
-                "package_key": "wasmtime-internal-unwinder-36.0.19",
+                "package_key": "wasmtime-internal-unwinder-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -31887,7 +31207,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -31897,7 +31217,7 @@
               },
               {
                 "name": "wat",
-                "package_key": "wat-1.251.0",
+                "package_key": "wat-1.263.0",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -31919,7 +31239,7 @@
               },
               {
                 "name": "wasmtime_versioned_export_macros",
-                "package_key": "wasmtime-internal-versioned-export-macros-36.0.19",
+                "package_key": "wasmtime-internal-versioned-export-macros-48.0.8",
                 "kind": "build",
                 "features": [],
                 "uses_default_features": true,
@@ -31953,7 +31273,7 @@
         "path": "src/lib.rs"
       }
     },
-    "addr2line-0.25.1": {
+    "addr2line-0.26.1": {
       "edition": "2018",
       "binaries": [
         {
@@ -31994,7 +31314,7 @@
     "anyerror-0.1.13": {
       "edition": "2021"
     },
-    "anyhow-1.0.102": {
+    "anyhow-1.0.104": {
       "edition": "2021",
       "build_script": "build.rs"
     },
@@ -32140,26 +31460,9 @@
     "bytes-1.11.1": {
       "edition": "2021"
     },
-    "cap-fs-ext-3.4.5": {
+    "cap-primitives-4.0.3": {
       "edition": "2021",
       "build_script": "build.rs"
-    },
-    "cap-net-ext-3.4.5": {
-      "edition": "2021"
-    },
-    "cap-primitives-3.4.5": {
-      "edition": "2021",
-      "build_script": "build.rs"
-    },
-    "cap-rand-3.4.5": {
-      "edition": "2021"
-    },
-    "cap-std-3.4.5": {
-      "edition": "2021",
-      "build_script": "build.rs"
-    },
-    "cap-time-ext-3.4.5": {
-      "edition": "2021"
     },
     "cc-1.2.63": {
       "edition": "2018"
@@ -32222,13 +31525,23 @@
     "core-foundation-sys-0.8.7": {
       "edition": "2018"
     },
+    "cpp_demangle-0.5.1": {
+      "edition": "2018",
+      "build_script": "build.rs",
+      "binaries": [
+        {
+          "name": "afl_runner",
+          "path": "src/bin/afl_runner.rs"
+        }
+      ]
+    },
     "cpufeatures-0.2.17": {
       "edition": "2018"
     },
     "cpufeatures-0.3.0": {
       "edition": "2024"
     },
-    "cranelift-assembler-x64-0.123.19": {
+    "cranelift-assembler-x64-0.135.8": {
       "edition": "2024",
       "build_script": "build.rs",
       "binaries": [
@@ -32238,7 +31551,7 @@
         }
       ]
     },
-    "cranelift-assembler-x64-meta-0.123.19": {
+    "cranelift-assembler-x64-meta-0.135.8": {
       "edition": "2024",
       "binaries": [
         {
@@ -32247,39 +31560,39 @@
         }
       ]
     },
-    "cranelift-bforest-0.123.19": {
+    "cranelift-bforest-0.135.8": {
       "edition": "2024"
     },
-    "cranelift-bitset-0.123.19": {
+    "cranelift-bitset-0.135.8": {
       "edition": "2024"
     },
-    "cranelift-codegen-0.123.19": {
+    "cranelift-codegen-0.135.8": {
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "cranelift-codegen-meta-0.123.19": {
+    "cranelift-codegen-meta-0.135.8": {
       "edition": "2024"
     },
-    "cranelift-codegen-shared-0.123.19": {
+    "cranelift-codegen-shared-0.135.8": {
       "edition": "2024"
     },
-    "cranelift-control-0.123.19": {
+    "cranelift-control-0.135.8": {
       "edition": "2024"
     },
-    "cranelift-entity-0.123.19": {
+    "cranelift-entity-0.135.8": {
       "edition": "2024"
     },
-    "cranelift-frontend-0.123.19": {
+    "cranelift-frontend-0.135.8": {
       "edition": "2024"
     },
-    "cranelift-isle-0.123.19": {
+    "cranelift-isle-0.135.8": {
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "cranelift-native-0.123.19": {
+    "cranelift-native-0.135.8": {
       "edition": "2024"
     },
-    "cranelift-srcgen-0.123.19": {
+    "cranelift-srcgen-0.135.8": {
       "edition": "2024"
     },
     "crc32fast-1.5.0": {
@@ -32422,9 +31735,6 @@
     "event-listener-strategy-0.5.4": {
       "edition": "2021"
     },
-    "fallible-iterator-0.3.0": {
-      "edition": "2018"
-    },
     "fast_chemail-0.9.6": {
       "edition": "2015"
     },
@@ -32522,8 +31832,8 @@
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "gimli-0.32.3": {
-      "edition": "2018"
+    "gimli-0.33.0": {
+      "edition": "2024"
     },
     "handlebars-6.4.1": {
       "edition": "2024"
@@ -32651,11 +31961,15 @@
     "inventory-0.3.24": {
       "edition": "2021"
     },
-    "io-extras-0.18.4": {
+    "io-extras-0.19.0": {
       "edition": "2021",
       "build_script": "build.rs"
     },
     "io-lifetimes-2.0.4": {
+      "edition": "2021",
+      "build_script": "build.rs"
+    },
+    "io-lifetimes-3.0.1": {
       "edition": "2021",
       "build_script": "build.rs"
     },
@@ -32751,8 +32065,8 @@
     "lru-slab-0.1.2": {
       "edition": "2021"
     },
-    "mach2-0.4.3": {
-      "edition": "2015"
+    "mach2-0.6.0": {
+      "edition": "2024"
     },
     "maplit-1.0.2": {
       "edition": "2015"
@@ -32823,7 +32137,7 @@
       "edition": "2021",
       "build_script": "build.rs"
     },
-    "object-0.37.3": {
+    "object-0.39.1": {
       "edition": "2018",
       "build_script": "build.rs"
     },
@@ -32967,10 +32281,10 @@
       "edition": "2018",
       "proc_macro": true
     },
-    "pulley-interpreter-36.0.19": {
+    "pulley-interpreter-48.0.8": {
       "edition": "2024"
     },
-    "pulley-macros-36.0.19": {
+    "pulley-macros-48.0.8": {
       "edition": "2024",
       "proc_macro": true
     },
@@ -33043,7 +32357,7 @@
       "edition": "2021",
       "proc_macro": true
     },
-    "regalloc2-0.12.2": {
+    "regalloc2-0.15.2": {
       "edition": "2018"
     },
     "regex-1.12.3": {
@@ -33087,6 +32401,9 @@
     "rust_decimal-1.42.0": {
       "edition": "2021",
       "build_script": "build.rs"
+    },
+    "rustc-demangle-0.1.27": {
+      "edition": "2015"
     },
     "rustc-hash-2.1.2": {
       "edition": "2021"
@@ -33275,6 +32592,9 @@
     "socket-pktinfo-0.3.2": {
       "edition": "2018"
     },
+    "socket2-0.5.10": {
+      "edition": "2021"
+    },
     "socket2-0.6.4": {
       "edition": "2021"
     },
@@ -33315,10 +32635,6 @@
     },
     "synstructure-0.13.2": {
       "edition": "2018"
-    },
-    "system-interface-0.27.3": {
-      "edition": "2021",
-      "build_script": "build.rs"
     },
     "tap-1.0.1": {
       "edition": "2015"
@@ -33854,88 +33170,82 @@
     "want-0.3.1": {
       "edition": "2018"
     },
-    "wasm-encoder-0.236.1": {
-      "edition": "2021",
-      "build_script": "build.rs"
-    },
-    "wasm-encoder-0.251.0": {
+    "wasm-encoder-0.254.2": {
       "edition": "2024"
     },
-    "wasmparser-0.236.1": {
-      "edition": "2021",
-      "build_script": "build.rs"
-    },
-    "wasmparser-0.251.0": {
+    "wasm-encoder-0.263.0": {
       "edition": "2024"
     },
-    "wasmprinter-0.236.1": {
-      "edition": "2021"
+    "wasm-metadata-0.254.2": {
+      "edition": "2024"
     },
-    "wasmtime-36.0.19": {
+    "wasmparser-0.254.2": {
+      "edition": "2024"
+    },
+    "wasmparser-0.263.0": {
+      "edition": "2024"
+    },
+    "wasmprinter-0.254.2": {
+      "edition": "2024"
+    },
+    "wasmtime-48.0.8": {
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "wasmtime-environ-36.0.19": {
+    "wasmtime-environ-48.0.8": {
       "edition": "2024"
     },
-    "wasmtime-internal-asm-macros-36.0.19": {
-      "edition": "2024"
-    },
-    "wasmtime-internal-component-macro-36.0.19": {
+    "wasmtime-internal-component-macro-48.0.8": {
       "edition": "2024",
       "proc_macro": true,
       "build_script": "build.rs"
     },
-    "wasmtime-internal-component-util-36.0.19": {
+    "wasmtime-internal-component-util-48.0.8": {
       "edition": "2024"
     },
-    "wasmtime-internal-cranelift-36.0.19": {
-      "edition": "2024"
-    },
-    "wasmtime-internal-fiber-36.0.19": {
+    "wasmtime-internal-core-48.0.8": {
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "wasmtime-internal-jit-debug-36.0.19": {
+    "wasmtime-internal-cranelift-48.0.8": {
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "wasmtime-internal-jit-icache-coherence-36.0.19": {
-      "edition": "2024"
-    },
-    "wasmtime-internal-math-36.0.19": {
-      "edition": "2024"
-    },
-    "wasmtime-internal-slab-36.0.19": {
-      "edition": "2024"
-    },
-    "wasmtime-internal-unwinder-36.0.19": {
+    "wasmtime-internal-fiber-48.0.8": {
       "edition": "2024",
       "build_script": "build.rs"
     },
-    "wasmtime-internal-versioned-export-macros-36.0.19": {
+    "wasmtime-internal-jit-debug-48.0.8": {
+      "edition": "2024",
+      "build_script": "build.rs"
+    },
+    "wasmtime-internal-jit-icache-coherence-48.0.8": {
+      "edition": "2024"
+    },
+    "wasmtime-internal-unwinder-48.0.8": {
+      "edition": "2024",
+      "build_script": "build.rs"
+    },
+    "wasmtime-internal-versioned-export-macros-48.0.8": {
       "edition": "2024",
       "proc_macro": true
     },
-    "wasmtime-internal-winch-36.0.19": {
+    "wasmtime-internal-wit-bindgen-48.0.8": {
       "edition": "2024"
     },
-    "wasmtime-internal-wit-bindgen-36.0.19": {
+    "wasmtime-wasi-48.0.8": {
       "edition": "2024"
     },
-    "wasmtime-wasi-36.0.13": {
+    "wasmtime-wasi-io-48.0.8": {
       "edition": "2024"
     },
-    "wasmtime-wasi-io-36.0.19": {
-      "edition": "2024"
-    },
-    "wast-251.0.0": {
+    "wast-263.0.0": {
       "edition": "2024"
     },
     "wast-35.0.2": {
       "edition": "2018"
     },
-    "wat-1.251.0": {
+    "wat-1.263.0": {
       "edition": "2024"
     },
     "webpki-roots-0.26.11": {
@@ -33944,19 +33254,15 @@
     "webpki-roots-1.0.7": {
       "edition": "2021"
     },
-    "wiggle-36.0.13": {
+    "wiggle-48.0.8": {
       "edition": "2024"
     },
-    "wiggle-generate-36.0.13": {
+    "wiggle-generate-48.0.8": {
       "edition": "2024"
     },
-    "wiggle-macro-36.0.13": {
+    "wiggle-macro-48.0.8": {
       "edition": "2024",
       "proc_macro": true,
-      "build_script": "build.rs"
-    },
-    "winch-codegen-36.0.19": {
-      "edition": "2024",
       "build_script": "build.rs"
     },
     "winnow-0.7.15": {
@@ -33965,8 +33271,11 @@
     "winnow-1.0.3": {
       "edition": "2021"
     },
-    "wit-parser-0.236.1": {
-      "edition": "2021"
+    "wit-component-0.254.2": {
+      "edition": "2024"
+    },
+    "wit-parser-0.254.2": {
+      "edition": "2024"
     },
     "witx-0.9.1": {
       "edition": "2018"

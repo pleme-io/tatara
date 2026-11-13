@@ -16,14 +16,14 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use wasmtime::{Config, Engine, Linker, Module, Store};
+use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
-use wasmtime_wasi::preview1::WasiP1Ctx;
 use wasmtime_wasi::WasiCtxBuilder;
 
 use crate::component::{apply_grant, ComponentHost};
 use crate::engine::{
-    check_boot, check_imports_granted, check_spawn, read_module, OutputSink, WasmBoot,
-    WasmEngine, WasmEngineError, WasmHandle, WasmProcess, WasmSpawn,
+    check_boot, check_imports_granted, check_spawn, read_module, OutputSink, WasmBoot, WasmEngine,
+    WasmEngineError, WasmHandle, WasmProcess, WasmSpawn,
 };
 use crate::WasmRuntime;
 
@@ -34,8 +34,7 @@ pub struct WasmtimeEngine {
 
 impl Default for WasmtimeEngine {
     fn default() -> Self {
-        let mut config = Config::new();
-        config.async_support(false);
+        let config = Config::new();
         let engine = Engine::new(&config).expect("wasmtime engine init");
         Self {
             engine,
@@ -100,7 +99,7 @@ impl WasmEngine for WasmtimeEngine {
         // Only added when WASI was granted: with no grant there is no symbol
         // for a `wasi_snapshot_preview1` import to resolve against.
         if grant.is_some() {
-            wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |s| s)
+            wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |s| s)
                 .map_err(|e| WasmEngineError::Instantiate(e.to_string()))?;
         }
 

@@ -539,7 +539,7 @@ impl EngineFacts {
 #[must_use]
 pub const fn facts_of(runtime: WasmRuntime) -> EngineFacts {
     match runtime {
-        // `run` wires `wasmtime_wasi::preview1` and calls `_start`, the p1
+        // `run` wires `wasmtime_wasi::p1` and calls `_start`, the p1
         // entry convention, so it takes P1. `spawn` hosts P2 components
         // (`wasi:cli/run`, and `wasi:http/incoming-handler` with the
         // `wasi-http` feature) on the async engine in `component.rs`.

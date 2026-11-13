@@ -5984,7 +5984,7 @@ checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
 
 [[package]]
 name = "tatara-api"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -6007,7 +6007,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-build-remote"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "serde",
  "serde_json",
@@ -6018,7 +6018,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-cli"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -6057,7 +6057,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-closed-loop-probe"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "blake3",
@@ -6100,7 +6100,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-core"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "blake3",
@@ -6121,7 +6121,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-domains"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "serde",
  "serde_json",
@@ -6130,7 +6130,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-engine"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "async-nats 0.38.0",
@@ -6170,7 +6170,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-eval"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "bumpalo",
  "serde",
@@ -6183,7 +6183,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-export-worker"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "async-nats 0.39.0",
@@ -6206,7 +6206,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-github-watcher"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -6231,7 +6231,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-hospedeiro"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "serde",
  "serde_json",
@@ -6248,7 +6248,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-hvf"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "applevisor",
  "serde",
@@ -6258,7 +6258,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-init"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "libc",
  "serde",
@@ -6272,7 +6272,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-kube"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "chrono",
@@ -6295,7 +6295,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-lattice"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "proptest",
  "schemars 0.8.22",
@@ -6328,7 +6328,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-mcp"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "serde",
  "serde_json",
@@ -6339,7 +6339,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-net"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6359,7 +6359,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-nix"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "blake3",
  "hex",
@@ -6402,7 +6402,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-os"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "blake3",
  "hex",
@@ -6418,7 +6418,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-pkgs"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "serde",
  "serde_json",
@@ -6431,7 +6431,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-pool-reconciler"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6460,7 +6460,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-process"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "blake3",
@@ -6483,7 +6483,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-reconciler"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6516,7 +6516,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-terreiro"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "blake3",
  "bumpalo",
@@ -6534,7 +6534,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-testing"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -6550,7 +6550,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-ui"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "blake3",
  "hex",
@@ -6566,7 +6566,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-vm"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "blake3",
  "gen-platform",
@@ -6587,7 +6587,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-wasm"
-version = "0.2.832"
+version = "0.2.833"
 dependencies = [
  "http-body-util",
  "hyper",
